@@ -1,0 +1,33 @@
+name: monticello_villas_app
+description: Monticello Villas Cross-Platform Incident and Announcement Management System - Resident Mobile App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+  image_picker: ^1.0.4
+  geolocator: ^10.1.0
+  firebase_core: ^2.24.0
+  firebase_auth: ^4.15.0
+  cloud_firestore: ^4.13.0
+  http: ^1.1.2
+  intl: ^0.19.0
+  provider: ^6.1.1
+  shared_preferences: ^2.2.2
+  connectivity_plus: ^5.0.2
+  url_launcher: ^6.2.2
+  flutter_sms: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
