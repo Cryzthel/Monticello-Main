@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "787092385070",
+    "project_id": "monticello-villas-f600e",
+    "storage_bucket": "monticello-villas-f600e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787092385070:android:ab380b50bfe5a02bea9ebf",
+        "android_client_info": {
+          "package_name": "com.example.monticello_villas_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5Vbf-ys4IiG12WhBfeimrA3JUmdIhGaU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787092385070:android:83f7576f6073c51cea9ebf",
+        "android_client_info": {
+          "package_name": "com.monticello.villas_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5Vbf-ys4IiG12WhBfeimrA3JUmdIhGaU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
