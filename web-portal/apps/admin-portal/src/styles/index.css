@@ -1,0 +1,16 @@
+/* This app's Tailwind entry.
+
+   The design system itself — every token, component class and keyframe — lives
+   in the shared package and is imported below, so the two consoles cannot drift
+   apart visually.
+
+   The `@source` line is why this file exists at all rather than the apps
+   importing the shared sheet directly. The shared stylesheet declares
+   `@import "tailwindcss" source(none)`, which switches OFF Tailwind v4's
+   automatic file scanning; with detection off, every directory to scan must be
+   named explicitly, and the shared sheet cannot name this one — it does not
+   know which app imported it. Each app therefore points Tailwind at its own
+   src/ here. Without this line the app's own components compile to no CSS at
+   all: the page renders unstyled, with no error. */
+@import '@shared/styles/index.css';
+@source '../';

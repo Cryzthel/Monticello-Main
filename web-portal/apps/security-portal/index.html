@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" class="light">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Monticello Villas | Guardhouse Portal</title>
+
+    <!--
+      Inter (UI) + JetBrains Mono (machine data). See the --font-sans /
+      --font-mono tokens in the shared stylesheet for which text gets which.
+      Both apps must request the SAME families — the token lives in the shared
+      sheet, so a portal that asks Google for a different face here renders the
+      other portal's fallback and the two consoles drift apart silently.
+
+      preconnect to BOTH hosts matters: the stylesheet comes from
+      fonts.googleapis.com but the font files themselves come from
+      fonts.gstatic.com, and without the second hint that connection is only
+      opened after the CSS has parsed — which is exactly the critical path you
+      are trying to shorten. crossorigin is required on the gstatic hint
+      because font fetches are CORS requests; without it the browser opens a
+      second, unusable connection.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+    <!--
+      Theme resolution BEFORE first paint.
+
+      This has to be a blocking inline script in <head>, not React: by the time
+      ThemeProvider mounts, the browser has already painted at least one frame,
+      and for a light-mode user that frame is the full dark canvas. The flash
+      is brief and genuinely unpleasant.
+
+      Duplicated logic with ThemeProvider is the accepted cost of that — the
+      storage key and the class names are the contract between the two. Keep
+      them in sync with packages/shared/src/theme/ThemeProvider.jsx.
+
+      The key is deliberately NOT portal-namespaced. Theme is a device
+      preference carrying no session identity, so it has no reason to be scoped
+      to a portal. Note that the two consoles no longer SHARE it either — they
+      are separate origins, and localStorage is per-origin — so each console
+      remembers the choice independently. The un-namespaced key is what keeps
+      that from changing if the two are ever co-hosted on one origin.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('monticello-theme')
+          var theme =
+            stored === 'light' || stored === 'dark'
+              ? stored
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+          var root = document.documentElement
+          root.classList.remove('light', 'dark')
+          root.classList.add(theme)
+          // Makes native scrollbars, form controls and the <input type="date">
+          // picker match the theme instead of always rendering light chrome.
+          root.style.colorScheme = theme
+        } catch (e) {
+          /* Private mode / blocked storage — the `light` class on <html> stands. */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,2720 @@
+/* `source(none)` turns OFF Tailwind v4's automatic content scanning.
+
+   Auto-detection scans outward from the directory holding the CSS file. That
+   was right when this sheet sat in a single app's src/; it is wrong now that
+   it lives in a shared package, where it would scan packages/shared and miss
+   both apps entirely — every app-specific class silently absent from the
+   build, no error, just an unstyled page.
+
+   With detection off, sources are explicit and therefore correct: the line
+   below covers this package, and each app names its own src/ in its own entry
+   stylesheet — see apps/admin-portal/src/styles/index.css. */
+@import "tailwindcss" source(none);
+@source "../";
+
+/* NOTE ON CONFIG SHAPE
+   --------------------
+   This project is Tailwind v4 (@tailwindcss/vite), which has NO
+   tailwind.config.js — the config file was replaced by this `@theme` block.
+   Every token below is the v4 equivalent of a `theme.extend` key:
+
+     @theme { --font-sans: … }          ≡  theme.extend.fontFamily.sans
+     @theme { --text-lg--letter-spacing }  ≡  theme.extend.fontSize.lg[1].letterSpacing
+     @theme { --tracking-tight: … }     ≡  theme.extend.letterSpacing.tight
+
+   Adding a tailwind.config.js here would be silently ignored. */
+
+/* Class-driven dark variant. Tailwind v4's built-in `dark:` follows
+   prefers-color-scheme, which a manual toggle cannot override. ThemeProvider
+   puts exactly one of `.dark` / `.light` on <html>, so `dark:` here means
+   "the user is in dark mode", not "their OS is". */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ══ THE DESIGN SYSTEM ══════════════════════════════════════════════════════
+   MOBILE-ALIGNED. This palette is a deliberate port of the Flutter app's
+   `AppColors` (lib/core/theme/app_theme.dart), because the web portal and the
+   mobile app are one product and previously were not one design. Where a value
+   below has a mobile counterpart, the mobile one is cited by name — that is
+   the parity contract, and it is the thing to check first if the two ever look
+   different again.
+
+     web token            mobile AppColors            value
+     ─────────────────────────────────────────────────────────────────────────
+     --color-base-950     (canvas, web-only step)     #F8FAFC  slate-50
+     --color-base-900     background / …Secondary     #FFFFFF
+     --color-base-800     neutralFill                 #F1F5F9  slate-100
+     --color-base-border  borderNeutralSoft           #F1F5F9  slate-100
+     --color-brand-400    textAccent                  #047857  emerald-700
+     --color-chart-fill   accentSecondary             #A7F3D0  emerald-200
+     --color-text-primary   textPrimary               #0F172A  slate-900
+     --color-text-secondary textSecondary             #475569  slate-600
+     --shadow-panel       AppShadows.sm               0 2px 8px black/5%
+     --radius-lg          AppRadius.sm                12px
+
+   THE ACCENT NO LONGER TRACKS MOBILE'S BUTTON FILL. The light CTA is #047857
+   (the reference's deep forest), not mobile's `headerSurface` #16A34A —
+   emerald-600, and the same value as mobile's `accentPrimary`. Same hue
+   direction, two steps deeper — see the brand block below. #047857 is still a
+   mobile token (`textAccent`), so the value is at least shared vocabulary;
+   the ROLE it plays differs between the two products.
+
+   (This line previously cited mobile's fill as #15803D, which is green-700
+   and not a mobile token at all. Corrected against `AppColors.headerSurface`.
+   The divergence it describes is load-bearing rather than cosmetic: a white
+   label on mobile's #16A34A measures 3.30:1 and clears AA at large sizes
+   only, while the same label on #047857 measures 5.48:1 and clears it flat.)
+
+   TWO DELIBERATE DIVERGENCES BEYOND THAT, both for contrast rather than taste:
+
+     --color-text-muted   is slate-500 #64748B, NOT mobile's textMuted
+                          #94A3B8. Mobile's value measures 2.85:1 on white and
+                          fails AA for small text; the web uses it for non-text
+                          only (inactive nav strokes). slate-500 is 4.8:1.
+     semantic accents     success/warning/danger/info sit ONE step darker than
+                          mobile's (#15803D/#B45309/#B91C1C/#0369A1 against
+                          #16A34A/#F59E0B/#DC2626/#0EA5E9). Same hue families;
+                          the web renders them as a 15% wash under
+                          full-strength label text, which eats ~1.3 stops that
+                          a solid mobile chip does not.
+
+   The canvas is the one step with no mobile counterpart. Mobile's `background`
+   is #FFFFFF because a phone shows one card at a time against it; a desktop
+   console shows fifteen, and they need a ground to sit ON. slate-50 is that
+   ground — the "airy off-white" the web spec asks for.
+
+   THE SYSTEM, IN SIX SENTENCES. (FLAT, DUAL-TONE, MOBILE-ALIGNED.)
+
+   1. TWO-TIER DEPTH, IN THE SAME DIRECTION IN BOTH THEMES. Light is a
+      #F8FAFC canvas carrying crisp WHITE cards; dark is a pure #000000
+      canvas carrying #18181B zinc-900 cards. In both, a surface that sits
+      higher is lighter. (Dark used to run the other way — a charcoal canvas
+      under near-black cards — until the 2026-09-17 redesign; the `.dark`
+      block records the change.) Floating layers (dropdowns, modals) rise in
+      BOTH themes. No glassmorphism, no blur, no translucent fills, no
+      elevation modelling.
+   2. A SURFACE IS A BORDER PLUS A WHISPER. The 1px line does the defining;
+      mobile's `AppShadows.sm` (black at 5%, 8px blur) sits under it so a
+      card's top edge does not dissolve where the border alone falls off. That
+      is the whole in-page depth budget — no gradients, no inset modelling, no
+      3D. Real shadows are still reserved for things genuinely stacked above
+      the page: dropdowns, popovers, modals.
+   3. ONE GREEN ACCENT, AT TWO LIGHTNESSES. Light takes the reference's deep
+      forest (#047857 CTA, white label); dark takes emerald (#10B981 CTA,
+      black label). Same role in both — primary CTAs, active navigation,
+      focus rings, status dots — and the fill/foreground PAIR tokens are what
+      keep the label legible without any component branching on theme.
+   4. Geometry, two shapes with two jobs (the 2026-09-17 oblong brief):
+      SURFACES AND FIELDS are `rounded-lg` — cards, modals, drawers, text
+      inputs, dropdown fields. Everything you PRESS OR READ AS A TOKEN is a
+      capsule (`rounded-full`): action buttons, icon buttons, segmented
+      controls and their segments, filter chips, status and category badges,
+      count pills, switches, dots and avatars. A capsule carries `px-4 py-1.5`
+      at its standard size so the curve never eats the first glyph. Text
+      inputs stay rectangular on purpose — a stadium-shaped field is the one
+      capsule that reads as consumer rather than console.
+   5. Icons are Lucide at 1.5px stroke, uniformly. They do NOT refill on
+      active: an active row is carried by the emerald wash and the accent ink.
+   6. NOTHING IS SET IN ALL CAPS. Screen headers, section titles, table column
+      heads, form labels and badges are all sentence case at font-semibold.
+      A `uppercase` utility in this codebase is a regression.
+
+   ── HOW THE PALETTE IS WIRED ──────────────────────────────────────────────
+   Light is declared in @theme and is therefore the compile-time default; dark
+   is a runtime override further down. That ordering matters: @theme emits
+   plain custom properties on :root, and every colour utility — including the
+   alpha ones like `bg-tint/[0.03]`, which compile to color-mix(in oklab,
+   var(--color-tint) 3%, transparent) — resolves them at paint time. Flipping
+   the variables therefore re-themes every component in both portals without a
+   single `dark:` class in the JSX.
+
+   ── ON THE SPEC'S HEX/CLASS PAIRINGS ──────────────────────────────────────
+   The spec names its accent as `#16A34A / bg-emerald-600`. That hex is
+   Tailwind's GREEN-600, not its stock emerald-600 (#059669) — but #16A34A is
+   also mobile's `accentPrimary`, so the hex is the authority and the
+   `--color-emerald-*` block below re-points the emerald scale onto it.
+
+   The consequence, stated plainly because it will surprise someone: in this
+   codebase `bg-emerald-600` paints #16A34A, not Tailwind's #059669. That is
+   deliberate — it makes the spec's own vocabulary literally true here, so
+   `bg-emerald-600` and `bg-brand-500` are the same pixel and new code can be
+   written in either dialect without drift.
+
+   The SLATE ramp is NOT overridden: Tailwind's stock slate already matches
+   both the spec and mobile exactly (slate-100 #F1F5F9, slate-400 #94A3B8,
+   slate-500 #64748B, slate-600 #475569, slate-900 #0F172A), so `text-slate-900`
+   and `border-slate-200` mean here precisely what they mean everywhere else. */
+
+/* ══ THE ELEVATION VALUES (LIGHT) ═══════════════════════════════════════════
+   Flat design does not mean "no shadow anywhere"; it means shadow stops being
+   how a surface declares itself. In this system a card's edge is now a drawn
+   1px `border-slate-200` line, and the only things that still cast are the
+   ones genuinely floating ABOVE the page — dropdowns, popovers, modals — where
+   a shadow communicates stacking order rather than decoration.
+
+   That is why --elev-panel is `none`. The claymorphism pass had it as a
+   four-layer stack (ambient / contact / inset highlight / inset mass); every
+   layer is gone, along with the inset-highlight trick, which is precisely the
+   "3D elevation effect" the corporate brief rules out.
+
+   These are deliberately OUTSIDE @theme. Tailwind resolves @theme values at
+   BUILD time when it generates a utility, so a literal there is frozen into
+   `shadow-overlay` and `.dark` can never reach it. The tokens in @theme are
+   pointers at these; these are what `.dark` reassigns. See the long note
+   beside `--shadow-panel` for the full explanation.
+
+   Nothing in the codebase should reference `--elev-*` directly. Components use
+   the `--shadow-*` tokens or the `shadow-*` utilities; this block is storage. */
+:root {
+  /* A card is a border, not a shadow. */
+  /* `AppShadows.sm` on mobile: black at 5%, 8px blur, 2px down, plus a 1px
+     contact line. Restored after the flat pass set it to `none` — mobile draws
+     this under every card, and since the web canvas and the card are now only
+     one slate step apart it is also what keeps a card's top edge from
+     dissolving where the border alone falls off. */
+  --elev-panel:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 2px 6px -1px rgba(15, 23, 42, 0.04);
+
+  /* The paired lift. Mobile's `shadowMedium` is black at 10%; this is that
+     value spread a little wider, so a hovered card reads as picked up rather
+     than merely re-lit. */
+  --elev-hover:
+    0 2px 4px rgba(0, 0, 0, 0.05),
+    0 8px 24px -6px rgba(0, 0, 0, 0.10);
+
+  /* ══ THE STACKING ORDER ═══════════════════════════════════════════════════
+     Every floating layer in this codebase portals into `document.body`, so
+     they are all SIBLINGS and their paint order is decided by nothing but
+     these numbers. That makes the order a single global fact, and it belongs
+     written down once rather than as a literal at twelve call sites.
+
+     THIS EXISTS BECAUSE THE LITERALS WERE WRONG. Dropdowns, row menus and
+     tooltips were `z-[9999]`; dialogs were `z-[10001]`. A `<Select>` inside a
+     modal therefore opened its menu BEHIND the modal — the options were in the
+     DOM, correctly positioned and 108px tall, and completely invisible.
+     `document.elementFromPoint` at the menu's own centre returned the form
+     underneath it, so every click the operator aimed at "Gate Guard" landed on
+     the field behind. From the outside that reads as "the dropdown is broken
+     and shows no options", which is exactly how it was reported.
+
+     THE RULE: a popover opened FROM a modal must outrank that modal. Popovers
+     are therefore ABOVE dialogs, not below them. Reading down, each layer may
+     only ever cover the ones above it in this list:
+
+       overlay   100   full-screen surfaces that own the viewport
+                       (command palette, lightbox)
+       modal    1000   dialogs and drawers
+       popover  2000   menus, dropdowns, tooltips — anything OPENED FROM
+                       something else, including from a modal
+       toast    3000   transient notices; must never be buried, and are
+                       pointer-events:none so being on top costs nothing
+
+       sos      4000   the guardhouse panic banner — the only thing that
+                       outranks a toast, because it is the only thing on
+                       either console that means someone is in danger
+
+     Gaps of 1000 leave room to insert a layer without renumbering. Use them as
+     `z-[var(--z-popover)]`; do not write a bare number. */
+  --z-overlay: 100;
+  --z-modal: 1000;
+  --z-popover: 2000;
+  --z-toast: 3000;
+  --z-sos: 4000;
+
+  /* Floating layers keep real shadows, because they are the only surfaces
+     whose whole job is to sit ON TOP of other content. Two layers: a soft
+     ambient for the drop, and a tight contact so the menu's own edge stays
+     crisp against whatever it covers. */
+  --elev-overlay:
+    0 4px 12px -2px rgba(15, 23, 42, 0.10),
+    0 2px 4px -2px rgba(15, 23, 42, 0.06);
+  --elev-modal:
+    0 20px 40px -12px rgba(15, 23, 42, 0.20),
+    0 4px 10px -4px rgba(15, 23, 42, 0.08);
+
+  /* The primary button is a flat fill. A coloured glow under a CTA is the
+     single most dated thing in the old palette, and corporate SaaS buttons
+     carry none — the fill and the label are the whole control. Kept as tokens
+     rather than deleted so the ~10 `shadow-brand*` call sites resolve to
+     nothing instead of erroring, and so re-introducing a hover shadow later is
+     a one-line change here. */
+  --elev-brand: none;
+  --elev-brand-hover: none;
+  --elev-brand-sm: none;
+}
+
+@theme {
+  /* ── The emerald ramp ─────────────────────────────────────────────────────
+     Re-pointed onto the spec's hexes (see the note above). Registering the
+     whole scale rather than only the two shades the spec names means
+     `bg-emerald-50`, `text-emerald-600`, `border-emerald-100` and friends
+     all resolve to this system instead of silently falling back to stock
+     Tailwind and introducing a second, near-miss green. */
+  --color-emerald-50: #ECFDF5;   /* success surfaces only — no longer the brand wash */
+  --color-emerald-100: #D1FAE5;  /* mobile glassBorder — accent hairlines */
+  --color-emerald-200: #A7F3D0;  /* mobile accentSecondary; chart fills */
+  --color-emerald-300: #86EFAC;
+  --color-emerald-400: #4ADE80;
+  --color-emerald-500: #22C55E;
+  --color-emerald-600: #16A34A;  /* THE accent */
+  --color-emerald-700: #15803D;
+  --color-emerald-800: #166534;
+  --color-emerald-900: #14532D;
+  --color-emerald-950: #064E3B;
+
+  /* ── The slate CHROME ramp ────────────────────────────────────────────────
+     Registered — with Tailwind's own stock values, so nothing moves in light
+     mode — for one reason: to give `.dark` something to override.
+
+     These four shades are what the spec writes every border and well in
+     (`border border-slate-100`, `bg-slate-50`), and a raw stock utility is
+     THEME-BLIND. Left alone, `border-slate-100` painted a near-white #F1F5F9
+     hairline around a near-black card in dark mode — measured, and visibly
+     wrong. Registering them here means the one vocabulary the spec uses works
+     in both themes instead of only the one it was written for.
+
+     Only the neutral SURFACE shades are re-pointed. `slate-900` deliberately is
+     NOT: it is the heading ink, and a token named slate-900 that resolves to
+     near-white in dark would be actively misleading to read. Text uses
+     --color-text-primary instead, which is #0F172A in light — the same value
+     the spec names — and inverts honestly. */
+  --color-slate-50: #F8FAFC;    /* inset well fill */
+  --color-slate-100: #F1F5F9;   /* card + panel hairline */
+  --color-slate-200: #E2E8F0;   /* input + nested-section border */
+  --color-slate-300: #CBD5E1;   /* hover border */
+
+  /* Modal and drawer scrim. A fixed near-black, NOT `bg-slate-900/40`: slate is
+     part of the theme-aware ramp above, so a scrim built on it would invert to
+     a WHITE veil in dark mode. A scrim is one of the few things in the system
+     that must not follow the theme — it exists to darken whatever is behind it,
+     in both. */
+  --color-scrim: rgba(0, 0, 0, 0.58);
+
+  /* Canvas + surfaces — mobile's `background` / `backgroundSecondary`, both
+     #FFFFFF, and its `neutralFill` slate for the insets.
+
+     The token NAMES stay semantic (950 = canvas, 900/850 = raised, 800 =
+     inset) so a component never has to know which theme is live: `bg-base-900`
+     means "panel" in both. What inverts between themes is the DIRECTION of
+     elevation — in dark a card lifts by getting lighter than near-black.
+
+     THREE DISTINCT STEPS, and the middle one is the point:
+
+       canvas  #F5F6F8   the soft grey workspace
+       card    #FFFFFF   solid, opaque white — never translucent
+       well    #F1F5F9   recessed inputs and code pills
+
+     The canvas was briefly pure white too, which made a card unable to
+     separate itself by fill at all — its hairline and shadow were the only
+     things defining an edge. Pulling the canvas down one step to slate-50
+     gives every white card a real figure/ground relationship, and the border
+     then reinforces the edge instead of solely carrying it.
+
+     `bg-emerald-50/40` is the spec's alternative canvas. slate-50 is the one
+     implemented: at 40% over white, emerald-50 lands within ~0.5% luminance of
+     slate-50 but carries a green cast that fights the emerald ACCENT sitting on
+     top of it — two greens a few degrees apart read as a mistake rather than a
+     palette. Swapping is a one-line change here if the green is wanted. */
+  /* THE APP CANVAS. #F5F6F8 since the 2026-09-22 redesign: the reference's
+     soft grey ground (`bg-gray-100/80` over white). One step deeper than the
+     slate-50 it replaces, so a white card lifts off it by fill as well as by
+     its hairline. The history below is kept for why it is not deeper still.
+
+     Previously: back to slate-50, the value the corporate spec named.
+     It was pulled down to #EFF3F9 for the claymorphism pass, which needed a
+     real figure/ground gap for its ambient shadows to land on. Flat design
+     has the opposite requirement: the card's EDGE is a drawn 1px border, so
+     the canvas no longer has to do any separating work, and a deeper ground
+     just makes the console look dimmer. slate-50 against white is the
+     Stripe/Atlassian relationship — barely there, enough to tell a content
+     surface from the page behind it. */
+  --color-base-950: #F5F6F8;   /* soft grey canvas — gray-100 at 80% over white */
+  --color-base-900: #FFFFFF;   /* cards, data tables, sidebar, drawers */
+  --color-base-850: #FFFFFF;   /* dropdowns, popovers, modals */
+  --color-base-800: #F1F5F9;   /* slate-100 — inset wells, search, code pills */
+  --color-base-700: #E2E8F0;   /* slate-200 */
+  --color-base-border: #F1F5F9; /* slate-100 — mobile borderNeutralSoft */
+
+  /* SURFACE EDGES, softer than a control's. A card, table or modal is drawn
+     by a 1px hairline a step lighter than an input's slate-200 border: the
+     reference's `border-slate-200/60`, resolved to a solid value so it does
+     not darken where two surfaces overlap. `divider` is lighter again, for the
+     rules between table rows, which should separate without striping. */
+  --color-hairline: #E9ECF0;
+  --color-divider: #F0F2F5;
+
+  /* The KPI card's outer shell: a step lighter than the canvas, so the white
+     face inside it reads as raised and the footnote strip as the shell's own. */
+  --color-kpi-shell: #FAFBFC;
+
+  /* THE INPUT FILL, as its own token rather than a base-* step.
+
+     `.field` used to say `bg-base-900`, i.e. "the card colour", which was
+     right while cards were the lightest surface in both themes. Dark mode
+     broke it: an input painted the card's own value vanishes into the card
+     (#18181B today), leaving a 1px border as the only evidence a field is
+     there at all.
+
+     The correct fill points OPPOSITE ways per theme — white (same as the card)
+     in light, one step back toward the canvas in dark — so it cannot be any
+     single base-* step. One semantic token answers it once, and no component
+     has to branch on theme. */
+  --color-field: #FFFFFF;
+
+  /* THE CAPSULE TRACK — the fill behind a segmented control.
+
+     Its own token for the same reason --color-field is one: the right value
+     points different ways per theme. The 2026-09-17 oblong brief models the
+     control on a dark reference capsule (`bg-zinc-900`, `border-zinc-800`),
+     which is exactly the dark value below. In light the same ROLE is the pale
+     slate-100 well, because a zinc capsule on a white card would be the
+     loudest object on every toolbar that carries one. */
+  --color-segmented-track: #F1F5F9;
+
+  /* Switch knob at rest. White with a contact shadow in light, a mid zinc in
+     dark, where a white knob on a zinc-800 track reads as a light left on. */
+  --color-switch-knob: #FFFFFF;
+
+  /* Neutral overlay ink.
+     Every translucent lift, hairline and hover in this codebase is expressed
+     as `tint/α` — `bg-tint/[0.03]`, `border-tint/10`, `hover:bg-tint/[0.06]`.
+     This one token is what themes ~260 of those utilities at once.
+
+     Slate-900, matching the heading ink and mobile's neutral ramp. It was
+     emerald-950 while the canvas was pastel green; on a white canvas a green
+     hairline reads as a tint someone forgot to remove, and the spec is
+     explicit that neutral chrome is slate.
+
+     Deliberately NOT `--color-white`/`--color-black`: white must stay white
+     for text and rings that sit on saturated fills (the danger count badge,
+     the map's marker outlines), which a blanket inversion would destroy. */
+  --color-tint: #0F172A;
+
+  /* The pale BRAND WASH — the one surface tint that means "brand", as opposed
+     to the emerald ramp above which now means only "success".
+
+     Kept as a separate token from `emerald-50` even though the two are the
+     same hex today, because they mean different things: this one follows the
+     BRAND and that one follows SUCCESS. They were briefly different values
+     (blue-50 vs emerald-50) and will be again the next time the accent moves,
+     which is exactly why the component layer asks for the semantic name rather
+     than writing `bg-emerald-50` into an @apply string. */
+  --color-brand-50: #ECFDF5;   /* emerald-50 — the pale brand wash */
+  /* emerald-100 — the wash one step in: an ACTIVE control (a selected
+     chip, a filter that is on) against brand-50's resting row tint. Added
+     when the translucent `bg-brand-500/10..20` fills were made solid;
+     without a second solid step every one of them would have collapsed
+     onto brand-50 and the two ranks would have become one. */
+  --color-brand-100: #D1FAE5;
+
+  /* Active nav row, as a fill/foreground PAIR so a component never branches on
+     theme — it asks for "the active row treatment" and gets a background plus
+     a foreground guaranteed legible on it.
+
+     The foreground is emerald-800 rather than the accent fill, and with a deep
+     forest accent there is room to spare: #065F46 on #ECFDF5 measures 7.0:1,
+     comfortably past both WCAG 1.4.11's 3:1 for the ICON and 1.4.3's 4.5:1
+     for the row's 14px LABEL, so one token safely serves both. */
+  --color-nav-active: #ECFDF5;
+  --color-nav-active-fg: #065F46;
+  /* ── Brand, light: THE REFERENCE'S DEEP FOREST GREEN ──────────────────────
+     #047857 / #065F46, the pair the reference uses for CTAs on a light canvas.
+
+     RELATIONSHIP TO THE MOBILE APP, since the previous pass aligned to it and
+     this one moves off that mark. Mobile's `accentPrimary` is #16A34A
+     (green-600) and its CTA step is `headerSurface` #15803D (green-700). The
+     web light accent is now #047857 (emerald-700) — two steps deeper and in
+     the emerald family rather than green. It is the SAME hue direction, not a
+     new colour: a resident's phone and a staff console still read as one
+     brand, one just carries a darker, more corporate green.
+
+     Worth knowing rather than discovering: #047857 is itself a mobile token —
+     `AppColors.textAccent` — so this value is in the shared vocabulary even
+     though it is not mobile's button fill.
+
+     The three ROLES are unchanged; the numbers denote job, not luminance:
+
+       brand-500  the accent FILL. Status dots, active indicators, rings,
+                  focus, chart strokes.
+       brand-400  the TEXT/ICON step. #065F46 measures 7.6:1 on white.
+       brand-600  the CTA fill — the one place a white label sits on green.
+
+     WHY THE CTA CLEARS AA HERE WITHOUT A SEPARATE STEP
+     --------------------------------------------------
+     Every previous accent in this file needed brand-600 to sit one step below
+     brand-500, because the fill hue was too light to carry a white 14px
+     semibold label (which is not WCAG "large text" — that starts at 18.66px
+     bold — so it needs 4.5:1, not 3:1).
+
+     A deep forest green does not have that problem: white on #047857 is 5.6:1
+     already, so 500 and 600 can be the same value and the pair collapses.
+     Hover DARKENS to #065F46 (7.6:1) rather than lightening, so the ratio
+     improves under the pointer instead of degrading — the same direction the
+     palette has always taken, for the same reason. */
+  --color-brand-500: #047857;   /* emerald-700 — the reference's deep forest */
+  --color-brand-400: #065F46;   /* emerald-800 — the TEXT step, 7.6:1 on white */
+
+  /* THE FOCUS RING, at full opacity, and there is only one of it.
+     WCAG 2.2 SC 2.4.11 asks for 3:1 between the indicator and its
+     surroundings. Every focus treatment in this file used to composite the
+     accent down to 60-70% first, and a translucent ring is measured AS
+     COMPOSITED, not as the colour it was mixed from: brand-500 at 70% over
+     white lands on #4FA089, which is 3.11:1 on a white card and 2.87:1 on the
+     #F5F6F8 canvas. The canvas is where the top bar sits, so the portal's
+     primary action failed the floor on the one surface it is always rendered
+     against, and `.btn` mixed at 60% and measured 2.59:1 everywhere. At full
+     opacity this is 5.48:1 on white and 5.07:1 on the canvas.
+     Softening a focus ring to look gentler is one of the few places in a UI
+     where taste and access point opposite ways, and access wins. */
+  --color-focus: #047857;
+  --color-brand-300: #064E3B;
+  --color-brand-600: #047857;
+
+  /* The filled-brand PAIR — every surface where a label sits directly on the
+     accent: the primary CTA, the selected segment of a tab group, the logo
+     tile, the theme-toggle knob.
+
+     Declared as a fill AND its guaranteed-legible foreground because the
+     correct foreground INVERTS between themes and a single `text-white` cannot
+     express that: light wants a WHITE label on a deep forest green (5.6:1),
+     dark wants a DARK label on emerald (7.04:1). Pinning either alone fails
+     the other — white on dark-mode's #10B981 is 2.54:1.
+
+     Any component that fills with brand should use `.surface-brand` rather
+     than pairing `bg-brand-*` with a hardcoded text colour, so this stays the
+     single place the question "what is legible on the accent?" is answered. */
+  --color-brand-cta: #047857;          /* 5.6:1 with a white label */
+  --color-brand-cta-fg: #FFFFFF;       /* white on #047857 measures 5.6:1 */
+  --color-brand-cta-hover: #065F46;    /* darker on hover — 7.6:1 */
+
+  /* THE PRIMARY ACTION: near-black, by the user's choice on 2026-09-22. The
+     reference's CTA is slate-900 with a white label (17.9:1), and it inverts
+     to near-white in dark. Emerald keeps every job that means state rather
+     than action: the switch that is on, the selected nav row, success, focus
+     and charts. `.btn-brand` and `.surface-brand` read this pair; nothing
+     else should. */
+  --color-cta: #0F172A;
+  --color-cta-fg: #FFFFFF;
+  --color-cta-hover: #1E293B;
+
+  /* The selected segment of a segmented control: a raised white face on the
+     grey track, the reference's pattern for "this one" among peers. The ring
+     is the segment's own edge; a drop shadow cannot show through the
+     clip-path that animates it (see SegmentedControl). */
+  --color-segment-active: #FFFFFF;
+  --color-segment-active-fg: #0F172A;
+  --color-segment-ring: rgba(15, 23, 42, 0.10);
+
+  /* STATUS CAPSULES: pastel fill + 700-step ink, the reference's soft pill.
+     Every pair measures at least 4.5:1 (ink on its own fill): success 5.3,
+     warning 4.8, danger 5.9, info 5.6, high 4.9, violet 6.6, neutral 6.9. */
+  --color-pill-success: #ECFDF5;
+  --color-pill-success-fg: #047857;
+  --color-pill-warning: #FFFBEB;
+  --color-pill-warning-fg: #B45309;
+  --color-pill-danger: #FEF2F2;
+  --color-pill-danger-fg: #B91C1C;
+  --color-pill-info: #F0F9FF;
+  --color-pill-info-fg: #0369A1;
+  --color-pill-high: #FFF7ED;
+  --color-pill-high-fg: #C2410C;
+  --color-pill-violet: #F5F3FF;
+  --color-pill-violet-fg: #6D28D9;
+  --color-pill-neutral: #F1F5F9;
+  --color-pill-neutral-fg: #475569;
+
+  /* Type — the slate ramp. 17.9:1 / 7.5:1 / 4.8:1 on white.
+
+     PARITY NOTE, because this is the one place the spec and the mobile app
+     disagree. The spec says headings are `text-slate-900` (#0F172A) and that
+     is what is implemented here. Mobile's `AppColors.textPrimary` is currently
+     #064E3B (emerald-950) — a green-black rather than a blue-black. The two
+     are close enough that no layout looks wrong, but they are not identical,
+     so a literal 1:1 match would need one line changed in
+     lib/core/theme/app_theme.dart. Flagged rather than silently reconciled:
+     picking the mobile value would contradict the written spec, and picking it
+     silently would hide a real divergence.
+
+     text-muted is slate-500 — the spec's metadata tone, and the lightest slate
+     that still clears AA for small text at 4.76:1. slate-400 (#94A3B8, mobile's
+     `textMuted`) measures 2.85:1 and is therefore used for NON-TEXT only: the
+     inactive nav icon strokes, where a text label carries the meaning. */
+  --color-text-primary: #0F172A;   /* slate-900 */
+  --color-text-secondary: #475569; /* slate-600 — mobile textSecondary */
+  --color-text-muted: #64748B;     /* slate-500 */
+
+  /* Semantic accents, at the 800 step — NOT the 700 step contrast tables
+     suggest. The badge pattern here is `bg-x/15` fill + full-strength `text-x`
+     label, so the label is never read against white: it is read against a 15%
+     wash of ITSELF, which lifts the background toward the text and eats about
+     1.3 stops. Measured on the actual pills, 700 landed at 3.5–4.4:1 and 800
+     clears AA with margin.
+
+     `success` is the brand green on purpose — it is why an upward delta and a
+     resolved incident read as "good" without a legend. `severity-high` is
+     deliberately NOT brand-derived (mobile never reuses the accent for
+     severity); see PriorityBadge.jsx / severityColors.js. */
+  --color-success: #15803D;        /* green-700 — mobile success #16A34A, one step down */
+  --color-warning: #B45309;        /* amber-700 — mobile warning #F59E0B, one step down */
+  --color-danger: #B91C1C;         /* red-700 — mobile danger #DC2626, one step down */
+  --color-info: #0369A1;           /* sky-700 — mobile info #0EA5E9, one step down */
+  --color-severity-high: #9A3412;
+  /* Seventh badge hue. The incident taxonomy has 7 categories and the tone
+     vocabulary had 6 distinguishable ones (brand and success are both emerald),
+     so two categories were sharing a colour. */
+  --color-violet: #5B21B6;
+
+  /* ── THE SOS PLATE: the one pair that does NOT follow the theme ───────────
+     Every other colour here is redefined under `.dark`. These two are not,
+     and that is the whole point of declaring them separately instead of
+     reaching for `--color-danger`.
+
+     Two reasons. The first is measured: in dark mode `--color-danger` becomes
+     #F87171 — a LIGHT red, correct as ink on a dark surface and wrong as a
+     plate under white type. White on it is 2.77:1, well under the 4.5:1 that
+     the banner's label owes. White on the value below is 6.47:1, and it is
+     6.47:1 in both themes because the value does not move.
+
+     The second is that an alarm should not have two appearances. A guard who
+     switches theme mid-shift must not have to re-learn what an emergency
+     looks like, so the panic banner is the one surface in either console that
+     is deliberately theme-invariant. */
+  --color-sos-plate: #B91C1C; /* red-700 — white on it measures 6.47:1 */
+  --color-sos-ink: #FFFFFF;
+
+  /* ── Elevation: THE CLAY STACK ────────────────────────────────────────────
+     This is the heart of the claymorphism pass, and it is expressed entirely
+     as token VALUES rather than as new classes. Every surface in both portals
+     already reads its depth through `var(--shadow-panel)` and friends — that
+     indirection was built for theming, and it is what lets ~200 call sites
+     become tactile clay without one of them being edited.
+
+     WHAT MAKES A SHADOW "CLAY" RATHER THAN A DROP SHADOW
+     ----------------------------------------------------
+     Every token below is a stack of up to four layers, and each does one job:
+
+       1. AMBIENT   a wide, soft, heavily-negative-spread drop. This is the
+                    "floating above the ground" cue and carries most of the
+                    apparent height.
+       2. CONTACT   a tighter, darker drop close to the element. Without it
+                    the ambient alone reads as fog and the shape looks like it
+                    is dissolving rather than resting.
+       3. HIGHLIGHT `inset` white along the TOP edge. This is the single layer
+                    that separates clay from flat material design: it implies
+                    a lit, rounded top face, so the surface reads as extruded
+                    rather than printed.
+       4. MASS      `inset` dark along the BOTTOM edge. The underside of that
+                    same extrusion turning away from the light.
+
+     The order matters — CSS paints box-shadow layers first-to-last, so the
+     insets are declared after the drops and therefore sit on top of the fill.
+
+     ON THE WHITE-CARD LIMITATION, stated because it is the thing someone will
+     notice and think is a bug: layer 3 is invisible on a pure-white surface,
+     because white-on-white has nowhere to go. On a #FFFFFF card the clay
+     reading is carried by layers 1, 2 and 4 plus the enlarged radius, which is
+     sufficient. The highlight earns its keep on every surface that is NOT
+     white — wells, buttons, icon tiles, the whole dark theme — and it is
+     declared uniformly rather than per-surface so no one has to remember which
+     is which.
+
+     --shadow-hover is the paired "lift", kept next to the resting value so the
+     two cannot drift apart. It deepens the ambient and leaves the insets
+     alone: growing the highlight on hover makes the card look like it changed
+     material rather than height. */
+  --surface-panel: #FFFFFF;
+
+  /* ── EVERY SHADOW TOKEN IS A POINTER, NOT A VALUE ─────────────────────────
+     Read this before changing any of the twelve lines below.
+
+     Tailwind v4 resolves an `@theme` value at BUILD time when it generates a
+     utility. Written as a literal, `--shadow-overlay: 0 16px 36px …` compiles
+     `shadow-overlay` down to those exact light-theme hexes, frozen — and the
+     `.dark` block's override never reaches it, because there is no longer a
+     variable left to override. Nothing errors. The utility simply paints a
+     light shadow in dark mode forever.
+
+     That was a live bug in this codebase, not a hypothetical: `shadow-overlay`
+     is on thirteen surfaces (every dropdown, the row menus, the notification
+     panel, the toasts, the map controls) and all thirteen were rendering the
+     light-mode shadow on a near-black canvas. It went unnoticed while shadows
+     were faint grey ambients. Claymorphism makes it unmissable — the stack now
+     carries a near-white inset HIGHLIGHT layer, which on a dark card is a
+     bright line across the top edge of every menu.
+
+     Pointing each token at a plain custom property fixes it for both consumers
+     at once. `var(--elev-overlay)` is what gets baked into the utility, and a
+     var reference resolves at PAINT time, so `.dark` reassigning `--elev-*`
+     moves the utility and the raw `box-shadow: var(--shadow-overlay)` call
+     sites together. The real values live in the `:root` block above @theme,
+     with their dark counterparts in `.dark`.
+
+     Consequence worth knowing: Tailwind cannot parse a var() into its
+     `shadow-<color>` modifier machinery, so `shadow-overlay/50` and friends do
+     not work on these named shadows. Nothing uses them, and a four-layer clay
+     stack has no single colour to modify anyway. */
+  --shadow-panel: var(--elev-panel);
+  --shadow-hover: var(--elev-hover);
+  --shadow-overlay: var(--elev-overlay);
+  --shadow-modal: var(--elev-modal);
+
+  /* Brand elevation, retained as tokens purely so the existing `shadow-brand*`
+     call sites resolve to `none` instead of to an undefined variable. See the
+     --elev-brand note above for why a corporate CTA carries no glow. */
+  --shadow-brand: var(--elev-brand);
+  --shadow-brand-hover: var(--elev-brand-hover);
+  --shadow-brand-sm: var(--elev-brand-sm);
+
+  /* ── RADIUS TIERS (2026-09-22) ─────────────────────────────────────────────
+     Three steps, one per job, so a corner says what the thing is:
+
+       rounded-xl   12px  outer surfaces: cards, tables, modals, drawers
+                         (was 16px until 2026-09-23, when the surface tier
+                         was moved down a step by request; it now shares a
+                         value with the nested tier, so the vocabulary is
+                         really 12 for boxes and 8 for controls)
+       rounded-xl   12px  surfaces nested inside them, popovers, toasts
+       rounded-lg    8px  controls: buttons, inputs, search, nav rows, tiles
+
+     `rounded-lg` is Tailwind's stock 8px again. It was re-pointed to 12px so
+     that one class could mean "a card's radius" (mobile's AppRadius.sm); with
+     surfaces moving to the two larger steps that job is gone, and the
+     redesign's controls are the reference's 8px rectangles. Capsules
+     (`rounded-full`) now mean status, trend, count and filter pills only. */
+  --radius-lg: 0.5rem;
+
+  /* ── SKELETON LOADING ─────────────────────────────────────────────────────
+     The placeholder fill, as two tokens rather than the four ad-hoc alphas the
+     codebase had grown: `bg-tint/10`, `bg-tint/5`, `bg-tint/[0.03]` and
+     `bg-tint/[0.06]` were all being used for the same job in different files,
+     so two skeletons on the same screen pulsed at visibly different greys.
+
+     TWO STEPS, because a skeleton is a LAYOUT, not a grey rectangle. The block
+     step stands in for substantive content (a heading, a value, an avatar, a
+     chart body); the muted step stands in for the secondary line beneath it.
+     Keeping the same 2:1 relationship the real type has is what makes the
+     placeholder read as the shape of the thing that is coming rather than as a
+     row of identical bars.
+
+     WHY NOT `bg-tint/α` DIRECTLY. `--color-tint` is slate-900 in light and
+     near-white in dark, so an alpha of it does invert — but it inverts to the
+     WRONG weight: 10% white on a dark card is a stronger contrast step
+     than 10% slate-900 on white, so dark skeletons borrowed from the light
+     alpha read as solid light bars. These are declared per theme instead, so
+     each side is tuned on its own ground. */
+  --color-skeleton: rgba(15, 23, 42, 0.09);
+  --color-skeleton-muted: rgba(15, 23, 42, 0.05);
+
+  --color-scrollbar: rgba(15, 23, 42, 0.20);
+  --color-scrollbar-hover: rgba(15, 23, 42, 0.35);
+
+  /* Charts. Recharts needs real colour VALUES on its SVG props, not utility
+     classes, so these are read as var() at the call site. Splitting line from
+     fill matters: the stroke has to stay saturated enough to read as a line,
+     while the area under it has to drop to a pastel wash or it swamps the
+     white card it sits on. */
+  --color-chart-line: #047857;
+  --color-chart-fill: #A7F3D0;   /* mobile accentSecondary — emerald-200 */
+  --color-chart-grid: rgba(15, 23, 42, 0.07);
+  /* Axis tick labels and the hover cursor band. Both were hardcoded white
+     (`#94A3B8`, `rgba(255,255,255,0.04)`) at their Recharts call sites, which
+     is invisible on a white card — the charts had no readable axes at all in
+     light mode. Tokenised so the value follows the theme like everything
+     else. --color-chart-axis is text-muted's value: 4.8:1, which an axis
+     label needs since it IS small text. */
+  --color-chart-axis: #64748B;
+  --color-chart-cursor: rgba(15, 23, 42, 0.06);
+  /* The "comparison" series — the Reported bars that Resolved is read
+     against. Deliberately NOT green: the pair only communicates if one of
+     them is the accent and the other is neutral. It was `rgba(255,255,255,
+     0.2)`, i.e. a white bar on a white card. */
+  --color-chart-neutral: #CBD5E1;
+
+  /* ── Typography ───────────────────────────────────────────────────────────
+     TWO families, split by what the text IS rather than where it sits.
+
+     Inter carries every piece of language in both portals — navigation,
+     headings, form controls, body copy, category tags, empty states. It has a
+     tall x-height and open apertures, which is why the 14px body text below
+     holds up at dashboard density where a smaller-eyed face would not.
+
+     This was Figtree, and the swap was a review decision rather than a
+     correction — both are large-x-height sans faces built for UI. Inter was
+     chosen because it is the one drawn specifically for screen UI at small
+     sizes, and because its metrics are close enough to Figtree's that the
+     per-step tracking scale below did not need retuning.
+
+     JetBrains Mono carries every piece of MACHINE DATA: ticket ids, log
+     timestamps, WPDA scores, status codes, and the figures in metric tables.
+     The split is a reading aid, not decoration — a monospaced ticket id is
+     scannable character-by-character against a list, and a column of
+     monospaced timestamps aligns on its own without help.
+
+     Loaded from Google Fonts in index.html (see the <link> there). If you
+     would rather not make a third-party request, `npm i @fontsource-variable/
+     inter @fontsource/jetbrains-mono` and import them in main.jsx instead —
+     the token below does not change. */
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  /* Optical tracking. A geometric sans set at 24px needs meaningfully tighter
+     spacing than the same face at 11px; setting one global `tracking-tight`
+     would over-tighten the small UI text that makes up most of a dashboard.
+     Binding letter-spacing to each STEP of the type scale means every
+     `text-*` utility in both portals is optically corrected automatically,
+     with no per-component classes to remember or keep in sync. */
+  --text-2xs: 0.625rem; /* 10px — micro-labels, badge counts, kbd hints */
+  --text-2xs--line-height: 1.4;
+  --text-2xs--letter-spacing: 0.01em;
+  /* 11px and 13px — the two steps the scale was missing, which is why about
+     sixty call sites wrote `text-[11px]` / `text-[13px]` by hand. Named for
+     the job rather than the size: `caption` is metadata under a value
+     (timestamps, hints, legend rows); `label` is a compact title inside a
+     dense surface (toast and popup headlines, list-row names, eyebrows). */
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1.45;
+  --text-caption--letter-spacing: 0.005em;
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.4;
+  --text-label--letter-spacing: -0.003em;
+  --text-xs--letter-spacing: 0.005em;
+  --text-sm--letter-spacing: 0em;
+  --text-base--letter-spacing: -0.011em;
+  --text-lg--letter-spacing: -0.017em;
+  --text-xl--letter-spacing: -0.02em;
+  --text-2xl--letter-spacing: -0.022em;
+  --text-3xl--letter-spacing: -0.026em;
+  --text-4xl--letter-spacing: -0.03em;
+
+  /* Explicit tracking utilities, for the cases the scale can't cover:
+     `tracking-tight` on a display heading, `tracking-label` on the uppercase
+     section eyebrows the sidebar and panel headers use. */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0em;
+  --tracking-label: 0.14em;
+
+  /* Line heights, tuned a touch open. Soft Modernism is an airy system: the
+     generous container padding below only reads as generous if the text
+     inside it is set with matching room. */
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* ── Motion ───────────────────────────────────────────────────────────────
+     One easing curve for every state change that moves geometry rather than
+     just colour — the sidebar collapse above all.
+
+     It decelerates hard and settles without overshooting, which is what makes
+     a width transition read as "sprung" rather than "eased". A true spring
+     (and Framer Motion with it) buys nothing here: width is a layout property,
+     so it is recalculated on the main thread either way, and this project
+     already animates everything in CSS on purpose — see the note above the
+     @keyframes block about the bundle size. */
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* The micro-interaction curve: a strong ease-out that commits in the first
+     frames and settles long. Presses, popovers and dialog entrances use it —
+     an interface that answers at the START of a transition feels fast at a
+     duration where a symmetric ease feels sluggish. Kept separate from
+     Tailwind's own `--ease-out` so the stock utility keeps its meaning. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* The SLIDE curve: a symmetric ease-in-out for something that travels
+     across the screen and lands, which is what a segmented control's
+     indicator does. Softer at the start than the classic (0.77, 0, 0.175, 1)
+     "strong" in-out, because this one answers a click — at 200ms that curve
+     spends its first 40ms nearly motionless, and a pill that hesitates after
+     a press reads as lag rather than as weight. */
+  --ease-slide: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ══ DARK MODE ══════════════════════════════════════════════════════════════
+   Same token names, different values. Nothing below this point in the file,
+   and nothing in any component, needs to know which theme is active.
+
+   Dark is a co-equal theme, not a counterpart. The 2026-09-17 briefs specify
+   BOTH surface sets — slate-50 and white in light; pure black, zinc-900 and
+   zinc-800 hairlines in dark — sharing one emerald accent and the same
+   geometry. (Before those briefs, dark was a green-cast charcoal under a neon
+   accent, treated as light's counterpart; the block below records what
+   changed and why.)
+
+   Two inversions do the work:
+
+   1. ELEVATION FLIPS DIRECTION. In light, the canvas is the tinted neutral
+      and raised surfaces are the whitest — a card lifts by getting closer to
+      white. In dark, base-950 is the darkest thing on screen and raised
+      surfaces get lighter. Keeping the token NAMES semantic is what lets the
+      same `bg-base-900` mean "panel" in both.
+
+   2. SATURATED ACCENTS LIGHTEN. #166534 reads beautifully on white and sits
+      at 2.48:1 on the zinc-900 card — unusable for text. Every accent therefore has a
+      dark-mode counterpart around the 300–400 step, chosen so the badge
+      pattern this design system is built on (`bg-x/15` fill + full-strength
+      `text-x` label) clears WCAG AA on a base-900 card. */
+.dark {
+  /* ══ BLACK AND ZINC: A SURFACE LIFTS BY GETTING LIGHTER ══════════════════
+     READ THIS BEFORE CHANGING A base-* VALUE.
+
+     History, because this block changed character twice on 2026-09-17:
+       · before, an "inverted ramp" — charcoal canvas (#18191D) under
+         NEAR-BLACK cards (#0D0E10), so panels read as wells;
+       · then, briefly, Tailwind slate — a #0F172A canvas under #1E293B cards;
+       · now, per the admin refactor brief, a PURE BLACK canvas under zinc-900
+         cards with zinc-800 hairlines.
+
+     The brief allowed zinc-900 or slate-900 for cards. Zinc was chosen: on
+     pure black a blue-tinted slate card reads as navy, and the brief's
+     hairline is zinc-800, so a slate card would put two colour temperatures
+     on one edge. The rule is the conventional one:
+
+       IN DARK, EVERY LAYER THAT SITS HIGHER IS LIGHTER.
+
+       #000000  canvas      pure black — the page
+       #18181B  card        zinc-900 — panels, sidebar, table headers
+       #232326  floating    just above zinc-900 — dropdowns, popovers,
+                            modals. NOT zinc-800: that is also the hairline,
+                            and a zinc-800 panel inside a zinc-800 border
+                            measures 1.00:1, i.e. no outline at all
+       #09090B  well        zinc-950 — inset fields, search, code pills:
+                            one step back from the card
+
+     Measured: card on canvas 1.19:1, floating on card 1.13:1, well on card
+     1.12:1. None of those states an edge by itself, so the `slate-200`
+     hairline below (zinc-800) keeps doing that work. */
+  --color-base-950: #09090B;   /* canvas — zinc-950, one step under the cards */
+  --color-base-900: #18181B;   /* cards, sidebar, table headers — zinc-900 */
+  --color-base-850: #202024;   /* dropdowns, popovers, modals — the lift */
+  --color-base-800: #111114;   /* inset wells, search field, code pills */
+  --color-base-700: #27272A;   /* zinc-800 */
+  --color-base-border: #27272A;
+
+  /* See the light-theme note: an input cannot share the card colour here, or
+     it disappears into it. #09090B is the well step — one move back toward the
+     canvas, so a field reads as recessed into the panel. */
+  --color-field: #09090B;
+
+  /* The oblong brief's reference capsule, literally: zinc-900 under a
+     zinc-800 hairline (`border-slate-200` resolves to #27272A below). */
+  --color-segmented-track: #111114;
+  --color-switch-knob: #A1A1AA;
+
+  /* On a dark canvas the overlay ink is white — a near-black hairline would
+     disappear into the surface it is meant to separate. */
+  --color-tint: #FFFFFF;
+
+  /* The chrome ramp, inverted. Same ROLES as the light values they replace —
+     50 fills a well, 100 draws the faintest divider, 200 a panel's and an
+     input's hairline, 300 a hover — which is what lets `border-slate-200` stay
+     the one thing a panel border is written as in both themes. JSX uses only
+     these four slate steps (177 of its 197 slate utilities are slate-200), so
+     remapping them here re-themes every border in both portals at once.
+
+     `slate-200` resolves to zinc-800 (#27272A), the brief's hairline: 1.19:1
+     on a zinc-900 card and 1.41:1 on the black canvas. It is faint by request
+     ("subtle low-contrast borders"), and still the only thing separating a
+     card from the page. (Under the brief slate palette this step had to be
+     slate-700, because the card itself was slate-800 and a border of the same
+     value drew nothing.)
+
+     Neutral zinc, to match the neutral surfaces — a blue hairline on black
+     reads as a colour cast. */
+  --color-slate-50: #09090B;
+  --color-slate-100: #1F1F23;
+  --color-slate-200: #27272A;
+  --color-slate-300: #3F3F46;
+
+  /* The pale brand wash, inverted: emerald-500 at 12% over the zinc card,
+     rather than a near-white mint, which at #ECFDF5 would paint a white tile on
+     a dark card. */
+  --color-brand-50: #172B27;
+  /* See the light note. One step up off the canvas, still well below the
+     fill step, so an active chip reads as lit rather than as a button. */
+  --color-brand-100: #1E3A33;
+
+  /* The emerald ramp stays a REAL green in both themes because it means
+     success, not brand. Without this line `bg-emerald-50` would paint its
+     near-white light value on a dark card the moment anyone used it. */
+  --color-emerald-50: #172B27;
+
+  /* The active nav row, dark counterpart: emerald-500 at 15% over the zinc
+     sidebar, carrying emerald-400 ink. #34D399 on #17302A measures 7.32:1. */
+  --color-nav-active: #17302A;
+  --color-nav-active-fg: #34D399;
+
+  /* Brand, dark: EMERALD. This was the reference's neon #00E676, which on
+     these dark surfaces reads as a different product from the light theme's
+     forest green. Emerald keeps one hue across both themes and the mobile app
+     (mobile is the palette source of truth). Mobile itself has no dark theme,
+     so these steps are chosen here rather than copied from AppColors.
+
+     Same three roles as light — 500 fills, 400 is the text/icon step, 600 is
+     the CTA fill. Measured on the black and zinc surfaces:
+
+       #34D399  400, text   9.22:1 card · 10.92:1 canvas · 8.15:1 floating
+       #10B981  500, fill   6.98:1 on the card if used as text — right for a
+                            dot, a focus ring or a chart line; still not the
+                            text step, which is 400 */
+  --color-brand-500: #10B981;
+  --color-brand-400: #34D399;
+  --color-brand-300: #6EE7B7;
+  --color-brand-600: #10B981;
+
+  /* See the light note. 500 is the ring step in dark for exactly the reason
+     quoted above it: right for a dot, a focus ring or a chart line. */
+  --color-focus: #10B981;
+
+  /* Inverted against light: an emerald fill carrying DARK ink. #000000 on
+     #10B981 measures 8.28:1; WHITE on the same fill is 2.54:1, which is
+     exactly why this is declared as a pair and never as
+     `bg-brand-* text-white`. The ink is the canvas colour, so a CTA reads as a
+     shape punched through to the page. Hover brightens rather than darkens,
+     the convention this block has always kept for dark. */
+  --color-brand-cta: #10B981;
+  --color-brand-cta-fg: #000000;
+  --color-brand-cta-hover: #34D399;   /* brighter on hover — 10.92:1 */
+
+  /* The type ramp, dark: slate-100 / slate-300 / slate-400. Kept from the
+     earlier brief, which asked for slate text by name; on neutral zinc its
+     slight coolness reads as crispness rather than as a cast. Measured on the
+     surfaces text actually lands on:
+
+                   card    canvas   floating
+       primary    16.17    19.17    14.31
+       secondary  11.93    14.14    10.56
+       muted       6.91     8.19     6.11   <- the floor: menus and modals
+
+     The floor was 4.84 on the slate palette; on zinc the muted step has real
+     headroom again. Still re-measure before lightening `--color-base-850`. */
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #CBD5E1;
+  --color-text-muted: #94A3B8;
+
+  --color-success: #22C55E;
+  --color-warning: #FBBF24;
+  /* Danger and violet are on their 400 steps. On the brief slate-800 card they
+     had to go one step lighter — their badges are `text-x` on a `bg-x/15`
+     wash, and red-400 / violet-400 measured 4.26:1 / 4.18:1 there. On the
+     darker zinc-900 card the same pairs measure 5.15:1 / 5.17:1, so the more
+     saturated, more alarming red is legible again. Every danger button is a
+     wash with danger-coloured type (see .btn-danger), never white on a solid
+     danger fill. */
+  --color-danger: #F87171;
+  /* Sky. This was briefly cyan: while the brand was blue, `info` at #38BDF8
+     collided exactly with brand-500 and informational badges rendered in the
+     accent. Moving info one hue
+     across keeps it separable. With the brand back on emerald that collision
+     is gone, so info returns to sky — the same hue family as mobile's
+     `info` #0EA5E9, one step brighter for a dark card. */
+  --color-info: #38BDF8;
+  --color-severity-high: #FB923C;
+  --color-violet: #A78BFA;
+
+  --surface-panel: #18181B;   /* opaque, matching base-900 */
+
+  --color-hairline: #26262B;
+  --color-divider: #222226;
+  --color-kpi-shell: #111114;
+
+  /* The CTA inverts: near-white with a near-black label (18.5:1). */
+  --color-cta: #FAFAFA;
+  --color-cta-fg: #09090B;
+  --color-cta-hover: #E4E4E7;
+
+  --color-segment-active: #2A2A2F;
+  --color-segment-active-fg: #FAFAFA;
+  --color-segment-ring: rgba(255, 255, 255, 0.08);
+
+  /* Pastel does not survive a dark ground; each tone becomes a 14-18% wash
+     of its 500 step under its 300 step ink, all above 7:1. */
+  --color-pill-success: rgba(16, 185, 129, 0.14);
+  --color-pill-success-fg: #6EE7B7;
+  --color-pill-warning: rgba(245, 158, 11, 0.14);
+  --color-pill-warning-fg: #FCD34D;
+  --color-pill-danger: rgba(239, 68, 68, 0.16);
+  --color-pill-danger-fg: #FCA5A5;
+  --color-pill-info: rgba(14, 165, 233, 0.15);
+  --color-pill-info-fg: #7DD3FC;
+  --color-pill-high: rgba(249, 115, 22, 0.15);
+  --color-pill-high-fg: #FDBA74;
+  --color-pill-violet: rgba(139, 92, 246, 0.18);
+  --color-pill-violet-fg: #C4B5FD;
+  --color-pill-neutral: rgba(255, 255, 255, 0.08);
+  --color-pill-neutral-fg: #D4D4D8;
+
+  /* ── The elevation values, dark ───────────────────────────────────────────
+     Same contract as light: a surface's edge is the `slate-200` border (which
+     in this theme resolves to #334155), and only genuinely floating layers
+     cast. The drops are heavier here purely because a shadow on a slate-900
+     canvas has less room to read than one on slate-50 — same design, more
+     alpha to reach the same legibility. */
+  --elev-panel: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 8px rgba(0, 0, 0, 0.25);
+  --elev-hover: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 24px -6px rgba(0, 0, 0, 0.40);
+  --elev-overlay:
+    0 4px 14px -2px rgba(0, 0, 0, 0.55),
+    0 2px 6px -2px rgba(0, 0, 0, 0.40);
+  --elev-modal:
+    0 24px 48px -12px rgba(0, 0, 0, 0.65),
+    0 6px 14px -6px rgba(0, 0, 0, 0.45);
+  --elev-brand: none;
+  --elev-brand-hover: none;
+  --elev-brand-sm: none;
+
+  /* Skeletons, inverted. White at a HIGHER alpha than light mode's slate — the
+     same relationship every other value in this block has, and for the reason
+     the elevation note gives: a lift on a near-black card has less room to read
+     than the equivalent drop on white, so it needs more alpha to land at the
+     same perceived weight. A card here is #18181B; 10% white takes it to about
+     #2F2F32, the dark-mode twin of light's #E9EAEC on white. */
+  --color-skeleton: rgba(255, 255, 255, 0.10);
+  --color-skeleton-muted: rgba(255, 255, 255, 0.06);
+  --color-scrollbar: rgba(16, 185, 129, 0.32);
+  --color-scrollbar-hover: rgba(16, 185, 129, 0.50);
+
+  /* The line is the TEXT step, not the fill step: a 2px stroke is read like
+     type, and #34D399 holds 9.22:1 on the card. The area under it keeps 500. */
+  --color-chart-line: #34D399;
+  --color-chart-fill: #10B981;
+  --color-chart-grid: rgba(255, 255, 255, 0.06);
+  --color-chart-axis: #94A3B8;
+  --color-chart-cursor: rgba(255, 255, 255, 0.04);
+  --color-chart-neutral: rgba(255, 255, 255, 0.2);
+}
+
+/* Code, path and route pills — `/pricing`, `MV-A1B2C3D4`. A soft container
+   rather than bare mono text, so a route reads as a value you could copy
+   rather than as prose. */
+.code-pill {
+  display: inline-flex;
+  align-items: center;
+  /* Capsule. A reference code is a discrete VALUE the card is holding, which
+     is the same thing a status pill is, so the two share a shape. */
+  border-radius: 9999px;
+  background-color: var(--color-base-800);
+  border: 1px solid var(--color-slate-200);
+  padding: 0.125rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+/* ══ PRINT ═════════════════════════════════════════════════════════════════
+   "Export PDF" on the report drawer is window.print() against this block —
+   every browser's print dialog offers "Save as PDF", so the capability is real
+   without bundling a PDF library into a bundle that already trips Vite's size
+   warning. The output is selectable text rather than a canvas raster, which
+   matters for a document that may end up in an incident file.
+
+   `visibility` rather than `display:none` on the hidden parts: the report area
+   is nested deep inside a fixed-position drawer, and display:none on any
+   ancestor removes the descendant too. visibility:hidden is inherited but
+   individually overridable, so the subtree can be turned back on.
+
+   Colours are forced to plain white/near-black. The pastel canvas prints as a
+   flat wash of toner on the printers a guardhouse actually has, and most
+   browsers drop backgrounds by default anyway. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #report-print-area,
+  #report-print-area * {
+    visibility: visible;
+  }
+
+  #report-print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    background: #ffffff;
+    color: #0F172A;
+  }
+
+  /* The drawer's own chrome must not clip the printed flow. */
+  #report-print-area,
+  #report-print-area * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  #report-print-area section {
+    break-inside: avoid;
+    border-color: #E5E7EB;
+    background: transparent;
+  }
+
+  #report-print-area p,
+  #report-print-area h2,
+  #report-print-area h3 {
+    color: #0F172A;
+  }
+}
+
+/* Theme switching, without paying for it on every other interaction.
+   A permanent `transition: background-color` on every element would also
+   animate hover states, table row highlights and the sidebar collapse —
+   making the whole UI feel laggy to hide a 200ms event that happens rarely.
+   ThemeProvider adds this class for the length of the switch and removes it,
+   so the cross-fade is global but momentary. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    fill 200ms ease,
+    stroke 200ms ease,
+    box-shadow 200ms ease !important;
+  transition-delay: 0ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-switching,
+  .theme-switching *,
+  .theme-switching *::before,
+  .theme-switching *::after {
+    transition: none !important;
+  }
+}
+
+/* Shared motion for portalled overlays (status dropdowns) and the toast
+   stack. Defined once at the top level — Tailwind v4's `animate-[…]`
+   arbitrary value only references a keyframe, it doesn't create one. */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Collapsed-sidebar tooltips. Slides in from the rail rather than just
+   fading, so the label reads as belonging to the icon it came from. */
+@keyframes tooltipIn {
+  from {
+    opacity: 0;
+    transform: translate(-4px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+/* Mirror of tooltipIn for left-placed tooltips — it must slide in from the
+   side it is anchored to, or it appears to come from behind the control. */
+@keyframes tooltipInLeft {
+  from {
+    opacity: 0;
+    transform: translate(4px, -50%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(0, -50%);
+  }
+}
+
+/* A row that arrived in real time.
+   Fades a brand wash out over ~2s rather than pulsing: a repeating highlight on
+   a live queue means several rows blinking at once during a busy shift, which
+   is harder to read than no highlight at all. One decay, then gone.
+
+   Animates `background-color` only. A transform or a height change here would
+   reflow the table on every arrival, and the row is inside a scroll container
+   an operator may be reading. */
+@keyframes rowFlash {
+  from {
+    background-color: color-mix(in oklab, var(--color-brand-500) 16%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+/* The panic banner's heartbeat.
+
+   Pulses a halo OUTSIDE the plate and never the plate's own fill. A banner
+   that flashed between two reds would swing the contrast of the label sitting
+   on it twice a second, and that label is the part naming who is in trouble —
+   so the colour under the text holds at 6.47:1 and only the air around it
+   moves.
+
+   The resting shadow is repeated in both stops so the ring is the only thing
+   that changes; `.sos-banner` restates it again for the reduced-motion case,
+   where this animation is switched off entirely. */
+@keyframes sosPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 10px 24px -6px color-mix(in oklab, var(--color-sos-plate) 55%, transparent),
+      0 0 0 0 color-mix(in oklab, var(--color-sos-plate) 45%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 10px 24px -6px color-mix(in oklab, var(--color-sos-plate) 55%, transparent),
+      0 0 0 0.6rem color-mix(in oklab, var(--color-sos-plate) 0%, transparent);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* ── Panel entrance ──────────────────────────────────────────────────────
+   This block used to hold seven keyframes. Six of them — `float`,
+   `glowPulse`, `radarSweep`, `ringPing`, `drawLine`, `growBar`,
+   `markerDrop` — existed solely to drive the login screen's animated hero
+   illustration, which is gone (see auth/LoginLayout.jsx). They were deleted
+   with it rather than left as dead CSS shipped to every page in both bundles.
+
+   `riseIn` survives because it is not hero-specific: ConfirmDialog uses it
+   for its modal entrance, and the login card uses it once on mount. It
+   animates only `transform` and `opacity`, so it stays on the compositor and
+   never triggers layout, and `prefers-reduced-motion` disables it below. */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Popover entrance — see .popover. Scale starts at 0.96, not 0: a menu that
+   grows from nothing reads as an effect, one that settles from 96% reads as
+   the control answering. */
+@keyframes popoverIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes scrimIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Side-drawer entrance, for a panel that arrives from the right edge rather
+   than appearing in the middle of the screen.
+
+   `riseIn` was tried first and is wrong for this shape: a full-height rail
+   that fades upward reads as a modal that missed its mark, because nothing
+   about the motion says which edge it came from — and on the dispatch map
+   that direction is the whole point. The panel slides in from the side the
+   map is being cleared towards, so the camera pan and the panel arrive as one
+   movement instead of two unrelated ones.
+
+   Full width of the panel, not a token nudge: a drawer that starts 24px off
+   its final position looks like a rendering glitch. `transform` and `opacity`
+   only, so it stays on the compositor, and `prefers-reduced-motion` disables
+   it below with the rest. */
+@keyframes drawerInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Indeterminate progress sweep, for work whose duration is genuinely unknown —
+   today just client-side image compression, where canvas encoding reports no
+   percentage and a determinate bar would have to invent one.
+
+   Animates `transform` only, so it stays on the compositor rather than
+   re-laying-out the tile thirty times a second. The element is sized to a
+   third of its track by the utility class; this slides that third across.
+
+   Under `prefers-reduced-motion` the rule below stops it, leaving a static
+   partial bar — which is fine, because the tile also says "Optimising…" in
+   words. The motion is never the only carrier of the state. */
+@keyframes indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
+/* ── THE LEAF, THE APP'S WAITING MARK ───────────────────────────────────────
+   Ported from the resident app's `LeafLoader` (lib/core/widgets/leaf_loader.dart)
+   so a resident who installs the phone app and an officer who opens the console
+   wait on the same mark. The three values below are that widget's, not
+   re-invented: a 1100ms linear turn, and a breathing scale of
+   `0.88 + 0.12 * sin(t)`.
+
+   CSS cannot evaluate a sine, so `leafBreathe` samples that curve at the
+   quarter points — sin hits 0, 1, 0, -1 — giving 0.88, 1.00, 0.88, 0.76. The
+   easing between the stops does the rest, and the result is the same slow
+   swell rather than a linear pulse that would read mechanical.
+
+   Rotation and scale are separate keyframes on NESTED elements, mirroring the
+   Flutter tree (`Transform.rotate` wrapping `Transform.scale`). Composing both
+   into one `transform` would force a single shared duration, and the turn and
+   the breath are deliberately different lengths.
+
+   A third keyframe, `leafTraverse`, walked the leaf along a progress track for
+   one pass. The session screen is the mark alone now, so it went with the
+   track. */
+@keyframes leafSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes leafBreathe {
+  0% {
+    transform: scale(0.88);
+  }
+  25% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.88);
+  }
+  75% {
+    transform: scale(0.76);
+  }
+  100% {
+    transform: scale(0.88);
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  /* Honour the OS setting. Everything still renders in full, it simply holds
+     still — animation is decoration everywhere in this codebase, never
+     information. */
+  [class*='animate-'],
+  .popover,
+  .dialog-scrim,
+  .dialog-panel,
+  /* The panic banner pulses through a class that does not carry `animate-` in
+     its name, so it would have escaped the selector above. It is listed here
+     explicitly, and it loses nothing that matters: the red plate, the siren
+     glyph, the alert count and the resident's name are all static, and the
+     banner keeps its resting shadow. The pulse was never the carrier of the
+     message — the same rule this whole block is written on. */
+  .sos-banner,
+  .step-enter {
+    animation: none !important;
+  }
+
+  .btn:active:not(:disabled),
+  .icon-btn:active:not(:disabled),
+  .chip:active:not(:disabled),
+  .switch:active:not(:disabled) {
+    transform: none;
+  }
+
+  /* The segmented pill jumps instead of sliding. Nothing is lost: the
+     selected label is recoloured either way, which is the actual signal. */
+  .segmented-indicator,
+  .switch,
+  .switch-knob {
+    transition-duration: 0ms !important;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-base-950);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    /* Both halves of the pair, not just the WebKit one. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ══ BROWSER SURFACES ═══════════════════════════════════════════════════
+     The parts no component draws still carry the palette: text selection,
+     native checkbox / radio / range accents, and the caret. */
+  ::selection {
+    background-color: color-mix(in oklab, var(--color-brand-500) 22%, transparent);
+    color: var(--color-text-primary);
+  }
+
+  :root {
+    accent-color: var(--color-brand-500);
+  }
+
+  input,
+  textarea {
+    caret-color: var(--color-brand-500);
+  }
+
+  /* The focus floor. `:where()` keeps specificity at zero, so a component
+     that draws its own treatment (.field's ring, .icon-btn's outline) still
+     wins; this only catches controls that drew none — which until now was
+     every .btn, segment and nav row in both portals. Keyboard only. */
+  :where(a, button, summary, [role='button'], [role='tab'], [role='switch'], [tabindex]:not([tabindex='-1'])):focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  /* Tabular figures, everywhere numbers are read in a column.
+     Inter ships proportional figures by default — lovely in a sentence, wrong
+     in a table, where a column of "11:07" and "12:44" will not align on the
+     colon unless every digit claims the same advance width. `tnum` is the
+     OpenType feature that fixes it; `font-variant-numeric` is the modern
+     spelling and `font-feature-settings` the fallback for older engines.
+
+     JetBrains Mono is monospaced so this is a no-op there — declared anyway so
+     the rule reads as "numbers in tables are tabular", not "the UI face needs
+     a patch", and survives a future font swap.
+
+     That last clause has now been tested: the UI face WAS swapped, Figtree to
+     Inter, and this rule needed no change because it was never written about
+     Figtree. Inter defaults to proportional figures too and exposes the same
+     `tnum` feature, so the reasoning transferred with the name. */
+  table,
+  .tabular,
+  [class*='font-mono'] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  /* ══ BROWSER AUTOFILL ═══════════════════════════════════════════════════
+     Chrome paints its own background and text colour on any field it has
+     autofilled, through a UA rule carrying `!important`. On the sign-in card
+     that lands as a pale rectangle INSIDE the field's rounded well: the border
+     and fill live on the wrapper (see auth/LoginForm.jsx#Field, which has to
+     wrap the input together with its leading icon), and the input itself is
+     `bg-transparent`. Chrome fills that transparent inner box, so the artefact
+     is a hard-edged light block sitting inside a rounded dark control — the
+     one element on the screen not drawn by this stylesheet.
+
+     ── WHY A 5000s TRANSITION AND NOT A BACKGROUND OVERRIDE ─────────────────
+     `background-color` cannot be won directly; the UA rule outranks author CSS
+     including `!important`. But the property is TRANSITIONABLE, and a
+     transition is honoured — so an absurd duration means the animation toward
+     the autofill colour never visibly progresses, and the element keeps
+     rendering its own background indefinitely. It is a trick, and it is the
+     only approach that works across Chrome, Edge and Safari.
+
+     ── WHAT IS DELIBERATELY *NOT* HERE ──────────────────────────────────────
+     The other common fix is `box-shadow: 0 0 0 1000px <colour> inset`, painting
+     over the autofill fill. It is omitted on purpose: Tailwind's `ring-*`
+     utilities compile to `box-shadow`, and `.field` puts `focus:ring-2` on the
+     INPUT itself. An author `box-shadow` here would silently delete the focus
+     ring on every field in the provisioning form the moment the browser had
+     autofilled it — trading a cosmetic artefact for a missing focus indicator,
+     which is an accessibility regression (WCAG 2.4.7). The login field is
+     safe (its ring is on the wrapper) but a rule in @layer base applies to
+     both, so the safe form is the only correct one.
+
+     `-webkit-text-fill-color` is required alongside: Chrome overrides `color`
+     too, and without it autofilled text renders near-black on the dark card.
+     Both it and `caret-color` read from the theme token, so the pair stays
+     correct in light and dark without a `dark:` variant. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    transition: background-color 5000s ease-in-out 0s;
+    -webkit-text-fill-color: var(--color-text-primary);
+    caret-color: var(--color-text-primary);
+  }
+
+  /* Chrome's autofill "key" glyph is a fixed-colour raster that reads as a
+     bright smudge on a dark field. It is decoration on a control that already
+     has a leading icon of its own. */
+  input::-webkit-credentials-auto-fill-button,
+  input::-webkit-contacts-auto-fill-button {
+    background-color: var(--color-text-muted);
+  }
+}
+
+@layer components {
+  /* ══ CONTAINERS ═══════════════════════════════════════════════════════════
+     Dashboard panels, data-grid wrappers, modals and drawers.
+
+     RADIUS: `rounded-xl`, 12px — the SURFACE tier. This has been 6, 12, 16, 20
+     and 24 across successive passes; the 2026 corporate-SaaS direction settled
+     it at 16, and it was moved back down to 12 on 2026-09-23 by request.
+     The concentric KPI shell is derived from this value (12 outer − 4 padding
+     = an 8px face), so moving this moves that too — and it did.
+
+     A tighter 6px corner was argued for here, on the grounds that a desktop
+     console reads as more precise. That is a fair argument and it is the one
+     this block used to end on — but it belongs to the pass before the
+     reference image. What is true of both passes is the lower bound: below
+     about 4px a 900px-wide panel corner stops being legible as a corner.
+
+     THE BORDER IS NOT THE ONLY EDGE ANY MORE. It was, for exactly one pass,
+     when --shadow-panel resolved to `none` and a hairline on white over the
+     canvas was the entire depth system. The reference's cards are bordered AND
+     softly raised, so the hairline now sits over `--shadow-panel`
+     (`--elev-panel`) rather than in place of it. The pairing is the point: the
+     border draws the edge, the shadow lifts the plane.
+
+     (The blur's removal is still worth the note it always had: it cost real
+     GPU time on every scroll of a long table and forced a stacking context
+     that half the codebase works around — see Select, StatusControl,
+     OverflowMenu, Tooltip, NotificationBell, ToastProvider, every one of which
+     portals into document.body because a blurred ancestor trapped it.) */
+  .card {
+    @apply rounded-xl border border-hairline;
+    background-color: var(--surface-panel);
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* ── THE PANIC BANNER ────────────────────────────────────────────────────
+     Owns its plate, its ink, its resting shadow AND its pulse together rather
+     than composing them from utilities at the call site. That is forced by the
+     pulse: it animates `box-shadow`, so a `shadow-overlay` utility on the same
+     element would be overwritten on every frame of the animation.
+
+     The plate is `--color-sos-plate`, which deliberately does not follow the
+     theme — see the token. White on it is 6.47:1 in light AND dark.
+
+     The resting shadow is declared here as well as inside the keyframe so that
+     switching the animation off for `prefers-reduced-motion` leaves a banner
+     with depth rather than a flat rectangle. */
+  .sos-banner {
+    background-color: var(--color-sos-plate);
+    color: var(--color-sos-ink);
+    box-shadow: 0 10px 24px -6px color-mix(in oklab, var(--color-sos-plate) 55%, transparent);
+    animation: sosPulse 1.6s ease-in-out infinite;
+  }
+
+  /* The hover response, as one class. Opt-in rather than baked into .card: a
+     KPI card or a table row that answers the pointer should respond, but a
+     static section panel that reacts to a passing cursor reads as a misfire.
+
+     FLAT MEANS THE BORDER MOVES, NOT THE CARD. The claymorphism version lifted
+     2px on a deepened shadow; both are gone. A corporate console answers hover
+     by darkening its edge one slate step and adding a hairline shadow — the
+     card stays exactly where it is, which is what keeps a dense dashboard from
+     twitching as the pointer crosses it. `transition-colors` rather than
+     `transition-all` so nothing else can quietly animate. */
+  .card-interactive {
+    @apply transition-[border-color,box-shadow] duration-150 hover:border-slate-200;
+  }
+
+  .card-interactive:hover {
+    box-shadow: var(--shadow-hover);
+  }
+
+  /* ══ HEADER CARD ══════════════════════════════════════════════════════════
+     The third radius tier, and the one that looks like a typo until you check
+     the source: 5px, which is mobile's `AppRadius.xxs`. The Flutter home
+     header (lib/features/home/screens/home_screen.dart#_buildHeader) documents
+     itself as `rounded-[5px] bg-white border border-slate-100 shadow-sm p-4`,
+     so this class is a literal port of that string and the two are meant to be
+     compared side by side.
+
+     WHY A CARD RATHER THAN A BAR, quoting the mobile rationale because it
+     applies identically here: a full-bleed strip with a hairline under it only
+     separates itself downward, and on a pure-white canvas the header and the
+     body become the same surface with nothing but that one line between them.
+     A bordered card is separated on all four sides and matches how every other
+     block on the page is framed.
+
+     PARITY, NEARLY RESTORED. The 5px radius was a literal port of mobile's
+     `AppRadius.xxs`; the claymorphism pass pushed it to 16px because clay
+     cannot express a 5px corner. The corporate pass brings it back to
+     `rounded-lg` — 6px, one pixel off the mobile value and inside the brief's
+     4–6px band. That single pixel is not worth a bespoke radius token, but it
+     is worth recording that the two are now effectively aligned again. */
+  /* ── KPI CARD (see KpiCard.jsx) ──────────────────────────────────────────
+     A shell holding a raised face: the face is a white 12px card with the
+     panel shadow, the shell a 16px frame whose own strip carries the trend.
+     4px of shell around the face keeps the corners concentric (16 - 4 = 12). */
+  .kpi-shell {
+    @apply flex min-w-0 flex-col rounded-xl border border-hairline p-1;
+    background-color: var(--color-kpi-shell);
+  }
+
+  /* 8px, not 12: the shell is 12 with 4px of padding, so the face has to be
+     12 - 4 to stay concentric. It was 12 while the shell was 16. */
+  .kpi-face {
+    @apply min-w-0 rounded-lg border border-hairline bg-base-900;
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* ══ ICON TILES ═══════════════════════════════════════════════════════════
+     The spec's standardized squircle frame for LEAD icons — the glyph that
+     identifies a row in a data table, a sidebar section, or a KPI card.
+
+     One class rather than the `w-10 h-10 rounded-lg bg-brand-50 …` string
+     retyped per call site, because that string was already drifting: lead
+     glyphs across the two portals were variously bare, circular, or boxed at
+     three different sizes. `.icon-tile` is the 40px default; `-sm` (32px) is
+     for dense table rows, `-lg` (48px) for KPI headers.
+
+     A tile only ever holds a GLYPH, never a label, so WCAG 1.4.11's 3:1
+     graphics floor applies rather than 1.4.3's 4.5:1 for text. brand-400
+     (#065F46) on brand-50 (#ECFDF5) measures ~7.3:1 and clears both, so a tile
+     that ever does need to carry text is already safe.
+
+     (This certified #0369A1 on #EFF6FF at 5.3:1 until 2026-09-23 — the BLUE
+     pair, from a pass that has since been reversed. Re-measure this line
+     whenever the brand ramp moves: a stale contrast certificate is worse than
+     no certificate, because it gets read as evidence.) */
+  /* Flat: a plain brand-tinted square. No shadow, no inset highlight — a tile
+     is a colour field behind a glyph, and at 32–48px any elevation treatment
+     is noise at the scale of a few pixels.
+
+     `bg-brand-50`, not `bg-emerald-50`. The tile is a BRAND surface, so it
+     follows the accent TOKEN rather than naming a colour. That indirection was
+     added when the brand briefly moved to blue and hardcoded emerald kept
+     painting green. The brand has since moved back to emerald — the mobile
+     app's AppColors is the palette authority — and the indirection is exactly
+     what made that reversal a one-token change. The emerald ramp below is a
+     different thing and still means SUCCESS, not brand. */
+  .icon-tile {
+    @apply flex shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-400;
+  }
+
+  .icon-tile-sm {
+    @apply h-8 w-8 rounded-lg;
+  }
+
+  .icon-tile-md {
+    @apply h-10 w-10;
+  }
+
+  .icon-tile-lg {
+    @apply h-12 w-12;
+  }
+
+  /* Tone variants, for tiles that carry a semantic rather than a brand
+     meaning (a danger tile on a critical incident row). Same geometry. */
+  .icon-tile-danger {
+    @apply bg-danger/10 text-danger;
+  }
+
+  .icon-tile-warning {
+    @apply bg-warning/10 text-warning;
+  }
+
+  .icon-tile-info {
+    @apply bg-info/10 text-info;
+  }
+
+  .icon-tile-neutral {
+    @apply bg-slate-100 text-text-secondary;
+  }
+
+  /* ══ FORM CONTROLS ════════════════════════════════════════════════════════
+     A corporate field is a WHITE BOX WITH A BORDER. That is three changes from
+     what this was, and each one is the brief:
+
+       radius   pill  →  rounded-lg. A stadium-shaped text input is the single
+                         loudest "consumer app" signal in a form.
+       fill     base-800 (grey well)  →  base-900 (the card's own white). A
+                         grey fill was doing the job the border now does, and
+                         two cues for one edge makes the field look heavier
+                         than everything around it.
+       depth    inset shadow  →  none. The recess was the claymorphism pass's
+                         central idea; flat design states the edge instead of
+                         modelling it.
+
+     FOCUS moves the border to the accent AND adds a ring. Both, not either:
+     the border colour is what a colourblind user reads, the ring is what
+     carries at a glance across a dense form. `border-brand-500` rather than
+     the CTA blue because this is an indicator, not a label surface — the 3:1
+     graphics floor applies, not 4.5:1.
+
+     THE RING AND THE BORDER COMPOSE SAFELY because neither is a hand-written
+     `box-shadow`. Tailwind's ring utilities compile to a `box-shadow` that
+     composes several slots and live in @layer utilities, which beats @layer
+     components — so a raw `box-shadow` declared here would be REPLACED the
+     instant the field is focused. That trap is why the old inset had to be
+     applied as a utility; with the inset gone there is nothing left to lose,
+     but the rule still holds for anything added here later. */
+  .field {
+    @apply w-full rounded-lg border border-slate-200 bg-field px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/20;
+  }
+
+  /* Identical to .field apart from the vertical padding. The two used to
+     differ in radius as well — a pill input beside a rounded-rectangle
+     textarea — and now that every control is `rounded-lg` that distinction,
+     and the safety-net rule that policed it, are both nearly redundant. The
+     rule below is kept anyway: it costs one selector and it is what stops a
+     future pill experiment from clipping a four-row textarea again. */
+  .field-textarea {
+    @apply w-full rounded-lg border border-slate-200 bg-field px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted outline-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/20;
+  }
+
+  /* ── SAFETY NET ───────────────────────────────────────────────────────────
+     A textarea can never be a pill, whichever class it is given.
+     `.field` is `rounded-full`, which is right for a 40px-tall field and
+     catastrophic on a 300px one: the radius resolves to half the HEIGHT, so the
+     box renders as a stadium and the curve eats the first and last lines of
+     text. Every textarea in the app had this — the compose-broadcast Message
+     box and the guard-notes box were oblongs with their placeholders clipped.
+
+     Fixing the five call sites was the actual repair; this rule is what stops
+     it coming back. `textarea.field` is (0,1,1) against `.field`'s
+     (0,1,0), so it wins on specificity regardless of source order — someone
+     reaching for "the input class" on a multi-line field now gets the right
+     shape instead of a bug that only shows up in a screenshot. */
+  textarea.field {
+    @apply rounded-lg py-2.5;
+  }
+
+  /* ══ BUTTONS ══════════════════════════════════════════════════════════════
+     Standardized action-button scale, shared by both portals. Tailwind v4's
+     `@apply` only accepts real utility classes (not other custom classes),
+     so these compose in the HTML instead of via CSS: every button combines
+     exactly one shape class (.btn), one size class (.btn-md/.btn-sm/
+     .btn-icon-md/.btn-icon-sm), and optionally one colour variant —
+     e.g. class="btn btn-md btn-brand". Colour variants are named by action
+     severity, not by which page uses them, so "Resolve" on the guard queue
+     and "Resolve" in the admin modal are visually identical.
+
+     8px, THE CONTROL TIER — not the capsule this block used to demand in
+     capitals. The 2026-09-17 oblong brief made every action trigger a capsule.
+     The corporate-SaaS direction that followed it reversed that: `rounded-full`
+     is reserved for things that are READ — status, trend, count and filter
+     pills — while things that are PRESSED take the 8px control tier, so shape
+     tells a label apart from a target. Buttons, inputs, the search field and
+     segmented controls are all 8px.
+
+     This block and the declaration below contradicted each other for a while,
+     which is how the capsule came back once already. If they ever disagree
+     again, the declaration is the one that ships. */
+  /* ── PRESS ────────────────────────────────────────────────────────────────
+     Transform is listed in the transition so the press both lands and releases
+     on the same strong ease-out. `:not(:disabled)` keeps a disabled control
+     inert to the pointer rather than merely faded. */
+  .btn {
+    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: 150ms;
+    transition-timing-function: var(--ease-out-strong);
+  }
+
+  /* 97% — the smallest scale that still reads as the control yielding. Below
+     about 95% a 44px button visibly jumps. */
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  /* Generous click targets, per the spec's web-ergonomics rule. The pill
+     geometry needs the extra horizontal room for the same reason .field
+     does — the curve eats the ends. */
+  .btn-md {
+    @apply h-10 px-4;
+  }
+
+  /* px-4 — the oblong brief's capsule inset. It was px-3.5 while buttons were
+     rectangles; a capsule's curve eats ~4px at each end of a 36px row, and at
+     14px sides the first glyph sat inside the bend. Height unchanged, so no
+     toolbar or dialog footer reflows. */
+  .btn-sm {
+    @apply h-9 px-3.5 text-xs;
+  }
+
+  /* ── THE COMPACT TIER ─────────────────────────────────────────────────────
+     `px-4 py-1.5 text-xs` — the standard small action button, the size the
+     dialogs use for Cancel/Submit, and the oblong brief's reference capsule
+     (a 28px row, matching a segment and a status badge exactly, so a compact
+     button, a filter chip and a badge on one line share one height).
+
+     WHY A THIRD TIER RATHER THAN RESIZING .btn-md. `.btn-md` is 44px tall with
+     24px of side padding, which is right for a page-level call to action
+     sitting alone on a toolbar and much too heavy for a pair of buttons in a
+     modal footer: two of them fill the width of the dialog and read as the
+     loudest thing on a form whose actual content is the fields above. Shrinking
+     .btn-md itself would have dragged every page's primary CTA down with it, so
+     the fix is a tier the dense surfaces opt into.
+
+     Height comes from the padding rather than a fixed `h-*`, which is what
+     keeps it flush with a `text-xs` label and lets it sit inline beside a
+     field without a hardcoded pixel height to keep in sync. */
+  .btn-compact {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* The FORM tier: `px-4 py-2` on a 14px label, a 36px capsule. What a
+     Settings card's Save and Discard use — one step up from the compact tier
+     because it commits a change to live consoles, and one step below
+     `.btn-md` because it sits inside a card footer, not alone on a page. */
+  .btn-form {
+    @apply px-4 py-2 text-sm;
+  }
+
+  /* The dispatch drawer's tier: `px-3 py-1.5 text-xs` with a hairline edge.
+     The drawer stacks two or three of these in a 416px rail beside
+     telemetry badges, so the capsule is tighter than .btn-compact, and every
+     variant carries the same 1px `border-slate-200` (zinc-800 in dark) so a
+     filled and an outlined button in one row stand the same height. */
+  .btn-drawer {
+    @apply border border-slate-200 px-3 py-1.5 text-xs;
+  }
+
+  .btn-icon-md {
+    @apply h-11 w-11 px-0;
+  }
+
+  .btn-icon-sm {
+    @apply h-9 w-9 px-0;
+  }
+
+  /* Retained as an alias: .btn is already a pill. Kept so existing
+     `btn btn-pill btn-md` call sites do not have to be swept — and it now
+     says `rounded-full`, so it can never again quietly undo the pill. */
+  .btn-pill {
+    @apply rounded-full;
+  }
+
+  /* Any surface filled with brand that carries a label on top. One class, so
+     the fill and its legible foreground can never be separated — see the
+     --color-brand-cta pair in the token block for why a bare `text-white`
+     is not sufficient. */
+  .surface-brand {
+    background-color: var(--color-cta);
+    color: var(--color-cta-fg);
+  }
+
+  /* The primary CTA. Hover moves AWAY from the canvas in both themes — light
+     darkens toward emerald-800, dark brightens toward emerald-300 — so the
+     label's contrast ratio improves under the pointer rather than degrading,
+     which is the failure mode of a naive `hover:bg-brand-400`. */
+  /* Properties restated rather than `@apply surface-brand` — Tailwind v4's
+     @apply only accepts real utility classes, not other custom ones (the same
+     constraint that makes the .btn scale compose in the HTML). */
+  .btn-brand {
+    background-color: var(--color-cta);
+    color: var(--color-cta-fg);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  }
+
+  .btn-brand:hover:not(:disabled) {
+    background-color: var(--color-cta-hover);
+  }
+
+  /* ── Tonal variants ───────────────────────────────────────────────────────
+     A tinted wash at 10% opacity cannot define its own edge, so these carry a
+     border for the same structural reason .card now does. Under the flat
+     system that makes them consistent with everything else rather than an
+     exception — every surface in the palette is now bounded by a line. */
+  .btn-success {
+    @apply border border-success/25 bg-success/10 text-success hover:bg-success/20;
+  }
+
+  .btn-warning {
+    @apply border border-warning/25 bg-warning/10 text-warning hover:bg-warning/20;
+  }
+
+  .btn-danger {
+    @apply border border-danger/25 bg-danger/10 text-danger hover:bg-danger/20;
+  }
+
+  .btn-outline {
+    @apply border border-slate-200 bg-base-900 text-text-primary hover:border-slate-300 hover:bg-slate-50;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  /* ══ SEGMENTED CONTROLS ═══════════════════════════════════════════════════
+     The inline tab group — "All / Active / Archived", the Light/Dark/System
+     theme picker, the report-scope switcher. A track carrying two to four
+     mutually exclusive options, exactly one of which is on.
+
+     THIS IS A CONSOLIDATION, NOT A NEW CONTROL. The pair below was written out
+     by hand at nine call sites across both portals (ResidentsPage,
+     HistoryPage ×2, SecurityAccountsPage, SecurityReportsPage, SettingsPage ×2,
+     FiledReportsTable, and the guard SettingsPage), and had already drifted in
+     the two ways copied markup always drifts: the segment was `px-3.5 py-1.5`
+     in six places and `h-7 px-3` in three, and the inactive hover was
+     `bg-tint/5` in some and `bg-tint/[0.06]` in others. Neither difference was
+     intentional — they are the fossil record of which file was copied from
+     which — and both are visible when two of these sit on one screen, as they
+     do on the Reports page.
+
+     WHY THE TRACK IS TINTED RATHER THAN WHITE. A segmented control has to read
+     as ONE object with a selected part, not as N buttons that happen to be
+     adjacent. The recessed track is what does that, and it is the same
+     `bg-base-800` well the inputs use — so "recessed" means one thing across
+     the system.
+
+     The selected segment is `.surface-brand`, which is the fill/foreground PAIR
+     rather than `bg-brand-500 text-white`; see the token block for why a
+     hardcoded white label cannot survive the dark inversion.
+
+     ── THE OBLONG PASS (2026-09-17) ──────────────────────────────────────────
+     Track and segment are capsules now, modelled on the brief's reference
+     timeframe switch: a `rounded-full` track with a 4px inner gutter and an
+     emerald pill that SLIDES between options instead of jumping.
+
+     All of that lives in `SegmentedControl.jsx`; every hand-written copy of
+     this markup has been moved onto it. The slide is Emil Kowalski's
+     clip-path tab technique rather than a moving box behind the labels: the
+     component renders the labels twice, the second copy in the selected
+     colours, and clips that copy to the selected segment. Moving the clip
+     moves the pill AND recolours each label at exactly the pixel the pill's
+     edge crosses it, which a colour transition on the labels cannot do (the
+     label flips while the pill is still on its way). */
+  .segmented {
+    @apply relative isolate inline-flex max-w-full items-center gap-0.5 rounded-lg border border-hairline p-0.5;
+    background-color: var(--color-segmented-track);
+  }
+
+  /* One option. `py-1.5` on a `text-xs` label gives a 28px capsule, the same
+     height as a `md` status badge and a `.btn-compact`, so the three can share
+     a toolbar row without any of them looking like it sits on its own
+     baseline. Padding rather than a fixed height is what lets a segment
+     carrying a count pill grow to fit it instead of clipping.
+
+     `position: relative` is structural: the keyboard focus ring is an
+     ::after that must paint ABOVE the indicator layer (see
+     .segmented-indicator), and it can only do that as a positioned box. */
+  .segment {
+    @apply relative flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium outline-none select-none;
+    transition-property: color, background-color, opacity;
+    transition-duration: 150ms;
+    transition-timing-function: ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* The label hover is gated on a real pointer. On touch, a tap leaves
+     :hover stuck on the last segment pressed, which then looks half-selected
+     beside the real selection. */
+  .segment-idle {
+    @apply cursor-pointer text-text-secondary disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .segment-idle:hover:not(:disabled) {
+      background-color: color-mix(in oklab, var(--color-tint) 6%, transparent);
+      color: var(--color-text-primary);
+    }
+  }
+
+  /* The selected segment BEFORE the indicator has measured itself — the
+     first server-less paint, a control inside a `display: none` ancestor, a
+     browser without ResizeObserver. The indicator replaces this the moment it
+     has a real rectangle to clip to; until then the selection is still
+     visible, just without the slide. */
+  .segment-active {
+    background-color: var(--color-segment-active);
+    color: var(--color-segment-active-fg);
+    box-shadow: inset 0 0 0 1px var(--color-segment-ring), 0 1px 2px rgba(15, 23, 42, 0.06);
+  }
+
+  /* Keyboard focus. An ::after ring rather than `outline`, because the
+     indicator layer is painted over the selected segment and would hide an
+     outline drawn on the button itself; a positioned pseudo-element with a
+     higher z-index lands on top of it. Inset by 3px so it fits the track's
+     4px gutter even when the track clips its overflow (the scrolling
+     tab strip that scrolls on a phone). */
+  .segment:focus-visible::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    z-index: 2;
+    border-radius: 9px;
+    box-shadow: 0 0 0 2px var(--color-focus);
+    pointer-events: none;
+  }
+
+  /* The sliding pill. One layer covering the whole track, painted in the
+     selected colours and clipped to the selected segment's rectangle; the
+     component writes the clip as `inset(… round 9999px)`, so the visible part
+     is always a capsule. Moving the clip is a paint-only change — no layout,
+     no transform on the labels — and CSS interpolates two `inset()` shapes
+     natively, so the whole slide is one declarative transition.
+
+     200ms on the slide curve, per the brief's `duration-200 ease-in-out`,
+     and `clip-path` rather than `all`: nothing else on this layer should ever
+     animate. */
+  .segmented-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-color: var(--color-segment-active);
+    color: var(--color-segment-active-fg);
+    transition: clip-path 200ms var(--ease-slide);
+  }
+
+  .segmented-indicator[data-instant='true'] {
+    transition: none;
+  }
+
+  /* Each mirrored label sits exactly on its button's measured box. */
+  .segmented-indicator > .segment {
+    position: absolute;
+    /* The raised segment's edge. Every copy carries it; the clip shows only
+       the active one, so the ring lands exactly on the visible pill. */
+    box-shadow: inset 0 0 0 1px var(--color-segment-ring);
+  }
+
+  /* Inline tallies inside a segment or chip ("Pending 3"). The fill is
+     derived from the label's own colour, so the same pill reads correctly in
+     the idle layer, in the selected layer and on either theme without a
+     branch — a hardcoded `bg-base-950/20` only worked on one of the four. */
+  .count-pill {
+    @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1.5 text-2xs font-semibold leading-none tabular-nums;
+    background-color: color-mix(in oklab, currentColor 16%, transparent);
+  }
+
+  /* The larger tier, for a segmented group acting as a page's SUB-NAVIGATION
+     rather than as a filter on a panel — the Security Accounts tabs, which
+     carry `role="tab"` and switch the whole view
+     under them.
+
+     A genuine second size rather than an inconsistency to flatten: these sit
+     alone under a page title and are the primary way around the screen, so they
+     take a 14px label and a 32px target, where the inline filter tier is a
+     12px label on a 28px target sitting in a toolbar beside other controls.
+     Same track, same selected treatment, one step up in scale. */
+  .segment-lg {
+    @apply shrink-0 gap-2 text-sm;
+  }
+
+  /* ══ FILTER CHIPS ═════════════════════════════════════════════════════════
+     A row of independent, individually-toggled filters — category chips on
+     the officer report log, lifecycle filters on Announcements, the response
+     status filter on the map. Not a segmented control: chips sit loose, wrap,
+     and may each be on or off, where a segmented track holds exactly one
+     answer.
+
+     Same capsule and inset as a segment (`px-4 py-1.5`, 28px) so a chip row
+     and a segmented control on one toolbar share a height. The selected chip
+     takes the brand pair; a caller with a meaning of its own (a status tone)
+     passes its tone classes instead of `.chip-active`. */
+  .chip {
+    @apply inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium leading-4 select-none disabled:cursor-not-allowed disabled:opacity-40;
+    transition-property: color, background-color, border-color, box-shadow, transform;
+    transition-duration: 150ms;
+    transition-timing-function: var(--ease-out-strong);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .chip:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .chip-idle {
+    @apply border-slate-200 bg-base-900 text-text-secondary;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .chip-idle:hover:not(:disabled) {
+      border-color: var(--color-slate-300);
+      color: var(--color-text-primary);
+    }
+  }
+
+  .chip-active {
+    border-color: color-mix(in oklab, var(--color-pill-success-fg) 30%, transparent);
+    background-color: var(--color-pill-success);
+    color: var(--color-pill-success-fg);
+  }
+
+  /* ══ SWITCH ═══════════════════════════════════════════════════════════════
+     A capsule track with a round knob — the on/off control on both
+     consoles' Settings pages.
+     State is carried by `aria-checked`, not by a class, so the styling and
+     what a screen reader announces cannot disagree.
+
+     Off is the `slate-300` step in both themes (#CBD5E1 / #3F3F46): light
+     enough to read as "off", dark enough that the knob is a visible object
+     on it. On is the brand pair, with the knob taking the CTA foreground —
+     white on forest in light, black on emerald in dark, the same ink the
+     selected segment's label uses.
+
+     Only the knob's `transform` moves. It travels on the sprung curve the
+     sidebar uses; the track recolours on a plain ease alongside it. */
+  .switch {
+    @apply relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border border-transparent p-0.5 disabled:cursor-not-allowed disabled:opacity-40;
+    background-color: var(--color-slate-300);
+    transition-property: background-color, border-color, box-shadow, transform;
+    transition-duration: 200ms, 200ms, 150ms, 150ms;
+    transition-timing-function: ease, ease, ease, var(--ease-out-strong);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .switch:active:not(:disabled) {
+    transform: scale(0.96);
+  }
+
+  .switch[aria-checked='true'] {
+    background-color: var(--color-brand-cta);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .switch[aria-checked='false']:hover:not(:disabled) {
+      background-color: color-mix(in oklab, var(--color-slate-300), var(--color-tint) 10%);
+    }
+
+    .switch[aria-checked='true']:hover:not(:disabled) {
+      background-color: var(--color-brand-cta-hover);
+    }
+  }
+
+  .switch-knob {
+    @apply pointer-events-none block h-[18px] w-[18px] rounded-full;
+    background-color: var(--color-switch-knob);
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      0 1px 1px rgba(0, 0, 0, 0.06);
+    transition:
+      transform 220ms var(--ease-spring),
+      background-color 200ms ease;
+  }
+
+  .switch[aria-checked='true'] .switch-knob {
+    transform: translateX(20px);
+    background-color: var(--color-brand-cta-fg);
+  }
+
+  /* ══ NAVIGATION ═══════════════════════════════════════════════════════════
+     Sidebar rows: nav items, the collapse trigger, the footer's profile and
+     sign-out. No horizontal padding or gap of its own — the .nav-icon slot
+     below owns the left inset, which is what makes a collapsed rail centre its
+     glyphs without the row's background shifting.
+
+     `rounded-lg`: under the flat system a nav row takes the same 6px corner
+     as every other control; the pill tier is retired outside dots and avatars. */
+  /* py-2 — a 36px row, and the most the nav can afford.
+     THE ARITHMETIC, because this value has now moved twice. The admin
+     nav is 11 links, 3 group labels and 2 group gaps, and at 1280x720
+     it has 540px to live in. Measured: 84px of that is labels and group
+     gaps, leaving the rows and their gaps. At py-1.5 with gap-0.5 the
+     column came to 496px — safe, but tight enough to read as cramped.
+     At py-2 with gap-1 it is 512px, which still clears 540 with room.
+     The brief's py-2.5 with gap-3 computes to 620px, which is 80px past
+     the viewport and reintroduces exactly the scrolling it also asks to
+     avoid; those two requirements cannot both hold at 11 items. If the
+     looser spacing is wanted, something has to leave the nav. */
+  .nav-link {
+    @apply relative flex w-full items-center rounded-lg py-2 text-left text-sm font-medium tracking-normal text-text-secondary transition-colors duration-150 hover:bg-tint/[0.04] hover:text-text-primary;
+  }
+
+  /* Fixed-width icon column, animated in step with the rail. At w-64/px-4 the
+     slot is 2.75rem and at w-20/px-3 it is 3.5rem, which puts the glyph 38px
+     and 40px from the sidebar's left edge respectively — 2px of drift across
+     the whole collapse instead of a jump from left-aligned to centred. */
+  /* A sidebar group's name: small grey sentence case, like the table heads.
+     Replaces the uppercase eyebrow the redesign retired. */
+  .nav-group-label {
+    @apply truncate text-xs font-medium leading-4 text-text-muted;
+  }
+
+  .nav-icon {
+    @apply flex shrink-0 items-center justify-center transition-[width] duration-300 ease-spring;
+  }
+
+  /* Everything in a row that is not the icon. Its box is sized by flex-1
+     inside a container whose width is already animating, so the text is
+     squeezed out continuously rather than unmounting; the opacity fade only
+     has to stop it being legible while that happens. `duration-150` out vs
+     `delay-100` in means the label clears before the rail narrows, and does
+     not reappear until the rail has finished widening. */
+  .nav-label {
+    @apply min-w-0 flex-1 truncate transition-opacity;
+  }
+
+  /* The active row: a solid pastel emerald pill with emerald ink, per the
+     spec's "subtle pastel green pill background highlight". Both values come
+     from --color-nav-active(-fg), so the component never branches on theme;
+     it just asks for "the active row treatment".
+
+     A tint alone would read as a hover state. Hover is `bg-brand-500/[0.08]`
+     above, and the active fill sits clearly above it — a solid pastel pill
+     cannot be mistaken for a translucent hover wash. The icon REFILL (see
+     .nav-icon-glyph-active below) is the second, redundant signal. */
+  .nav-link-active {
+    background-color: var(--color-nav-active);
+    color: var(--color-nav-active-fg);
+  }
+
+  .nav-link-active:hover {
+    background-color: var(--color-nav-active);
+    color: var(--color-nav-active-fg);
+  }
+
+  /* ── Nav glyphs: STROKE ONLY ──────────────────────────────────────────────
+     These rules used to implement a "refill": an inactive nav glyph was line
+     art and an active or hovered one gained a translucent fill, so the icon
+     appeared to solidify as you selected it. That is gone.
+
+     The brief asks for one standardized thin-stroke icon set used consistently,
+     and a glyph that changes WEIGHT mid-interaction is the opposite of
+     consistent — it made the sidebar the only place in either console where an
+     icon rendered two different ways. Corporate consoles carry a single stroke
+     everywhere and let colour do the state work.
+
+     So an active row is now signalled by exactly two things, both of which the
+     row itself owns: the pale blue wash (--color-nav-active) and the accent
+     ink (--color-nav-active-fg). The glyph just inherits the colour.
+
+     `fill: transparent` is still declared, and still load-bearing: Lucide sets
+     `fill="none"` as an ATTRIBUTE on the SVG, and leaving the property unset
+     means anything that later sets `fill` on an ancestor can leak in. */
+  .nav-icon-glyph {
+    @apply text-slate-400 transition-colors duration-150;
+    fill: transparent;
+  }
+
+  .group:hover .nav-icon-glyph {
+    color: var(--color-text-secondary);
+  }
+
+  .nav-icon-glyph-active,
+  .group:hover .nav-icon-glyph-active {
+    color: var(--color-nav-active-fg);
+  }
+
+  /* ══ ICON BUTTONS ═════════════════════════════════════════════════════════
+     Global stroke weight is set once in React, not here: main.jsx wraps the
+     app in <LucideProvider strokeWidth={2}>, so every Lucide glyph in both
+     portals draws at the spec's 2px weight and a per-icon `strokeWidth` prop
+     is a deliberate exception rather than the norm.
+
+     What lives here is the CONTAINER. Icon-only controls previously each
+     invented their own box — the sidebar toggle, the header search, the
+     notification bell, the row overflow menu and the drawer close button were
+     four different sizes with three different hover treatments. One shape
+     class + one size class, same as the .btn scale above:
+
+         class="icon-btn icon-btn-sm"
+         class="icon-btn icon-btn-md icon-btn-active"   (toggled on) */
+  /* A circle, not a rounded square: an icon button is an action trigger, and
+     under the oblong rule every trigger is a capsule — at equal width and
+     height a capsule IS a circle. */
+  .icon-btn {
+    @apply inline-flex shrink-0 items-center justify-center rounded-lg text-text-muted transition-[color,background-color,border-color,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-tint/[0.05] hover:text-text-primary active:scale-[0.94] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent;
+  }
+
+  .icon-btn-sm {
+    @apply h-9 w-9;
+  }
+
+  .icon-btn-md {
+    @apply h-10 w-10;
+  }
+
+  /* Same pastel-pill language as .nav-link-active, so "this control is on"
+     means the same thing in the header as it does in the sidebar. */
+  .icon-btn-active {
+    background-color: var(--color-nav-active);
+    color: var(--color-nav-active-fg);
+  }
+
+  .icon-btn-active:hover {
+    background-color: var(--color-nav-active);
+    color: var(--color-nav-active-fg);
+  }
+
+  /* ══ FLOATING SURFACES ═══════════════════════════════════════════════════
+     Every menu, dropdown and notification panel is one object: the popover
+     fill, a slate hairline (in dark mode the only edge a floating layer has —
+     a shadow reads as nothing against charcoal) and the overlay shadow. It
+     grows out of the edge it is anchored to; set `--popover-origin` inline to
+     that edge ("top right", "bottom left"). */
+  .popover {
+    @apply rounded-xl border border-hairline bg-base-850;
+    box-shadow: var(--shadow-overlay);
+    transform-origin: var(--popover-origin, top);
+    animation: popoverIn 150ms var(--ease-out-strong);
+  }
+
+  /* Dialogs and sheets. The scrim fades on a short plain curve while the panel
+     rises a few pixels and settles from 98%, so opening a dialog is one gesture
+     rather than a hard cut to a darkened page. */
+  .dialog-scrim {
+    animation: scrimIn 180ms ease-out;
+  }
+
+  .dialog-panel {
+    animation: dialogIn 220ms var(--ease-out-strong);
+  }
+
+  /* `.eyebrow` IS GONE — this is a tombstone, not a declaration.
+     It was a small label set above or beside content: `uppercase` with
+     `tracking-label` originally, sentence case once all-caps was ruled a
+     regression here, and finally retired when the surfaces that used it moved
+     to SectionHeading, CardHeader and `.table-head`. This note used to say the
+     name was kept "because ~40 call sites use it". There are now none and the
+     class is not declared anywhere; it is recorded only so the name, where it
+     still appears in badgeStyles.js, reads as history rather than as a live
+     class to go looking for. */
+  /* A table's column heads: the reference's small grey sentence-case labels
+     on a pale band. Paired with `bg-slate-50` on the thead. */
+  .table-head {
+    @apply text-xs font-medium leading-tight tracking-normal text-text-muted;
+  }
+
+  /* A <th> is bold by the browser's own stylesheet; the heads take the row's
+     medium weight instead, as the reference's quiet column labels do. */
+  .table-head > th {
+    font-weight: inherit;
+  }
+
+  /* ── META LABEL: the one label style for metadata ─────────────────────────
+     Table column headers, and the label half of every label/value pair in a
+     detail view. These were set at three sizes — 10px (`text-2xs`) in the
+     incident breakdown, 12px in half the tables, 13px (`.eyebrow`) in the
+     other half — so a column header read smaller than the value under it, and
+     a detail label read smaller still.
+
+     Now one size, the SAME as the values beside them (14px). Label and value
+     are told apart by ink and weight instead of by shrinking the label:
+     secondary at medium weight, against primary. Secondary measures 7.58:1 on
+     a light card and 11.93:1 on a dark one. */
+  .meta-label {
+    @apply text-sm font-medium leading-snug tracking-normal text-text-secondary;
+  }
+
+  /* A wizard step arriving. The shared `riseIn` entrance, short and
+     ease-out: the step answers at the start of the motion, which is what makes
+     Next feel immediate. Listed in the reduced-motion block, where it holds
+     still. */
+  .step-enter {
+    animation: riseIn 200ms var(--ease-out-strong) both;
+  }
+
+  /* ══ WORKSPACE GRID ═══════════════════════════════════════════════════════
+     The spec's desktop standard: main page views are 12-column grids on a
+     `gap-6` gutter. `.page-grid` is that container; children place themselves
+     with ordinary `col-span-*` utilities, which is the part that has to stay
+     in the JSX because only the page knows how wide its own panels are.
+
+     Twelve columns rather than the `grid-cols-2` / `grid-cols-[1.6fr_1fr]`
+     one-offs this replaces: 12 divides by 2, 3, 4 and 6, so a two-thirds /
+     one-third split (8+4) and a four-up metric row (3+3+3+3) sit on the SAME
+     column track. They previously did not, which is why a KPI card's left edge
+     never lined up with the panel beneath it.
+
+     Sharing a track aligns OUTER edges only. An inner edge meets the four-up
+     KPI row's gutters only when it falls on a quarter line — 6+6, 9+3, 3+9.
+     An 8+4 split puts its gutter at two-thirds, which matches a THREE-up row
+     and nothing else.
+
+     ── WHERE A ROW SPLITS: `xl:`, NOT `lg:` ─────────────────────────────────
+     The sidebar rail appears at `lg` (1024px) and takes 256px at the same
+     instant a `lg:col-span-*` split takes effect, so crossing that breakpoint
+     makes the content column NARROWER while the layout gets DENSER. Measured
+     with the rail open: 965px of content at 1023px, 710px at 1024px. An 8+4
+     row there put its right panel at 221px, and the Overview's category donut
+     — sized as a share of that panel — fell from 415px to 58px across a single
+     pixel of viewport.
+
+     So page-level splits key off `xl` (1280px), where the rail leaves 966px
+     and a four-column cell is ~306px. Below it they stack, which at 710–965px
+     is the better use of the width anyway.
+
+     Container queries key off the real column and are the purer fix. They were
+     considered and not used: `container-type` applies layout containment,
+     which makes the container the containing block for `position: fixed`
+     descendants — and the map's fullscreen state and several modals render as
+     `fixed` from inside `<main>`. */
+  .page-grid {
+    @apply grid grid-cols-12 gap-6;
+  }
+
+  /* ── THE TWO VERTICAL RHYTHMS, AND WHICH ONE A PAGE TAKES ─────────────────
+     There are exactly two, they are not interchangeable, and the difference is
+     structural rather than aesthetic:
+
+       gap-6 (24px)  SCROLLING pages. The page is as tall as its content and
+                     the document scrolls, so panels can breathe. Matches
+                     .page-grid and .kpi-grid above, which is what makes a
+                     stacked panel line up with a KPI row's gutter.
+       gap-4 (16px)  FIXED-HEIGHT workspaces — anything whose root carries
+                     `h-full min-h-0`. These fit the viewport exactly and
+                     scroll INSIDE their columns (Tickets, History, Residents),
+                     so every 8px spent on a gutter is 8px taken from the
+                     queue. 24px there costs roughly a table row.
+
+     A scrolling page on gap-4 is drift, not a variation — security
+     PerformancePage was the one instance and is now gap-6. If a new page is
+     ambiguous, look for `h-full` on its root: that is the test. */
+
+
+  /* A row of four equal metric cards — the shape every KPI strip in both
+     portals uses. Defined once, rather than as five hand-copied sets of the
+     same three responsive spans, for the same reason .btn and .icon-tile are:
+     the copies had already drifted (gap-3 here, gap-4 there, `sm:grid-cols-2`
+     on one page and `grid-cols-2` on another). */
+
+  /* ── ONE, TWO OR FOUR — NEVER THREE ──────────────────────────────────────
+     This was `repeat(auto-fit, minmax(14rem, 1fr))`, chosen while the Admin
+     Overview carried three cards. It carries four again, and every row using
+     this class — the Overview, System Metrics and the System Health strip —
+     holds exactly four.
+
+     With four cards, auto-fit has a THREE-column state, and three columns of
+     four cards is three plus a lone orphan. Four columns need 968px (4 × 224 +
+     3 × 24); with the rail open a 1280px laptop leaves 966px. It missed by two
+     pixels, so the most common laptop in the building showed both the
+     Overview's KPI row and its health strip as 3+1. The same state covered
+     roughly 778–1023px without the rail and 1034–1281px with it.
+
+     Explicit steps remove that state: one up on a phone, two up from `sm`,
+     four up from `xl`. Two-up is balanced for four cards at every width it
+     covers, and `xl` is where the page-level splits move too (see
+     .page-grid), so the whole Overview changes shape at one breakpoint.
+
+     Four-up at 1280px with the rail open makes each card 223px — a pixel
+     under the old 14rem figure, which was only ever auto-fit's cut-off, not a
+     legibility floor. Measured there: no element escapes or clips any card,
+     and all four hold one equal height, 16px taller than at two-up because the
+     help text takes one more line. Do not raise this breakpoint to "fix" a
+     sub-14rem width without a measurement that shows something breaking.
+
+     An all-CSS alternative — auto-fit with a minimum of `25% - gutter` — does
+     force exactly four, but only if the browser's division lands on 4.0 rather
+     than 3.9999. That knife-edge is what produced the orphan, so it was not
+     used.
+
+     SkeletonKpiRow defaults to this class, so placeholders reflow with the
+     cards they stand in for and nothing shifts on load. */
+  .kpi-grid {
+    @apply grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4;
+  }
+
+  /* A three-card row would leave the fourth track empty at `xl`. No row holds
+     three today; this keeps the class honest if one ever does. Below `xl` a
+     three-card row still breaks 2+1 — use an explicit grid there, as Response
+     Metrics does for its six. */
+  .kpi-grid:has(> :nth-child(3):last-child) {
+    @apply xl:grid-cols-3;
+  }
+
+  /* ══ SKELETON LOADING ═════════════════════════════════════════════════════
+     The placeholder vocabulary, as classes rather than as the retyped
+     `animate-pulse rounded bg-tint/10` string that had spread to ~40 call
+     sites across both portals at four different alphas.
+
+     WHAT A SKELETON IS FOR HERE, since it decides every rule below: it is not
+     a spinner substitute, it is a RESERVATION. The page draws the shape and
+     the footprint of the content that is coming so that when the data lands it
+     is swapped in place rather than pushed in — which is the whole cumulative
+     layout shift (CLS) argument. A skeleton that does not match the real
+     element's box is worse than no skeleton at all, because it guarantees the
+     jump instead of merely permitting it.
+
+     Hence the sizing convention the JSX components enforce: a skeleton's
+     height is the LINE HEIGHT of the text it replaces (h-3 for a 12px caption,
+     h-4 for a 14px body line, h-7 for a 24px KPI figure), never an arbitrary
+     bar, and the container it sits in keeps the real layout's padding and gap.
+
+     `animate-pulse` is Tailwind's own keyframe and is already covered by the
+     global `prefers-reduced-motion` rule further up this file, which stops
+     every `animate-*` class — so a reduced-motion user gets the same static
+     placeholder layout, correctly sized, without the breathing. That is the
+     reason the pulse is a utility here rather than a bespoke keyframe: a
+     custom animation name would have had to opt back into that guard by hand. */
+  .skeleton {
+    @apply animate-pulse rounded;
+    background-color: var(--color-skeleton);
+  }
+
+  /* The secondary line — a caption under a heading, a timestamp under a name.
+     Pairing the two weights is what gives a placeholder block its hierarchy;
+     a stack of identical bars reads as a loading GRAPHIC, whereas a strong bar
+     over a weaker, shorter one reads as the paragraph it is standing in for. */
+  .skeleton-muted {
+    @apply animate-pulse rounded;
+    background-color: var(--color-skeleton-muted);
+  }
+
+  /* Avatars, status dots and the donut hole — anything whose real counterpart
+     is a circle. Kept as a modifier rather than a separate component so the
+     fill stays in one place. */
+  .skeleton-circle {
+    @apply animate-pulse rounded-full;
+    background-color: var(--color-skeleton);
+  }
+
+  /* A skeleton standing in for a whole SURFACE rather than a line of text: a
+     chart body, a map, an image tile. It takes the card's own 12px radius
+     instead of the 4px `rounded` the text bars use, because it is replacing a
+     panel-sized region and a text radius at that scale reads as a mistake. */
+  .skeleton-block {
+    @apply animate-pulse rounded-lg;
+    background-color: var(--color-skeleton-muted);
+  }
+
+  /* ══ DATA TABLES ══════════════════════════════════════════════════════════
+     The spec's data-grid wrapper: a white container at the generous radius,
+     with the delicate hairline and the soft ambient. `overflow-hidden` is what
+     makes the corner radius actually clip the first and last rows — without
+     it a table's own backgrounds paint square corners over the wrapper's
+     curve, which is the single most common way a rounded container fails. */
+  .data-panel {
+    @apply overflow-hidden rounded-xl border border-hairline bg-base-900;
+    box-shadow: var(--shadow-panel);
+  }
+
+  /* Table row hover, matched to the nav and icon-button language so a
+     pointer-responsive surface behaves the same everywhere. */
+  .data-row {
+    @apply transition-colors duration-150 hover:bg-slate-50/70;
+  }
+
+  /* Thin, translucent brand-tinted scrollbar for the app's scrollable
+     panels (triage queue, tables, activity feed) — replaces the bulky OS
+     default so it reads as part of the UI instead of a browser chrome
+     element. Firefox uses `scrollbar-*`; everything else uses ::-webkit-*. */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar) transparent;
+  }
+
+  /* SMOOTH SCROLLING, AND WHAT IT ACTUALLY GOVERNS.
+     `scroll-behavior` applies to PROGRAMMATIC and anchor scrolling —
+     `scrollIntoView`, `scrollTo`, a hash link — and not to the wheel or the
+     trackpad, which the compositor already animates. So this changes nothing
+     you can see today: there is no `scrollIntoView` or `scrollTo` anywhere in
+     either portal. It is declared because the moment one is added — "jump to
+     the flagged row", "back to top", a deep link to an incident — the default
+     is a teleport, and a teleport inside a fixed-height workspace is
+     genuinely disorienting: the chrome stays put while the content changes
+     underneath it with no motion to connect the two states.
+     `.custom-scrollbar` is the right hook because it is already on every
+     scroll container in the system, `main` included — the class means "this
+     scrolls" and now carries how it scrolls too.
+     Gated on the motion preference: someone who asked for less motion did not
+     ask for a slower jump. */
+  @media (prefers-reduced-motion: no-preference) {
+    html,
+    .custom-scrollbar {
+      scroll-behavior: smooth;
+    }
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar);
+    border-radius: 9999px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-hover);
+  }
+}
+
+/* ══ MAP POPUP ════════════════════════════════════════════════════════════════
+   The dispatch map's hover card for a guard unit (see setupUnitLayers in
+   IncidentMap). Mapbox ships its popup as a white 3px-radius box with a white
+   tip, painted by mapbox-gl.css.
+
+   OUTSIDE EVERY @layer, deliberately. mapbox-gl.css is imported from JS as a
+   plain unlayered stylesheet, and an unlayered rule beats any layered rule
+   whatever its specificity — so these overrides would lose silently inside
+   `@layer components`. Out here they win on specificity: each selector
+   carries one class more than the Mapbox rule it replaces.
+
+   The surface is the popover pair MapControls already uses on this map
+   (base-850 fill, slate-200 hairline), so the popup flips with the theme like
+   the toolbar beside it. The tip takes the fill on whichever side Mapbox
+   anchors it. */
+.map-popup {
+  /* Above the map's floating furniture — the controls panel, route badge and
+     toolbar are all z-10 inside IncidentMap's isolated stacking context — and
+     below its z-20 notices. */
+  z-index: 15;
+  /* .mapboxgl-map sets `font: 12px/20px Helvetica Neue…` on everything inside
+     the map container, and a popup is inside it. Without this the card would
+     be the one thing in the portal set in a different typeface. */
+  font-family: var(--font-sans);
+  line-height: 1.5;
+}
+
+.map-popup .mapboxgl-popup-content {
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-slate-200);
+  border-radius: var(--radius-xl);
+  background-color: var(--color-base-850);
+  box-shadow: var(--elev-overlay);
+}
+
+.map-popup.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip,
+.map-popup.mapboxgl-popup-anchor-bottom-left .mapboxgl-popup-tip,
+.map-popup.mapboxgl-popup-anchor-bottom-right .mapboxgl-popup-tip {
+  border-top-color: var(--color-base-850);
+}
+
+.map-popup.mapboxgl-popup-anchor-top .mapboxgl-popup-tip,
+.map-popup.mapboxgl-popup-anchor-top-left .mapboxgl-popup-tip,
+.map-popup.mapboxgl-popup-anchor-top-right .mapboxgl-popup-tip {
+  border-bottom-color: var(--color-base-850);
+}
+
+.map-popup.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: var(--color-base-850);
+}
+
+.map-popup.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: var(--color-base-850);
+}

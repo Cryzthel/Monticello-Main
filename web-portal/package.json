@@ -1,0 +1,41 @@
+{
+  "name": "monticello-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev-all.mjs",
+    "dev:admin": "npm run dev -w @monticello/admin-portal",
+    "dev:security": "npm run dev -w @monticello/security-portal",
+    "build": "npm run build --workspaces --if-present",
+    "build:admin": "npm run build -w @monticello/admin-portal",
+    "build:security": "npm run build -w @monticello/security-portal",
+    "preview:admin": "npm run preview -w @monticello/admin-portal",
+    "preview:security": "npm run preview -w @monticello/security-portal",
+    "lint": "oxlint"
+  },
+  "dependencies": {
+    "firebase": "^12.16.0",
+    "lucide-react": "^1.24.0",
+    "mapbox-gl": "^3.26.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.1",
+    "recharts": "^3.10.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "autoprefixer": "^10.5.4",
+    "oxlint": "^1.71.0",
+    "postcss": "^8.5.19",
+    "tailwindcss": "^4.3.2",
+    "vite": "^8.1.1"
+  }
+}

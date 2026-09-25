@@ -1,0 +1,620 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // Staff (admin/security) role check for the web dashboard. Role
+    // assignment itself is NOT client-writable — an approved staff_accounts
+    // doc can only be created/edited via the Firebase Console or an Admin
+    // SDK Cloud Function, mirroring how password_reset_otps stays
+    // server-only. Clients may only read their own row to learn their role.
+    function staffDoc() {
+      return get(/databases/$(database)/documents/staff_accounts/$(request.auth.uid));
+    }
+
+    // Granular roles mirror backend/src/config/roles.js — staff_accounts is
+    // the single source of truth for "who is staff and what can they do",
+    // read here directly and by the Express API's requireAuth middleware
+    // (via the Admin SDK, which bypasses these rules).
+    function isStaff() {
+      return isSignedIn()
+        && staffDoc().data.status == 'approved'
+        && staffDoc().data.role in
+          ['super_admin', 'hoa_admin', 'security_head', 'security_officer'];
+    }
+
+    function isAdminStaff() {
+      return isSignedIn()
+        && staffDoc().data.status == 'approved'
+        && staffDoc().data.role in ['super_admin', 'hoa_admin'];
+    }
+
+    function isSecurityStaff() {
+      return isSignedIn()
+        && staffDoc().data.status == 'approved'
+        && staffDoc().data.role in ['super_admin', 'security_head', 'security_officer'];
+    }
+
+    // Resident property (verify-first). Doc id must match the signed-in user.
+    match /properties/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Profile documents managed by the app. Staff may additionally read (but
+    // never write) a profile — the admin/security dashboards look up a
+    // reporter's phone number from here for the incident detail modal's
+    // "Contact Resident" action, same isStaff() gate already used for
+    // residents/incidents below.
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isStaff();
+      allow write: if isOwner(userId);
+    }
+
+    // Signup / verification workflow. A resident reads & upserts their own
+    // row (name/email/property fields); only staff may change
+    // verificationStatus (see AccountApprovalService, resident.controller.js
+    // verifyResident/rejectResident, both use the Admin SDK anyway, but this
+    // also lets the dashboard's own signed-in staff session update it).
+    match /residents/{userId} {
+      allow read: if isOwner(userId) || isStaff();
+      allow create: if isOwner(userId) || isAdminStaff();
+      // A resident may update their own profile/property fields, but never
+      // their own verificationStatus — only admin staff can approve/reject
+      // (verifyResident/rejectResident), otherwise a resident could just
+      // self-verify.
+      //
+      // Both sides default to 'pending' via .get() so that a doc which was
+      // created WITHOUT a status (PropertyStorage.saveVerifiedProperty writes
+      // only property fields) can still receive its initial 'pending' stamp
+      // from the owner. The strict `a == b` form denied that write, silently
+      // leaving residents with no status/name/email and therefore missing or
+      // blank on the admin Residents page. Self-approval is still blocked:
+      // once a real status exists, the owner can only write that same value.
+      allow update: if isAdminStaff()
+        || (isOwner(userId)
+          && request.resource.data.get('verificationStatus', 'pending')
+             == resource.data.get('verificationStatus', 'pending'));
+    }
+
+    // Incidents: residents create and read their own reports, add evidence to
+    // them, and rate the response once it is closed. Staff (admin/security)
+    // read every incident; only SECURITY staff may move one through the
+    // dispatch stages. Only admins may delete.
+    match /incidents/{incidentId} {
+
+      // ── THE DISPATCH WORKFLOW IS SECURITY-OWNED ──────────────────────────
+      //
+      //   DISPATCHED ─► RESPONDING ─► ON-SITE ─► INVESTIGATING ─► RESOLVED
+      //
+      // Every field the dispatch stages write. They are written only by
+      // web-portal/apps/security-portal/src/lib/dispatchWorkflow.js, one batch
+      // per stage, and each batch must be one of the edges in validTransition()
+      // below. No stage can be skipped, and none can be entered without its
+      // audit entry.
+      //
+      // Keep this list in step with that file. A field written there but not
+      // listed here becomes a field an administrator or a resident can quietly
+      // write.
+      function workflowFields() {
+        return [
+          'status', 'dispatchStage', 'stageUpdatedAt', 'lastLogId',
+          'acknowledgedAt', 'dispatchedAt', 'dispatchedByUid', 'dispatchedByName',
+          'assignedGuardUid', 'assignedGuardName', 'assignedGuardBadge',
+          'respondingAt', 'onSceneAt', 'arrival', 'investigatingAt',
+          'investigation', 'escalation',
+          'resolvedAt', 'resolvedBy', 'resolvedByName', 'resolution',
+          'ratingRequestedAt'
+        ];
+      }
+
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function touchesWorkflow() {
+        return changedKeys().hasAny(workflowFields());
+      }
+
+      // The stage the stored document is in. A report written before
+      // `dispatchStage` existed is read from its old status. This mirrors
+      // deriveDispatchStage in web-portal/packages/shared/src/lib/dispatchStage.js.
+      function currentStage() {
+        return resource.data.get('dispatchStage',
+          resource.data.status == 'dispatched' ? 'responding'
+          : resource.data.status == 'in_progress' ? 'on_site'
+          : resource.data.status in ['resolved', 'closed', 'false_alarm'] ? 'resolved'
+          : 'none');
+      }
+
+      // The officer the call is booked to, or a supervisor acting for them.
+      function isAssignedOrSupervisor() {
+        return resource.data.get('assignedGuardUid', '') == request.auth.uid
+          || staffDoc().data.role in ['super_admin', 'security_head'];
+      }
+
+      function isSecurityAccount(uid) {
+        let staff = get(/databases/$(database)/documents/staff_accounts/$(uid)).data;
+        return staff.status == 'approved'
+          && staff.role in ['super_admin', 'security_head', 'security_officer'];
+      }
+
+      // Every workflow write names the audit entry written beside it in the
+      // same batch, and that entry must exist once the batch lands. A stage
+      // change without its entry is refused, so the log is complete rather
+      // than best-effort. See status_log below.
+      function logged() {
+        let d = request.resource.data;
+        return d.lastLogId is string
+          && d.lastLogId != resource.data.get('lastLogId', '')
+          && d.stageUpdatedAt == request.time
+          && existsAfter(/databases/$(database)/documents/incidents/$(incidentId)/status_log/$(d.lastLogId));
+      }
+
+      // none → dispatched. Also dispatched → dispatched with another guard: a
+      // reassignment, usually after the 90-second acknowledgement window runs
+      // out. Any security officer may dispatch, and the guard picked must be
+      // an approved security account.
+      function isDispatch() {
+        let d = request.resource.data;
+        return currentStage() in ['none', 'dispatched']
+          && d.dispatchStage == 'dispatched'
+          && d.status == 'dispatched'
+          && d.assignedGuardUid is string
+          && isSecurityAccount(d.assignedGuardUid)
+          && d.assignedGuardName is string && d.assignedGuardName.size() > 0
+          && d.get('assignedGuardBadge', '') is string
+          && d.dispatchedAt == request.time
+          && d.dispatchedByUid == request.auth.uid
+          && d.dispatchedByName is string
+          && changedKeys().hasOnly([
+            'status', 'dispatchStage', 'stageUpdatedAt', 'lastLogId',
+            'dispatchedAt', 'dispatchedByUid', 'dispatchedByName',
+            'assignedGuardUid', 'assignedGuardName', 'assignedGuardBadge'
+          ]);
+      }
+
+      // dispatched → responding: the guard's Acknowledge & Respond.
+      function isRespond() {
+        let d = request.resource.data;
+        return currentStage() == 'dispatched'
+          && d.dispatchStage == 'responding'
+          && d.status == 'dispatched'
+          && d.respondingAt == request.time
+          && isAssignedOrSupervisor()
+          && changedKeys().hasOnly(['dispatchStage', 'stageUpdatedAt', 'lastLogId', 'respondingAt']);
+      }
+
+      // The rules measure the distance themselves. A guard who claims to be
+      // within 30 m must submit a fix that IS within 30 m of the pin. A guard
+      // who is not, or who has no fix, must give a reason (the override).
+      function validArrival(a) {
+        return a.keys().hasOnly(['lat', 'lng', 'accuracyM', 'distanceM', 'withinRadius', 'override', 'overrideReason'])
+          && a.withinRadius is bool
+          && a.override is bool
+          && (a.withinRadius
+            ? latlng.value(float(a.lat), float(a.lng)).distance(
+                latlng.value(float(resource.data.location.lat), float(resource.data.location.lng))) <= 30
+            : (a.override == true
+              && a.overrideReason is string
+              && a.overrideReason.size() >= 3
+              && a.overrideReason.size() <= 280));
+      }
+
+      // responding → on_site: "I have arrived".
+      function isArrive() {
+        let d = request.resource.data;
+        return currentStage() == 'responding'
+          && d.dispatchStage == 'on_site'
+          && d.status == 'in_progress'
+          && d.onSceneAt == request.time
+          && validArrival(d.arrival)
+          && isAssignedOrSupervisor()
+          && changedKeys().hasOnly(['status', 'dispatchStage', 'stageUpdatedAt', 'lastLogId', 'onSceneAt', 'arrival']);
+      }
+
+      function validInvestigation(inv) {
+        return inv.keys().hasOnly(['tags', 'photoUrls'])
+          && inv.get('tags', []) is list
+          && inv.get('tags', []).hasOnly([
+            'area_secured', 'medical_requested', 'police_requested',
+            'fire_requested', 'suspect_detained', 'property_damage'
+          ])
+          && inv.get('photoUrls', []) is list
+          && inv.get('photoUrls', []).size() <= 12;
+      }
+
+      // on_site → investigating.
+      function isInvestigate() {
+        let d = request.resource.data;
+        return currentStage() == 'on_site'
+          && d.dispatchStage == 'investigating'
+          && d.status == 'in_progress'
+          && d.investigatingAt == request.time
+          && validInvestigation(d.get('investigation', {}))
+          && isAssignedOrSupervisor()
+          && changedKeys().hasOnly(['dispatchStage', 'stageUpdatedAt', 'lastLogId', 'investigatingAt', 'investigation']);
+      }
+
+      function validEscalation(e) {
+        return e.keys().hasOnly(['at', 'byUid', 'byName', 'reason'])
+          && e.at == request.time
+          && e.byUid == request.auth.uid
+          && e.byName is string
+          && e.reason is string && e.reason.size() >= 3 && e.reason.size() <= 280;
+      }
+
+      // Inside INVESTIGATING: quick tags, scene photos, and a one-time
+      // escalation. The stage does not move, but each write is still logged.
+      function isInvestigationUpdate() {
+        let d = request.resource.data;
+        return currentStage() == 'investigating'
+          && d.dispatchStage == 'investigating'
+          && validInvestigation(d.get('investigation', {}))
+          && (!changedKeys().hasAny(['escalation'])
+            || (!('escalation' in resource.data) && validEscalation(d.escalation)))
+          && isAssignedOrSupervisor()
+          && changedKeys().hasOnly(['stageUpdatedAt', 'lastLogId', 'investigation', 'escalation']);
+      }
+
+      function validResolution(r) {
+        return r.keys().hasOnly(['outcome', 'notes', 'photoUrls'])
+          && r.outcome in [
+            'resolved_on_site', 'referred_authorities', 'medical_handover',
+            'false_alarm', 'no_issue_found', 'resident_unreachable'
+          ]
+          && r.notes is string && r.notes.size() >= 10 && r.notes.size() <= 1000
+          && r.photoUrls is list && r.photoUrls.size() >= 1 && r.photoUrls.size() <= 6;
+      }
+
+      // investigating → resolved. The outcome, notes and at least one photo
+      // are required. Stamps the time the resident app asks for a rating.
+      function isResolve() {
+        let d = request.resource.data;
+        return currentStage() == 'investigating'
+          && d.dispatchStage == 'resolved'
+          && d.status == 'resolved'
+          && d.resolvedAt == request.time
+          && d.resolvedBy == request.auth.uid
+          && d.resolvedByName is string
+          && d.ratingRequestedAt == request.time
+          && validResolution(d.resolution)
+          && isAssignedOrSupervisor()
+          && changedKeys().hasOnly([
+            'status', 'dispatchStage', 'stageUpdatedAt', 'lastLogId',
+            'resolvedAt', 'resolvedBy', 'resolvedByName', 'resolution', 'ratingRequestedAt'
+          ]);
+      }
+
+      function validTransition() {
+        return logged()
+          && (isDispatch() || isRespond() || isArrive() || isInvestigate()
+            || isInvestigationUpdate() || isResolve());
+      }
+
+      // The reporting resident's rating of a closed call: once, 1 to 5 stars.
+      function validRating() {
+        let r = request.resource.data.residentRating;
+        return currentStage() == 'resolved'
+          && !('residentRating' in resource.data)
+          && r.keys().hasOnly(['stars', 'comment', 'ratedAt'])
+          && r.stars is int && r.stars >= 1 && r.stars <= 5
+          && r.get('comment', '') is string && r.get('comment', '').size() <= 500
+          && r.ratedAt == request.time;
+      }
+
+      // A report starts where every report starts: pending, with no stage,
+      // no unit, no resolution and no rating. Both creators (the mobile app's
+      // report wizard and the Guardhouse's File a report) write exactly that,
+      // and nothing else may, or a resident could file a report that claims to
+      // be resolved already.
+      allow create: if isSignedIn()
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.get('status', 'pending') == 'pending'
+        && !request.resource.data.keys().hasAny(workflowFields().removeAll(['status']))
+        && !('residentRating' in request.resource.data);
+
+      allow read: if isSignedIn()
+        && (resource.data.reporterUid == request.auth.uid || isStaff());
+
+      // ── WHY A FIELD-LEVEL CARVE-OUT RATHER THAN isSecurityStaff() ────────
+      //
+      // Administrators still own real write operations on an incident that
+      // have nothing to do with dispatch: soft delete (`deletedAt`), archive
+      // and unarchive, restore, and the reviewed stamp on Audit History. So
+      // the test is on the FIELDS TOUCHED, not on the role alone: admin staff
+      // may write anything except the workflow set above.
+      //
+      // The reporting resident is held to the same line. The mobile app only
+      // adds evidence after a report is filed (hasMedia, photoUrls,
+      // videoUrls), so nothing it does touches the workflow. That keeps a
+      // resident from writing their own report's stage or its audit pointer.
+      //
+      // Note `isSecurityStaff()` includes super_admin, so a super_admin
+      // retains dispatch authority at the RULES layer even though the Admin
+      // portal's UI never offers it.
+      allow update: if isSignedIn() && (
+        (resource.data.reporterUid == request.auth.uid
+          && !touchesWorkflow()
+          && (!changedKeys().hasAny(['residentRating']) || validRating()))
+        || (isSecurityStaff()
+          && !changedKeys().hasAny(['residentRating'])
+          && (!touchesWorkflow() || validTransition()))
+        || (isAdminStaff()
+          && !touchesWorkflow()
+          && !changedKeys().hasAny(['residentRating']))
+      );
+
+      allow delete: if isSignedIn()
+        && (resource.data.reporterUid == request.auth.uid || isAdminStaff());
+
+      // ── THE FORENSIC LOG ─────────────────────────────────────────────────
+      //
+      // One entry per dispatch-workflow write, created in the same batch as
+      // the write it records (see logged() above), carrying who acted, the
+      // device they used, its battery and where it was. Append-only: nobody
+      // may edit or delete an entry, administrators included.
+      match /status_log/{logId} {
+        allow read: if isStaff();
+        allow create: if isSecurityStaff()
+          && getAfter(/databases/$(database)/documents/incidents/$(incidentId)).data.lastLogId == logId
+          && request.resource.data.toStage
+            == getAfter(/databases/$(database)/documents/incidents/$(incidentId)).data.dispatchStage
+          && request.resource.data.keys().hasOnly([
+            'action', 'fromStage', 'toStage', 'status',
+            'userId', 'userName', 'userRole', 'assignedGuardUid',
+            'at', 'clientAt', 'queuedOffline',
+            'geolocation', 'batteryLevel', 'charging', 'deviceTelemetry', 'detail'
+          ])
+          && request.resource.data.keys().hasAll([
+            'action', 'fromStage', 'toStage', 'userId', 'at',
+            'geolocation', 'batteryLevel', 'deviceTelemetry'
+          ])
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.at == request.time
+          && (request.resource.data.geolocation == null || request.resource.data.geolocation is map)
+          && (request.resource.data.batteryLevel == null || request.resource.data.batteryLevel is number)
+          && request.resource.data.deviceTelemetry is map;
+        allow update, delete: if false;
+      }
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdminStaff();
+    }
+
+    // Panic alerts — a resident may create their own (the SOS button) and
+    // read it back, but only security staff can acknowledge/resolve.
+    // onPanicAlertCreate (functions/index.js) does the FCM fan-out.
+    match /panic_alerts/{alertId} {
+      allow create: if isSignedIn()
+        && request.resource.data.residentUid == request.auth.uid;
+      // READ is isStaff(), not isSecurityStaff(). The narrower helper excludes
+      // 'hoa_admin', so the Admin portal's Panic Alerts (SOS) page — an
+      // oversight surface — would return permission-denied for every HOA
+      // administrator while quietly rendering an empty table. Administrators
+      // still watch the emergency stream; they simply do not write to it.
+      //
+      // UPDATE IS BACK TO isSecurityStaff(), reversing an earlier widening.
+      //
+      // That widening let administrators dispatch and resolve, on the argument
+      // that an SOS raised while the guardhouse is unattended should not wait
+      // for a guard to sign in. It has been withdrawn by request in favour of a
+      // single line of operational authority: the people who physically respond
+      // are the only ones who record what happened. An acknowledgement stamped
+      // by someone who is not attending stops the alert looking like it still
+      // needs a response, which is worse than leaving it unacknowledged.
+      //
+      // THE COST IS REAL. With no guard signed in, a live SOS can no longer be
+      // cleared from any console. That is the exact failure the widening
+      // prevented, so the mitigation has to be guardhouse coverage or a
+      // server-side escalation — not a client with write access.
+      //
+      // Every status field on this document is security-owned (status,
+      // acknowledgedBy/Name, acknowledgedAt, resolvedAt), so the whole update
+      // surface moves together and no field-level carve-out is needed here.
+      allow read: if isSignedIn()
+        && (resource.data.residentUid == request.auth.uid || isStaff());
+      allow update: if isSecurityStaff();
+    }
+
+    // Staff directory backing the admin/security web dashboard. A row is
+    // provisioned server-side (Console or Admin SDK) with status
+    // 'approved'; a signed-in staff member may only read their own row to
+    // resolve their role. Admins may additionally list/read every row for
+    // the Audit Trail's user-management view. Never client-writable.
+    match /staff_accounts/{userId} {
+      allow read: if isOwner(userId) || isAdminStaff();
+      // Still never client-CREATABLE: provisioning goes through the
+      // provisionStaffAccount callable (or the Console) so a role can't be
+      // self-granted. Revoking is different — an admin needs to be able to cut
+      // off a departed guard immediately, without waiting on a deploy.
+      allow create, update: if false;
+      allow delete: if isAdminStaff();
+    }
+
+    // Guard shift log backing the admin "Security On-Duty History" table.
+    // A guard clocks themselves in and out; an admin reads every row to audit
+    // who was on duty when.
+    //
+    // Deliberately NOT deletable and not freely updatable: a shift record is
+    // the timesheet an incident response is judged against, so a guard must not
+    // be able to rewrite when they were present. Create stamps timeIn, and the
+    // only permitted update is closing an open shift the guard owns.
+    // ── SHIFTS AND THE HANDOVER LOG ─────────────────────────────────────
+    //
+    // An officer may only write to their OWN shift, and only while it is still
+    // open — `timeOut == null` is what makes a closed shift immutable, which
+    // is the property the admin timesheet is billed from.
+    //
+    // The update previously constrained who and when but not WHAT, so any
+    // field could be added to a shift row. It is now a closed set: the fields
+    // a shift is created with, which may not change, plus the two this write
+    // is actually for — `timeOut` and the officer's handover.
+    match /guard_shifts/{shiftId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && request.resource.data.guardUid == request.auth.uid;
+      allow update: if isStaff()
+        && resource.data.guardUid == request.auth.uid
+        && resource.data.timeOut == null
+        && request.resource.data.keys().hasOnly([
+          'guardUid', 'name', 'email', 'role', 'timeIn', 'timeOut', 'createdAt', 'handover'
+        ])
+        // The identity of a shift is fixed once it is open. Without this an
+        // officer could close someone else's shift by rewriting guardUid, or
+        // lengthen their own by moving timeIn.
+        && request.resource.data.guardUid == resource.data.guardUid
+        && request.resource.data.timeIn == resource.data.timeIn
+        && (!('handover' in request.resource.data.keys())
+            || (request.resource.data.handover.keys().hasOnly(['summary', 'outstanding', 'filedAt'])
+                && request.resource.data.handover.get('summary', '') is string
+                && request.resource.data.handover.get('summary', '').size() <= 1000
+                && request.resource.data.handover.get('outstanding', '') is string
+                && request.resource.data.handover.get('outstanding', '').size() <= 1000));
+      allow delete: if false;
+    }
+
+    // Audit-log entries an admin has dismissed from the History view.
+    //
+    // The audit trail is DERIVED from timestamps on incidents/announcements, so
+    // there is no log row to delete. Removing an entry therefore records a
+    // dismissal here instead of destroying the underlying document — deleting
+    // the incident would erase the very evidence the audit log exists to keep.
+    // Shared rather than per-browser so the log reads the same for every admin.
+    match /audit_dismissals/{eventId} {
+      allow read: if isStaff();
+      allow create, delete: if isAdminStaff();
+      allow update: if false;
+    }
+
+    // ── Notification preferences (Admin Portal › Settings) ───────────────
+    // One document, two switches: `push.enabled` (resident push, read by the
+    // Cloud Functions) and `sos.sirenEnabled` (the guardhouse SOS siren).
+    // Schema: web-portal/packages/shared/src/lib/systemSettingsStore.js.
+    //
+    // Any staff account reads it — every guardhouse console needs the siren
+    // flag. Any administrator writes it. The shape is checked, so a write can
+    // only ever carry the two booleans and the save stamp.
+    // The shape is checked here as well as in sanitizeSettings, and the two
+    // are not redundant. The sanitizer defends the CONSUMERS from a bad
+    // document; this defends the DOCUMENT from a bad writer — an old build, a
+    // hand edit in the Firebase console, or an administrator's session being
+    // used for something other than the form. Types and enums only: the rule
+    // says what may be stored, the sanitizer says what a value means.
+    //
+    // `get([...], default)` reads a nested field without requiring it, so a
+    // partial merge — flipping one switch — is not forced to resend groups it
+    // is not touching.
+    match /system_settings/operations {
+      allow read: if isStaff();
+      allow create, update: if isAdminStaff()
+        && request.resource.data.keys().hasOnly([
+          'push', 'sos', 'incidents', 'guardhouse', 'residentApp', 'organisation',
+          'updatedAt', 'updatedBy'
+        ])
+
+        && request.resource.data.get('push', {}).keys().hasOnly(['enabled'])
+        && request.resource.data.get(['push', 'enabled'], true) is bool
+
+        && request.resource.data.get('sos', {}).keys().hasOnly([
+          'sirenEnabled', 'escalateAfterMinutes', 'geofenceAlert', 'hotlines'
+        ])
+        && request.resource.data.get(['sos', 'sirenEnabled'], true) is bool
+        && request.resource.data.get(['sos', 'geofenceAlert'], true) is bool
+        && request.resource.data.get(['sos', 'escalateAfterMinutes'], 3) is int
+        && request.resource.data.get(['sos', 'escalateAfterMinutes'], 3) >= 1
+        && request.resource.data.get(['sos', 'escalateAfterMinutes'], 3) <= 10
+        // Length only. The contents are a list of maps the sanitizer trims;
+        // rules cannot iterate a list, so this caps the blast radius instead.
+        && request.resource.data.get(['sos', 'hotlines'], []) is list
+        && request.resource.data.get(['sos', 'hotlines'], []).size() <= 8
+
+        && request.resource.data.get('incidents', {}).keys().hasOnly([
+          'autoAssign', 'ackTargetMinutes', 'resolveTargetHours', 'hazardTtlHours'
+        ])
+        && request.resource.data.get(['incidents', 'autoAssign'], false) is bool
+        && request.resource.data.get(['incidents', 'ackTargetMinutes'], 5) is int
+        && request.resource.data.get(['incidents', 'resolveTargetHours'], 24) is int
+        && request.resource.data.get(['incidents', 'hazardTtlHours'], 72) is int
+
+        && request.resource.data.get('guardhouse', {}).keys().hasOnly([
+          'sirenVolume', 'requireHandover', 'telemetryIntervalSeconds'
+        ])
+        && request.resource.data.get(['guardhouse', 'sirenVolume'], 0.8) is number
+        && request.resource.data.get(['guardhouse', 'sirenVolume'], 0.8) >= 0
+        && request.resource.data.get(['guardhouse', 'sirenVolume'], 0.8) <= 1
+        && request.resource.data.get(['guardhouse', 'requireHandover'], false) is bool
+        && request.resource.data.get(['guardhouse', 'telemetryIntervalSeconds'], 10) in [5, 10, 30]
+
+        && request.resource.data.get('residentApp', {}).keys().hasOnly([
+          'reportsPerHour', 'maxUploadMb', 'requireVerificationForSos'
+        ])
+        && request.resource.data.get(['residentApp', 'reportsPerHour'], 5) is int
+        && request.resource.data.get(['residentApp', 'reportsPerHour'], 5) >= 1
+        && request.resource.data.get(['residentApp', 'reportsPerHour'], 5) <= 50
+        && request.resource.data.get(['residentApp', 'maxUploadMb'], 10) in [5, 10, 25]
+        && request.resource.data.get(['residentApp', 'requireVerificationForSos'], false) is bool
+
+        && request.resource.data.get('organisation', {}).keys().hasOnly([
+          'contactEmail', 'officeHours', 'logoUrl', 'auditRetentionDays'
+        ])
+        && request.resource.data.get(['organisation', 'contactEmail'], '') is string
+        && request.resource.data.get(['organisation', 'officeHours'], '') is string
+        && request.resource.data.get(['organisation', 'logoUrl'], '') is string
+        && request.resource.data.get(['organisation', 'auditRetentionDays'], 90) in [0, 30, 60, 90];
+      allow delete: if false;
+    }
+
+    // ── LIVE UNIT TELEMETRY ──────────────────────────────────────────────
+    //
+    // One document per security officer, written only by that officer's own
+    // console while they are clocked in, and read by staff to draw units on
+    // the dispatch map. `position` is null off duty, and while idle if the
+    // officer has turned location sharing off. See useGuardTelemetry in the
+    // security portal.
+    match /guard_telemetry/{uid} {
+      allow read: if isStaff();
+      allow create, update: if isSecurityStaff()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'name', 'badgeNumber', 'onDuty', 'mode', 'activeIncidentId',
+          'position', 'battery', 'device', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.onDuty is bool
+        && request.resource.data.mode in ['idle', 'active', 'off']
+        && (request.resource.data.position == null || request.resource.data.position is map)
+        && (request.resource.data.battery == null || request.resource.data.battery is map)
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isSecurityStaff() && request.auth.uid == uid;
+    }
+
+    // ── THE SCHEDULED SWEEP'S HEARTBEAT ──────────────────────────────────────
+    //
+    // `operations_state/sweep` is written only by the operations sweep, through
+    // the Admin SDK, which does not pass through these rules at all. So this
+    // block exists for the READ: staff can see when the sweep last ran and what
+    // it did. A scheduled job with no visible heartbeat is indistinguishable
+    // from one that has been failing silently for a month, and the four
+    // settings it enforces would go on being displayed as if they worked.
+    //
+    // No client writes, ever. Every field here is a claim about what the server
+    // did — a forged `retentionRanAt` would stop the audit log being pruned,
+    // and a forged `hazardWatermark` would skip reports past the cursor
+    // permanently, since the cursor only moves forward.
+    match /operations_state/{stateId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,449 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-24T00:00:00.000Z",
+  "title": "Design System: Monticello Villas Consoles",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Soft Grey Workspace",
+        "canonical": "#F5F6F8",
+        "dark": "#09090B",
+        "note": "The app canvas. One step deeper than slate-50 so a white card lifts by fill as well as by hairline. The one surface step with no mobile counterpart.",
+        "tonalRamp": ["#0F172A", "#1E293B", "#334155", "#475569", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F5F6F8"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#FFFFFF",
+        "dark": "#18181B",
+        "note": "Every card, panel, dialog and rail. Solid and opaque; never translucent.",
+        "tonalRamp": ["#09090B", "#18181B", "#27272A", "#3F3F46", "#71717A", "#D4D4D8", "#F4F4F5", "#FFFFFF"]
+      },
+      "well": {
+        "role": "neutral",
+        "displayName": "Recessed Well",
+        "canonical": "#F1F5F9",
+        "dark": "#111114",
+        "note": "Inset inputs, code pills, the segmented track. Mobile's neutralFill.",
+        "tonalRamp": ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#CBD5E1", "#E2E8F0", "#F1F5F9"]
+      },
+      "kpi-shell": {
+        "role": "neutral",
+        "displayName": "KPI Plate",
+        "canonical": "#FAFBFC",
+        "dark": "#111114",
+        "note": "The one off-white plate in the system, so the white KPI face inside it reads as raised.",
+        "tonalRamp": ["#0F172A", "#334155", "#475569", "#64748B", "#94A3B8", "#E2E8F0", "#F1F5F9", "#FAFBFC"]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Whisper Hairline",
+        "canonical": "#E9ECF0",
+        "dark": "#26262B",
+        "note": "The 1px line that defines a surface. The border draws the edge; the panel shadow keeps it from dissolving.",
+        "tonalRamp": ["#0F172A", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#E9ECF0"]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Row Divider",
+        "canonical": "#F0F2F5",
+        "dark": "#222226",
+        "note": "Between rows inside a panel — one step lighter than the panel's own hairline.",
+        "tonalRamp": ["#0F172A", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F0F2F5"]
+      },
+      "control-border": {
+        "role": "neutral",
+        "displayName": "Control Stroke",
+        "canonical": "#E2E8F0",
+        "dark": "#27272A",
+        "note": "One step stronger than the surface hairline, because a field has to look operable. Hover steps to #CBD5E1.",
+        "tonalRamp": ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0"]
+      },
+      "cta": {
+        "role": "secondary",
+        "displayName": "Console Ink",
+        "canonical": "#0F172A",
+        "dark": "#FAFAFA",
+        "note": "Action, not accent. Every primary button, the wordmark tile, the active segment's label. Hover #1E293B in light, #E4E4E7 in dark.",
+        "tonalRamp": ["#020617", "#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1"]
+      },
+      "brand-fill": {
+        "role": "primary",
+        "displayName": "Forest Emerald",
+        "canonical": "#047857",
+        "dark": "#10B981",
+        "note": "The accent and the only green. Switch-on, focus outline, chart stroke, leaf mark, active nav ink source. Mobile's AppColors.textAccent; the role differs from mobile, where #16A34A is the button fill. A white label on #047857 measures 5.48:1 and clears AA flat, where mobile's fill measures 3.30:1.",
+        "tonalRamp": ["#064E3B", "#065F46", "#047857", "#059669", "#10B981", "#34D399", "#A7F3D0", "#ECFDF5"]
+      },
+      "brand-ink": {
+        "role": "primary",
+        "displayName": "Deep Emerald Ink",
+        "canonical": "#065F46",
+        "dark": "#34D399",
+        "note": "The accent as text: active nav labels, lead-glyph tiles, inline accent links. On the emerald wash it measures ~7.3:1.",
+        "tonalRamp": ["#064E3B", "#065F46", "#047857", "#059669", "#10B981", "#6EE7B7", "#D1FAE5", "#ECFDF5"]
+      },
+      "brand-wash": {
+        "role": "primary",
+        "displayName": "Emerald Wash",
+        "canonical": "#ECFDF5",
+        "dark": "#172B27",
+        "note": "A solid step, not an alpha. The resting or selected row tint and the lead-glyph tile plate. Replaced every bg-brand-500/<alpha> fill; zero remain in the build.",
+        "tonalRamp": ["#064E3B", "#065F46", "#047857", "#10B981", "#6EE7B7", "#A7F3D0", "#D1FAE5", "#ECFDF5"]
+      },
+      "brand-wash-active": {
+        "role": "primary",
+        "displayName": "Emerald Wash, Active",
+        "canonical": "#D1FAE5",
+        "dark": "#1E3A33",
+        "note": "One step up from the resting wash, for an active control fill — avatar fallbacks, pressed accent chrome. Mobile's glassBorder value.",
+        "tonalRamp": ["#064E3B", "#065F46", "#047857", "#10B981", "#34D399", "#A7F3D0", "#D1FAE5", "#ECFDF5"]
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus Emerald",
+        "canonical": "#047857",
+        "dark": "#10B981",
+        "note": "Full opacity, expressed exactly once in the base-layer focus floor as a 2px outline at 2px offset. Every translucent focus ring in the system was removed in its favour, and outline-none went with them.",
+        "tonalRamp": ["#064E3B", "#065F46", "#047857", "#059669", "#10B981", "#34D399", "#A7F3D0", "#ECFDF5"]
+      },
+      "nav-active": {
+        "role": "primary",
+        "displayName": "Active Nav Plate",
+        "canonical": "#ECFDF5",
+        "dark": "#17302A",
+        "note": "Paired with nav-active-fg (#065F46 light / #34D399 dark). Read as a pair; never a fill plus a literal text colour.",
+        "tonalRamp": ["#064E3B", "#065F46", "#047857", "#10B981", "#6EE7B7", "#A7F3D0", "#D1FAE5", "#ECFDF5"]
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Heading Slate",
+        "canonical": "#0F172A",
+        "dark": "#F1F5F9",
+        "note": "Mobile's textPrimary. Named semantically rather than as slate-900 precisely so it can invert honestly.",
+        "tonalRamp": ["#020617", "#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#CBD5E1", "#F1F5F9"]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Body Slate",
+        "canonical": "#475569",
+        "dark": "#CBD5E1",
+        "note": "Mobile's textSecondary. Body copy, nav labels at rest, meta labels.",
+        "tonalRamp": ["#0F172A", "#1E293B", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0"]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Metadata Slate",
+        "canonical": "#64748B",
+        "dark": "#94A3B8",
+        "note": "Deliberately slate-500, not mobile's textMuted #94A3B8, which measures 2.85:1 on white and fails AA for small text. 4.8:1 here.",
+        "tonalRamp": ["#0F172A", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F1F5F9"]
+      },
+      "icon-inactive": {
+        "role": "neutral",
+        "displayName": "Inactive Glyph",
+        "canonical": "#94A3B8",
+        "dark": "#94A3B8",
+        "note": "Non-text only — inactive nav strokes. Never used for a label, at any size.",
+        "tonalRamp": ["#0F172A", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F8FAFC"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Resolved Green",
+        "canonical": "#15803D",
+        "dark": "#22C55E",
+        "note": "One step darker than mobile's #16A34A, because the web renders semantics as a wash under full-strength ink, which costs ~1.3 stops a solid mobile chip does not pay.",
+        "tonalRamp": ["#14532D", "#166534", "#15803D", "#16A34A", "#22C55E", "#4ADE80", "#A7F3D0", "#ECFDF5"]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Pending Amber",
+        "canonical": "#B45309",
+        "dark": "#FBBF24",
+        "tonalRamp": ["#78350F", "#92400E", "#B45309", "#D97706", "#F59E0B", "#FBBF24", "#FDE68A", "#FFFBEB"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Critical Red",
+        "canonical": "#B91C1C",
+        "dark": "#F87171",
+        "tonalRamp": ["#7F1D1D", "#991B1B", "#B91C1C", "#DC2626", "#EF4444", "#F87171", "#FCA5A5", "#FEF2F2"]
+      },
+      "info": {
+        "role": "tertiary",
+        "displayName": "Dispatched Blue",
+        "canonical": "#0369A1",
+        "dark": "#38BDF8",
+        "tonalRamp": ["#082F49", "#075985", "#0369A1", "#0284C7", "#0EA5E9", "#38BDF8", "#BAE6FD", "#F0F9FF"]
+      },
+      "severity-high": {
+        "role": "tertiary",
+        "displayName": "High-Severity Orange",
+        "canonical": "#9A3412",
+        "dark": "#FB923C",
+        "note": "Deliberately its own orange rather than a brand tint, so severity never reads as accent.",
+        "tonalRamp": ["#7C2D12", "#9A3412", "#C2410C", "#EA580C", "#F97316", "#FB923C", "#FED7AA", "#FFF7ED"]
+      },
+      "violet": {
+        "role": "tertiary",
+        "displayName": "Security Violet",
+        "canonical": "#5B21B6",
+        "dark": "#A78BFA",
+        "note": "The security incident category's own hue, so a queue can be scanned by kind without reading a word.",
+        "tonalRamp": ["#2E1065", "#4C1D95", "#5B21B6", "#6D28D9", "#8B5CF6", "#A78BFA", "#DDD6FE", "#F5F3FF"]
+      },
+      "sos-plate": {
+        "role": "tertiary",
+        "displayName": "Alarm Plate",
+        "canonical": "#B91C1C",
+        "dark": "#B91C1C",
+        "note": "The single element exempt from theming. White on it measures 6.47:1 in both themes, because the value does not move.",
+        "tonalRamp": ["#450A0A", "#7F1D1D", "#991B1B", "#B91C1C", "#DC2626", "#EF4444", "#FCA5A5", "#FEF2F2"]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Modal Scrim",
+        "canonical": "rgba(0, 0, 0, 0.58)",
+        "dark": "rgba(0, 0, 0, 0.58)",
+        "note": "A fixed near-black, not an alpha of the theme-aware slate ramp — a scrim built on slate would invert to a white veil in dark mode. Its job is to darken whatever is behind it, in both themes.",
+        "tonalRamp": ["rgba(0,0,0,0.90)", "rgba(0,0,0,0.80)", "rgba(0,0,0,0.70)", "rgba(0,0,0,0.58)", "rgba(0,0,0,0.45)", "rgba(0,0,0,0.30)", "rgba(0,0,0,0.15)", "rgba(0,0,0,0.05)"]
+      },
+      "chart-line": {
+        "role": "primary",
+        "displayName": "Series Stroke",
+        "canonical": "#047857",
+        "dark": "#34D399",
+        "note": "Split from the fill on purpose: the stroke stays saturated enough to read as a line while the area under it drops to a pastel wash. Read as var() at the Recharts call site, which needs real values rather than utility classes.",
+        "tonalRamp": ["#064E3B", "#065F46", "#047857", "#059669", "#10B981", "#34D399", "#A7F3D0", "#ECFDF5"]
+      },
+      "chart-neutral": {
+        "role": "neutral",
+        "displayName": "Comparison Bar",
+        "canonical": "#CBD5E1",
+        "dark": "rgba(255, 255, 255, 0.2)",
+        "note": "Deliberately not green: the Reported/Resolved pair only communicates if one is the accent and the other is neutral.",
+        "tonalRamp": ["#0F172A", "#334155", "#475569", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F1F5F9"]
+      }
+    },
+    "typographyMeta": {
+      "page-title": { "displayName": "Page Title", "purpose": "The page naming itself, once, in PageHeader. Moved out of the top bar in the 2026-09-22 redesign so the title could be a real 24px heading rather than a label beside a search field." },
+      "figure": { "displayName": "Figure", "purpose": "The headline number on a KPI face. Inter with tabular figures, never mono — equal-width digits are what align 12,847 against 11,846." },
+      "section-title": { "displayName": "Section Title", "purpose": "SectionHeading, which sits ABOVE a panel, over a 14px muted description." },
+      "card-title": { "displayName": "Card Title", "purpose": "CardHeader, the header row INSIDE a card, over a 12px muted line. One rank below the section title, and which rank applies is decided by where the header sits." },
+      "body": { "displayName": "Body", "purpose": "Every sentence, cell and field value. The working size of both consoles; Inter's tall x-height is what holds it up at dashboard density." },
+      "label": { "displayName": "Label", "purpose": "A compact title inside a dense surface — toast and popover headlines, list-row names, notification titles. Named for the job, not the size." },
+      "control": { "displayName": "Control", "purpose": "Small-rank buttons, segments, chips, md badges, table column heads." },
+      "caption": { "displayName": "Caption", "purpose": "Metadata under a value — timestamps, hints, legend rows, sm badges. Added to the scale because ~60 call sites were writing text-[11px] by hand." },
+      "micro": { "displayName": "Micro", "purpose": "Count pills, keyboard hints, the wordmark role line. Semibold, because at 10px weight is the only thing keeping it legible." },
+      "machine-data": { "displayName": "Machine Data", "purpose": "Ticket ids, badge numbers, log codes, credential slips — strings a human reads character-by-character against a list. NOT figures: counts, timers and timestamps are Inter with tabular-nums." }
+    },
+    "shadows": [
+      { "name": "panel", "value": "0 1px 2px rgba(15,23,42,0.04), 0 2px 6px -1px rgba(15,23,42,0.04)", "purpose": "The resting whisper under a card, KPI face or data panel. Mobile's AppShadows.sm. Sits UNDER the hairline: the border draws the edge, the shadow keeps it from dissolving." },
+      { "name": "hover", "value": "0 2px 4px rgba(0,0,0,0.05), 0 8px 24px -6px rgba(0,0,0,0.10)", "purpose": "The paired lift, on .card-interactive only. The card does not translate — a dense dashboard must not twitch as the pointer crosses it." },
+      { "name": "overlay", "value": "0 4px 12px -2px rgba(15,23,42,0.10), 0 2px 4px -2px rgba(15,23,42,0.06)", "purpose": "Popovers, dropdowns, tooltips, map popups. A soft ambient drop plus a tight contact so the menu's own edge stays crisp against whatever it covers." },
+      { "name": "modal", "value": "0 20px 40px -12px rgba(15,23,42,0.20), 0 4px 10px -4px rgba(15,23,42,0.08)", "purpose": "Dialogs and drawers." },
+      { "name": "contact-primary", "value": "0 1px 2px rgba(15,23,42,0.12)", "purpose": "Under a primary button. The whole depth budget for a CTA — a coloured glow is the most dated thing in the old palette and --shadow-brand* resolve to none." },
+      { "name": "contact-outline", "value": "0 1px 2px rgba(15,23,42,0.04)", "purpose": "Under an outline button and the header's search trigger." },
+      { "name": "segment-active", "value": "inset 0 0 0 1px rgba(15,23,42,0.10), 0 1px 2px rgba(15,23,42,0.06)", "purpose": "The selected segment's ring and contact line inside the segmented track." },
+      { "name": "sos-rest", "value": "0 10px 24px -6px color-mix(in oklab, #B91C1C 55%, transparent)", "purpose": "The panic banner at rest, declared outside the keyframe so switching the pulse off for reduced motion leaves a banner with depth rather than a flat rectangle." },
+      { "name": "panel-dark", "value": "0 1px 2px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.25)", "purpose": "Dark mode reassigns every shadow to a higher-opacity black rather than inheriting the light value." },
+      { "name": "modal-dark", "value": "0 20px 40px -12px rgba(0,0,0,0.60), 0 4px 10px -4px rgba(0,0,0,0.40)", "purpose": "Dialogs and drawers in dark mode (approximate; read --elev-modal in the .dark block for the shipped value)." }
+    ],
+    "motion": [
+      { "name": "ease-spring", "value": "cubic-bezier(0.32, 0.72, 0, 1)", "purpose": "Geometry that changes size: the rail collapse (300ms), the switch knob (220ms). Decelerates hard and settles without overshooting, which is what makes a width transition read as sprung rather than eased." },
+      { "name": "ease-out-strong", "value": "cubic-bezier(0.23, 1, 0.32, 1)", "purpose": "Presses, popovers and dialog entrances. An interface that answers in the first frames feels fast at a duration where a symmetric ease feels sluggish." },
+      { "name": "ease-slide", "value": "cubic-bezier(0.65, 0, 0.35, 1)", "purpose": "The segmented indicator's clip-path travel (200ms). Softer at the start than the classic strong in-out, which spends its first 40ms nearly motionless and reads as lag after a click." },
+      { "name": "duration-state", "value": "150ms", "purpose": "Every colour, border and shadow state change." },
+      { "name": "duration-entrance", "value": "200-260ms", "purpose": "popoverIn 150ms, riseIn 200ms, dialogIn 220ms, drawerInRight 260ms, scrimIn 180ms." },
+      { "name": "duration-rail", "value": "300ms", "purpose": "The sidebar width transition; labels cross-fade at 150/200ms with a 100ms delay on expand." },
+      { "name": "leaf-spin", "value": "1100ms linear infinite", "purpose": "The waiting mark's turn, ported from the phone app's LeafLoader, with leafBreathe layered over it at the same period (0.88 to 1 to 0.88 to 0.76)." },
+      { "name": "sos-pulse", "value": "1.6s ease-in-out infinite", "purpose": "The panic banner's expanding ring. Suppressed under reduced motion, leaving the resting shadow." },
+      { "name": "theme-switch", "value": "200ms ease (colour properties only)", "purpose": "Applied through a temporary .theme-switching class so a theme flip animates colour and nothing else. Disabled entirely under reduced motion." },
+      { "name": "reduced-motion", "value": "animation: none; transform: none; transition-duration: 0ms", "purpose": "prefers-reduced-motion: reduce kills every keyframe, flattens the button/chip/switch press scales, and zeroes the switch and segmented-indicator transitions. It also gates scroll-behavior: smooth, which is only declared under no-preference." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "content-max", "value": "1600px (max-w-[100rem])" }
+    ],
+    "stackingOrder": [
+      { "name": "overlay", "value": 100, "purpose": "Full-screen surfaces that own the viewport: command palette, lightbox." },
+      { "name": "modal", "value": 1000, "purpose": "Dialogs and drawers." },
+      { "name": "popover", "value": 2000, "purpose": "Menus, dropdowns, tooltips — anything opened FROM something else, including from a modal. Deliberately ABOVE dialogs: a Select inside a modal used to open its menu behind the modal, so every click landed on the field underneath." },
+      { "name": "toast", "value": 3000, "purpose": "Transient notices. pointer-events: none, so being on top costs nothing." },
+      { "name": "sos", "value": 4000, "purpose": "The guardhouse panic banner — the only thing that outranks a toast, because it is the only thing on either console that means someone is in danger." }
+    ],
+    "geometry": {
+      "shell": "100dvh flex row, rail + content column, both overflow-hidden.",
+      "rail": "256px expanded / 80px collapsed; px-4 / px-3, py-3, gap-3; 300ms sprung width.",
+      "navRow": "32px (.nav-link py-1.5); group gap-3, item gap-0.5; icon slot 44px expanded / 56px collapsed. Measured: the full admin nav fits without scrolling to roughly a 630px-tall viewport.",
+      "header": "min-h-16 wrapping, sm:h-16 fixed; px-4 sm:px-6; canvas fill with a hairline below.",
+      "content": "max-w-[100rem] centred; p-4 pb-10 sm:p-6 sm:pb-12; overflow-y-auto overscroll-contain.",
+      "scrollOwnership": "The children wrapper takes min-h-0 flex-1 ONLY when a page passes scroll={false}. On a scrolling page both classes are a bug — measured as a 584px box around 1224px of content at 1280x800, which put every bottom padding in the middle of the overflow.",
+      "grids": ".page-grid grid-cols-12 gap-6; .kpi-grid 1/2/4 at sm/xl, dropping to 3 when exactly three cards are present.",
+      "dialogs": "Nine dialogs at max-h-[80dvh]; none sets a fixed height. Widths: max-w-2xl (both form composers, the account provisioner), max-w-xl (announcement detail), max-w-lg (credential, panic-alert, resolve), max-w-4xl (incident detail). Composer rhythm px-6 py-3.5 / p-6 pb-8 / px-6 py-3; detail-panel rhythm px-5 py-4. Below sm a dialog squares its bottom corners and meets the viewport edge.",
+      "drawerException": "The dispatch drawer is the one deliberate fixed height: h-[88dvh] as a mobile bottom sheet, becoming a 416px right-hand rail at lg.",
+      "badgeRanks": "md (h-6, 12px, px-3) for every table row, feed row and list card — the default. sm (h-5, 11px, px-2.5) for dense chrome only. lg (h-7, 14px, px-3.5) for a badge used as a heading.",
+      "tableScroll": "Scroll bodies carry pb-6; every long list ends in TablePagination (seven of them). Audit History's select-all is scoped to the visible page because the action behind it is a bulk delete."
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The commit control. Near-black plate, white label, 8px corner, sized by fixed height so a row of buttons aligns whatever the labels say.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; border: none; border-radius: 8px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; letter-spacing: 0em; cursor: pointer; transition-property: color, background-color, border-color, box-shadow, transform, opacity; transition-duration: 150ms; transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1); } .ds-btn-primary { height: 40px; padding: 0 16px; background-color: var(--color-cta, #0F172A); color: var(--color-cta-fg, #FFFFFF); box-shadow: 0 1px 2px rgba(15,23,42,0.12); } .ds-btn-primary:hover { background-color: var(--color-cta-hover, #1E293B); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-focus, #047857); outline-offset: 2px; } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "The secondary action beside a primary. White on the control stroke; hover darkens the stroke and drops the fill to the well.",
+      "html": "<button class=\"ds-btn ds-btn-outline\">Cancel</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--color-slate-200, #E2E8F0); background-color: var(--color-base-900, #FFFFFF); color: var(--color-text-primary, #0F172A); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; font-weight: 500; cursor: pointer; box-shadow: 0 1px 2px rgba(15,23,42,0.04); transition: color 150ms, background-color 150ms, border-color 150ms, box-shadow 150ms, transform 150ms cubic-bezier(0.23,1,0.32,1); } .ds-btn-outline:hover { border-color: var(--color-slate-300, #CBD5E1); background-color: var(--color-slate-50, #F8FAFC); } .ds-btn-outline:focus-visible { outline: 2px solid var(--color-focus, #047857); outline-offset: 2px; } .ds-btn-outline:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "The one field style. Rectangular on purpose — a stadium-shaped field is the one capsule that reads as consumer rather than console. Focus shifts the border to the accent and adds the system's single surviving translucent ring.",
+      "html": "<input class=\"ds-field\" type=\"text\" placeholder=\"Search by name, email or property\" />",
+      "css": ".ds-field { width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--color-slate-200, #E2E8F0); background-color: var(--color-field, #FFFFFF); padding: 8px 12px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; line-height: 1.5; color: var(--color-text-primary, #0F172A); outline: none; transition: color 150ms, background-color 150ms, border-color 150ms, box-shadow 150ms; } .ds-field::placeholder { color: var(--color-text-muted, #64748B); } .ds-field:hover { border-color: var(--color-slate-300, #CBD5E1); } .ds-field:focus { border-color: var(--color-brand-500, #047857); box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-brand-500, #047857) 20%, transparent); } .ds-field[aria-invalid='true'] { border-color: var(--color-danger, #B91C1C); } .ds-field:disabled { opacity: 0.6; cursor: not-allowed; }"
+    },
+    {
+      "name": "Status Capsule",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "The portal's ONE oblong badge, at the md rank every table row, feed row and list card uses. Fixed height rather than vertical padding, so badges of different labels share a baseline in a row. Tone is resolved from meaning, never passed as a colour.",
+      "html": "<span class=\"ds-badge ds-badge-info\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg>Dispatched</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 12px; border-radius: 9999px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 12px; font-weight: 500; line-height: 1; letter-spacing: 0.005em; white-space: nowrap; user-select: none; } .ds-badge svg { width: 14px; height: 14px; flex-shrink: 0; } .ds-badge-info { background-color: var(--color-pill-info, #F0F9FF); color: var(--color-pill-info-fg, #0369A1); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-pill-info-fg, #0369A1) 15%, transparent); } .ds-badge-success { background-color: var(--color-pill-success, #ECFDF5); color: var(--color-pill-success-fg, #047857); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-pill-success-fg, #047857) 15%, transparent); } .ds-badge-danger { background-color: var(--color-pill-danger, #FEF2F2); color: var(--color-pill-danger-fg, #B91C1C); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-pill-danger-fg, #B91C1C) 15%, transparent); }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip-idle",
+      "description": "A pressable capsule — the one deliberate exception to capsules being read-only, because a filter's on-state IS a token. Hover is gated behind a fine pointer so a touch tap leaves no stuck state.",
+      "html": "<button class=\"ds-chip\">All incidents</button> <button class=\"ds-chip ds-chip-active\">Open</button>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 12px; border-radius: 9999px; border: 1px solid var(--color-slate-200, #E2E8F0); background-color: var(--color-base-900, #FFFFFF); color: var(--color-text-secondary, #475569); font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 12px; font-weight: 500; line-height: 16px; white-space: nowrap; cursor: pointer; user-select: none; transition: color 150ms, background-color 150ms, border-color 150ms, box-shadow 150ms, transform 150ms cubic-bezier(0.23,1,0.32,1); } @media (hover: hover) and (pointer: fine) { .ds-chip:hover { border-color: var(--color-slate-300, #CBD5E1); color: var(--color-text-primary, #0F172A); } } .ds-chip:focus-visible { outline: 2px solid var(--color-focus, #047857); outline-offset: 2px; } .ds-chip:active { transform: scale(0.97); } .ds-chip-active { border-color: color-mix(in oklab, var(--color-pill-success-fg, #047857) 30%, transparent); background-color: var(--color-pill-success, #ECFDF5); color: var(--color-pill-success-fg, #047857); }"
+    },
+    {
+      "name": "Card with Header",
+      "kind": "card",
+      "refersTo": "card-header",
+      "description": "A 12px surface — hairline plus the resting whisper — carrying CardHeader, the header rank that lives INSIDE a card: 14px semibold over a 12px muted line, with the supporting line one ink step LIGHTER than the title.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-header\"><div><h3>Recent incidents</h3><p>Last 24 hours across all zones</p></div><button class=\"ds-card-action\">View all</button></div><div class=\"ds-card-body\">Three reports filed, two resolved.</div></div>",
+      "css": ".ds-card { border-radius: 12px; border: 1px solid var(--color-hairline, #E9ECF0); background-color: var(--surface-panel, #FFFFFF); box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 2px 6px -1px rgba(15,23,42,0.04); overflow: hidden; font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--color-hairline, #E9ECF0); padding: 12px 16px; } .ds-card-header h3 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.2; color: var(--color-text-primary, #0F172A); } .ds-card-header p { margin: 2px 0 0; font-size: 12px; line-height: 1.2; color: var(--color-text-muted, #64748B); } .ds-card-action { border: none; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 500; color: var(--color-brand-400, #065F46); cursor: pointer; } .ds-card-action:focus-visible { outline: 2px solid var(--color-focus, #047857); outline-offset: 2px; } .ds-card-body { padding: 20px; font-size: 14px; line-height: 1.5; color: var(--color-text-secondary, #475569); }"
+    },
+    {
+      "name": "KPI Card",
+      "kind": "custom",
+      "refersTo": "kpi-shell",
+      "description": "One headline figure as a layered card: a white 8px face inside a 12px off-white shell with 4px of padding, so the corners stay concentric (12 minus 4). The face carries the label and the number; the strip under it carries the trend and what the number means, so every figure in a row sits at the same height whatever its footnote says.",
+      "html": "<div class=\"ds-kpi\"><div class=\"ds-kpi-face\"><p class=\"ds-kpi-label\">Total incidents</p><p class=\"ds-kpi-value\">12,847</p></div><div class=\"ds-kpi-strip\"><span class=\"ds-kpi-trend\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M16 7h6v6\"/><path d=\"m22 7-8.5 8.5-5-5L2 17\"/></svg>+12%</span><p class=\"ds-kpi-help\">Reports filed this month</p></div></div>",
+      "css": ".ds-kpi { display: flex; flex-direction: column; border-radius: 12px; border: 1px solid var(--color-hairline, #E9ECF0); background-color: var(--color-kpi-shell, #FAFBFC); padding: 4px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-kpi-face { border-radius: 8px; border: 1px solid var(--color-hairline, #E9ECF0); background-color: var(--color-base-900, #FFFFFF); box-shadow: 0 1px 2px rgba(15,23,42,0.04), 0 2px 6px -1px rgba(15,23,42,0.04); padding: 14px 16px; } .ds-kpi-label { margin: 0; font-size: 14px; font-weight: 500; color: var(--color-text-secondary, #475569); } .ds-kpi-value { margin: 6px 0 0; font-size: 30px; line-height: 36px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--color-text-primary, #0F172A); } .ds-kpi-strip { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 12px; } .ds-kpi-trend { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; background-color: var(--color-pill-success, #ECFDF5); color: var(--color-pill-success-fg, #047857); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-pill-success-fg, #047857) 15%, transparent); } .ds-kpi-trend svg { width: 12px; height: 12px; } .ds-kpi-help { margin: 0; font-size: 12px; color: var(--color-text-muted, #64748B); }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "32px rows at 8px radius. Hover is a 4% ink wash; active is the emerald wash plate under deep-emerald ink. Lucide glyphs at 1.5px stroke do NOT refill on active — the wash and the ink carry it, so the glyph is not a second redundant signal.",
+      "html": "<nav class=\"ds-nav\"><p class=\"ds-nav-group\">Operations</p><a class=\"ds-nav-link\" href=\"#\"><span class=\"ds-nav-icon\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect width=\"7\" height=\"9\" x=\"3\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"14\" y=\"3\" rx=\"1\"/><rect width=\"7\" height=\"9\" x=\"14\" y=\"12\" rx=\"1\"/><rect width=\"7\" height=\"5\" x=\"3\" y=\"16\" rx=\"1\"/></svg></span>Overview</a><a class=\"ds-nav-link ds-nav-link-active\" href=\"#\"><span class=\"ds-nav-icon\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/></svg></span>Incidents<span class=\"ds-nav-count\">4</span></a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 232px; padding: 12px; background-color: var(--color-base-900, #FFFFFF); font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-nav-group { margin: 0 0 4px; padding: 0 12px; font-size: 12px; font-weight: 500; line-height: 16px; color: var(--color-text-muted, #64748B); } .ds-nav-link { position: relative; display: flex; align-items: center; width: 100%; box-sizing: border-box; border-radius: 8px; padding: 6px 0; font-size: 14px; font-weight: 500; text-decoration: none; color: var(--color-text-secondary, #475569); transition: background-color 150ms, color 150ms; } .ds-nav-icon { display: flex; width: 44px; flex-shrink: 0; align-items: center; justify-content: center; } .ds-nav-icon svg { width: 18px; height: 18px; color: var(--color-slate-400, #94A3B8); transition: color 150ms; } .ds-nav-link:hover { background-color: color-mix(in oklab, var(--color-tint, #0F172A) 4%, transparent); color: var(--color-text-primary, #0F172A); } .ds-nav-link:hover .ds-nav-icon svg { color: var(--color-text-secondary, #475569); } .ds-nav-link:focus-visible { outline: 2px solid var(--color-focus, #047857); outline-offset: 2px; } .ds-nav-link-active, .ds-nav-link-active:hover { background-color: var(--color-nav-active, #ECFDF5); color: var(--color-nav-active-fg, #065F46); } .ds-nav-link-active .ds-nav-icon svg, .ds-nav-link-active:hover .ds-nav-icon svg { color: var(--color-nav-active-fg, #065F46); } .ds-nav-count { margin-left: auto; margin-right: 12px; display: inline-flex; height: 20px; min-width: 20px; align-items: center; justify-content: center; border-radius: 9999px; padding: 0 6px; font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; background-color: var(--color-pill-danger, #FEF2F2); color: var(--color-pill-danger-fg, #B91C1C); }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segment-active",
+      "description": "A well-coloured 8px track at 2px padding holding 6px segments. The selected pill is white with an inset ring and a contact shadow; in the React component the indicator is a separate layer whose clip-path transitions, so the pill travels rather than cross-fades.",
+      "html": "<div class=\"ds-segmented\" role=\"tablist\"><button class=\"ds-segment ds-segment-active\" role=\"tab\">Open</button><button class=\"ds-segment\" role=\"tab\">Dispatched</button><button class=\"ds-segment\" role=\"tab\">Resolved</button></div>",
+      "css": ".ds-segmented { position: relative; display: inline-flex; align-items: center; gap: 2px; border-radius: 8px; border: 1px solid var(--color-hairline, #E9ECF0); background-color: var(--color-segmented-track, #F1F5F9); padding: 2px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; } .ds-segment { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; border: none; background: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 500; letter-spacing: 0.005em; white-space: nowrap; color: var(--color-text-secondary, #475569); cursor: pointer; user-select: none; outline: none; transition: color 150ms, background-color 150ms; } @media (hover: hover) and (pointer: fine) { .ds-segment:not(.ds-segment-active):hover { background-color: color-mix(in oklab, var(--color-tint, #0F172A) 6%, transparent); color: var(--color-text-primary, #0F172A); } } .ds-segment-active { cursor: default; background-color: var(--color-segment-active, #FFFFFF); color: var(--color-segment-active-fg, #0F172A); box-shadow: inset 0 0 0 1px var(--color-segment-ring, rgba(15,23,42,0.10)), 0 1px 2px rgba(15,23,42,0.06); } .ds-segment:focus-visible::after { content: ''; position: absolute; inset: -3px; border-radius: 9px; box-shadow: 0 0 0 2px var(--color-focus, #047857); pointer-events: none; }"
+    },
+    {
+      "name": "Duty Switch",
+      "kind": "custom",
+      "refersTo": "switch-on",
+      "description": "A 44x24 capsule whose knob travels 20px on the sprung curve. On-state is the accent CTA fill, and the knob takes the CTA's FOREGROUND colour, so the pair inverts correctly in dark mode without the component knowing which theme is live.",
+      "html": "<button class=\"ds-switch\" role=\"switch\" aria-checked=\"true\" aria-label=\"On duty\"><span class=\"ds-switch-knob\"></span></button>",
+      "css": ".ds-switch { position: relative; display: inline-flex; align-items: center; width: 44px; height: 24px; flex-shrink: 0; border: 1px solid transparent; border-radius: 9999px; padding: 2px; background-color: var(--color-slate-300, #CBD5E1); cursor: pointer; transition: background-color 200ms ease, border-color 200ms ease, transform 150ms cubic-bezier(0.23,1,0.32,1); } .ds-switch[aria-checked='true'] { background-color: var(--color-brand-cta, #047857); } .ds-switch:focus-visible { outline: 2px solid var(--color-focus, #047857); outline-offset: 2px; } .ds-switch:active { transform: scale(0.96); } .ds-switch-knob { display: block; width: 18px; height: 18px; border-radius: 9999px; background-color: var(--color-switch-knob, #FFFFFF); box-shadow: 0 1px 2px rgba(0,0,0,0.2), 0 1px 1px rgba(0,0,0,0.06); transition: transform 220ms cubic-bezier(0.32,0.72,0,1), background-color 200ms ease; } .ds-switch[aria-checked='true'] .ds-switch-knob { transform: translateX(20px); background-color: var(--color-brand-cta-fg, #FFFFFF); }"
+    },
+    {
+      "name": "The Leaf Mark",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The signature waiting mark, ported from the resident phone app's LeafLoader so a resident raising an SOS and the officer receiving it wait on the same object. Exact Bezier from buildLeafPath at 24x24, a top-to-bottom gradient into 55% alpha, a 1100ms linear turn with the breathing scale layered over it. Holds still rather than disappearing under reduced motion.",
+      "html": "<div class=\"ds-leaf-stage\" role=\"status\" aria-live=\"polite\"><span class=\"ds-leaf\"><span class=\"ds-leaf-breathe\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\" focusable=\"false\"><defs><linearGradient id=\"ds-leaf-grad\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0%\" stop-color=\"var(--color-brand-500, #047857)\"/><stop offset=\"100%\" stop-color=\"var(--color-brand-500, #047857)\" stop-opacity=\"0.55\"/></linearGradient></defs><path d=\"M12 0 Q24 4.32 12 24 Q0 4.32 12 0 Z\" fill=\"url(#ds-leaf-grad)\"/></svg></span></span><span class=\"ds-sr-only\">Checking session</span></div>",
+      "css": ".ds-leaf-stage { display: flex; align-items: center; justify-content: center; padding: 48px; background-color: var(--color-base-950, #F5F6F8); } .ds-leaf { display: inline-block; width: 48px; height: 48px; flex-shrink: 0; animation: dsLeafSpin 1100ms linear infinite; } .ds-leaf-breathe { display: block; width: 100%; height: 100%; animation: dsLeafBreathe 1100ms ease-in-out infinite; } .ds-leaf svg { width: 100%; height: 100%; display: block; } @keyframes dsLeafSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } @keyframes dsLeafBreathe { 0% { transform: scale(0.88); } 25% { transform: scale(1); } 50% { transform: scale(0.88); } 75% { transform: scale(0.76); } 100% { transform: scale(0.88); } } @media (prefers-reduced-motion: reduce) { .ds-leaf, .ds-leaf-breathe { animation: none; } } .ds-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Duty Desk",
+    "overview": "Two consoles that behave like instruments rather than marketing surfaces. A desk officer keeps the Guardhouse open for a whole shift and an administrator reads the Admin portal for an hour at a time, so the system's first commitment is that nothing moves, glows or shouts unless it is carrying information. The ground is a soft grey workspace; content sits on crisp white cards that declare their edges with a single hairline and a whisper of shadow; one emerald accent marks state, and one near-black marks action. Both themes are co-equal — light is compiled as the default and dark is a runtime override of the same token names, so no component branches on theme.\n\nDensity is high but not cramped. Figures are set in Inter with tabular figures so a column of counts aligns without a costume typeface; capsules carry read-only state; 8px rectangles are the things you operate. Depth is a two-tier ladder in the same direction in both themes — a surface that sits higher is lighter — and only layers genuinely floating above the page cast a real shadow. There is no glassmorphism, no blur, no translucent surface fill and no elevation modelling; every one of those was present in an earlier pass and was removed for measured reasons recorded in packages/shared/src/styles/index.css.\n\nThe palette is a deliberate port of the Flutter resident app's AppColors, because the phone and the guardhouse are one product. Where the shipped web value departs from mobile, it departs for a measured contrast reason and the stylesheet says which. That parity contract is the first thing to check if the two products ever look different again.",
+    "keyCharacteristics": [
+      "Flat, dual-tone, mobile-aligned: border plus a whisper defines a surface; real shadows are reserved for floating layers.",
+      "One emerald accent at two lightnesses (#047857 light, #10B981 dark) for state, focus and charts; a near-black for action.",
+      "Two shapes with two jobs: 12px boxes, 8px controls, capsules only for tokens you read.",
+      "Inter for all language and all figures (with tabular-nums); JetBrains Mono for identifiers and machine data only.",
+      "Sentence case everywhere; an uppercase utility in this codebase is a regression.",
+      "Both themes measured to WCAG 2.1 AA; a solid single-value focus outline is the floor, not a per-component decision."
+    ],
+    "rules": [
+      { "name": "The Action-Is-Not-Accent Rule", "body": "Emerald never fills a button. Action is {colors.cta}; emerald means state — active nav, switch-on, success, focus, charts. If a new surface wants a green CTA, it wants the wrong token.", "section": "colors" },
+      { "name": "The Pair Rule", "body": "Any surface that fills with a colour and carries a label on it reads a pair token (cta/cta-fg, nav-active/nav-active-fg, pill-x/pill-x-fg), never a fill plus a hardcoded text-white. The correct foreground inverts between themes and a single literal cannot express that.", "section": "colors" },
+      { "name": "The Solid-Wash Rule", "body": "Brand tints are solid palette steps, not alphas. A resting or selected row is {colors.brand-wash}; an active control fill is {colors.brand-wash-active}. A bg-brand-500/<alpha> fill is drift — there are zero left in the build.", "section": "colors" },
+      { "name": "The Mobile-Wins Rule", "body": "When a brief and the Flutter app's AppColors disagree on a palette value, the mobile palette wins. Where the shipped web value departs from mobile it is a measured contrast correction and the token says so.", "section": "colors" },
+      { "name": "The Theme-Invariant Alarm Rule", "body": "The SOS plate and the modal scrim are the only elements exempt from theming — one must always mean danger, the other must always darken. Nothing else may opt out.", "section": "colors" },
+      { "name": "The Sentence-Case Rule", "body": "Nothing in either console is set in all caps. Page titles, section titles, table column heads, form labels and badges are sentence case at medium or semibold weight. An uppercase utility here is a regression — the retired .eyebrow class is kept in the stylesheet as a tombstone, not a declaration.", "section": "typography" },
+      { "name": "The Figures-Are-Inter Rule", "body": "Counts, timestamps, timers, deltas and pagination ranges are Inter with tabular-nums. Alignment is a numeric feature, not a typeface choice. font-mono on a figure is drift; font-mono on an identifier is the system.", "section": "typography" },
+      { "name": "The Two-Header-Ranks Rule", "body": "A header above a panel is SectionHeading (16px semibold over 14px muted). A header inside a card is CardHeader (14px semibold over 12px muted). Which one applies is decided by where the header sits, never by the page. Both set their supporting line in text-muted, one step lighter than the title — the rank must never invert.", "section": "typography" },
+      { "name": "The Who-Owns-The-Scroll Rule", "body": "DashboardLayout gives the children wrapper min-h-0 flex-1 ONLY when a page passes scroll={false}. A fixed-height workspace needs both classes so its inner regions scroll instead of pushing the column taller. A scrolling page must have neither: min-h-0 lets a flex item shrink below its content, so the box stayed at viewport height around taller content — measured at 1280x800 as a 584px box around 1224px of content — and every bottom padding landed in the middle of the overflow. Dropping both restores the automatic minimum size; measured after, 48px of clearance at scroll end.", "section": "layout" },
+      { "name": "The Two-Rhythms Rule", "body": "There are exactly two vertical rhythms and they are not interchangeable. A scrolling page uses 24px gaps. A fixed-height workspace — anything whose root carries h-full min-h-0 and scrolls inside its columns — uses 16px, because every 8px of gutter there is 8px taken from the queue. The test is h-full on the root; a scrolling page on 16px is drift.", "section": "layout" },
+      { "name": "The Skeleton-Is-A-Reservation Rule", "body": "A placeholder's height is the line height of the text it replaces (12px caption to a 12px bar, 14px body to a 16px bar, the KPI figure to a 28px bar) and its container keeps the real layout's padding and gap. A skeleton that does not match the real box guarantees the layout shift it exists to prevent.", "section": "layout" },
+      { "name": "The Border-Is-The-Edge Rule", "body": "A surface's edge is a drawn hairline; the shadow only keeps it from dissolving. If a new panel needs a shadow to be findable, its fill or its hairline is wrong.", "section": "elevation" },
+      { "name": "The Floating-Only-Casts Rule", "body": "Only a layer genuinely above the page casts a real shadow. An in-page panel that casts one is claiming a stacking order it does not have.", "section": "elevation" },
+      { "name": "The Hover-Moves-The-Border Rule", "body": "A hovered card darkens its edge one slate step and gains the hover whisper. It does NOT translate. A dense dashboard must not twitch as the pointer crosses it.", "section": "elevation" },
+      { "name": "The Two-Tiers Rule", "body": "12 for boxes, 8 for controls. The surface tier moved down from 16px, so surfaces and the old nested tier are now the same value and the vocabulary is genuinely two steps. A radius chosen for looks rather than for tier is drift.", "section": "shapes" },
+      { "name": "The Capsule-Is-Read-Not-Pressed Rule", "body": "rounded-full marks a thing you read as a token — a status, a count, a filter's on-state. Things you operate are 8px rectangles. A text input is never a capsule: the curve eats the first glyph, and on a textarea it resolves to half the height and clips the first and last lines. A textarea.field specificity rule enforces this permanently.", "section": "shapes" },
+      { "name": "The Concentric-Nesting Rule", "body": "A nested radius equals the outer radius minus the gap between them. The KPI card is the reference: the shell is 12px with 4px of padding, so the face is 8px.", "section": "shapes" },
+      { "name": "The Badge-Rank Rule", "body": "md (24px, 12px label, px-3) for every table row, feed row and list card — anything a reader scans down a column of. It is the default; pass nothing. sm (20px, 11px label) for dense chrome only: drawers, toasts, pickers, inline fields and dialog headers. lg (28px) exists for a badge used as a heading. Left to per-call-site judgement this drifted so badly that single rows showed two capsule heights side by side; 17 call sites were promoted to settle it.", "section": "components" },
+      { "name": "The Two-Vocabularies Rule", "body": "Incident categories and audit event categories are deliberately different icon vocabularies. theme/categoryIcons.js exports categoryIcon, auditEventIcon, panicSignalIcon, residentStatusIcon and notificationIcon as separate maps; do not fold one into another. Category tone resolves through categoryTone(), which lower-cases first, because Firestore values are not guaranteed lowercase.", "section": "components" },
+      { "name": "The Focus-Goes-In-And-Comes-Back Rule", "body": "Every role=\"dialog\" surface routes through useDialogFocus: focus moves in on open (to a named initialRef, else the panel itself, which carries tabindex=\"-1\"), Tab is contained inside the panel, and focus returns to the opener on close. Twelve of the thirteen dialog surfaces use it. NotificationBell is the one deliberate exclusion, because it is a popover rather than a modal and must not trap Tab.", "section": "components" }
+    ],
+    "dos": [
+      "Do express focus once: a 2px solid {colors.focus} outline at 2px offset, from the base-layer floor on every a, button, summary, [role=button], [role=tab], [role=switch] and tabbable element. A new control inherits it by being focusable and needs no focus classes at all.",
+      "Do size buttons by fixed height (40px / 36px) so a row of them aligns whatever the labels say, and use .btn-sm in dialog footers.",
+      "Do use md badges in anything with rows and sm only in dense chrome.",
+      "Do read a pair token whenever you fill a surface and put a label on it.",
+      "Do set figures — counts, timers, timestamps, deltas — in Inter with tabular-nums.",
+      "Do put 12px on boxes and 8px on controls, and keep nested radii concentric (outer minus gap).",
+      "Do give the children wrapper min-h-0 flex-1 only when the page passes scroll={false}.",
+      "Do reach for z-[var(--z-*)], and remember popovers outrank modals.",
+      "Do route every role=\"dialog\" through useDialogFocus."
+    ],
+    "donts": [
+      "Don't add outline-none to a focusable control. It was removed from .btn, .chip, .switch, .segment and .icon-btn along with their translucent rings, and it is the thing that breaks the focus floor.",
+      "Don't fill anything with bg-brand-500/<alpha>. Use {colors.brand-wash} for a resting or selected tint and {colors.brand-wash-active} for an active control fill.",
+      "Don't put emerald on a button, or near-black on a status.",
+      "Don't set anything in all caps, and don't reintroduce a kicker or eyebrow line above a heading — the .eyebrow class is a tombstone in the stylesheet, and the retired uppercase tracked label is not a rank in this scale.",
+      "Don't use font-mono for a count, timer, delta or timestamp. Mono is for identifiers and log strings only.",
+      "Don't give an in-page panel a real shadow, a gradient, a blur, a translucent fill, or a hard offset shadow — none of those exist in this world, and each of the first four was measured out of an earlier pass.",
+      "Don't draw an icon as a text glyph or an icon font. Icons are Lucide components at 1.5px stroke, or an inline SVG for the leaf.",
+      "Don't give a dialog a fixed height, and don't invent a width outside the lg / xl / 2xl / 4xl ladder.",
+      "Don't make a whole row the only way to act on a notification; give it an explicit action control.",
+      "Don't add a tailwind.config.js. This is Tailwind v4 and the @theme block in packages/shared/src/styles/index.css is the config; a config file here is silently ignored."
+    ],
+    "knownLimitations": [
+      ".btn-drawer (border px-3 py-1.5 text-xs) and .btn-compact (px-3 py-1.5 text-xs) are identical sizing under two names, and both size by padding rather than by the fixed height the rest of the button scale uses. Unresolved.",
+      ".btn-pill applies rounded-full to a pressed control, which the Capsule-Is-Read-Not-Pressed Rule exists to forbid. It is in the sheet; it should not be extended to new controls.",
+      "font-mono survives at 56 call sites, roughly twenty of them numeric displays rather than identifiers — the dispatch stopwatches in dispatch/parts.jsx and DispatchDetailDrawer.jsx, the 'n selected' counters in FiledReportsTable.jsx, SecurityReportsPage.jsx and AuditHistoryTable.jsx, the WPDA score in IncidentBreakdown.jsx, the counts in CategoryBreakdownPanel.jsx, the toast and bell timestamps. The stylesheet's own typography comment still argues the broad mono-for-machine-data split and has not been narrowed to match. Drift, not the system.",
+      "Fifteen bare input elements carry outline-none inside a bordered search wrapper, and only six files use focus-within at all, so most inline search fields show nothing when focused. A hole in the focus floor, not a style.",
+      "Several inline search shells are rounded-xl (12px) though they are controls and belong at 8px.",
+      "The stylesheet's RADIUS TIERS comment still lists three steps and labels two of them rounded-xl 12px, describing the state mid-move. The compiled CSS is the authority: --radius-xl .75rem, --radius-lg .5rem, --radius-md .375rem.",
+      ".field keeps outline-none plus focus:ring-2 focus:ring-brand-500/20. It is the deliberate field treatment and it is legible, but it is the single survivor of the ring removal, so 'focus is one solid outline' is true of controls and not of fields."
+    ]
+  }
+}
