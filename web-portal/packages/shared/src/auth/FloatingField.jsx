@@ -38,6 +38,7 @@
 const FLOATED =
   '-top-2.5 left-6 translate-y-0 bg-white px-2 text-xs font-medium text-text-primary'
 
+
 /** Resting: inside the field, vertically centred, clear of the leading icon. */
 const RESTING = 'top-1/2 left-[3.25rem] -translate-y-1/2 px-0 text-sm text-text-muted'
 
@@ -54,7 +55,7 @@ const FLOATED_ON_FOCUS = [
   'group-focus-within:px-2',
   'group-focus-within:text-xs',
   'group-focus-within:font-medium',
-  'group-focus-within:text-text-primary',
+  'group-focus-within:text-brand-500',
 ].join(' ')
 
 /**
@@ -91,10 +92,10 @@ export default function FloatingField({
         className={`flex items-center gap-3 rounded-full border bg-field px-6 transition-[border-color,box-shadow] duration-200 ease-in-out ${
           error
             ? 'border-danger group-focus-within:border-danger group-focus-within:ring-2 group-focus-within:ring-danger/20'
-            : 'border-slate-200/80 hover:border-slate-300 group-focus-within:border-text-primary group-focus-within:ring-2 group-focus-within:ring-text-primary/10'
+            : 'border-slate-200/80 hover:border-slate-300 group-focus-within:border-brand-500 group-focus-within:ring-2 group-focus-within:ring-brand-500/20'
         }`}
       >
-        <Icon className="h-4 w-4 shrink-0 text-text-muted transition-colors duration-200 group-focus-within:text-text-primary" />
+        <Icon className="h-4 w-4 shrink-0 text-text-muted transition-colors duration-200 group-focus-within:text-brand-500" />
         <input
           id={id}
           aria-invalid={error ? 'true' : undefined}

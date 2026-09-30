@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth'
-import { CheckCircle2, Eye, EyeOff, KeyRound, Lock, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, ShieldAlert } from 'lucide-react'
 
 import { auth } from '@shared/lib/firebase'
 import AuthAlert from '@shared/auth/AuthAlert'
 import BackToSignIn from '@shared/auth/BackToSignIn'
 import LoginSplitLayout from '@shared/auth/LoginSplitLayout'
-import FloatingField from '@shared/auth/FloatingField'
+import NewPasswordFields from '@shared/auth/NewPasswordFields'
+import { passwordReady } from '@shared/auth/passwordPolicy'
 import { CTA } from '@shared/auth/authStyles'
 
 /**
@@ -39,48 +40,20 @@ import { CTA } from '@shared/auth/authStyles'
  * the person gets that they are resetting the account they meant to.
  */
 
-/**
- * Password rules, in the order they are shown.
- *
- * Length first because it is the one that actually matters — every additional
- * character multiplies the search space, while the character-class rules mostly
- * push people towards `Password1!`. The classes are kept because the product's
- * own accounts are provisioned by an administrator and a shared floor is worth
- * having, but the meter below weights length heaviest for the same reason.
+/*
+ * The rules, the meter and the match check live in NewPasswordFields, which
+ * this screen and the OTP flow both render. They were duplicated here first,
+ * and two copies of a password policy is two places for it to drift — with the
+ * copy nobody is looking at being the one that does.
  */
-const RULES = [
-  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
-  { id: 'case', label: 'Upper and lower case', test: (v) => /[a-z]/.test(v) && /[A-Z]/.test(v) },
-  { id: 'number', label: 'A number', test: (v) => /\d/.test(v) },
-  { id: 'symbol', label: 'A symbol', test: (v) => /[^A-Za-z0-9]/.test(v) },
-]
-
-const STRENGTH = [
-  { label: 'Too short', bar: 'w-1/4 bg-danger', text: 'text-danger' },
-  { label: 'Weak', bar: 'w-2/4 bg-warning', text: 'text-warning' },
-  { label: 'Good', bar: 'w-3/4 bg-info', text: 'text-info' },
-  { label: 'Strong', bar: 'w-full bg-success', text: 'text-success' },
-]
-
-function scoreOf(value) {
-  if (!value) return -1
-  const passed = RULES.filter((rule) => rule.test(value)).length
-  // Length is a gate, not one vote among four: nothing counts as more than
-  // "weak" until it is long enough, however many symbols it has.
-  if (!RULES[0].test(value)) return 0
-  return Math.min(STRENGTH.length - 1, Math.max(1, passed - 1))
-}
 
 /**
  * How long step 4 waits before returning to sign-in on its own.
  *
  * It returns automatically because the person's next action is always the same
  * one, and a success screen that waits for a click is a screen someone leaves
- * open on a shared machine. Five seconds is long enough to read the sentence
- * that matters — other devices will need the new password too — and the button
- * is there the whole time for anyone who does not want to wait. The count is
- * shown rather than silent: an interface that navigates without warning feels
- * like it crashed.
+ * open on a shared machine. The count is shown rather than silent: an interface
+ * that navigates without warning feels like it crashed.
  */
 const REDIRECT_SECONDS = 5
 
@@ -157,9 +130,7 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
   const [done, setDone] = useState(false)
   const [countdown, setCountdown] = useState(REDIRECT_SECONDS)
 
-  const score = useMemo(() => scoreOf(password), [password])
-  const mismatch = confirmation.length > 0 && confirmation !== password
-  const ready = score >= 1 && password === confirmation && !submitting
+  const ready = passwordReady(password, confirmation) && !submitting
 
   // Verify the link before rendering a form against it.
   useEffect(() => {
@@ -287,92 +258,15 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
           </p>
         ) : null}
 
-        <div className="flex flex-col gap-5">
-          <FloatingField
-            id="new-password"
-            label="New password"
-            icon={Lock}
-            type={reveal ? 'text' : 'password'}
-            required
-            autoComplete="new-password"
-            autoFocus
-            filled={Boolean(password)}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 10 characters"
-            trailing={
-              <button
-                type="button"
-                onClick={() => setReveal((prev) => !prev)}
-                className="shrink-0 rounded-full p-1.5 text-text-muted transition-colors duration-150 hover:bg-tint/10 hover:text-text-primary"
-                aria-label={reveal ? 'Hide password' : 'Show password'}
-                aria-pressed={reveal}
-              >
-                {reveal ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            }
-          />
-
-          {/* The meter is `aria-hidden` and the rule list carries the real
-              message: a coloured bar communicates nothing to a screen reader,
-              and the same information is already spelled out beneath it. */}
-          {password ? (
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <div
-                  className="h-1 flex-1 overflow-hidden rounded-full bg-base-800"
-                  aria-hidden="true"
-                >
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ease-out ${
-                      STRENGTH[Math.max(0, score)].bar
-                    }`}
-                  />
-                </div>
-                <span className={`text-xs font-medium ${STRENGTH[Math.max(0, score)].text}`}>
-                  {STRENGTH[Math.max(0, score)].label}
-                </span>
-              </div>
-              <ul className="flex flex-col gap-1">
-                {RULES.map((rule) => {
-                  const met = rule.test(password)
-                  return (
-                    <li
-                      key={rule.id}
-                      className={`flex items-center gap-2 text-xs transition-colors duration-200 ${
-                        met ? 'text-success' : 'text-text-muted'
-                      }`}
-                    >
-                      <CheckCircle2
-                        className={`h-3.5 w-3.5 shrink-0 ${met ? 'opacity-100' : 'opacity-30'}`}
-                      />
-                      {rule.label}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          ) : null}
-
-          <FloatingField
-            id="confirm-password"
-            label="Confirm password"
-            icon={KeyRound}
-            type={reveal ? 'text' : 'password'}
-            required
-            autoComplete="new-password"
-            filled={Boolean(confirmation)}
-            value={confirmation}
-            onChange={(event) => setConfirmation(event.target.value)}
-            placeholder="Type it again"
-            aria-invalid={mismatch ? 'true' : undefined}
-          />
-          {mismatch ? (
-            <p role="alert" className="-mt-2 text-xs font-medium text-danger">
-              The two passwords do not match yet.
-            </p>
-          ) : null}
-        </div>
+        <NewPasswordFields
+          password={password}
+          confirmation={confirmation}
+          reveal={reveal}
+          disabled={submitting}
+          onPasswordChange={setPassword}
+          onConfirmationChange={setConfirmation}
+          onToggleReveal={() => setReveal((prev) => !prev)}
+        />
 
         <AuthAlert tone="error">{error}</AuthAlert>
 

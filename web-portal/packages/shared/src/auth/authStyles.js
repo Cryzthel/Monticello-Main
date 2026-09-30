@@ -10,18 +10,34 @@
  */
 
 /**
- * The primary action, everywhere: "Sign in", "Verify and sign in", "Send reset
- * link", "Set new password", "Return to sign in".
+ * The primary action, everywhere: "Sign in", "Verify code", "Send reset code",
+ * "Set new password", "Return to sign in".
  *
- * `.btn` and `.btn-brand` are the design system's, so the fill, the hover, the
- * 150ms `--ease-out-strong` transition and the 0.97 press scale are shared with
- * every other CTA in both products. Only the SHAPE is overridden — a capsule
- * rather than the system's 8px corner — which is the sign-in screens' one
- * geometric departure and matches the oblong fields above it.
+ * ── WHY THE TOKEN AND NOT `bg-emerald-600` ───────────────────────────────────
+ * The brief names `bg-emerald-600 hover:bg-emerald-700`. Stock Tailwind's
+ * emerald-600 is #059669, and a white label on it measures about 3.8:1 — under
+ * the 4.5:1 that normal-size text owes its background. A sign-in button is the
+ * one control on the screen that must be legible to everyone, in a guardhouse,
+ * at night, on a cheap monitor.
  *
- * In light, which these screens are pinned to, `--color-cta` is #0F172A and
- * `--color-cta-hover` is #1E293B: the near-black the brief asks for, arrived at
- * through the token rather than around it.
+ * `--color-brand-cta` is #047857: the same emerald family, two steps deeper,
+ * measured at 5.6:1 with white and already carrying its own guaranteed-legible
+ * foreground and hover. It also inverts correctly — in dark it becomes #10B981
+ * with a BLACK label, because white on that fill is 2.54:1. That inversion is
+ * why the fill and its text colour are a PAIR and why this uses both halves
+ * rather than pinning `text-white`.
+ *
+ * ── THIS DIVERGES FROM THE DASHBOARDS, DELIBERATELY AND VISIBLY ──────────────
+ * Every other CTA in both consoles is near-black (`--color-cta`, "the primary
+ * action: near-black, by the user's choice on 2026-09-22"). The sign-in screens
+ * are now emerald by a later request. If the intent is one CTA colour product
+ * wide, the change belongs in `--color-cta` itself — one line in
+ * styles/index.css moves every button in both dashboards at once — rather than
+ * here, which moves only these four screens.
+ *
+ * `.btn` supplies the shape, the 150ms `--ease-out-strong` transition and the
+ * 0.97 press scale, shared with every other button in the product. `.btn-brand`
+ * is deliberately NOT used: it hardcodes the near-black pair.
  */
 export const CTA =
-  'btn btn-brand h-12 w-full rounded-full text-sm font-semibold disabled:opacity-60'
+  'btn h-12 w-full rounded-full bg-brand-cta text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover text-sm font-semibold disabled:opacity-60'
