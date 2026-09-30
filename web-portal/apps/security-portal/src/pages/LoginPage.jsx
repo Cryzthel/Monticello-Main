@@ -16,11 +16,14 @@ import { ROUTES } from '@/config/portal'
  * of importing it and handing it a different illustration. The card component
  * it replaced (`LoginLayout`) had no other caller and is gone.
  *
- * WHAT IS STILL DIFFERENT, AND DELIBERATELY SO: `accent="info"`. It reaches two
- * marks — the Remember-me checkbox and the Forgot-password link — and it is the
- * one visual cue that tells an operator which console they are looking at
- * before they read a word. Geometry, type, spacing, focus treatment and the CTA
- * are byte-identical to admin's, which is the point of the shared shell.
+ * NOTHING VISUAL DIFFERS ANY MORE. The accent used to: this console painted
+ * the recovery link and the Remember-me tick sky blue while admin painted them
+ * emerald. Two screens identical in every other dimension, disagreeing on one
+ * link, read as an oversight rather than as a signal — and the heading already
+ * says which console you are on. Both are emerald now, and the prop that
+ * expressed the difference is deleted rather than defaulted.
+ *
+ * What is left that differs: the strings and the illustration.
  */
 
 /**
@@ -65,7 +68,6 @@ export default function LoginPage() {
       illustration={<LoginHero />}
     >
       <LoginForm
-        accent="info"
         emailIcon={Mail}
         emailPlaceholder="guard.test@monticellovillas.ph"
         submitLabel="Sign in"

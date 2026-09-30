@@ -91,12 +91,6 @@ export default function LoginForm({
   submitLabel,
   /** Where a successful sign-in lands when there is no deep link to resume. */
   fallbackPath,
-  /**
-   * 'brand' (admin emerald) or 'info' (guardhouse sky). It reaches two small
-   * controls — the Remember-me checkbox and the recovery link — and is the one
-   * visual difference left between the two consoles' sign-in screens.
-   */
-  accent = 'brand',
 }) {
   const { login, completeSecondFactor, rejection, setRejection } = useAuth()
   const navigate = useNavigate()
@@ -121,9 +115,25 @@ export default function LoginForm({
   // same thing on the same screen.
   const [recovering, setRecovering] = useState(false)
 
-  const accentLink =
-    accent === 'info' ? 'text-info hover:text-info/80' : 'text-brand-400 hover:text-brand-300'
-  const accentCheckbox = accent === 'info' ? 'accent-info' : 'accent-brand-500'
+  /*
+   * THE SAME EMERALD IN BOTH CONSOLES.
+   *
+   * This was a prop: admin passed `brand` and the guardhouse `info`, painting
+   * the recovery link and the Remember-me tick sky blue on one screen and
+   * emerald on the other. The idea was that the accent told an operator which
+   * console they were looking at — but a sign-in screen already says so in the
+   * heading, and what it actually produced was two screens that are identical
+   * in every dimension except one link, which reads as a mistake rather than as
+   * a signal.
+   *
+   * With one value left the prop was a knob nothing turned, so it is gone
+   * rather than defaulted. `brand-400` is the design system's TEXT step of the
+   * accent — #065F46 in light, 7.6:1 on white — not the fill step, because this
+   * is ink on a white pane and the fill step is drawn to carry a label on top
+   * of it, not to be read against a background.
+   */
+  const accentLink = 'text-brand-400 hover:text-brand-300'
+  const accentCheckbox = 'accent-brand-500'
 
   // A session restored from storage that this portal does not accept is signed
   // out by AuthProvider before anything renders. Surfacing its reason here is

@@ -14,8 +14,9 @@ import { ROUTES } from '@/config/portal'
  * release, while only this console had been asked for the split layout; the
  * guardhouse now renders the same `LoginSplitLayout` with its own illustration
  * and strings, so the screens are identical in geometry, type and spacing once
- * more. The only visual difference left is the `accent`, which reaches two
- * small controls — see the guardhouse's copy of this file.
+ * more — including the accent, which used to differ and no longer does. The
+ * two sign-in screens are now identical apart from their strings and their
+ * illustration.
  */
 
 /**
@@ -60,7 +61,6 @@ export default function LoginPage() {
       illustration={<LoginHero />}
     >
       <LoginForm
-        accent="brand"
         emailIcon={Mail}
         emailPlaceholder="monticellovillas@gmail.com"
         submitLabel="Sign in"
