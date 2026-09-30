@@ -2,7 +2,7 @@
  * Monticello Villas — password-reset OTP Cloud Functions.
  *
  * Two callable functions:
- *   - sendPasswordOtp({ email })  -> generates a 4-digit OTP, stores a HASHED
+ *   - sendPasswordOtp({ email })  -> generates a 6-digit OTP, stores a HASHED
  *     copy server-side, and emails the plaintext code to the user.
  *   - verifyPasswordOtp({ email, otp }) -> checks the code, and on success
  *     returns a Firebase password-reset link the client can complete.
@@ -32,6 +32,23 @@ const OTP_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 const COLLECTION = "password_reset_otps";
 
+// ── HOW MANY DIGITS A RESET CODE HAS ────────────────────────────────────────
+//
+// Was 4. Six is what every mail-delivered code a resident has ever typed looks
+// like, and it is what iOS and Android's one-time-code autofill expects to
+// find in the message — but the reason to change it is the search space. A
+// 4-digit code is 10,000 possibilities; six is a million, against the same
+// 5-attempt limit and the same 10-minute window.
+//
+// THIS IS HALF OF A PAIR. `kOtpLength` in
+// lib/features/auth/widgets/otp_pin_input.dart is the other, and the two must
+// ship together: `verifyPasswordOtp` rejects a code of the wrong length before
+// it ever reaches the hash comparison, so a client sending 6 against a deployed
+// 4 (or the reverse) fails every reset in the estate at the same step with
+// "Email and a 6-digit code are required."
+const OTP_LENGTH = 6;
+const OTP_MAX_EXCLUSIVE = 10 ** OTP_LENGTH;
+
 /**
  * A resend inside this window is answered with success, but sends nothing and
  * reissues nothing. The code already in the caller's inbox stays live, so the
@@ -42,17 +59,19 @@ const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
 /**
  * Guesses are counted per ADDRESS over this window, not per issued code.
  *
- * WHY. The code is four digits — 10,000 values — and MAX_ATTEMPTS caps guesses
- * at five, which is a sound cap only if five is all a caller ever gets.
- * `sendPasswordOtp` overwrote the record with `attempts: 0`, so five wrong
- * guesses followed by another send returned a full budget; the call is
- * unauthenticated and was unthrottled, so roughly 2,000 send-and-guess cycles
- * walked the entire keyspace. The window makes the cap cumulative and the
- * cooldown bounds the email flood that refilling it required.
+ * WHY. MAX_ATTEMPTS caps guesses at five, which is a sound cap only if five is
+ * all a caller ever gets. `sendPasswordOtp` overwrote the record with
+ * `attempts: 0`, so five wrong guesses followed by another send returned a full
+ * budget; the call is unauthenticated and was unthrottled, so against the
+ * 4-digit code this replaced — 10,000 values — roughly 2,000 send-and-guess
+ * cycles walked the entire keyspace. The window makes the cap cumulative and
+ * the cooldown bounds the email flood that refilling it required.
  *
- * Widening the code to six digits would have been the other half of this, but
- * the mobile client validates `otp.length != 4` before it calls and would
- * reject every code it was sent — a client contract change, not a fix.
+ * THE OTHER HALF IS NOW DONE TOO. OTP_LENGTH is six, so the same attack faces a
+ * million values rather than ten thousand. Both halves matter and neither is
+ * redundant: the window is what makes the cap real, and the width is what keeps
+ * a future regression of the window from being immediately catastrophic — which
+ * is not hypothetical, because that is exactly what happened here once.
  */
 const OTP_ATTEMPT_WINDOW_MS = 30 * 60 * 1000;
 
@@ -122,7 +141,14 @@ exports.sendPasswordOtp = functions
     const windowOpen =
       Boolean(prev) && now - windowStartedAt < OTP_ATTEMPT_WINDOW_MS;
 
-    const otp = String(crypto.randomInt(0, 10000)).padStart(4, "0");
+    // `randomInt` is the CSPRNG, not Math.random — a guessable reset code is a
+    // guessable account. padStart keeps leading zeros, so 000042 stays a valid
+    // six-digit code rather than becoming "42" and failing its own length
+    // check on the way back in.
+    const otp = String(crypto.randomInt(0, OTP_MAX_EXCLUSIVE)).padStart(
+      OTP_LENGTH,
+      "0"
+    );
     const salt = crypto.randomBytes(16).toString("hex");
 
     // `lastSentAt` is deliberately NOT written here. It is stamped only once
@@ -179,10 +205,10 @@ exports.verifyPasswordOtp = functions.https.onCall(async (data) => {
   const email = normalizeEmail(data.email);
   const otp = String(data.otp || "").trim();
 
-  if (!email || otp.length !== 4) {
+  if (!email || otp.length !== OTP_LENGTH) {
     throw new functions.https.HttpsError(
       "invalid-argument",
-      "Email and a 4-digit code are required."
+      `Email and a ${OTP_LENGTH}-digit code are required.`
     );
   }
 
