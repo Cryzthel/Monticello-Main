@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
+} from 'react'
 
 /**
  * Theme state for both portals.
@@ -40,6 +42,45 @@ export function useTheme() {
   return context
 }
 
+/**
+ * Pins the whole app to one theme for as long as the calling component is
+ * mounted, then hands control back.
+ *
+ * WHY THIS IS A PROVIDER-LEVEL OVERRIDE AND NOT A CLASS ON A WRAPPER DIV.
+ * The light palette is declared in `@theme`, which emits plain custom
+ * properties on `:root`; `.dark` overrides them on <html>. Custom properties
+ * INHERIT, so a `<div className="light">` inside a dark document declares
+ * nothing and inherits the dark values — the div renders dark. The only ways
+ * to pin a subtree light are to duplicate the entire light palette under a
+ * `.light` selector (two palettes to keep in sync, which is how they drift) or
+ * to change what is on <html>. This does the second.
+ *
+ * It deliberately does NOT touch the stored preference. A dark-mode
+ * administrator who signs in through the pinned-light login is still a
+ * dark-mode administrator on the dashboard a moment later; only the resolved
+ * theme is overridden, and only while the pinning screen is on screen.
+ *
+ * Because `theme` in context reports the FORCED value, `isDark` and anything
+ * branching on it are correct for what is actually painted. The consequence,
+ * stated because it would otherwise be a puzzle: a theme toggle rendered
+ * inside a pinned screen would write the preference and appear to do nothing.
+ * No such screen has one, and a screen that pins a theme has no business
+ * offering a control that contradicts it.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useForcedTheme(forced) {
+  const { setForcedTheme } = useTheme()
+
+  // Layout effect, not effect: this runs in the same commit that mounts the
+  // pinned screen, so the class swap below lands before the browser paints
+  // rather than one frame into it. An effect here is a visible dark flash on
+  // every client-side navigation into the login route.
+  useLayoutEffect(() => {
+    setForcedTheme(forced)
+    return () => setForcedTheme(null)
+  }, [forced, setForcedTheme])
+}
+
 // Queried as "is the OS dark?" rather than "is it light?" so that the fallback
 // when matchMedia is unavailable — and the value the SSR/no-window branch
 // returns — is LIGHT, which is the design system's canonical theme. See the
@@ -65,9 +106,15 @@ function readStored() {
 export default function ThemeProvider({ children }) {
   const [preference, setPreference] = useState(readStored)
   const [systemTheme, setSystemTheme] = useState(readSystem)
+  // Set by useForcedTheme while a screen that pins a theme is mounted — today
+  // only the admin sign-in, which is light by design and must stay light for a
+  // dark-mode administrator. Null means "nobody is pinning"; the preference
+  // below decides, exactly as before.
+  const [forcedTheme, setForcedTheme] = useState(null)
   const firstRun = useRef(true)
 
-  const theme = preference === 'system' ? systemTheme : preference
+  const preferred = preference === 'system' ? systemTheme : preference
+  const theme = forcedTheme ?? preferred
 
   // Keep following the OS while the preference is 'system'. The listener is
   // always attached rather than conditionally, so switching back to 'system'
@@ -79,7 +126,11 @@ export default function ThemeProvider({ children }) {
     return () => media.removeEventListener('change', onChange)
   }, [])
 
-  useEffect(() => {
+  // Layout effect so the class and `color-scheme` are on <html> before the
+  // browser paints the commit that changed them. As a plain effect this is a
+  // frame of the OUTGOING theme every time the resolved theme changes, which
+  // is most visible entering and leaving the pinned-light sign-in screen.
+  useLayoutEffect(() => {
     const root = document.documentElement
 
     // Skip the cross-fade on the very first run: index.html already resolved
@@ -124,12 +175,14 @@ export default function ThemeProvider({ children }) {
       /** Resolved: 'light' | 'dark'. What is actually on screen. */
       theme,
       isDark: theme === 'dark',
-      /** Stored: 'light' | 'dark' | 'system'. */
+      /** Stored: 'light' | 'dark' | 'system'. Unaffected by a pin. */
       preference,
       setPreference,
       /** Hands control back to the OS. */
       useSystemTheme: () => setPreference('system'),
       toggle,
+      /** For useForcedTheme only. Pass a theme to pin, null to release. */
+      setForcedTheme,
     }),
     [theme, preference, toggle],
   )

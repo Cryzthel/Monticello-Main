@@ -39,6 +39,56 @@ import { SecondFactorRequiredError, describeTwoFactorError, normaliseCode } from
  */
 
 /**
+ * THE TWO PRESENTATIONS OF THIS FORM.
+ *
+ * `standard` is the guardhouse's, unchanged and byte-identical to what it has
+ * always rendered. `elevated` is the admin split-card screen's, and the two
+ * lines below are the WHOLE difference — there is no third branch anywhere in
+ * this file, which is the point of collecting them here rather than threading
+ * a className through every call site.
+ *
+ * ── ON THE ALL-CAPS FIELD LABELS ─────────────────────────────────────────────
+ * `uppercase` on the elevated labels is a DELIBERATE, SCOPED exception to rule
+ * 6 of the design system ("nothing is set in all caps; a `uppercase` utility in
+ * this codebase is a regression"), taken by request for this one screen. Two
+ * things make it defensible rather than a quiet violation:
+ *
+ *   · It is `text-transform`, not caps typed into the DOM. The accessible name
+ *     stays "Email address", so a screen reader reads the words instead of
+ *     spelling them — which was the real objection behind the rule, and the
+ *     one the system's own note records.
+ *   · It cannot leak. The guardhouse reads `standard` and is unaffected, and
+ *     anything new that wants this look has to ask for it by name.
+ *
+ * Tracking is non-negotiable alongside it: caps without extra letter-spacing
+ * set tight and read as shouting, which is what `tracking-wider` answers.
+ */
+const LABEL_CLASS = {
+  standard: 'text-xs font-medium text-text-secondary',
+  elevated: 'text-xs font-semibold uppercase tracking-wider text-text-secondary',
+}
+
+/**
+ * The submit button, per presentation.
+ *
+ * Both are `.btn .btn-brand`, so the fill, the hover, the 150ms
+ * `--ease-out-strong` transition and the 0.97 press scale are the design
+ * system's and stay identical between the consoles. `elevated` overrides only
+ * the shape: a 12px corner instead of 8px, `py-3` instead of a fixed 48px row,
+ * and a semibold label.
+ *
+ * `.btn`'s own transition is kept rather than the brief's `transition-all`,
+ * which is the one detail here worth stating: `transition-all` also animates
+ * layout properties, so a button that reflows — a label swapping to "Signing
+ * in…", an error banner appearing above it — animates its own width and height
+ * on a 150ms curve. The enumerated list cannot do that.
+ */
+const SUBMIT_CLASS = {
+  standard: 'btn btn-brand mt-1 h-12 w-full text-label disabled:opacity-60',
+  elevated: 'btn btn-brand mt-1 w-full rounded-xl py-3 text-sm font-semibold disabled:opacity-60',
+}
+
+/**
  * One labelled field: label above, a pill well below holding a leading icon,
  * the input, and an optional trailing control.
  *
@@ -46,10 +96,18 @@ import { SecondFactorRequiredError, describeTwoFactorError, normaliseCode } from
  * icon, border, fill and ring all light up as a single control instead of a
  * ring appearing around a box that happens to contain a glyph.
  */
-function Field({ id, label, icon: Icon, trailing, inputClassName = '', ...inputProps }) {
+function Field({
+  id,
+  label,
+  icon: Icon,
+  trailing,
+  labelClassName = LABEL_CLASS.standard,
+  inputClassName = '',
+  ...inputProps
+}) {
   return (
     <div>
-      <label htmlFor={id} className="mb-2 block text-xs font-medium text-text-secondary">
+      <label htmlFor={id} className={`mb-2 block ${labelClassName}`}>
         {label}
       </label>
       {/* Matches `.field` in the design system — a flat bordered box at the
@@ -82,7 +140,24 @@ export default function LoginForm({
   fallbackPath,
   /** 'brand' (admin blue) or 'info' (guardhouse sky). Styling only. */
   accent = 'brand',
+  /**
+   * The email field's leading glyph. Defaults to `AtSign` — see the note at
+   * the field itself for why that was the original choice, which still holds
+   * for the guardhouse. The admin split-card screen passes `Mail` because its
+   * brief names an envelope, and a prop is how one screen takes that without
+   * silently changing the other console's field.
+   */
+  emailIcon: EmailIcon = AtSign,
+  /**
+   * 'standard' (the guardhouse card) or 'elevated' (the admin split card).
+   * Presentation only — see LABEL_CLASS and SUBMIT_CLASS, which are the entire
+   * difference between the two.
+   */
+  variant = 'standard',
 }) {
+  const labelClassName = LABEL_CLASS[variant] ?? LABEL_CLASS.standard
+  const submitClassName = SUBMIT_CLASS[variant] ?? SUBMIT_CLASS.standard
+
   const { login, completeSecondFactor, rejection, setRejection } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -225,6 +300,7 @@ export default function LoginForm({
           id="totp-code"
           label="Authentication code"
           icon={KeyRound}
+          labelClassName={labelClassName}
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -258,7 +334,7 @@ export default function LoginForm({
         <button
           type="submit"
           disabled={submitting || normaliseCode(code).length !== 6}
-          className="btn btn-brand mt-1 h-12 w-full text-label disabled:opacity-60"
+          className={submitClassName}
         >
           {submitting ? (
             <>
@@ -285,13 +361,15 @@ export default function LoginForm({
 
   return (
     <form className="flex flex-col gap-5" onSubmit={handleSubmit} noValidate>
-      {/* AtSign rather than Mail: the brief names an `@` glyph, and it is the
-          more literal cue for "this field takes an address" than an envelope,
-          which reads as "we will send you something". */}
+      {/* AtSign is the default here: the guardhouse brief names an `@` glyph,
+          and it is the more literal cue for "this field takes an address" than
+          an envelope, which reads as "we will send you something". The admin
+          screen overrides it with `Mail` per its own brief — see the prop. */}
       <Field
         id="email"
         label="Email address"
-        icon={AtSign}
+        icon={EmailIcon}
+        labelClassName={labelClassName}
         type="email"
         required
         autoComplete="email"
@@ -305,6 +383,7 @@ export default function LoginForm({
         id="password"
         label="Password"
         icon={Lock}
+        labelClassName={labelClassName}
         type={showPassword ? 'text' : 'password'}
         required
         autoComplete="current-password"
@@ -374,7 +453,7 @@ export default function LoginForm({
       <button
         type="submit"
         disabled={submitting}
-        className="btn btn-brand mt-1 h-12 w-full text-label disabled:opacity-60"
+        className={submitClassName}
       >
         {submitting ? (
           <>
