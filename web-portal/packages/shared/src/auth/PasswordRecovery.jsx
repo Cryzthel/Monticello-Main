@@ -76,7 +76,29 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
     setError('')
     setSubmitting(true)
     try {
-      await sendPasswordResetEmail(auth, address)
+      /*
+       * `continueUrl` is this portal's OWN sign-in page, and it is what makes
+       * one Firebase project serve two consoles correctly.
+       *
+       * A project has a single password-reset action URL, but admin and the
+       * guardhouse are separate applications on separate origins. Without this,
+       * whichever handler processes the code has no idea which console the
+       * person came from, and sends a guard to the administrator's sign-in
+       * page — a screen their account is refused by. With it, the destination
+       * travels with the request.
+       *
+       * Firebase will only accept a URL whose domain is on the project's
+       * Authorized domains list, so this cannot be pointed somewhere arbitrary.
+       *
+       * Read from the address bar rather than taken as a prop because recovery
+       * is only ever shown ON the sign-in page — `pathname` here IS the login
+       * route, and threading a `loginPath` prop through two components to
+       * rediscover it would be ceremony.
+       */
+      await sendPasswordResetEmail(auth, address, {
+        url: `${window.location.origin}${window.location.pathname}`,
+        handleCodeInApp: false,
+      })
       setSent(true)
     } catch (err) {
       switch (err?.code) {

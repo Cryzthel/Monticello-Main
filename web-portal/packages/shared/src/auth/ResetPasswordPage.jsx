@@ -89,6 +89,62 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
   const navigate = useNavigate()
   const oobCode = params.get('oobCode') ?? ''
 
+  /*
+   * Where to send the person afterwards.
+   *
+   * Firebase appends `continueUrl` from the `actionCodeSettings` the sending
+   * portal supplied — see PasswordRecovery — so this is how a guardhouse reset
+   * handled by a page hosted on the admin origin knows to return the guard to
+   * the guardhouse.
+   *
+   * ── IT IS ALLOWLISTED, AND THE OBVIOUS REASONING FOR NOT DOING SO IS WRONG ──
+   * The tempting argument is that Firebase only puts domains from the project's
+   * Authorized domains list into the emails it sends, so the value is already
+   * vetted. That is true of the email and irrelevant here: this page reads the
+   * query string of whatever URL the browser is pointed at. Anyone can write
+   *
+   *     https://<portal>/reset-password?oobCode=…&continueUrl=https://evil.tld
+   *
+   * and send it to a member of staff. Firebase is not in that loop at all.
+   * Following it would hand an attacker a redirect off a security console at
+   * the exact moment the victim has just changed their password and is primed
+   * to type it again — a working phishing hop, shipped by us.
+   *
+   * So: same origin is always fine, and any OTHER origin has to be named in
+   * `VITE_AUTH_RETURN_ORIGINS`. That variable is how the two consoles learn
+   * about each other without either bundle hardcoding the other's address —
+   * config rather than code, which is the property config/portal.js is
+   * protecting when it says this app must not know the guardhouse's origin.
+   */
+  const continueUrl = useMemo(() => {
+    const raw = params.get('continueUrl')
+    if (!raw) return null
+    let parsed
+    try {
+      parsed = new URL(raw, window.location.origin)
+    } catch {
+      return null
+    }
+    // Blocks `javascript:`, `data:` and friends before anything else looks at it.
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
+    if (parsed.origin === window.location.origin) return parsed.href
+
+    const allowed = String(import.meta.env.VITE_AUTH_RETURN_ORIGINS ?? '')
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+    return allowed.includes(parsed.origin) ? parsed.href : null
+  }, [params])
+
+  /** Leave for wherever the reset came from, or this portal's sign-in. */
+  const returnToSignIn = () => {
+    if (continueUrl) {
+      window.location.assign(continueUrl)
+      return
+    }
+    navigate(loginPath, { replace: true })
+  }
+
   const [account, setAccount] = useState(null)
   const [checking, setChecking] = useState(true)
   const [linkError, setLinkError] = useState('')
@@ -134,12 +190,13 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
   useEffect(() => {
     if (!done) return undefined
     if (countdown <= 0) {
-      navigate(loginPath, { replace: true })
+      returnToSignIn()
       return undefined
     }
     const timer = setTimeout(() => setCountdown((n) => n - 1), 1000)
     return () => clearTimeout(timer)
-  }, [done, countdown, navigate, loginPath])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done, countdown])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -181,7 +238,7 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
           </div>
           <button
             type="button"
-            onClick={() => navigate(loginPath, { replace: true })}
+            onClick={returnToSignIn}
             className={CTA}
           >
             Back to sign in
@@ -208,7 +265,7 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
           <div className="flex flex-col gap-3">
             <button
               type="button"
-              onClick={() => navigate(loginPath, { replace: true })}
+              onClick={returnToSignIn}
               className={CTA}
             >
               Return to sign in
@@ -323,10 +380,7 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
           <button type="submit" disabled={!ready} className={CTA}>
             {submitting ? 'Setting password…' : 'Set new password'}
           </button>
-          <BackToSignIn
-            onClick={() => navigate(loginPath, { replace: true })}
-            disabled={submitting}
-          />
+          <BackToSignIn onClick={returnToSignIn} disabled={submitting} />
         </div>
       </form>
     )
