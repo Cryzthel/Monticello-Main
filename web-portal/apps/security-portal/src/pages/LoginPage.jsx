@@ -42,12 +42,19 @@ import { ROUTES } from '@/config/portal'
  */
 const HERO_ANIMATION = '/auth/login-hero.json'
 
+/**
+ * Measured over a full loop of this asset — see LoginHeroAnimation for what
+ * these mean, why they are written down rather than read at runtime, and the
+ * console snippet that re-derives them when the illustration changes.
+ */
+const HERO_FIT = { fillX: 0.9254, offsetXPct: -0.2, offsetYPct: 0.54 }
+
 export default function LoginPage() {
   return (
     <LoginSplitLayout
       title="Welcome back, Guard"
       description="Enter your guardhouse credentials to access the security console."
-      illustration={<LoginHeroAnimation src={HERO_ANIMATION} />}
+      illustration={<LoginHeroAnimation src={HERO_ANIMATION} fit={HERO_FIT} />}
     >
       <LoginForm
         variant="elevated"
