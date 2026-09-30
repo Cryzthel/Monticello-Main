@@ -137,14 +137,21 @@ export default function LoginHeroAnimation({ src, className = '' }) {
       lottieRef={lottieRef}
       loop
       autoplay={!reduced}
-      // 28rem. It was 24rem while the hero lived in a column inside a card,
-      // where the card's own width was the limit; the pane is now half the
-      // viewport — 720px at 1440 — and at 384px the illustration read as a
-      // small object adrift in it rather than as one half of the screen. 448px
-      // is ~62% of the pane at that width, which is where it sits in the
-      // reference, and it is still capped by the pane's padding on narrower
-      // laptops rather than by this number.
-      className={`w-full max-w-[28rem] select-none ${className}`}
+      /*
+       * Sized to FILL its pane, not to sit politely inside it. The cap has
+       * climbed 24 → 28 → 36rem as the hero moved from a column inside a card
+       * to half the viewport; at 448px it read as a small object adrift in a
+       * 720px pane. 576px is 80% of that pane, and on anything narrower the
+       * pane's own padding is the limit rather than this number.
+       *
+       * `max-h-full` is the guard that makes filling safe. The box is square,
+       * so on a short window — a laptop at 1440x720, or a browser with three
+       * toolbars — a width-driven 576px box would be taller than the pane and
+       * overflow it. Clamping the height instead lets the SVG's own
+       * `xMidYMid meet` letterbox it, which loses a little width and never
+       * distorts or clips.
+       */
+      className={`h-auto max-h-full w-full max-w-[36rem] select-none ${className}`}
       /*
        * From the animation, not hardcoded. lottie-web's SVG renderer sizes
        * itself to its container, so a container with no height draws a 0px

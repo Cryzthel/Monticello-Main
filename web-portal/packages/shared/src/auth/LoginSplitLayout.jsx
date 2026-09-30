@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { useForcedTheme } from '@shared/theme/ThemeProvider'
 
 /**
- * The sign-in screen: two full-height panes, an illustration on the left and
- * the form on the right, divided by a hairline down the middle of the viewport.
+ * The sign-in screen: two full-height panes divided by a hairline down the
+ * middle of the viewport. The illustration owns the left pane; the form sits in
+ * a card on the right.
  *
  * ── THIS DOES NOT REPLACE LoginLayout ────────────────────────────────────────
  * LoginLayout — the single centred card — is still what the guardhouse renders,
@@ -12,46 +13,44 @@ import { useForcedTheme } from '@shared/theme/ThemeProvider'
  * asked for this treatment, and the two files existing side by side is the
  * honest way to say that the screens have diverged. Folding both into one
  * component behind a `split` flag would have hidden a real product decision
- * inside a boolean, and every later change would have had to reason about
- * which branch it was in.
+ * inside a boolean.
  *
- * If the guardhouse is ever asked for the same shape it renders THIS component
- * with its own illustration and strings; nothing here knows which portal it is.
+ * ── WHERE THE TONES SIT, AND WHY THEY ARE THAT WAY ROUND ─────────────────────
+ * The illustration pane is WHITE and the form pane is the canvas grey
+ * (#F5F6F8), which is the reverse of the arrangement this screen carried while
+ * the form had no container.
+ *
+ * It had to flip, because a card needs a ground. `--color-base-900` (the card)
+ * is #FFFFFF and `--color-base-950` (the canvas) is #F5F6F8 — that pair is the
+ * entire figure/ground relationship in this design system, and it only works in
+ * one direction. A white card on a white pane has nothing but its own hairline
+ * to state its edge; the grey has to be on the side the card is on.
+ *
+ * The useful side effect is that the divider now coincides with a change of
+ * tone. A line between two identically-coloured panes is a line someone drew;
+ * a line on the seam between two grounds is the seam.
  *
  * ── HOW THIS ARRIVED AT FULL BLEED ───────────────────────────────────────────
- * By subtraction, over four passes, and the order matters because each removal
- * only became possible once the one before it had happened:
+ * By subtraction, and the order matters because each removal only became
+ * possible once the one before it had happened:
  *
  *   1. THE CANVAS WAS THE WRONG GREY — `bg-slate-50` (#F8FAFC) against a body
- *      painting `--color-base-950` (#F5F6F8 since the 2026-09-22 redesign).
- *      Two greys three units apart, stacked, with a visible seam wherever the
- *      page ran taller than the container. That seam read as a second
- *      background box sitting behind the card.
+ *      painting #F5F6F8. Two greys three units apart, stacked, with a visible
+ *      seam that read as a second background box behind the card.
+ *   2. THE CARD HAD AN INNER GUTTER — which put two concentric rounded
+ *      rectangles on the left half.
+ *   3. THE HERO COLUMN WAS TINTED — so the card read as a tinted box beside a
+ *      white box inside one border. Removing it was only possible once the
+ *      hero stopped being a video: an MP4 has no alpha and was knocked out
+ *      with `mix-blend-multiply`, which reads as transparency ONLY over a
+ *      near-white surface, so the asset was dictating the column's colour.
+ *   4. THE OUTER CARD — by then a white rectangle framing content that no
+ *      longer needed framing, with the two panes going full bleed in its place.
  *
- *   2. THE CARD HAD AN INNER GUTTER — `p-2` / `lg:p-3`, which inset the hero
- *      panel and put two concentric rounded rectangles on the left half.
- *
- *   3. THE HERO COLUMN WAS TINTED — `bg-slate-100/70`, so the card read as a
- *      tinted box beside a white box inside one border. Removing it was only
- *      possible once the hero stopped being a video: an MP4 has no alpha and
- *      was knocked out with `mix-blend-multiply`, a blend that reads as
- *      transparency ONLY over a near-white surface, so the asset was dictating
- *      the column's colour. A Lottie draws real transparency.
- *
- *   4. THE CARD ITSELF — by then a white rectangle with a border, a radius and
- *      a shadow around content that no longer needed framing.
- *
- * What is left is the layout below: no card, no radius, no shadow, and no
- * centred column of content floating in a grey field either. The two panes ARE
- * the page, edge to edge, and the only drawn line on the screen is the one
- * dividing them.
- *
- * THE TINT MOVED RATHER THAN CAME BACK. Pane 1 is `bg-base-950` and pane 2 is
- * `bg-white` — the same canvas/surface pair the dashboard uses, at viewport
- * scale. That is not a re-run of (3): there, a tint on one COLUMN INSIDE a
- * white card made the card read as two boxes. Here the panes are not inside
- * anything, so the pair reads as what it is — a ground on one side and the
- * working surface on the other, with the divider stating the join.
+ * The container below is NOT that card coming back. That one wrapped the whole
+ * screen, illustration included, which is what made the layout read as a box
+ * inside a box. This one wraps the FORM: the eight controls that are the only
+ * reason anyone opens this page, grouped as one object on a ground.
  *
  * ── WHY THIS SCREEN IS PINNED LIGHT ──────────────────────────────────────────
  * By request: the sign-in surface is fixed light and the dashboard's theme
@@ -59,14 +58,14 @@ import { useForcedTheme } from '@shared/theme/ThemeProvider'
  * own comment explains why a wrapper class cannot be — briefly, the palette
  * lives in inheriting custom properties on <html>, so a nested `.light` div
  * declares nothing and inherits the very dark values it was added to escape.
- * The pin is released the moment this component unmounts, so the preference a
+ * The pin releases the moment this component unmounts, so the preference a
  * dark-mode administrator set is intact on the dashboard a moment later.
  *
- * Because the theme is pinned, every token here resolves to its light value
- * permanently: `bg-base-950` is always #F5F6F8, `text-text-primary` always
- * slate-900, `border-slate-200` always #E2E8F0. They stay tokens rather than
- * hexes for the reason in (1) — this screen and the dashboard behind it must
- * not describe the same colour two different ways.
+ * Every token here therefore resolves to its light value permanently:
+ * `bg-base-950` is always #F5F6F8, `text-text-primary` always slate-900,
+ * `border-slate-200` always #E2E8F0. They stay tokens rather than hexes for the
+ * reason in (1) — this screen and the dashboard behind it must not describe the
+ * same colour two different ways.
  */
 
 /**
@@ -78,10 +77,6 @@ import { useForcedTheme } from '@shared/theme/ThemeProvider'
  * assumption is wrong — hiding an ancestor does not stop a media element from
  * fetching its source. The first build of this screen pulled the full hero on a
  * 375px phone that could never show a frame of it.
- *
- * Gating in CSS alone cannot fix that, and gating in JS alone would leave the
- * pane's sizing to a state update. Hence both, with the breakpoint named once
- * here so the two cannot drift silently.
  */
 const HERO_QUERY = '(min-width: 64rem)'
 
@@ -110,8 +105,7 @@ const ENTRANCE = 'animate-[riseIn_500ms_cubic-bezier(0.16,1,0.3,1)_both]'
 
 /**
  * @param illustration  The hero pane's content. Neither rendered nor fetched
- *                      below `lg` — see HERO_QUERY, and the pane itself for why
- *                      it is not merely shrunk.
+ *                      below `lg` — see HERO_QUERY.
  * @param title         The h1. One per screen — the hero pane deliberately
  *                      carries no heading of its own.
  * @param description   The supporting line under the title.
@@ -121,44 +115,74 @@ export default function LoginSplitLayout({ children, illustration, title, descri
   const heroVisible = useHeroVisible()
 
   return (
-    // `bg-white` on the grid, not only on the form pane. Below `lg` the hero
-    // pane is not rendered at all, so without it the single remaining pane
-    // would be white over a body painting #F5F6F8 — which shows as a grey band
-    // under an overscroll on a phone. Above `lg` the hero pane paints over it.
-    <div className="grid min-h-screen w-full bg-white lg:grid-cols-2">
+    // The canvas grey is on the GRID, so it is also what a phone sees: below
+    // `lg` the hero pane is not rendered and the form card sits on this ground
+    // alone, which is the ordinary card-on-canvas relationship the rest of the
+    // product uses. The hero pane paints its white over it above `lg`.
+    //
+    // EVERY TRACK IS `minmax(0,1fr)`, INCLUDING THE SINGLE MOBILE ONE. A grid
+    // track's default minimum is `auto`, which means it refuses to shrink below
+    // its item's min-content width — so a plain `grid-cols-2` / implicit single
+    // column silently becomes a floor. Measured: the form pane held itself at
+    // 374px inside a 320px grid and pushed 54px of horizontal scroll onto the
+    // page, which is every phone narrower than an iPhone 12. Releasing the
+    // minimum let the pane reach 320 and the card 280 with nothing clipped, so
+    // there was never a real content floor — only the track's default.
+    //
+    // This is the same guard the two-column layout carried before it was
+    // simplified to `lg:grid-cols-2`; the shorthand is what dropped it.
+    <div className="grid min-h-screen w-full grid-cols-[minmax(0,1fr)] bg-base-950 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       {/* ── Hero pane ────────────────────────────────────────────────────── */}
       {/* HIDDEN below lg, not shrunk. On a phone the form IS the screen: a
-          scaled-down illustration above it would push the two fields and the
-          CTA under the fold on every handset, which is the one thing a sign-in
+          scaled-down illustration above it would push the fields and the CTA
+          under the fold on every handset, which is the one thing a sign-in
           screen cannot afford. `hidden lg:grid` hides the pane; `heroVisible`
-          is what keeps the 95 KB animation off mobile data — see HERO_QUERY.
+          is what keeps the 203 KB animation off mobile data — see HERO_QUERY.
 
           `border-r` is the line down the middle of the screen. It belongs to
           this pane rather than to the form pane's left edge for one reason:
-          this pane is the one that disappears below `lg`, and a border owned by
-          the pane that survives would need its own breakpoint to be turned off
-          again. */}
-      <div className={`hidden place-items-center border-r border-slate-200 bg-base-950 p-12 lg:grid xl:p-16 ${ENTRANCE}`}>
+          this is the pane that disappears below `lg`, and a border owned by the
+          pane that survives would need its own breakpoint to be switched off.
+
+          The padding is deliberately small — `p-8`, against the `p-12`/`p-16`
+          this pane carried when the illustration was capped at 448px. The
+          illustration is the whole content of a half-viewport pane, and
+          padding was the thing keeping it from filling one. */}
+      <div
+        className={`hidden place-items-center border-r border-slate-200 bg-white p-8 lg:grid ${ENTRANCE}`}
+      >
         {heroVisible ? illustration : null}
       </div>
 
       {/* ── Form pane ────────────────────────────────────────────────────── */}
-      {/* `justify-center` here and `my-auto` on the content, rather than
+      {/* `justify-center` here and `my-auto` on the card, rather than
           `items-center`, which is the same centring with one difference that
-          matters: when the content is taller than the viewport — the
+          matters: when the card is taller than the viewport — the
           second-factor step on a short window — `align-items:center` overflows
           in BOTH directions and the top becomes unreachable, because scrolling
           cannot go above the origin. Auto margins resolve to 0 once free space
-          is negative, so the content sits at the top and the page scrolls. */}
-      <div className="flex w-full justify-center px-6 py-12 sm:px-10">
-        {/* `max-w-sm` is the whole of the form's width discipline. The pane is
-            half the viewport — 720px at 1440 — and a form stretched across that
-            is unreadable: the eye loses the left edge on the return sweep, and
-            a 700px-wide text input looks like a search bar, not a credential
-            field. 384px keeps the label, the field and the CTA in one column
-            the eye can hold, and the air either side of it is the point rather
-            than waste. */}
-        <div className={`my-auto w-full max-w-sm ${ENTRANCE}`}>
+          is negative, so the card sits at the top and the page scrolls. */}
+      <div className="flex w-full justify-center px-5 py-10 sm:px-8 lg:py-12">
+        {/* THE FORM'S CONTAINER. `shadow-modal` rather than the flatter
+            `shadow-panel` a dashboard card gets: this is the only object on
+            its half of the screen and there is no other content for it to
+            establish a stacking relationship with, so the deeper shadow reads
+            as presence rather than as noise. It is also what the single-card
+            login used before this screen was split, so the two portals' sign-in
+            cards still cast the same shadow.
+
+            29rem (464px) holds a 384px column of content inside `p-10`, which
+            is where the field/label/CTA rhythm was tuned.
+
+            The padding steps DOWN on a phone rather than staying put. At
+            `p-8` on a 375px screen the card's content box is 286px, and the
+            28px heading needs ~294px to set on one line — so it broke after
+            "Welcome back," and left "Admin" alone on the second. `p-6` buys
+            back the 16px that fixes it, and a phone does not want a desktop's
+            inset anyway. */}
+        <div
+          className={`my-auto w-full max-w-[29rem] rounded-2xl border border-slate-200 bg-white p-6 shadow-modal sm:p-8 lg:p-10 ${ENTRANCE}`}
+        >
           {/* Brand mark. Chrome, not a control — it belongs to the shell for
               the same reason it did in the single-card layout: a component
               named LoginForm rendering a wordmark is the seam that let the two
@@ -177,32 +201,37 @@ export default function LoginSplitLayout({ children, illustration, title, descri
             </div>
           </div>
 
-          {/* The "Admin portal authentication" capsule that sat here is gone by
-              request, and nothing replaces it: the brand mark above already
-              says which product this is and the heading says what to do, so a
-              third line between them was labelling a screen with exactly one
-              possible purpose. `mt-10` is the space the capsule and its two
-              margins occupied, handed back to the heading. */}
-          <h1 className="mt-10 text-2xl font-bold leading-tight tracking-tight text-text-primary">
+          {/* THE HEADING, SET AS DISPLAY TYPE RATHER THAN AS A BIG LABEL.
+              Three values doing the work, all of them things Inter needs at
+              this size and does not get from a bare `text-2xl font-bold`:
+
+                · 1.75rem — 28px. Large enough to be the anchor of the card
+                  without competing with the CTA for weight.
+                · tracking -0.022em. Inter's default spacing is tuned for text
+                  sizes; at 28px it sets loose, and the negative tracking is
+                  what makes a heading look drawn rather than typed. This is
+                  the single biggest difference between a heading that reads as
+                  designed and one that reads as a default.
+                · leading 1.15. The stock 1.25 leaves a gap under a
+                  single-line heading that reads as a missing element.
+
+              It steps down to 24px below `sm` for the same reason the card's
+              padding does — see there. Both were needed: the padding alone
+              still left it one wrap away on a 360px handset.
+
+              `mt-9` is the space the removed "Admin portal authentication"
+              capsule and its two margins occupied, given back to the heading. */}
+          <h1 className="mt-9 text-2xl font-bold leading-[1.15] tracking-[-0.022em] text-text-primary sm:text-[1.75rem]">
             {title}
           </h1>
 
           {description ? (
-            // No `max-w` on this one any more. It had `36ch` to stop it setting
-            // as one long line and an orphan — a real risk in a column as wide
-            // as the old card's. Inside `max-w-sm` the column IS 36ch, so the
-            // cap was doing nothing but making the paragraph narrower than the
-            // fields it introduces.
             <p className="mt-2.5 text-sm font-normal leading-relaxed text-text-muted">
               {description}
             </p>
           ) : null}
 
-          {/* Everything below this line — labels, field wells, the Remember-me
-              row, the CTA — shares the brand mark's and the heading's left
-              edge, because they all sit in this one `max-w-sm` column. The only
-              things inset from it are the leading icons INSIDE a field well. */}
-          <div className="mt-8">{children}</div>
+          <div className="mt-7">{children}</div>
         </div>
       </div>
     </div>

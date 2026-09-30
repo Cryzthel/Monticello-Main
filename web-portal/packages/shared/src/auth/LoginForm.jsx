@@ -60,12 +60,21 @@ import { SecondFactorRequiredError, describeTwoFactorError, normaliseCode } from
  *   · It cannot leak. The guardhouse reads `standard` and is unaffected, and
  *     anything new that wants this look has to ask for it by name.
  *
- * Tracking is non-negotiable alongside it: caps without extra letter-spacing
- * set tight and read as shouting, which is what `tracking-wider` answers.
+ * The two values that make caps read as a refined micro-label rather than as
+ * shouting, and neither is optional:
+ *
+ *   · 11px (`text-caption`), not 12px. Caps occupy more optical space than
+ *     lowercase at the same size — no descenders, every glyph at cap height —
+ *     so a 12px caps label sits visually level with the 14px input text it
+ *     introduces and competes with it. One step down restores the hierarchy.
+ *   · 0.09em tracking, up from Tailwind's `tracking-wider` (0.05em). Inter's
+ *     spacing is drawn for mixed case; caps set at text spacing crowd, and the
+ *     smaller the label the more it needs. This is the whole difference
+ *     between a label that looks typeset and one that looks like a shout.
  */
 const LABEL_CLASS = {
   standard: 'text-xs font-medium text-text-secondary',
-  elevated: 'text-xs font-semibold uppercase tracking-wider text-text-secondary',
+  elevated: 'text-caption font-semibold uppercase tracking-[0.09em] text-text-secondary',
 }
 
 /**
