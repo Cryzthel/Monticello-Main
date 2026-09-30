@@ -33,21 +33,28 @@ import { CTA } from '@shared/auth/authStyles'
  *      password recovery would be broken for all staff with nothing in the
  *      logs to explain it.
  *
- * Measured on this project (monticello-villas-f600e) while writing this: that
- * protection is currently OFF, so the lookup does distinguish real addresses
- * from invented ones. That is not a reason to build on it — it is the reason
- * this comment exists.
+ * Measured on this project (monticello-villas-f600e) on 2026-10-01: the
+ * protection was OFF at that point, so the lookup did distinguish real
+ * addresses from invented ones. That was never a reason to build on it — it is
+ * the reason this comment exists.
  *
  * `sendPasswordResetEmail` already reports `auth/user-not-found` under exactly
  * the same conditions, so the specified experience is delivered from the call
  * that has to happen anyway — no second endpoint, no deprecated API, and no new
- * capability exposed. And when enumeration protection is switched on, this call
- * simply succeeds instead of throwing, so the screen degrades to "check your
- * email" rather than lying to the person in front of it.
+ * capability exposed.
  *
- * TO MAKE THIS SCREEN NON-ENUMERATING, which is the right thing for a security
- * console: enable Email Enumeration Protection in the Firebase console. No code
- * change is needed — the branch below stops being reachable on its own.
+ * ── THIS FILE IS CORRECT WITH THE PROTECTION ON OR OFF ───────────────────────
+ * Enabling it is the intended end state and needs NO code change here. With it
+ * on, `sendPasswordResetEmail` stops throwing `auth/user-not-found` and simply
+ * resolves, so the not-found branch below becomes unreachable and every address
+ * lands on "check your email" — which is the correct answer for a screen that
+ * must not confirm who has an account. Nothing starts lying; a branch just
+ * stops being taken.
+ *
+ * Sign-in is already correct for that mode too: AuthContext collapses
+ * `auth/user-not-found`, `auth/wrong-password` and `auth/invalid-credential`
+ * into one "Invalid email or password.", and `invalid-credential` is the code
+ * Firebase returns once the protection is on.
  */
 
 /**
