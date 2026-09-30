@@ -3,11 +3,17 @@ import { useEffect, useRef } from 'react'
 /**
  * Six single-character boxes for a 6-digit code, with auto-advance.
  *
- * ── WHERE THIS IS USED, AND WHERE IT IS NOT ──────────────────────────────────
- * The two-factor step of the sign-in form. It is NOT part of password recovery,
- * because password recovery in this product has no 6-digit code to type — see
- * PasswordRecovery for what Firebase actually sends and why. A pin UI on a
- * screen with no pin would be a control that cannot be satisfied.
+ * ── WHERE THIS IS USED ───────────────────────────────────────────────────────
+ * Two screens: the two-factor step of the sign-in form, and the code step of
+ * password recovery.
+ *
+ * Recovery was the later of the two and did not always have a code. Firebase's
+ * own password reset is a LINK, not a pin, so until `sendPasswordOtp` existed
+ * there was nothing for six boxes to accept. That is why recovery reaches this
+ * component through a fallback rather than depending on it: when the callable
+ * cannot run, PasswordRecovery drops to Firebase's link and never renders these
+ * boxes. A pin UI on a screen with no pin is a control that cannot be
+ * satisfied, and that is a live possibility here, not a hypothetical one.
  *
  * ── WHY ONE INPUT PER DIGIT IS WORTH THE CODE ────────────────────────────────
  * It replaced a single text input with wide letter-spacing, which looked close

@@ -450,9 +450,35 @@ export function describeCallableError(err, action = 'complete that') {
     return err?.message ?? 'Some details were rejected. Check the form and retry.'
   }
   if (code === 'not-found' || code === 'internal' || code === 'unavailable') {
+    /*
+     * `err.message` is deliberately NOT preferred here, and that is a fix
+     * rather than a style choice.
+     *
+     * A callable that could not RUN — as opposed to one that ran and threw —
+     * comes back with its message set to the bare code, so `err.message` is the
+     * string "internal". That is truthy, so `err?.message || '…'` returned
+     * "internal" to the administrator and the written sentence below never
+     * appeared. A useless-but-truthy SDK string shadowing real copy is the same
+     * bug that put "Firebase: Error (auth/missing-password)." on the sign-in
+     * screen; it is worth recognising the shape.
+     *
+     * The wording covers both reasons the function might not run, because from
+     * here they are indistinguishable: never deployed, or deployed and unable
+     * to start. The second is what a project with billing disabled looks like,
+     * and it is the more confusing of the two precisely because the function
+     * IS listed in the console.
+     */
+    const bare = String(err?.message ?? '')
+      .trim()
+      .toLowerCase()
+      .replace(/^functions\//, '')
+    const informative = bare && bare !== code ? err.message : ''
     return (
-      err?.message ||
-      'Could not reach the provisioning function. It may not be deployed yet — run "firebase deploy --only functions".'
+      informative ||
+      'Could not reach the provisioning function. It is either not deployed, or ' +
+        'deployed but unable to start — Cloud Functions need billing enabled on ' +
+        'the Firebase project. Accounts can be created directly in the Firebase ' +
+        'Console in the meantime.'
     )
   }
   return err?.message || `Could not ${action}. Please try again.`

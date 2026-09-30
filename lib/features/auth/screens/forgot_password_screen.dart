@@ -50,6 +50,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _sending = false;
   bool _prefilled = false;
   int _step = 0; // 0 = email, 1 = OTP, 2 = new password
+
+  /// True once we have fallen back to emailing a reset LINK instead of a code.
+  ///
+  /// The code flow runs on two Cloud Functions, and Cloud Functions need the
+  /// project to be on a billed plan. While it is not, every call comes back as
+  /// a bare `internal` and the resident is simply stuck. Firebase Auth's own
+  /// password-reset email costs nothing and is unaffected, so when the backend
+  /// cannot be reached this screen sends that instead and says so, rather than
+  /// showing an error it cannot act on.
+  ///
+  /// Nothing is thrown away by this: the code path is still the first thing
+  /// tried on every attempt, so it starts working again on its own the moment
+  /// the functions can run.
+  bool _sentLink = false;
   String _email = '';
   String _resetCode = ''; // oobCode extracted from the reset link
   bool _obscureNew = true;
@@ -113,6 +127,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
+  /// Callable failures that mean the function never executed, as opposed to
+  /// the function answering "no". Only these are worth falling back on — a
+  /// rate limit or a bad address is a real answer and must be shown.
+  static const _backendDown = {
+    'internal',
+    'unavailable',
+    'deadline-exceeded',
+    'not-found',
+  };
+
+  /// Firebase Auth's own reset mail. Free tier, no Cloud Function involved.
+  Future<void> _sendResetLinkFallback() async {
+    await FirebaseAuth.instance.sendPasswordResetEmail(email: _email);
+    if (!mounted) return;
+    setState(() => _sentLink = true);
+  }
+
   Future<void> _sendOtp() async {
     if (_sending) return;
     if (!_formKey.currentState!.validate()) return;
@@ -136,8 +167,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         if (mounted) _otpFocusNode.requestFocus();
       });
     } on FirebaseFunctionsException catch (e) {
-      _showToast(e.message ?? 'Could not send verification code.',
-          isError: true);
+      if (_backendDown.contains(e.code)) {
+        try {
+          await _sendResetLinkFallback();
+        } on FirebaseAuthException catch (authError) {
+          _showToast(
+            authError.code == 'invalid-email'
+                ? 'That does not look like an email address.'
+                : 'Could not send a reset email. Please try again.',
+            isError: true,
+          );
+        }
+      } else {
+        _showToast(e.message ?? 'Could not send verification code.',
+            isError: true);
+      }
     } catch (_) {
       _showToast('Something went wrong. Please try again.', isError: true);
     } finally {
@@ -271,7 +315,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 children: [
                   ModernBackButton(
                     onPressed: () {
-                      if (_step > 0 && !_sending) {
+                      if (_sentLink && !_sending) {
+                        // Back out of the link screen to the address field
+                        // rather than off the screen entirely: the usual
+                        // reason to go back here is a mistyped address.
+                        setState(() => _sentLink = false);
+                      } else if (_step > 0 && !_sending) {
                         setState(() => _step = _step - 1);
                       } else {
                         Navigator.of(context).maybePop();
@@ -300,7 +349,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   const SizedBox(height: 20),
 
                   // Step indicator
-                  _buildStepIndicator(),
+                  if (!_sentLink) _buildStepIndicator(),
                   const SizedBox(height: 32),
 
                   // Icon
@@ -317,8 +366,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         boxShadow: AppShadows.md,
                       ),
                       child: Icon(
-                        _step == 0
-                            ? PhosphorIconsFill.envelopeSimple
+                        _sentLink
+                            ? PhosphorIconsFill.paperPlaneTilt
+                            : _step == 0
+                                ? PhosphorIconsFill.envelopeSimple
                             : _step == 1
                                 ? PhosphorIconsFill.pushPinSimple
                                 : PhosphorIconsFill.lock,
@@ -331,8 +382,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                   // Title
                   Text(
-                    _step == 0
-                        ? 'Reset Password'
+                    _sentLink
+                        ? 'Check Your Email'
+                        : _step == 0
+                            ? 'Reset Password'
                         : _step == 1
                             ? 'Enter Code'
                             : 'New Password',
@@ -341,11 +394,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _step == 0
-                        ? 'Enter your email and we\'ll send a verification code.'
-                        : _step == 1
-                            ? 'We sent a $kOtpLength-digit code to $_email'
-                            : 'Create a strong new password for your account.',
+                    _sentLink
+                        ? 'We sent a password reset link to $_email. Open it to '
+                            'choose a new password. It expires in an hour.'
+                        : _step == 0
+                            ? 'Enter your email and we\'ll send a verification code.'
+                            : _step == 1
+                                ? 'We sent a $kOtpLength-digit code to $_email'
+                                : 'Create a strong new password for your account.',
                     textAlign: TextAlign.center,
                     style: _t(
                         size: 14, color: AppColors.textSecondary, height: 1.5),
@@ -353,9 +409,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   const SizedBox(height: 36),
 
                   // Step content
-                  if (_step == 0) _buildEmailStep(),
-                  if (_step == 1) _buildOtpStep(),
-                  if (_step == 2) _buildNewPasswordStep(),
+                  if (_sentLink) _buildLinkSentStep(),
+                  if (!_sentLink && _step == 0) _buildEmailStep(),
+                  if (!_sentLink && _step == 1) _buildOtpStep(),
+                  if (!_sentLink && _step == 2) _buildNewPasswordStep(),
 
                   const SizedBox(height: 40),
 
@@ -388,6 +445,46 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// Shown when the code backend could not be reached and a reset LINK was
+  /// emailed instead. Nothing is typed here — the next step happens in the
+  /// resident's inbox — so this is a confirmation and two ways onward.
+  Widget _buildLinkSentStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 54,
+          child: ElevatedButton(
+            onPressed: _sending ? null : () => Navigator.of(context).maybePop(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.background,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+            ),
+            child: Text('Back to Sign In',
+                style: _t(size: 16, weight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: GestureDetector(
+            onTap: _sending ? null : () => setState(() => _sentLink = false),
+            child: Text(
+              'Use a different email',
+              style: _t(
+                  size: 14,
+                  weight: FontWeight.w600,
+                  color: AppColors.primary),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

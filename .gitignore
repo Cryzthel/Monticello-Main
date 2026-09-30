@@ -1,4 +1,6 @@
 # Miscellaneous
+.claude/
+
 *.class
 *.log
 *.pyc
