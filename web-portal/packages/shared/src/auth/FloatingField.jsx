@@ -70,6 +70,10 @@ export default function FloatingField({
   icon: Icon,
   trailing,
   filled = false,
+  /** A validation message for THIS field. Shown under it, and wired to the
+   *  input with `aria-describedby` so a screen reader reads the field and its
+   *  problem together rather than announcing an error that floats free of it. */
+  error = '',
   inputClassName = '',
   ...inputProps
 }) {
@@ -83,10 +87,18 @@ export default function FloatingField({
           answer the design system requires — the border moves AND a ring
           appears — with only the hue changed. Near-black on white measures
           17.9:1, well past the 3:1 a focus indicator owes its surroundings. */}
-      <div className="flex items-center gap-3 rounded-full border border-slate-200/80 bg-field px-6 transition-[border-color,box-shadow] duration-200 ease-in-out hover:border-slate-300 group-focus-within:border-text-primary group-focus-within:ring-2 group-focus-within:ring-text-primary/10">
+      <div
+        className={`flex items-center gap-3 rounded-full border bg-field px-6 transition-[border-color,box-shadow] duration-200 ease-in-out ${
+          error
+            ? 'border-danger group-focus-within:border-danger group-focus-within:ring-2 group-focus-within:ring-danger/20'
+            : 'border-slate-200/80 hover:border-slate-300 group-focus-within:border-text-primary group-focus-within:ring-2 group-focus-within:ring-text-primary/10'
+        }`}
+      >
         <Icon className="h-4 w-4 shrink-0 text-text-muted transition-colors duration-200 group-focus-within:text-text-primary" />
         <input
           id={id}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
           className={`min-w-0 flex-1 bg-transparent py-3.5 text-sm text-text-primary outline-none placeholder:text-transparent focus:placeholder:text-text-muted ${inputClassName}`}
           {...inputProps}
         />
@@ -104,6 +116,14 @@ export default function FloatingField({
       >
         {label}
       </label>
+
+      {/* Inside the field's own wrapper, indented to the text rather than the
+          capsule's edge, so it reads as belonging to the control above it. */}
+      {error ? (
+        <p id={`${id}-error`} className="mt-1.5 px-6 text-xs font-medium text-danger">
+          {error}
+        </p>
+      ) : null}
     </div>
   )
 }

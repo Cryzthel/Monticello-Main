@@ -51,6 +51,41 @@ import { SecondFactorRequiredError, describeTwoFactorError, normaliseCode } from
  * `dark:` variant and nothing needs a literal hex.
  */
 
+/**
+ * What the form checks before it is willing to call Firebase.
+ *
+ * ── WHY THIS EXISTS AT ALL ───────────────────────────────────────────────────
+ * The form is `noValidate`, which switches OFF the browser's own enforcement of
+ * the `required` attributes on the fields below. That is deliberate — native
+ * validation bubbles are unstyleable, appear in the wrong place and read in the
+ * browser's language rather than the product's — but turning it off without
+ * replacing it is what produced this, shown to staff verbatim:
+ *
+ *     Firebase: Error (auth/missing-password).
+ *
+ * An empty password sailed past `required`, reached
+ * `signInWithEmailAndPassword`, and came back as an SDK string.
+ *
+ * ── THE EMAIL CHECK IS DELIBERATELY SHALLOW ──────────────────────────────────
+ * Non-empty, one `@`, something either side of it, no spaces. It is not trying
+ * to decide whether an address is deliverable — that is unknowable here, and
+ * every regex that claims to do it rejects addresses that are perfectly valid.
+ * The only job is to stop an obviously malformed string becoming a round trip
+ * and a generic failure; Firebase remains the authority on whether the account
+ * exists.
+ */
+function validate({ email, password }) {
+  const errors = {}
+  const address = email.trim()
+
+  if (!address) errors.email = 'Enter your email address.'
+  else if (!/^[^\s@]+@[^\s@]+$/.test(address)) errors.email = 'That does not look like an email address.'
+
+  if (!password) errors.password = 'Enter your password.'
+
+  return errors
+}
+
 export default function LoginForm({
   emailPlaceholder,
   submitLabel,
@@ -72,6 +107,9 @@ export default function LoginForm({
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
+  // Per-field, so "which one did I miss" is answered at the field rather than
+  // in a banner that names it and makes the reader go looking.
+  const [fieldErrors, setFieldErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   // Set when the password was accepted and an authenticator code is due.
   // Holds Firebase's resolver; no session exists until the code verifies.
@@ -100,6 +138,17 @@ export default function LoginForm({
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+
+    const problems = validate({ email, password })
+    setFieldErrors(problems)
+    if (Object.keys(problems).length > 0) {
+      // Focus the first field with a problem. Without this the message appears
+      // below the fold of a short window and the form looks like it did
+      // nothing, which is how people end up pressing the button repeatedly.
+      document.getElementById(problems.email ? 'email' : 'password')?.focus()
+      return
+    }
+
     setSubmitting(true)
 
     try {
@@ -107,7 +156,7 @@ export default function LoginForm({
       // account back out before login() resolves, so reaching this line means
       // the session is valid FOR THIS APP — there is no second, weaker sense
       // of "signed in" left to defend against.
-      await login(email, password)
+      await login(email.trim(), password, { remember: rememberMe })
       navigate(location.state?.from?.pathname ?? fallbackPath, { replace: true })
     } catch (err) {
       if (err instanceof SecondFactorRequiredError) {
@@ -163,6 +212,7 @@ export default function LoginForm({
           // state" that switching views is supposed to avoid.
           setError('')
           setPassword('')
+          setFieldErrors({})
         }}
       />
     )
@@ -242,8 +292,12 @@ export default function LoginForm({
         autoComplete="email"
         autoFocus
         filled={Boolean(email)}
+        error={fieldErrors.email}
         value={email}
-        onChange={(event) => setEmail(event.target.value)}
+        onChange={(event) => {
+          setEmail(event.target.value)
+          if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }))
+        }}
         placeholder={emailPlaceholder}
       />
 
@@ -255,8 +309,12 @@ export default function LoginForm({
         required
         autoComplete="current-password"
         filled={Boolean(password)}
+        error={fieldErrors.password}
         value={password}
-        onChange={(event) => setPassword(event.target.value)}
+        onChange={(event) => {
+          setPassword(event.target.value)
+          if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }))
+        }}
         placeholder="Enter your password"
         trailing={
           <button

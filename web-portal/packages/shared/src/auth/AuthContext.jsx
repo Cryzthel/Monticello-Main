@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  browserLocalPersistence,
+  browserSessionPersistence,
   onAuthStateChanged,
+  setPersistence,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from 'firebase/auth'
@@ -40,17 +43,58 @@ import { resolveWithTotp, secondFactorChallenge } from '@shared/lib/twoFactor'
 // eslint-disable-next-line react-refresh/only-export-components
 export const AuthContext = createContext(null)
 
-// Firebase's raw error codes (e.g. "auth/user-not-found" vs "auth/wrong-password")
-// would let a caller enumerate which emails are registered — collapse the
-// credential-related ones into one generic message.
-const INVALID_CREDENTIAL_CODES = new Set([
-  'auth/user-not-found',
-  'auth/wrong-password',
-  'auth/invalid-credential',
-  'auth/invalid-email',
-])
+/**
+ * Every Firebase auth code this product can surface, mapped to something a
+ * person can act on.
+ *
+ * ── WHY THIS IS EXHAUSTIVE RATHER THAN A SHORTLIST ───────────────────────────
+ * It used to be a four-code set, and anything outside it was rethrown for the
+ * form to render as `err.message`. That is how a member of staff came to be
+ * shown
+ *
+ *     Firebase: Error (auth/missing-password).
+ *
+ * A raw SDK string in a UI is not just ugly: it names an internal API to
+ * someone who cannot act on it, and it tells an attacker exactly which call
+ * failed and how. The rule now is that NOTHING reaches the UI except a message
+ * written here — `describeAuthError` always returns one, so there is no path
+ * left that renders a Firebase string.
+ *
+ * ── THE FIRST FOUR ARE COLLAPSED ON PURPOSE ──────────────────────────────────
+ * Distinguishing "no such account" from "wrong password" tells an anonymous
+ * visitor which addresses have staff accounts. They share one message. With
+ * Email Enumeration Protection now on, Firebase collapses them to
+ * `invalid-credential` upstream anyway — this keeps the guarantee even if that
+ * setting is ever turned off again.
+ */
+const AUTH_ERROR_MESSAGES = {
+  'auth/invalid-credential': 'Invalid email or password.',
+  'auth/user-not-found': 'Invalid email or password.',
+  'auth/wrong-password': 'Invalid email or password.',
+  'auth/invalid-email': 'Invalid email or password.',
 
-const GENERIC_CREDENTIAL_ERROR = 'Invalid email or password.'
+  // Should be unreachable — the form validates before calling. Mapped anyway:
+  // the point of this table is that no code can escape it.
+  'auth/missing-password': 'Enter your password.',
+  'auth/missing-email': 'Enter your email address.',
+
+  'auth/user-disabled': 'This account has been disabled. Contact system administration.',
+  'auth/too-many-requests':
+    'Too many sign-in attempts from this device. Wait a few minutes and try again.',
+  'auth/network-request-failed':
+    'Could not reach the server. Check your connection and try again.',
+  'auth/operation-not-allowed':
+    'Email sign-in is not enabled for this project. Contact system administration.',
+  'auth/internal-error': 'Something went wrong signing you in. Try again.',
+}
+
+const GENERIC_AUTH_ERROR =
+  'Unable to sign in. Try again, or contact system administration if this continues.'
+
+/** Always a written message, never a Firebase string. */
+function describeAuthError(error) {
+  return AUTH_ERROR_MESSAGES[error?.code] ?? GENERIC_AUTH_ERROR
+}
 
 /**
  * Firestore codes that mean "ask again later", not "no".
@@ -215,12 +259,37 @@ export function AuthProvider({
     return approvedRole
   }, [])
 
+  /**
+   * @param remember  Whether the session should outlive the browser session.
+   *                  Drives Firebase's persistence, which is the only thing
+   *                  "Remember me" can actually mean.
+   *
+   *                  It was a checkbox wired to nothing: React held the state,
+   *                  no one read it, and `setPersistence` was never called
+   *                  anywhere in the codebase — so every sign-in used
+   *                  Firebase's default (LOCAL, survives closing the browser)
+   *                  and unticking the box changed nothing. On a console that
+   *                  guards are expected to sign into from a shared machine at
+   *                  the gate, a "Remember me" that silently always remembers
+   *                  is the wrong kind of broken.
+   */
   const login = useCallback(
-    async (email, password) => {
+    async (email, password, { remember = false } = {}) => {
       setRejection('')
 
       let credential
       try {
+        // Before signing in, not after: persistence chosen afterwards would
+        // apply to the NEXT session, leaving this one wherever the default put
+        // it. Its own try/catch because a browser with storage blocked (private
+        // mode, or policy) rejects here, and being unable to honour the
+        // checkbox is not a reason to refuse the sign-in — Firebase falls back
+        // to in-memory, which is the safer of the two directions anyway.
+        await setPersistence(
+          auth,
+          remember ? browserLocalPersistence : browserSessionPersistence,
+        ).catch(() => {})
+
         credential = await signInWithEmailAndPassword(auth, email, password)
       } catch (err) {
         // Right password, second factor due. Not a failure: the form moves to
@@ -228,10 +297,7 @@ export function AuthProvider({
         // exists yet — Firebase issues none until the factor is verified.
         const challenge = secondFactorChallenge(err)
         if (challenge) throw challenge
-        if (INVALID_CREDENTIAL_CODES.has(err.code)) {
-          throw new Error(GENERIC_CREDENTIAL_ERROR)
-        }
-        throw err
+        throw new Error(describeAuthError(err))
       }
 
       return finishSignIn(credential)

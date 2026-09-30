@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { Mail, MailCheck } from 'lucide-react'
 
@@ -58,6 +58,17 @@ import { CTA } from '@shared/auth/authStyles'
  */
 
 /**
+ * Seconds before the link can be sent again.
+ *
+ * A resend control with no cooldown is a button people press three times when
+ * mail is slow, which is how an account trips Firebase's `too-many-requests`
+ * and locks itself out of recovery for several minutes — the opposite of what
+ * the person pressing it wants. The countdown is shown rather than the button
+ * being silently inert: a disabled control with no explanation reads as broken.
+ */
+const RESEND_COOLDOWN = 45
+
+/**
  * @param initialEmail  Whatever was already typed into the sign-in form, as a
  *                      starting point the person can correct.
  * @param onClose       Back to sign-in.
@@ -67,6 +78,15 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [cooldown, setCooldown] = useState(0)
+  const [resent, setResent] = useState(false)
+
+  // Ticks only while there is something to count. Re-armed by each send.
+  useEffect(() => {
+    if (cooldown <= 0) return undefined
+    const timer = setTimeout(() => setCooldown((n) => n - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [cooldown])
 
   async function requestReset(event) {
     event.preventDefault()
@@ -100,6 +120,7 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
         handleCodeInApp: false,
       })
       setSent(true)
+      setCooldown(RESEND_COOLDOWN)
     } catch (err) {
       switch (err?.code) {
         case 'auth/user-not-found':
@@ -127,6 +148,17 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
     }
   }
 
+  /**
+   * Sends the same link again. Reuses `requestReset` so there is exactly one
+   * place that knows how to send and how to interpret a failure — a second
+   * copy here is how the two would drift into reporting different things.
+   */
+  async function resend() {
+    setResent(false)
+    await requestReset({ preventDefault: () => {} })
+    setResent(true)
+  }
+
   if (sent) {
     return (
       <div className="step-enter flex flex-col gap-6">
@@ -144,17 +176,43 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
           </div>
         </div>
 
-        <p className="text-xs leading-relaxed text-text-muted">
-          Nothing arrived? Check spam, then{' '}
-          <button
-            type="button"
-            onClick={() => setSent(false)}
-            className="font-medium text-text-primary underline decoration-slate-300 underline-offset-2 transition-colors hover:decoration-text-primary"
-          >
-            try a different address
-          </button>
-          .
-        </p>
+        <div className="flex flex-col gap-2.5">
+          <p className="text-xs leading-relaxed text-text-muted">
+            Nothing arrived? Check spam, then{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setSent(false)
+                setResent(false)
+              }}
+              className="font-medium text-text-primary underline decoration-slate-300 underline-offset-2 transition-colors hover:decoration-text-primary"
+            >
+              try a different address
+            </button>
+            .
+          </p>
+
+          {/* `aria-live` so the countdown reaching zero is announced rather
+              than silently becoming pressable for someone not watching it. */}
+          <p className="text-xs font-medium text-text-secondary" aria-live="polite">
+            {cooldown > 0 ? (
+              `Resend link in ${cooldown}s`
+            ) : (
+              <button
+                type="button"
+                onClick={resend}
+                disabled={submitting}
+                className="font-semibold text-text-primary underline decoration-slate-300 underline-offset-2 transition-colors hover:decoration-text-primary disabled:opacity-50"
+              >
+                {submitting ? 'Sending…' : 'Resend link'}
+              </button>
+            )}
+          </p>
+
+          {resent ? (
+            <p className="text-xs font-medium text-success">Sent again. Check your inbox.</p>
+          ) : null}
+        </div>
 
         <div className="flex flex-col gap-3">
           <button type="button" onClick={onClose} className={CTA}>
