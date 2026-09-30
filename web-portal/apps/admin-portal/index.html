@@ -7,8 +7,16 @@
     <title>Monticello Villas | Admin Portal</title>
 
     <!--
-      Inter (UI) + JetBrains Mono (machine data). See the --font-sans /
-      --font-mono tokens in the shared stylesheet for which text gets which.
+      Inter (UI) + JetBrains Mono (machine data) + Plus Jakarta Sans (display).
+      See the --font-sans / --font-mono / --font-display tokens in the shared
+      stylesheet for which text gets which.
+
+      Plus Jakarta Sans is requested HERE AND NOT IN THE GUARDHOUSE, at only
+      the two weights the sign-in heading uses (700, 800). It is a display
+      face for one heading on one screen in this console; asking the other
+      console to download it would be paying for a face it never renders. The
+      token's fallback chain starts with Inter, so a guardhouse that ever
+      adopts that shell degrades to the body face rather than to Times.
       Both apps must request the SAME families — the token lives in the shared
       sheet, so a portal that asks Google for a different face here renders the
       other portal's fallback and the two consoles drift apart silently.
@@ -25,7 +33,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap"
     />
     <!--
       Theme resolution BEFORE first paint.

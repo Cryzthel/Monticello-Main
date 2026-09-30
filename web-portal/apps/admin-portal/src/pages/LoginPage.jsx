@@ -10,12 +10,12 @@ import { ROUTES } from '@/config/portal'
  * shared components, and the only things this file decides are the strings,
  * the illustration and where a successful sign-in lands.
  *
- * It no longer shares a shell with the guardhouse. That console keeps the
- * single centred card (LoginLayout); this one is the dual-column split, pinned
- * light, by request. The two screens are therefore no longer identical in
- * geometry, which was previously the property this file existed to protect —
- * so it is worth saying plainly that the divergence is deliberate and lives
- * entirely in the choice of shell on the next line.
+ * It shares a shell with the guardhouse again. The two diverged for one
+ * release, while only this console had been asked for the split layout; the
+ * guardhouse now renders the same `LoginSplitLayout` with its own illustration
+ * and strings, so the screens are identical in geometry, type and spacing once
+ * more. The only visual difference left is the `accent`, which reaches two
+ * small controls — see the guardhouse's copy of this file.
  */
 
 /**

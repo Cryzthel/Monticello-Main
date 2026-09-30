@@ -28,14 +28,18 @@ import { SecondFactorRequiredError, describeTwoFactorError, normaliseCode } from
  * had its own 89-line copy of the same form, which is how they drifted apart in
  * the first place; the pages are now pure config.
  *
- * SCOPE: FIELDS AND ACTIONS ONLY. The brand mark, title and small-caps
- * sub-label moved up into LoginLayout when the split panel became a single
- * card — they are the card's header, and a component named LoginForm rendering
- * a wordmark was the seam that let the two consoles' headers drift apart.
+ * SCOPE: FIELDS AND ACTIONS ONLY. The brand mark, the heading and its
+ * supporting line live in the shell (`LoginSplitLayout`), not here. That split
+ * is load-bearing rather than tidy-minded: a component named LoginForm
+ * rendering a wordmark is the exact seam that let the two consoles' headers
+ * drift apart when each portal had its own copy of this file.
  *
- * Everything below assumes the dark-pinned subtree LoginLayout establishes, so
- * every token here resolves to its dark value under either theme. Nothing
- * needs a `dark:` variant and nothing needs a literal hex.
+ * THEME: the shell pins light and this form inherits it, so every token below
+ * resolves to its light value on the sign-in screen. Nothing here needs a
+ * `dark:` variant and nothing needs a literal hex — which is also why this same
+ * file renders correctly if it is ever mounted somewhere that does follow the
+ * theme. (An earlier version of this note claimed the opposite, from when the
+ * login was pinned DARK; the pin flipped and the note did not.)
  */
 
 /**
@@ -94,7 +98,36 @@ const LABEL_CLASS = {
  */
 const SUBMIT_CLASS = {
   standard: 'btn btn-brand mt-1 h-12 w-full text-label disabled:opacity-60',
-  elevated: 'btn btn-brand mt-1 w-full rounded-xl py-3 text-sm font-semibold disabled:opacity-60',
+  elevated: 'btn btn-brand mt-1 w-full rounded-xl py-3.5 text-sm font-semibold disabled:opacity-60',
+}
+
+/**
+ * The field WELL — the bordered box holding the icon, the input and any
+ * trailing control.
+ *
+ * `standard` is the design system's field verbatim: emerald border and ring on
+ * focus, because in this palette emerald means STATE (focused, selected,
+ * healthy) while near-black means ACTION.
+ *
+ * `elevated` answers focus in near-black instead, by request. Two things make
+ * that a considered exception rather than a drift:
+ *
+ *   · IT IS STILL A TWO-PART ANSWER. The border moves AND a ring appears, which
+ *     is what the system requires of a focus state; only the hue changed. A
+ *     ring alone, or a border alone, is the failure this pattern guards
+ *     against.
+ *   · IT MEASURES. slate-900 on white is 17.9:1, well past the 3:1 a focus
+ *     indicator owes its surroundings, so the neutral reads as a stronger
+ *     indicator here than the emerald it replaces, not a weaker one.
+ *
+ * `hover:border-slate-300` is new to both — a field that answers the pointer
+ * before it is clicked, which the standard variant simply never had.
+ */
+const FIELD_CLASS = {
+  standard:
+    'border-slate-200 hover:border-slate-300 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25',
+  elevated:
+    'border-slate-200/80 hover:border-slate-300 focus-within:border-text-primary focus-within:ring-2 focus-within:ring-text-primary/10',
 }
 
 /**
@@ -111,6 +144,7 @@ function Field({
   icon: Icon,
   trailing,
   labelClassName = LABEL_CLASS.standard,
+  wellClassName = FIELD_CLASS.standard,
   inputClassName = '',
   ...inputProps
 }) {
@@ -129,7 +163,7 @@ function Field({
           Focus moves the border to the accent AND adds a ring — the same pair
           `.field` uses, so this hand-built field and every generated one
           answer focus identically. */}
-      <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-field px-3 transition-colors duration-150 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/25">
+      <div className={`flex items-center gap-3 rounded-lg border bg-field px-3 transition-colors duration-150 ${wellClassName}`}>
         <Icon className="h-4 w-4 shrink-0 text-text-muted" />
         <input
           id={id}
@@ -166,6 +200,7 @@ export default function LoginForm({
 }) {
   const labelClassName = LABEL_CLASS[variant] ?? LABEL_CLASS.standard
   const submitClassName = SUBMIT_CLASS[variant] ?? SUBMIT_CLASS.standard
+  const wellClassName = FIELD_CLASS[variant] ?? FIELD_CLASS.standard
 
   const { login, completeSecondFactor, rejection, setRejection } = useAuth()
   const navigate = useNavigate()
@@ -310,6 +345,7 @@ export default function LoginForm({
           label="Authentication code"
           icon={KeyRound}
           labelClassName={labelClassName}
+          wellClassName={wellClassName}
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -379,6 +415,7 @@ export default function LoginForm({
         label="Email address"
         icon={EmailIcon}
         labelClassName={labelClassName}
+        wellClassName={wellClassName}
         type="email"
         required
         autoComplete="email"
@@ -393,6 +430,7 @@ export default function LoginForm({
         label="Password"
         icon={Lock}
         labelClassName={labelClassName}
+        wellClassName={wellClassName}
         type={showPassword ? 'text' : 'password'}
         required
         autoComplete="current-password"

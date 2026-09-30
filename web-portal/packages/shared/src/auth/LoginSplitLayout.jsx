@@ -3,32 +3,41 @@ import { useEffect, useState } from 'react'
 import { useForcedTheme } from '@shared/theme/ThemeProvider'
 
 /**
- * The sign-in screen: two full-height panes divided by a hairline down the
- * middle of the viewport. The illustration owns the left pane; the form sits in
- * a card on the right.
+ * The sign-in screen for BOTH consoles: two full-height panes divided by a
+ * hairline down the middle of the viewport, the illustration owning the left
+ * and the form sitting directly on the right.
  *
- * ── THIS DOES NOT REPLACE LoginLayout ────────────────────────────────────────
- * LoginLayout — the single centred card — is still what the guardhouse renders,
- * byte for byte, and is deliberately untouched. Only the admin console was
- * asked for this treatment, and the two files existing side by side is the
- * honest way to say that the screens have diverged. Folding both into one
- * component behind a `split` flag would have hidden a real product decision
- * inside a boolean.
+ * ── HOW IT CAME TO SERVE BOTH ────────────────────────────────────────────────
+ * For one release it did not. The admin portal was asked for this layout and
+ * the guardhouse kept the old single centred card (`LoginLayout`); the two
+ * components sat side by side because that was the honest way to say the
+ * screens had genuinely diverged — a `split` flag on one component would have
+ * hidden a real product decision inside a boolean.
  *
- * ── WHERE THE TONES SIT, AND WHY THEY ARE THAT WAY ROUND ─────────────────────
- * The illustration pane is WHITE and the form pane is the canvas grey
- * (#F5F6F8), which is the reverse of the arrangement this screen carried while
- * the form had no container.
+ * They have converged again, so `LoginLayout` is deleted rather than left
+ * around. It had exactly one caller, and a file whose own comment says "this is
+ * what the guardhouse renders" is worse than absent once that stops being true.
+ * It is in the history if the single-card shape is ever wanted back.
  *
- * It had to flip, because a card needs a ground. `--color-base-900` (the card)
- * is #FFFFFF and `--color-base-950` (the canvas) is #F5F6F8 — that pair is the
- * entire figure/ground relationship in this design system, and it only works in
- * one direction. A white card on a white pane has nothing but its own hairline
- * to state its edge; the grey has to be on the side the card is on.
+ * NOTHING HERE KNOWS WHICH PORTAL IT IS, which is what made the guardhouse's
+ * adoption an import and three strings. Keep it that way: portal identity
+ * belongs in the page that renders this, not in the shell.
  *
- * The useful side effect is that the divider now coincides with a change of
- * tone. A line between two identically-coloured panes is a line someone drew;
- * a line on the seam between two grounds is the seam.
+ * ── WHERE THE TONES SIT, AND WHY THEY MOVED BACK ─────────────────────────────
+ * The illustration pane is the canvas grey (#F5F6F8) and the form pane is
+ * WHITE. They were the other way round for exactly as long as the form sat in
+ * a card, and the two facts are the same fact.
+ *
+ * A card needs a ground: `--color-base-900` (#FFFFFF) on `--color-base-950`
+ * (#F5F6F8) is the entire figure/ground relationship in this system and it only
+ * works in one direction, so while there was a card the grey had to be on the
+ * card's side. The card is gone, so the grey goes back to the illustration and
+ * the form gets the white — which is also what makes the form column read as
+ * open space rather than as a panel with something sitting on it.
+ *
+ * Either way round, the divider falls on a change of tone. A line between two
+ * identically-coloured panes is a line someone drew; a line on the seam between
+ * two grounds is the seam.
  *
  * ── HOW THIS ARRIVED AT FULL BLEED ───────────────────────────────────────────
  * By subtraction, and the order matters because each removal only became
@@ -47,10 +56,16 @@ import { useForcedTheme } from '@shared/theme/ThemeProvider'
  *   4. THE OUTER CARD — by then a white rectangle framing content that no
  *      longer needed framing, with the two panes going full bleed in its place.
  *
- * The container below is NOT that card coming back. That one wrapped the whole
- * screen, illustration included, which is what made the layout read as a box
- * inside a box. This one wraps the FORM: the eight controls that are the only
- * reason anyone opens this page, grouped as one object on a ground.
+ *   5. THE FORM'S OWN CARD, which was tried after (4) and is also gone. It was
+ *      a real improvement on nothing at all — it gave the controls an object to
+ *      belong to — but it cost the form column its width: a 464px card inside a
+ *      720px pane left 256px of that pane doing nothing, and the fields inside
+ *      it were narrower than they had been at any point in this screen's life.
+ *      Without it the same controls get a 448px column and the pane's own
+ *      generous padding, which is more space and one less box.
+ *
+ * So: no surfaces at all. Two grounds, one line, and content sitting directly
+ * on both.
  *
  * ── WHY THIS SCREEN IS PINNED LIGHT ──────────────────────────────────────────
  * By request: the sign-in surface is fixed light and the dashboard's theme
@@ -115,10 +130,9 @@ export default function LoginSplitLayout({ children, illustration, title, descri
   const heroVisible = useHeroVisible()
 
   return (
-    // The canvas grey is on the GRID, so it is also what a phone sees: below
-    // `lg` the hero pane is not rendered and the form card sits on this ground
-    // alone, which is the ordinary card-on-canvas relationship the rest of the
-    // product uses. The hero pane paints its white over it above `lg`.
+    // White is on the GRID, because below `lg` the hero pane is not rendered
+    // and the form pane is the whole screen. The hero pane paints the canvas
+    // grey over it above `lg`.
     //
     // EVERY TRACK IS `minmax(0,1fr)`, INCLUDING THE SINGLE MOBILE ONE. A grid
     // track's default minimum is `auto`, which means it refuses to shrink below
@@ -131,7 +145,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
     //
     // This is the same guard the two-column layout carried before it was
     // simplified to `lg:grid-cols-2`; the shorthand is what dropped it.
-    <div className="grid min-h-screen w-full grid-cols-[minmax(0,1fr)] bg-base-950 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid min-h-screen w-full grid-cols-[minmax(0,1fr)] bg-white lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       {/* ── Hero pane ────────────────────────────────────────────────────── */}
       {/* HIDDEN below lg, not shrunk. On a phone the form IS the screen: a
           scaled-down illustration above it would push the fields and the CTA
@@ -149,7 +163,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
           illustration is the whole content of a half-viewport pane, and
           padding was the thing keeping it from filling one. */}
       <div
-        className={`hidden place-items-center border-r border-slate-200 bg-white p-8 lg:grid ${ENTRANCE}`}
+        className={`hidden place-items-center border-r border-slate-200 bg-base-950 p-8 lg:grid ${ENTRANCE}`}
       >
         {heroVisible ? illustration : null}
       </div>
@@ -162,27 +176,18 @@ export default function LoginSplitLayout({ children, illustration, title, descri
           in BOTH directions and the top becomes unreachable, because scrolling
           cannot go above the origin. Auto margins resolve to 0 once free space
           is negative, so the card sits at the top and the page scrolls. */}
-      <div className="flex w-full justify-center px-5 py-10 sm:px-8 lg:py-12">
-        {/* THE FORM'S CONTAINER. `shadow-modal` rather than the flatter
-            `shadow-panel` a dashboard card gets: this is the only object on
-            its half of the screen and there is no other content for it to
-            establish a stacking relationship with, so the deeper shadow reads
-            as presence rather than as noise. It is also what the single-card
-            login used before this screen was split, so the two portals' sign-in
-            cards still cast the same shadow.
+      <div className="flex w-full justify-center px-6 py-12 sm:px-8 md:px-16">
+        {/* No surface — this is a plain measure. `max-w-md` (448px) is the
+            whole of the form's width discipline, and it is 64px wider than the
+            column the card allowed, which is the point of removing it.
 
-            29rem (464px) holds a 384px column of content inside `p-10`, which
-            is where the field/label/CTA rhythm was tuned.
-
-            The padding steps DOWN on a phone rather than staying put. At
-            `p-8` on a 375px screen the card's content box is 286px, and the
-            28px heading needs ~294px to set on one line — so it broke after
-            "Welcome back," and left "Admin" alone on the second. `p-6` buys
-            back the 16px that fixes it, and a phone does not want a desktop's
-            inset anyway. */}
-        <div
-          className={`my-auto w-full max-w-[29rem] rounded-2xl border border-slate-200 bg-white p-6 shadow-modal sm:p-8 lg:p-10 ${ENTRANCE}`}
-        >
+            It is still a CAP rather than the pane's full width. The pane is
+            half the viewport, 720px at 1440, and a form stretched across that
+            is unreadable: the eye loses the left edge on the return sweep, and
+            a 600px text input reads as a search bar rather than a credential
+            field. The `md:px-16` on the pane and the air either side of this
+            measure are doing the same job from opposite directions. */}
+        <div className={`my-auto w-full max-w-md ${ENTRANCE}`}>
           {/* Brand mark. Chrome, not a control — it belongs to the shell for
               the same reason it did in the single-card layout: a component
               named LoginForm rendering a wordmark is the seam that let the two
@@ -201,37 +206,51 @@ export default function LoginSplitLayout({ children, illustration, title, descri
             </div>
           </div>
 
-          {/* THE HEADING, SET AS DISPLAY TYPE RATHER THAN AS A BIG LABEL.
-              Three values doing the work, all of them things Inter needs at
-              this size and does not get from a bare `text-2xl font-bold`:
+          {/* THE HEADING, AND THE ONE PLACE THIS PRODUCT USES A SECOND FACE.
+              Plus Jakarta Sans at 800, via `--font-display` — see that token
+              for why a display face exists at all and why only this console
+              downloads it. Inter is a text face: its proportions are drawn to
+              stay even at 11-16px, which is exactly what makes it
+              unremarkable at 30px. This is a different typeface, not the body
+              font enlarged, and that is the difference the brief is asking
+              for.
 
-                · 1.75rem — 28px. Large enough to be the anchor of the card
-                  without competing with the CTA for weight.
-                · tracking -0.022em. Inter's default spacing is tuned for text
-                  sizes; at 28px it sets loose, and the negative tracking is
-                  what makes a heading look drawn rather than typed. This is
-                  the single biggest difference between a heading that reads as
-                  designed and one that reads as a default.
-                · leading 1.15. The stock 1.25 leaves a gap under a
-                  single-line heading that reads as a missing element.
+              Three values carry the rest, and none of them are decoration:
 
-              It steps down to 24px below `sm` for the same reason the card's
-              padding does — see there. Both were needed: the padding alone
-              still left it one wrap away on a 360px handset.
+                · 800, not 700. Plus Jakarta Sans has a genuinely distinct
+                  ExtraBold — wider stems, tighter counters — where many
+                  families just smear the bold. At 700 it reads as a heavier
+                  Inter; at 800 it reads as itself.
+                · tracking -0.025em. A face's default spacing is metric for
+                  text sizes; at display sizes it sets loose, and negative
+                  tracking is most of the difference between a heading that
+                  looks drawn and one that looks typed.
+                · leading 1.1. Tighter than the 1.15 this had under Inter,
+                  because Jakarta's taller x-height already fills the line.
 
-              `mt-9` is the space the removed "Admin portal authentication"
-              capsule and its two margins occupied, given back to the heading. */}
-          <h1 className="mt-9 text-2xl font-bold leading-[1.15] tracking-[-0.022em] text-text-primary sm:text-[1.75rem]">
+              NO GRADIENT FILL, which the brief marks optional. A two-colour
+              heading is the single most recognisable tell of a generated
+              landing page, and this is an internal console that four
+              administrators sign into. The ink is the system's heading value.
+
+              It steps down to 24px below `sm`, where the full string would
+              otherwise orphan "Admin" onto a second line. */}
+          <h1 className="mt-9 font-display text-2xl font-extrabold leading-[1.1] tracking-[-0.025em] text-text-primary sm:text-[1.875rem]">
             {title}
           </h1>
 
           {description ? (
-            <p className="mt-2.5 text-sm font-normal leading-relaxed text-text-muted">
+            // Deliberately NOT the display face. A second face earns its place
+            // by contrast, and setting both lines in it would spend that
+            // contrast on the line nobody reads first. `leading-relaxed`
+            // (1.625) rather than the body 1.5, because this sets at 45-ish
+            // characters and a longer measure wants more air between lines.
+            <p className="mt-3 max-w-[46ch] text-sm font-normal leading-relaxed text-text-muted">
               {description}
             </p>
           ) : null}
 
-          <div className="mt-7">{children}</div>
+          <div className="mt-9">{children}</div>
         </div>
       </div>
     </div>

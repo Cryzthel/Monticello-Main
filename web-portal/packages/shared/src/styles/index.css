@@ -761,6 +761,37 @@
     "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
 
+  /* ── THE DISPLAY FACE ─────────────────────────────────────────────────────
+     Plus Jakarta Sans, for headings that are the largest thing on their
+     screen. Today that is exactly one element: the admin sign-in heading.
+
+     WHY A SECOND FACE AT ALL. Inter is a text face — its proportions are drawn
+     to stay even at 11-16px, which is precisely what makes it unremarkable at
+     28px and up. Plus Jakarta Sans has a taller x-height, rounder bowls and a
+     genuinely different ExtraBold, so it reads as a chosen typeface rather
+     than as the body font enlarged. It is also close enough in width and
+     colour to Inter that the two sit together without looking like a mistake,
+     which Outfit (narrower) and Clash Display (much more mannered) do not.
+
+     WHY IT IS A TOKEN AND NOT A CLASS ON ONE COMPONENT. The stack has to be
+     written once. A component reaching for `font-['Plus_Jakarta_Sans']`
+     inline is a magic string that no other component can find, and the
+     fallback chain — which is what renders while the webfont loads, and
+     forever if the request fails — would be missing from it entirely.
+
+     SCOPE: BOTH consoles request it, at only the two weights the sign-in
+     heading uses. That changed when the guardhouse adopted the same split
+     sign-in shell — it renders the same <h1>, so it needs the same face, and
+     a portal whose heading silently fell back to Inter while the other did not
+     is precisely the drift the font tokens exist to prevent.
+
+     It is still a DISPLAY face, not a second body face. One element uses it.
+     Anything that reaches for it on a screen full of 14px text is using the
+     wrong token; `--font-sans` is the answer there. */
+  --font-display:
+    "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
   /* Optical tracking. A geometric sans set at 24px needs meaningfully tighter
      spacing than the same face at 11px; setting one global `tracking-tight`
      would over-tighten the small UI text that makes up most of a dashboard.

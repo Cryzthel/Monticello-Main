@@ -25,7 +25,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap"
     />
     <!--
       Theme resolution BEFORE first paint.
@@ -56,6 +56,18 @@
               : window.matchMedia('(prefers-color-scheme: dark)').matches
                 ? 'dark'
                 : 'light'
+          // The sign-in screen is pinned light regardless of preference —
+          // see useForcedTheme in packages/shared/src/theme/ThemeProvider.jsx,
+          // which is the runtime half of this. Resolving it here as well is
+          // what stops a dark-mode guard seeing one full dark frame of the
+          // login on a cold load or a refresh; React cannot help, because by
+          // the time it mounts that frame has already been painted.
+          //
+          // This console gained the rule when its login adopted the shared
+          // split shell, which pins light. Keep it in step with the admin
+          // portal's copy — the two index.html files are the pre-paint half of
+          // one behaviour.
+          if (location.pathname === '/login') theme = 'light'
           var root = document.documentElement
           root.classList.remove('light', 'dark')
           root.classList.add(theme)

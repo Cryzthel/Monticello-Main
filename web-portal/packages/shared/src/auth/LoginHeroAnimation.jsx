@@ -139,19 +139,25 @@ export default function LoginHeroAnimation({ src, className = '' }) {
       autoplay={!reduced}
       /*
        * Sized to FILL its pane, not to sit politely inside it. The cap has
-       * climbed 24 → 28 → 36rem as the hero moved from a column inside a card
-       * to half the viewport; at 448px it read as a small object adrift in a
-       * 720px pane. 576px is 80% of that pane, and on anything narrower the
-       * pane's own padding is the limit rather than this number.
+       * climbed 24 → 28 → 36 → 44rem as the hero moved from a column inside a
+       * card to half the viewport. At 44rem (704px) the number has stopped
+       * being the constraint at ordinary desktop widths: a 720px pane less its
+       * `p-8` leaves 656px, so the PANE decides and the cap only stops the
+       * illustration ballooning on an ultrawide display.
        *
-       * `max-h-full` is the guard that makes filling safe. The box is square,
-       * so on a short window — a laptop at 1440x720, or a browser with three
-       * toolbars — a width-driven 576px box would be taller than the pane and
-       * overflow it. Clamping the height instead lets the SVG's own
-       * `xMidYMid meet` letterbox it, which loses a little width and never
-       * distorts or clips.
+       * The two portals' animations have different aspect ratios — admin's is
+       * square (750x750), the guardhouse's landscape (994x736) — so filling the
+       * same width gives them different heights, and that is correct rather
+       * than a mismatch to be fixed. Cropping one to match the other would mean
+       * cutting an illustration to fit a number.
+       *
+       * `max-h-full` is the guard that makes filling safe. On a short window —
+       * a laptop at 1440x720, or a browser carrying three toolbars — a
+       * width-driven box can come out taller than the pane. Clamping the height
+       * lets the SVG's own `xMidYMid meet` letterbox it, which loses a little
+       * width and never distorts or clips.
        */
-      className={`h-auto max-h-full w-full max-w-[36rem] select-none ${className}`}
+      className={`h-auto max-h-full w-full max-w-[44rem] select-none ${className}`}
       /*
        * From the animation, not hardcoded. lottie-web's SVG renderer sizes
        * itself to its container, so a container with no height draws a 0px
