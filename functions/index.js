@@ -174,15 +174,54 @@ exports.sendPasswordOtp = functions
         from: `"Monticello Villas" <${process.env.SMTP_USER}>`,
         to: email,
         subject: "Your password reset code",
+
+        // ── WHY THIS HEADER IS HERE ──────────────────────────────────────
+        // Gmail threads messages that share a subject and participants. Every
+        // code this function sends has the same subject and goes to the same
+        // person, so a resent code is filed UNDER the first one in a collapsed
+        // conversation — and the code the resident is now waiting for is the
+        // one hidden at the bottom. They read the stale code, it fails, and
+        // the obvious conclusion is that the resend did not work.
+        //
+        // A unique reference per message is the documented way to opt a
+        // transactional mail out of that grouping. It matters specifically
+        // because this flow HAS a resend button with a countdown behind it.
+        //
+        // Its own random value, NOT the OTP's salt. The salt is one half of
+        // what protects the stored hash, and a cryptographic input does not
+        // belong in a header that travels in clear text through every relay
+        // between here and the inbox — however harmless it looks when the
+        // recipient already knows the code.
+        headers: {
+          "X-Entity-Ref-ID": crypto.randomUUID(),
+        },
+
+        // Plain text first and genuinely equivalent, not an afterthought: a
+        // multipart message with a real text alternative is treated as more
+        // legitimate than an HTML-only one, and it is what a watch, a screen
+        // reader or a text-only client actually renders. The code leads the
+        // sentence so it is the first thing in the inbox preview snippet.
         text:
-          `Your Monticello Villas password reset code is ${otp}. ` +
+          `${otp} is your Monticello Villas password reset code. ` +
           `It expires in ${OTP_TTL_MINUTES} minutes. ` +
-          `If you didn't request this, you can ignore this email.`,
+          `If you didn't request this, you can ignore this email — ` +
+          `your password has not changed.`,
+
+        // No images, no tracking pixel, no link. A transactional code has
+        // nothing to click, and the things that make mail look like marketing
+        // — remote images, redirect URLs, wide colour blocks — are the things
+        // that get it filtered. System fonts only; a webfont in email is a
+        // remote request that will not load.
         html:
-          `<p>Your Monticello Villas password reset code is:</p>` +
-          `<p style="font-size:28px;font-weight:700;letter-spacing:6px">${otp}</p>` +
-          `<p>It expires in ${OTP_TTL_MINUTES} minutes. ` +
-          `If you didn't request this, you can ignore this email.</p>`,
+          `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;` +
+          `font-size:15px;line-height:1.6;color:#0F172A">` +
+          `<p style="margin:0 0 16px">Your Monticello Villas password reset code is:</p>` +
+          `<p style="margin:0 0 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;` +
+          `font-size:30px;font-weight:700;letter-spacing:8px;color:#047857">${otp}</p>` +
+          `<p style="margin:0 0 16px">It expires in ${OTP_TTL_MINUTES} minutes.</p>` +
+          `<p style="margin:0;color:#475569">If you didn't request this, you can ignore ` +
+          `this email — your password has not changed.</p>` +
+          `</div>`,
       });
     } catch (err) {
       console.error("Failed to send OTP email", err);

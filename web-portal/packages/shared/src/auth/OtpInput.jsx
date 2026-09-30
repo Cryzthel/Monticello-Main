@@ -150,7 +150,7 @@ export default function OtpInput({
           className={`h-14 w-full min-w-0 rounded-2xl border bg-field text-center font-mono text-lg font-semibold text-text-primary outline-none transition-[border-color,box-shadow] duration-200 ease-in-out disabled:opacity-60 ${
             invalid
               ? 'border-danger focus:border-danger focus:ring-2 focus:ring-danger/20'
-              : 'border-slate-200/80 hover:border-slate-300 focus:border-text-primary focus:ring-2 focus:ring-text-primary/10'
+              : 'border-slate-200/80 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20'
           }`}
         />
       ))}
