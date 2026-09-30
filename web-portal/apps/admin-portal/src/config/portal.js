@@ -41,6 +41,17 @@ export const UNAUTHORIZED_MESSAGE = 'This account is not authorized for the Admi
  */
 export const ROUTES = {
   login: '/login',
+  /**
+   * Where Firebase's password-reset email lands. PUBLIC, like `login` — the
+   * whole point is that it is reachable by someone who cannot sign in.
+   *
+   * Reaching it needs one setting in the Firebase console: Authentication →
+   * Templates → Password reset → Customize action URL → this path on this
+   * portal's domain. Without it Firebase's own hosted page handles the code and
+   * this route is simply never visited; nothing breaks, it just does not look
+   * like the product. See ResetPasswordPage.
+   */
+  resetPassword: '/reset-password',
   home: '/dashboard',
   dashboard: '/dashboard',
   heatmap: '/heatmap',

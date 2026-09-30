@@ -44,15 +44,22 @@ const HERO_ANIMATION = '/auth/login-hero.json'
  */
 const HERO_FIT = { fillX: 0.8085, offsetXPct: -6.56, offsetYPct: -2.21 }
 
+/**
+ * The hero, as its own export so the reset-password route can show the same
+ * illustration without repeating the asset path and its measured `fit`.
+ */
+export function LoginHero() {
+  return <LoginHeroAnimation src={HERO_ANIMATION} fit={HERO_FIT} />
+}
+
 export default function LoginPage() {
   return (
     <LoginSplitLayout
       title="Welcome back, Admin"
       description="Enter your administrative credentials to access the management suite."
-      illustration={<LoginHeroAnimation src={HERO_ANIMATION} fit={HERO_FIT} />}
+      illustration={<LoginHero />}
     >
       <LoginForm
-        variant="elevated"
         accent="brand"
         emailIcon={Mail}
         emailPlaceholder="monticellovillas@gmail.com"

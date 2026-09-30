@@ -3,7 +3,8 @@ import RequireAuth from '@shared/auth/RequireAuth'
 import { useAuth } from '@shared/auth/AuthContext'
 import { ROUTES } from '@/config/portal'
 
-import LoginPage from '@/pages/LoginPage'
+import LoginPage, { LoginHero } from '@/pages/LoginPage'
+import ResetPasswordPage from '@shared/auth/ResetPasswordPage'
 import DashboardPage from '@/pages/DashboardPage'
 import HeatmapPage from '@/pages/HeatmapPage'
 import TicketsPage from '@/pages/TicketsPage'
@@ -68,6 +69,12 @@ export default function AppRoutes() {
           login and remembers where it came from. */}
       <Route path="/" element={<Navigate to={ROUTES.home} replace />} />
       <Route path={ROUTES.login} element={<LoginPage />} />
+      {/* Public, and deliberately outside RequireAuth: the person opening it
+          cannot sign in, which is why they were sent the link. */}
+      <Route
+        path={ROUTES.resetPassword}
+        element={<ResetPasswordPage loginPath={ROUTES.login} illustration={<LoginHero />} />}
+      />
 
       <Route element={<RequireAuth loginPath={ROUTES.login} />}>
         <Route path={ROUTES.dashboard} element={<DashboardPage />} />
