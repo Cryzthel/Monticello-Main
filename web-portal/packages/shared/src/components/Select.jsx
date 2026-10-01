@@ -163,7 +163,7 @@ export default function Select({
         // than the old `px-2.5`: the curve eats horizontal room at the ends, so
         // a pill needs more padding than a rounded rectangle for the same
         // optical inset.
-        className={`inline-flex ${height} items-center gap-2 rounded-lg border ${VARIANTS[variant] ?? VARIANTS.toolbar} px-3.5 font-medium text-text-primary transition-[color,background-color,border-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`inline-flex ${height} items-center gap-2 rounded-full border ${VARIANTS[variant] ?? VARIANTS.toolbar} px-3.5 font-medium text-text-primary transition-[color,background-color,border-color,box-shadow] duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
           open ? 'border-brand-500 ring-2 ring-brand-500/20' : 'border-slate-200 hover:border-slate-300'
         } ${className}`}
       >

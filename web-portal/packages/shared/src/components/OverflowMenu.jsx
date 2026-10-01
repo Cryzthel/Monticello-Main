@@ -63,7 +63,7 @@ export default function OverflowMenu({ items = [], ariaLabel = 'Row actions' }) 
         onClick={handleToggle}
         aria-label={ariaLabel}
         aria-expanded={open}
-        className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors duration-150 ${
+        className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors duration-150 ${
           open
             ? 'border-tint/20 bg-tint/[0.08] text-text-primary'
             : 'border-transparent text-text-secondary hover:border-tint/10 hover:bg-tint/[0.06] hover:text-text-primary'

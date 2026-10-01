@@ -502,12 +502,26 @@
   --color-cta-fg: #FFFFFF;
   --color-cta-hover: #1E293B;
 
-  /* The selected segment of a segmented control: a raised white face on the
-     grey track, the reference's pattern for "this one" among peers. The ring
-     is the segment's own edge; a drop shadow cannot show through the
-     clip-path that animates it (see SegmentedControl). */
-  --color-segment-active: #FFFFFF;
-  --color-segment-active-fg: #0F172A;
+  /* The selected segment of a segmented control.
+     ── A SOLID FILL, BECAUSE WHITE-ON-SLATE-100 WAS NOT AN INDICATOR ───────
+     This was #FFFFFF on the #F1F5F9 track: measured in the browser, that is a
+     contrast ratio of 1.10:1. WCAG asks 3:1 of a non-text UI indicator, and
+     1.10 is not a near miss — the selected option was legible only by its 10%
+     ring and a 1px shadow, both of which vanish on a cheap panel or in
+     sunlight. The whole job of this control is to say which one is selected.
+
+     Forest rather than the brand #10B981: bright emerald on a pale track
+     measures about 2.1:1 and fails the same test the white face failed, which
+     is the trap worth recording — the accessible choice here is a DARKER
+     green than the brand, not the brand itself. #047857 against #F1F5F9 is
+     5.6:1, and white label on #047857 is 5.3:1, so the pill clears 3:1 as an
+     indicator and the label clears 4.5:1 as text.
+
+     The ring stays. It is the segment's own edge and it is what the
+     clip-path's mirrored copy carries; a drop shadow cannot show through the
+     clip that animates it (see SegmentedControl). */
+  --color-segment-active: #047857;
+  --color-segment-active-fg: #FFFFFF;
   --color-segment-ring: rgba(15, 23, 42, 0.10);
 
   /* STATUS CAPSULES: pastel fill + 700-step ink, the reference's soft pill.
@@ -1062,8 +1076,13 @@
   --color-cta-fg: #09090B;
   --color-cta-hover: #E4E4E7;
 
-  --color-segment-active: #2A2A2F;
-  --color-segment-active-fg: #FAFAFA;
+  /* Dark gets the brand green itself, which is the inverse of the light-mode
+     problem: #10B981 on the #111114 track is a strong indicator, and it is
+     dark mode where a near-black-on-black face (#2A2A2F on #111114, 1.4:1)
+     was hardest to see. The label goes near-black ON the green rather than
+     white, because white on #10B981 is only 2.4:1. */
+  --color-segment-active: #10B981;
+  --color-segment-active-fg: #09090B;
   --color-segment-ring: rgba(255, 255, 255, 0.08);
 
   /* Pastel does not survive a dark ground; each tone becomes a 14-18% wash
@@ -1863,23 +1882,30 @@
      severity, not by which page uses them, so "Resolve" on the guard queue
      and "Resolve" in the admin modal are visually identical.
 
-     8px, THE CONTROL TIER — not the capsule this block used to demand in
-     capitals. The 2026-09-17 oblong brief made every action trigger a capsule.
-     The corporate-SaaS direction that followed it reversed that: `rounded-full`
-     is reserved for things that are READ — status, trend, count and filter
-     pills — while things that are PRESSED take the 8px control tier, so shape
-     tells a label apart from a target. Buttons, inputs, the search field and
-     segmented controls are all 8px.
+     THE CAPSULE, AND THE FOURTH TIME THIS HAS BEEN DECIDED. Every pressable
+     control in both portals is `rounded-full`: buttons, icon buttons,
+     segmented tracks and their segments, chips and switches. Text inputs and
+     surfaces are NOT — see the radius note further down.
 
-     This block and the declaration below contradicted each other for a while,
-     which is how the capsule came back once already. If they ever disagree
-     again, the declaration is the one that ships. */
+     The history is short and worth keeping, because the comment you are
+     reading has been wrong twice. Claymorphism, then an 8px corporate tier,
+     then the 2026-09-17 oblong brief (capsules), then a corporate-SaaS
+     direction that reverted to 8px, and now 2026-10-02, which restores the
+     capsule deliberately and system-wide. Each reversal left the prose here
+     describing the previous one — `.btn-pill` still said ".btn is already a
+     pill" through the entire 8px era.
+
+     So: if this block and the declaration below ever disagree again, THE
+     DECLARATION IS THE ONE THAT SHIPS, and the prose is the bug. The one
+     rule that has survived every flip is that a MULTI-LINE field is never a
+     capsule — that one is enforced in CSS, not prose, because it actually
+     broke. */
   /* ── PRESS ────────────────────────────────────────────────────────────────
      Transform is listed in the transition so the press both lands and releases
      on the same strong ease-out. `:not(:disabled)` keeps a disabled control
      inert to the pointer rather than merely faded. */
   .btn {
-    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
     transition-property: color, background-color, border-color, box-shadow, transform, opacity;
     transition-duration: 150ms;
     transition-timing-function: var(--ease-out-strong);
@@ -1952,9 +1978,11 @@
     @apply h-9 w-9 px-0;
   }
 
-  /* Retained as an alias: .btn is already a pill. Kept so existing
-     `btn btn-pill btn-md` call sites do not have to be swept — and it now
-     says `rounded-full`, so it can never again quietly undo the pill. */
+  /* A no-op alias. `.btn` is a pill again, so this adds nothing — it is kept
+     only so the handful of `btn btn-pill` call sites do not need sweeping,
+     and because declaring `rounded-full` here means that if `.btn` is ever
+     reverted a fifth time, these sites keep the shape they asked for by name
+     rather than silently changing with it. Do not add it to new call sites. */
   .btn-pill {
     @apply rounded-full;
   }
@@ -2047,7 +2075,7 @@
      edge crosses it, which a colour transition on the labels cannot do (the
      label flips while the pill is still on its way). */
   .segmented {
-    @apply relative isolate inline-flex max-w-full items-center gap-0.5 rounded-lg border border-hairline p-0.5;
+    @apply relative isolate inline-flex max-w-full items-center gap-0.5 rounded-full border border-hairline p-0.5;
     background-color: var(--color-segmented-track);
   }
 
@@ -2061,7 +2089,7 @@
      ::after that must paint ABOVE the indicator layer (see
      .segmented-indicator), and it can only do that as a positioned box. */
   .segment {
-    @apply relative flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium outline-none select-none;
+    @apply relative flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium outline-none select-none;
     transition-property: color, background-color, opacity;
     transition-duration: 150ms;
     transition-timing-function: ease;
@@ -2104,7 +2132,10 @@
     position: absolute;
     inset: -3px;
     z-index: 2;
-    border-radius: 9px;
+    /* Follows the segment. This was 9px — the 6px segment plus its 3px inset —
+       and a rounded-rectangle ring around a capsule reads as a misprint at the
+       corners. A capsule's ring is just a bigger capsule. */
+    border-radius: 9999px;
     box-shadow: 0 0 0 2px var(--color-focus);
     pointer-events: none;
   }
@@ -2386,7 +2417,7 @@
      under the oblong rule every trigger is a capsule — at equal width and
      height a capsule IS a circle. */
   .icon-btn {
-    @apply inline-flex shrink-0 items-center justify-center rounded-lg text-text-muted transition-[color,background-color,border-color,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-tint/[0.05] hover:text-text-primary active:scale-[0.94] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent;
+    @apply inline-flex shrink-0 items-center justify-center rounded-full text-text-muted transition-[color,background-color,border-color,transform] duration-150 ease-[var(--ease-out-strong)] hover:bg-tint/[0.05] hover:text-text-primary active:scale-[0.94] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent;
   }
 
   .icon-btn-sm {

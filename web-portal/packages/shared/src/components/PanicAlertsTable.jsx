@@ -13,9 +13,37 @@ import { isOutsideBoundary } from '@shared/lib/panicGeofence'
 import { MapPinOff } from '@shared/icons'
 import SearchField from '@shared/components/SearchField'
 
+/*
+ * A dot on Live, and only on Live.
+ *
+ * The label is a node rather than a string so the one filter that describes
+ * something HAPPENING carries a live indicator inside the capsule, the way the
+ * on-duty badge and the route badge already do. "Resolved" and "All" describe
+ * states of the record, not of the world, so they stay plain — a dot on every
+ * option would say nothing.
+ *
+ * `motion-safe:` on the ping only. The solid dot underneath is always painted,
+ * so with reduced motion the indicator is still there; it simply stops
+ * pulsing, rather than disappearing along with the animation. This is the same
+ * pairing RouteSummaryBadge and GuardStatusWidget use.
+ *
+ * No halo, no glow: a coloured blur around a 6px dot inside a 28px capsule is
+ * the decorative kind of emphasis this console does not use. The ping IS the
+ * emphasis.
+ */
+const LiveLabel = () => (
+  <span className="inline-flex items-center gap-1.5">
+    <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
+      <span className="absolute inline-flex h-full w-full rounded-full bg-danger/60 motion-safe:animate-ping" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-danger" />
+    </span>
+    Live
+  </span>
+)
+
 const FILTERS = [
   { value: 'all', label: 'All' },
-  { value: 'live', label: 'Live' },
+  { value: 'live', label: <LiveLabel />, title: 'Alerts still open' },
   { value: 'resolved', label: 'Resolved' },
 ]
 
