@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { FilePlus2, Loader2, Send, ShieldAlert, X } from 'lucide-react'
+import { FilePlus2, Loader2, Send, ShieldAlert, X } from '@shared/icons'
 import Select from '@shared/components/Select'
 import AddressSelect from '@/components/AddressSelect'
 import ResidentLocationPicker from '@/components/ResidentLocationPicker'
@@ -319,7 +319,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
       {/* ── Header ── */}
       <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
-        <FilePlus2 className="h-4 w-4 shrink-0 text-brand-500" />
+        <FilePlus2 size="sm" className="shrink-0 text-brand-500" />
         <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
           File incident report
         </h2>
@@ -334,7 +334,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
           title={busy ? 'Wait for the upload to finish' : 'Close'}
           className="icon-btn icon-btn-sm -mr-1.5"
         >
-          <X className="h-4 w-4" />
+          <X size="sm" />
         </button>
       </header>
 
@@ -482,7 +482,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
 
         {error ? (
           <p className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
-            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
             {error}
           </p>
         ) : null}
@@ -510,7 +510,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
           title={uploading ? 'Waiting for every attachment to finish uploading' : undefined}
           className="btn btn-sm btn-brand min-w-[8.5rem] flex-1 sm:flex-none"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          {busy ? <Loader2 size="sm" className="animate-spin" /> : <Send size="sm" />}
           {uploading ? 'Uploading…' : submitting ? 'Filing…' : 'Submit report'}
         </button>
       </div>

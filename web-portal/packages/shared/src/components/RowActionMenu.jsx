@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MoreHorizontal, Eye, Send, CheckCircle2 } from 'lucide-react'
+import { MoreHorizontal, Eye, Send, CheckCircle2 } from '@shared/icons'
 
 // Portal-based, same reasoning as shared/components/NotificationBell: the
 // table body it lives in scrolls (overflow-y-auto), which would clip an
@@ -56,7 +56,7 @@ export default function RowActionMenu({
         aria-expanded={open}
         className={`icon-btn icon-btn-sm ${open ? 'icon-btn-active' : ''}`}
       >
-        <MoreHorizontal className="h-4 w-4" />
+        <MoreHorizontal size="sm" />
       </button>
 
       {open && position
@@ -76,7 +76,7 @@ export default function RowActionMenu({
                 onClick={() => runAction(onView)}
                 className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07]"
               >
-                <Eye className="h-3.5 w-3.5 shrink-0 text-text-secondary" />
+                <Eye size="sm" className="shrink-0 text-text-secondary" />
                 View details
               </button>
               {/* Mutating actions are rendered only when a handler is supplied.
@@ -94,7 +94,7 @@ export default function RowActionMenu({
                   onClick={() => runAction(onDispatch)}
                   className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
-                  <Send className="h-3.5 w-3.5 shrink-0 text-brand-400" />
+                  <Send size="sm" className="shrink-0 text-brand-400" />
                   {dispatchLabel}
                 </button>
               ) : null}
@@ -105,7 +105,7 @@ export default function RowActionMenu({
                   onClick={() => runAction(onResolve)}
                   className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+                  <CheckCircle2 size="sm" className="shrink-0 text-success" />
                   {resolveLabel}
                 </button>
               ) : null}

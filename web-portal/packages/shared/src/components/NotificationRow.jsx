@@ -1,4 +1,4 @@
-import { X, Check, AlertTriangle, Info, ArrowRight, MapPin } from 'lucide-react'
+import { X, Check, AlertTriangle, Info, ArrowRight, MapPin } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { clockTime, relativeTime } from '@shared/lib/notifications'
 import { notificationIcon } from '@shared/theme/categoryIcons'
@@ -16,19 +16,17 @@ const TONE_GLYPH = {
 export function ToneGlyph({ tone, size = 'md' }) {
   const { icon: Icon, ring } = TONE_GLYPH[tone] ?? TONE_GLYPH.info
   const box = size === 'sm' ? 'h-6 w-6' : 'h-7 w-7'
-  const glyph = size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5'
+  const glyph = 'sm'
   return (
     <span
       className={`flex ${box} shrink-0 items-center justify-center rounded-full border-2 bg-transparent ${ring}`}
     >
-      {/* Inherits the global 1.75 stroke from <LucideProvider> in main.jsx.
-          This comment claimed a "deliberate override of the global 1.5
-          stroke", and both halves were wrong: the provider is 1.75, and there
-          is no override here — `glyph` sets a size and nothing else. Left as a
-          note rather than deleted because the underlying observation still
-          holds: these sit at 12-14px inside a 2px ring, so if the global
-          weight ever drops, this is a place to check. */}
-      <Icon className={glyph} />
+      {/* Both boxes take a 16px glyph. The scale's 14px step went with the
+          move to Material Symbols (see shared/icons/tokens.js), and 16 still
+          clears the 2px ring inside the smaller 24px box. There is no house
+          stroke weight to tune here any more either: these are filled shapes,
+          and their weight is the set's own wght=400. */}
+      <Icon size={glyph} />
     </span>
   )
 }
@@ -152,7 +150,7 @@ export default function NotificationRow({ notification, unread = false, onSelect
               className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-0.5 text-caption font-semibold text-brand-400 transition-colors hover:text-brand-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
             >
               {actionLabel ?? 'View details'}
-              <ArrowRight className="h-3 w-3" />
+              <ArrowRight size="sm" />
             </button>
           </div>
         ) : null}

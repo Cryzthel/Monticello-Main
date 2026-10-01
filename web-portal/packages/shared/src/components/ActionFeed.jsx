@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { Archive, FilePlus2, Send, CheckCircle2 } from 'lucide-react'
+import { Archive, FilePlus2, Send, CheckCircle2 } from '@shared/icons'
 import Card from '@shared/components/Card'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import { isOfficerFiled } from '@shared/lib/staffFiling'
@@ -122,7 +122,7 @@ export default function ActionFeed({
         </p>
         {archiveHref ? (
           <Link to={archiveHref} className="btn btn-sm btn-outline">
-            <Archive className="h-3.5 w-3.5" />
+            <Archive size="sm" />
             Archive
           </Link>
         ) : null}
@@ -151,7 +151,7 @@ export default function ActionFeed({
             return (
               <div key={`${event.incident.id}-${event.type}-${index}`} className="flex gap-3 px-1">
                 <div className={`icon-tile mt-0.5 h-7 w-7 rounded-lg ${meta.color}`}>
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon size="sm" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-text-primary">

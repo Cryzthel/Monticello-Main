@@ -8,7 +8,7 @@ import {
   UserPlus,
   Users,
   X,
-} from 'lucide-react'
+} from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import Card from '@shared/components/Card'
 import Select from '@shared/components/Select'
@@ -31,6 +31,7 @@ import {
   describeCallableError,
   setSecurityAccountStatus,
 } from '@/lib/securityAccounts'
+import SearchField from '@shared/components/SearchField'
 
 /**
  * Security Account Provisioning & Access Management.
@@ -105,7 +106,7 @@ function ResultStrip({ feedback, onDismiss }) {
           : 'border-success/25 bg-success/10 text-success'
       }`}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+      <Icon size="sm" className="mt-0.5 shrink-0" />
       <span className="min-w-0 flex-1">{feedback.message}</span>
       <button
         type="button"
@@ -113,7 +114,7 @@ function ResultStrip({ feedback, onDismiss }) {
         aria-label="Dismiss"
         className="-mr-1 -mt-0.5 shrink-0 rounded-lg p-1 opacity-70 transition hover:bg-tint/10 hover:opacity-100"
       >
-        <X className="h-3.5 w-3.5" />
+        <X size="sm" />
       </button>
     </div>
   )
@@ -283,7 +284,7 @@ export default function SecurityAccountsPage() {
             // Compact, like every other action in this workflow. See .btn-compact.
             className="btn btn-compact btn-brand"
           >
-            <UserPlus className="h-3.5 w-3.5" />
+            <UserPlus size="sm" />
             Add account
           </button>
         </div>
@@ -294,16 +295,12 @@ export default function SecurityAccountsPage() {
         {tab === 'directory' ? (
           <>
             <div className="flex shrink-0 flex-wrap items-center gap-3">
-              <div className="flex min-w-[16rem] flex-1 items-center gap-2 rounded-xl border border-hairline bg-base-800 px-4 py-2">
-                <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-                <input
-                  type="search"
-                  className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-                  placeholder="Search by name, badge number or email"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
+              <SearchField
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by name, badge number or email"
+                className="min-w-[16rem] flex-1"
+              />
               <Select
                 ariaLabel="Filter by status"
                 value={statusFilter}

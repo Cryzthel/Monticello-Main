@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown } from '@shared/icons'
 import { statusStyle, INCIDENT_STATUSES } from '@shared/theme/statusStyles'
 
 /**
@@ -110,7 +110,8 @@ export default function StatusSelect({
         <span className={`h-2 w-2 shrink-0 rounded-full ${value ? dot : 'bg-text-muted'}`} />
         <span className={`truncate ${value ? '' : 'text-text-muted'}`}>{value ?? placeholder}</span>
         <ChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 text-text-secondary transition-transform duration-150 ${
+          size="sm"
+          className={`ml-auto text-text-secondary transition-transform duration-150 ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -146,9 +147,9 @@ export default function StatusSelect({
                     }`}
                   >
                     <span className={`h-2 w-2 shrink-0 rounded-full ${optionDot}`} />
-                    <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                    <Icon size="sm" className="shrink-0 opacity-70" />
                     {option}
-                    {active ? <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-brand-400" /> : null}
+                    {active ? <Check size="sm" className="ml-auto shrink-0 text-brand-400" /> : null}
                   </button>
                 )
               })}

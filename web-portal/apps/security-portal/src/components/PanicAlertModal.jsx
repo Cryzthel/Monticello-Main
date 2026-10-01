@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Siren, ShieldCheck, MapPin, MapPinOff, Clock } from 'lucide-react'
+import { X, Siren, ShieldCheck, MapPin, MapPinOff, Clock } from '@shared/icons'
 import { minutesWaiting } from '@shared/lib/wpda'
 import { acknowledgePanicAlert, acknowledgedByLabel } from '@shared/lib/panicAlerts'
 import { useAuth } from '@shared/auth/AuthContext'
@@ -109,20 +109,20 @@ export default function PanicAlertModal({ alert, onClose }) {
             aria-label="Close panic alert"
             className="btn btn-icon-sm absolute right-3 top-3 text-text-secondary hover:text-text-primary"
           >
-            <X className="h-5 w-5" />
+            <X size="md" />
           </button>
 
           <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-danger/20">
             {/* Kept pulsing here too — the alert is still live while this is
                 open, and a static icon would read as a record of one. */}
             <span className="absolute inline-flex h-full w-full animate-ping rounded-lg bg-danger/50" />
-            <Siren className="relative h-6 w-6 text-danger" />
+            <Siren size="lg" className="relative text-danger" />
           </span>
 
           <div>
             <p className="text-sm font-bold text-danger">Panic alert</p>
             <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-text-secondary">
-              <Clock className="h-3 w-3 shrink-0" />
+              <Clock size="sm" className="shrink-0" />
               {formatAgo(alert.createdAt)}
             </p>
           </div>
@@ -136,7 +136,7 @@ export default function PanicAlertModal({ alert, onClose }) {
           <div>
             <p className="text-base font-semibold text-text-primary">{alert.residentName}</p>
             <p className="mt-1 flex items-center justify-center gap-1.5 text-sm text-text-secondary">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-danger" />
+              <MapPin size="sm" className="shrink-0 text-danger" />
               {alert.address}
             </p>
           </div>
@@ -153,7 +153,7 @@ export default function PanicAlertModal({ alert, onClose }) {
           */}
           {geofenceAlert && isOutsideBoundary(alert) ? (
             <p className="flex w-full items-start gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-left text-xs leading-relaxed text-text-primary">
-              <MapPinOff aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
+              <MapPinOff size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
               <span>
                 <span className="font-semibold text-warning">Outside the subdivision.</span> This SOS
                 reported a position beyond the registered boundary — confirm the location before
@@ -207,7 +207,7 @@ export default function PanicAlertModal({ alert, onClose }) {
                 : 'btn btn-sm w-full cursor-not-allowed border border-slate-200 bg-base-800 text-text-muted opacity-100'
             }
           >
-            <ShieldCheck className="h-3.5 w-3.5" />
+            <ShieldCheck size="sm" />
             {isActive ? (busy ? 'Acknowledging…' : 'Acknowledge report') : 'Acknowledged'}
           </button>
         </div>

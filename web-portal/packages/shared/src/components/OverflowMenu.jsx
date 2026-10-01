@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MoreVertical } from 'lucide-react'
+import { MoreVertical } from '@shared/icons'
 
 /**
  * Row overflow menu — the `⋯` trigger plus its dropdown.
@@ -69,7 +69,7 @@ export default function OverflowMenu({ items = [], ariaLabel = 'Row actions' }) 
             : 'border-transparent text-text-secondary hover:border-tint/10 hover:bg-tint/[0.06] hover:text-text-primary'
         }`}
       >
-        <MoreVertical className="h-4 w-4" />
+        <MoreVertical size="sm" />
       </button>
 
       {open && position
@@ -94,7 +94,7 @@ export default function OverflowMenu({ items = [], ariaLabel = 'Row actions' }) 
                       : 'text-text-secondary hover:bg-tint/5 hover:text-text-primary'
                   }`}
                 >
-                  {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" /> : null}
+                  {Icon ? <Icon size="sm" className="shrink-0" /> : null}
                   {label}
                 </button>
               ))}

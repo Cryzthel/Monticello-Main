@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Eye, FileText, Loader2, MapPin, RotateCcw, Search, ShieldAlert, Trash2, X,
-} from 'lucide-react'
+  Eye,
+  FileText,
+  Loader2,
+  MapPin,
+  RotateCcw,
+  Search,
+  ShieldAlert,
+  Trash2,
+  X,
+} from '@shared/icons'
 import Card from '@shared/components/Card'
 import TablePagination from '@shared/components/TablePagination'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -12,6 +20,7 @@ import { softDeleteIncidents, restoreIncidents, isDeleted } from '@shared/lib/in
 import { describeFirestoreError } from '@shared/lib/audit'
 import { formatCategory } from '@shared/lib/wpda'
 import { Skeleton } from '@shared/components/Skeleton'
+import SearchField from '@shared/components/SearchField'
 
 const TABS = [
   { key: 'active', label: 'Active' },
@@ -106,7 +115,7 @@ function FiledReportCard({ report, checked, onToggle, onOpen }) {
           </p>
 
           <p className="mt-2 flex items-start gap-1.5 text-xs leading-snug text-text-secondary">
-            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-400" />
+            <MapPin size="sm" className="mt-0.5 shrink-0 text-brand-400" />
             <span className="min-w-0 break-words">{report.location || 'Location not provided'}</span>
           </p>
 
@@ -123,7 +132,7 @@ function FiledReportCard({ report, checked, onToggle, onOpen }) {
           without one nothing on screen says the row opens. */}
       <div className="flex justify-end border-t border-divider px-4 py-2">
         <button type="button" onClick={onOpen} className="btn btn-sm btn-outline min-h-11 px-4">
-          <Eye className="h-4 w-4" />
+          <Eye size="sm" />
           View report
         </button>
       </div>
@@ -134,7 +143,7 @@ function FiledReportCard({ report, checked, onToggle, onOpen }) {
 function EmptyState({ message }) {
   return (
     <div className="px-4 py-14 text-center">
-      <FileText className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+      <FileText size="lg" className="mx-auto mb-2 text-text-muted" />
       <p className="text-sm text-text-secondary">{message}</p>
     </div>
   )
@@ -281,30 +290,13 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
           reflowing under a guard who just archived their last report. */}
       <div className="flex flex-col gap-3 border-b border-hairline p-4">
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-          <div className="flex h-11 min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 sm:h-9 sm:flex-1">
-            <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-            {/* text-base below `sm:` — iOS zooms the viewport on focus for any
-                field under 16px, and it never zooms back out afterwards. */}
-            <input
-              type="text"
-              inputMode="search"
-              autoComplete="off"
-              className="h-full w-full bg-transparent text-base text-text-primary outline-none placeholder:text-text-muted sm:text-sm"
-              placeholder="Search name, location, or status"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            {search ? (
-              <button
-                type="button"
-                onClick={() => setSearch('')}
-                aria-label="Clear search"
-                className="icon-btn h-8 w-8 shrink-0"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
+          <SearchField
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onClear={() => setSearch('')}
+            placeholder="Search name, location, or status"
+            className="min-w-0 sm:flex-1"
+          />
 
           {/* A tray, not the four loose pills the announcement feed uses.
               There are two of them and they are the two halves of one
@@ -374,7 +366,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
 
       {loadError ? (
         <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
-          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">
             {describeFirestoreError(loadError, 'load your filed reports')}
           </span>
@@ -383,10 +375,10 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
 
       {error ? (
         <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
-          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">{error}</span>
           <button type="button" onClick={() => setError('')} aria-label="Dismiss" className="shrink-0 rounded p-0.5 hover:bg-danger/15">
-            <X className="h-3.5 w-3.5" />
+            <X size="sm" />
           </button>
         </p>
       ) : null}
@@ -404,7 +396,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
             aria-label="Clear selection"
             className="icon-btn ml-auto h-11 w-11 shrink-0 sm:order-2 sm:ml-0 sm:h-9 sm:w-9"
           >
-            <X className="h-4 w-4" />
+            <X size="sm" />
           </button>
           <div className="flex w-full items-center gap-2 sm:order-1 sm:ml-auto sm:w-auto">
             {tab === 'active' ? (
@@ -414,7 +406,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
                 onClick={() => setConfirming({ kind: 'delete', rows: selected })}
                 className="btn btn-sm btn-danger min-h-11 flex-1 sm:min-h-0 sm:flex-none"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 size="sm" />
                 {`Delete ${selected.length}`}
               </button>
             ) : (
@@ -424,7 +416,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
                 onClick={() => setConfirming({ kind: 'restore', rows: selected })}
                 className="btn btn-sm btn-success min-h-11 flex-1 sm:min-h-0 sm:flex-none"
               >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                {busy ? <Loader2 size="sm" className="animate-spin" /> : <RotateCcw size="sm" />}
                 {`Restore ${selected.length}`}
               </button>
             )}
@@ -564,7 +556,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
                         onClick={() => onView?.(report)}
                         className="btn btn-sm btn-outline"
                       >
-                        <Eye className="h-3.5 w-3.5" />
+                        <Eye size="sm" />
                         View
                       </button>
                     </td>

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Menu, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react'
+import { Menu, PanelLeftClose, PanelLeftOpen, Search } from '@shared/icons'
 import NotificationBell from '@shared/components/NotificationBell'
 import ThemeToggle from '@shared/components/ThemeToggle'
 
@@ -53,10 +53,10 @@ export default function TopHeader({
       <button
         type="button"
         onClick={onOpenDrawer}
-        className="icon-btn icon-btn-sm shrink-0 border border-slate-200 bg-base-900 lg:hidden"
+        className="icon-btn icon-btn-sm icon-btn-plain shrink-0 lg:hidden"
         aria-label="Open navigation"
       >
-        <Menu className="h-4 w-4" />
+        <Menu size="sm" />
       </button>
 
       {/* Visible on every rail state, so the control that restores a
@@ -68,12 +68,12 @@ export default function TopHeader({
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-expanded={!collapsed}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className="icon-btn icon-btn-sm hidden shrink-0 lg:inline-flex"
+          className="icon-btn icon-btn-sm icon-btn-plain hidden shrink-0 lg:inline-flex"
         >
           {collapsed ? (
-            <PanelLeftOpen className="h-[1.125rem] w-[1.125rem]" />
+            <PanelLeftOpen size="md" />
           ) : (
-            <PanelLeftClose className="h-[1.125rem] w-[1.125rem]" />
+            <PanelLeftClose size="md" />
           )}
         </button>
       ) : null}
@@ -89,11 +89,17 @@ export default function TopHeader({
         onClick={onOpenPalette}
         aria-label="Search pages"
         aria-keyshortcuts="Meta+K Control+K"
-        className="hidden h-10 min-w-0 max-w-xl flex-1 items-center gap-2.5 rounded-lg border border-slate-200 bg-base-900 px-3 text-left text-sm text-text-muted shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-[border-color,color] duration-150 hover:border-slate-300 hover:text-text-secondary sm:flex"
+        // An oblong, matching the SearchField every filter bar below now uses —
+        // this is the one search affordance a reader meets first, so it cannot
+        // be the one that still looks like a box. `pl-4 pr-2` rather than an
+        // even `px-4`: the ⌘K cap needs less room inside the curve than the
+        // leading glyph does, and an even padding left it crowding the right
+        // edge. `shadow-none` drops the 1px lift a flat oblong does not want.
+        className="hidden h-10 min-w-0 max-w-xl flex-1 items-center gap-2.5 rounded-full border border-slate-200 bg-base-900 pl-4 pr-2 text-left text-sm text-text-muted transition-[border-color,color] duration-150 hover:border-slate-300 hover:text-text-secondary sm:flex"
       >
-        <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <Search size="sm" className="shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">Search pages…</span>
-        <kbd className="shrink-0 rounded-md border border-hairline bg-slate-50 px-1.5 py-0.5 font-sans text-2xs text-text-muted">
+        <kbd className="shrink-0 rounded-full border border-hairline bg-slate-50 px-2 py-0.5 font-sans text-2xs text-text-muted">
           ⌘K
         </kbd>
       </button>
@@ -101,9 +107,9 @@ export default function TopHeader({
         type="button"
         onClick={onOpenPalette}
         aria-label="Search pages"
-        className="icon-btn icon-btn-sm shrink-0 border border-slate-200 bg-base-900 sm:hidden"
+        className="icon-btn icon-btn-sm icon-btn-plain shrink-0 sm:hidden"
       >
-        <Search className="h-4 w-4" />
+        <Search size="sm" />
       </button>
 
       {/* Wraps under the search on a phone, where the duty controls, the
@@ -116,7 +122,7 @@ export default function TopHeader({
             aria-label={primaryAction.label}
             className="btn btn-brand h-10 px-3 sm:px-4"
           >
-            {PrimaryIcon ? <PrimaryIcon className="h-4 w-4" aria-hidden="true" /> : null}
+            {PrimaryIcon ? <PrimaryIcon size="sm" aria-hidden="true" /> : null}
             {/* `sm:inline`, not `xl:inline`. Hidden below xl, the briefed
                 "dark CTA on the right" rendered as a bare icon button on every
                 laptop narrower than 1280px. The crowding this guarded against

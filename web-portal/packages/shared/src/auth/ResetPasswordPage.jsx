@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth'
-import { CheckCircle2, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, ShieldAlert } from '@shared/icons'
 
 import { auth } from '@shared/lib/firebase'
 import AuthAlert from '@shared/auth/AuthAlert'
@@ -200,7 +200,7 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-danger/10 text-danger">
-              <ShieldAlert className="h-5 w-5" />
+              <ShieldAlert size="md" />
             </span>
             <div>
               <p className="text-base font-semibold text-text-primary">Link no longer valid</p>
@@ -223,7 +223,7 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
         <div className="step-enter flex flex-col gap-6">
           <div className="flex flex-col gap-3">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-success/10 text-success">
-              <CheckCircle2 className="h-5 w-5" />
+              <CheckCircle2 size="md" />
             </span>
             <div>
               <p className="text-base font-semibold text-text-primary">Password updated</p>

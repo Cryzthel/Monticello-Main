@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MapPinOff, Navigation } from 'lucide-react'
+import { MapPinOff, Navigation } from '@shared/icons'
 
 /**
  * Tells the officer, on their own device, that dispatch cannot see them.
@@ -87,7 +87,7 @@ export default function LocationAccessNotice({ mode, sharing, locationError }) {
       role="status"
       className="flex items-start gap-3 border-b border-hairline bg-warning/10 px-4 py-2.5 text-caption text-text-primary"
     >
-      <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+      <Icon size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">
           {denied

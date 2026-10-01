@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { RotateCcw, Trash2, X, Search, Trash } from 'lucide-react'
+import { RotateCcw, Trash2, X, Search, Trash } from '@shared/icons'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import StatusBadge from '@shared/components/StatusBadge'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { restoreIncidents, purgeIncidents } from '@shared/lib/incidents'
 import { formatCategory } from '@shared/lib/wpda'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
+import SearchField from '@shared/components/SearchField'
 
 /**
  * The recycle bin — the only place Restore and Permanent Delete live.
@@ -75,16 +76,12 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
   return (
     <div className="data-panel flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-3 border-b border-hairline p-4">
-        <div className="flex min-w-[16rem] flex-1 items-center gap-2 rounded-xl border border-hairline bg-base-800 px-4 py-2">
-          <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-          <input
-            type="text"
-            className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-            placeholder="Search deleted reports"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
+        <SearchField
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search deleted reports"
+          className="min-w-[16rem] flex-1"
+        />
         <span className="text-xs text-text-secondary">
           {rows.length} report{rows.length === 1 ? '' : 's'} in trash
         </span>
@@ -101,7 +98,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
               onClick={() => setConfirming({ kind: 'restore', ids: [...selectedIds] })}
               className="btn btn-sm btn-success"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw size="sm" />
               Restore selected
             </button>
             <button
@@ -110,7 +107,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
               onClick={() => setConfirming({ kind: 'purge', ids: [...selectedIds] })}
               className="btn btn-sm btn-danger"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 size="sm" />
               Permanently delete selected
             </button>
             <button
@@ -118,7 +115,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
               onClick={() => setSelectedIds(new Set())}
               className="btn btn-icon-sm text-text-secondary hover:text-text-primary"
             >
-              <X className="h-3.5 w-3.5" />
+              <X size="sm" />
             </button>
           </div>
         </div>
@@ -171,7 +168,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
-                  <Trash className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+                  <Trash size="lg" className="mx-auto mb-2 text-text-muted" />
                   <p className="text-sm text-text-secondary">
                     {search ? 'No deleted reports match that search.' : 'The recycle bin is empty.'}
                   </p>

@@ -17,7 +17,7 @@ import {
   UserPlus,
   UserRound,
   X,
-} from 'lucide-react'
+} from '@shared/icons'
 import Select from '@shared/components/Select'
 import { MetaItem, MetaList } from '@shared/components/MetaList'
 import CredentialHandoff from '@/components/CredentialHandoff'
@@ -159,7 +159,7 @@ function TextInput({ id, error, icon: Icon, className = '', ...rest }) {
   return (
     <div className="relative">
       {Icon ? (
-        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+        <Icon size="sm" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
       ) : null}
       <input
         id={id}
@@ -201,7 +201,7 @@ function Stepper({ step, editing, busy, onJump }) {
                       : 'bg-base-800 text-text-muted ring-slate-200'
                 }`}
               >
-                {state === 'done' ? <Check className="h-3.5 w-3.5" /> : index + 1}
+                {state === 'done' ? <Check size="sm" /> : index + 1}
               </span>
               <span
                 className={`hidden truncate text-sm sm:block ${
@@ -423,7 +423,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
             <header className="sticky top-0 z-10 border-b border-hairline bg-base-850">
               <div className="flex items-start gap-4 px-6 pb-4 pt-5">
                 <span className="icon-tile icon-tile-md">
-                  {editing ? <IdCard className="h-5 w-5" /> : <UserPlus className="h-5 w-5" />}
+                  {editing ? <IdCard size="md" /> : <UserPlus size="md" />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <h2 className="text-base font-semibold leading-tight text-text-primary">
@@ -442,7 +442,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
                   aria-label="Close"
                   className="icon-btn icon-btn-sm -mr-1 shrink-0 text-text-secondary hover:text-text-primary"
                 >
-                  <X className="h-4 w-4" />
+                  <X size="sm" />
                 </button>
               </div>
               <Stepper step={step} editing={editing} busy={busy} onJump={setStep} />
@@ -453,7 +453,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
                 two-field step and a three-field one. */}
             <div ref={stepBodyRef} key={current.key} className="step-enter space-y-5 px-6 py-5 sm:min-h-[18rem]">
               <div className="flex items-start gap-3">
-                <StepIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-400" />
+                <StepIcon size="md" className="mt-0.5 shrink-0 text-brand-400" />
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-text-primary">{current.label}</h3>
                   <p className="mt-0.5 text-sm text-text-secondary">{current.description}</p>
@@ -610,7 +610,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
 
                   {editing ? (
                     <div className="flex items-start gap-3 rounded-xl border border-hairline bg-base-800 p-4">
-                      <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
+                      <KeyRound size="sm" className="mt-0.5 shrink-0 text-text-secondary" />
                       <p className="text-sm leading-relaxed text-text-secondary">
                         Passwords cannot be changed here. Use{' '}
                         <strong className="font-semibold text-text-primary">Reset password</strong> in the
@@ -647,7 +647,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
                             aria-label={revealed ? 'Hide password' : 'Show password'}
                             className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 hover:text-text-primary sm:h-7 sm:w-7"
                           >
-                            {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            {revealed ? <EyeOff size="sm" /> : <Eye size="sm" />}
                           </button>
                         </div>
                         <button
@@ -655,7 +655,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
                           onClick={() => update({ password: generateTempPassword() })}
                           className="btn btn-sm btn-outline h-11 shrink-0 sm:h-9"
                         >
-                          <RefreshCw className="h-3.5 w-3.5" />
+                          <RefreshCw size="sm" />
                           New password
                         </button>
                       </div>
@@ -666,7 +666,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
 
               {submitError ? (
                 <p className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <AlertTriangle size="sm" className="mt-0.5 shrink-0" />
                   <span className="min-w-0">{submitError}</span>
                 </p>
               ) : null}
@@ -691,20 +691,20 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
                   disabled={busy}
                   className="btn btn-sm btn-outline"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <ArrowLeft size="sm" />
                   Back
                 </button>
               )}
 
               {editing || step === LAST_STEP ? (
                 <button type="submit" disabled={busy} className="btn btn-sm btn-brand">
-                  {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  {busy ? <Loader2 size="sm" className="animate-spin" /> : <Check size="sm" />}
                   {editing ? 'Save changes' : 'Create account'}
                 </button>
               ) : (
                 <button type="submit" disabled={busy} className="btn btn-sm btn-brand">
                   Next
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  <ArrowRight size="sm" />
                 </button>
               )}
             </footer>

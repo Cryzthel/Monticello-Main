@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  Clock, ImageOff, MapPin, PlayCircle, ShieldCheck, ShieldQuestion, X,
-} from 'lucide-react'
+import { Clock, ImageOff, MapPin, PlayCircle, ShieldCheck, ShieldQuestion, X } from '@shared/icons'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import StatusBadge from '@shared/components/StatusBadge'
 import Lightbox from '@shared/components/Lightbox'
@@ -143,11 +141,11 @@ export default function IncidentReviewModal({ report, onClose }) {
                 have. */}
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
               <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-400" />
+                <MapPin size="sm" className="shrink-0 text-brand-400" />
                 {address || 'Location not recorded'}
               </span>
               <span className="inline-flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                <Clock size="sm" className="shrink-0 text-text-muted" />
                 {watermark.timestamp}
               </span>
             </p>
@@ -158,7 +156,7 @@ export default function IncidentReviewModal({ report, onClose }) {
             aria-label="Close report review"
             className="btn btn-icon-sm -mr-1 -mt-1 shrink-0 text-text-secondary hover:text-text-primary"
           >
-            <X className="h-4 w-4" />
+            <X size="sm" />
           </button>
         </header>
 
@@ -181,7 +179,7 @@ export default function IncidentReviewModal({ report, onClose }) {
           <section className="shrink-0 overflow-hidden rounded-xl border border-hairline bg-base-800">
             <header className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2.5">
               <h3 className="flex items-center gap-2 text-xs font-semibold tracking-normal text-text-secondary">
-                <ImageOff className="h-3.5 w-3.5 shrink-0 text-brand-400" />
+                <ImageOff size="sm" className="shrink-0 text-brand-400" />
                 Attachments
               </h3>
               <span className="shrink-0 text-2xs text-text-muted">
@@ -213,7 +211,7 @@ export default function IncidentReviewModal({ report, onClose }) {
                     <>
                       <video src={active.url} className="h-full w-full object-contain" muted />
                       <span className="absolute inset-0 flex items-center justify-center">
-                        <PlayCircle className="h-10 w-10 text-white/90" />
+                        <PlayCircle size={40} className="text-white/90" />
                       </span>
                     </>
                   ) : (
@@ -230,7 +228,7 @@ export default function IncidentReviewModal({ report, onClose }) {
                       light mode — a dark ring on a dark photo, i.e. no ring. */}
                   <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent p-3">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-2xs font-semibold text-white/90 ring-1 ring-inset ring-white/20">
-                      <ShieldCheck className="h-3 w-3 text-success" />
+                      <ShieldCheck size="sm" className="text-success" />
                       Watermark verified
                     </span>
                     <span className="rounded-full bg-black/50 px-2.5 py-1 text-2xs font-medium text-white/80 ring-1 ring-inset ring-white/20">
@@ -241,11 +239,11 @@ export default function IncidentReviewModal({ report, onClose }) {
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4 text-left">
                     <p className="text-sm font-semibold text-white">{watermark.name}</p>
                     <p className="mt-0.5 flex items-center gap-1 text-xs text-white/80">
-                      <MapPin className="h-3 w-3 shrink-0" />
+                      <MapPin size="sm" className="shrink-0" />
                       {watermark.address}
                     </p>
                     <p className="mt-0.5 flex items-center gap-1 text-xs text-white/60">
-                      <Clock className="h-3 w-3 shrink-0" />
+                      <Clock size="sm" className="shrink-0" />
                       {watermark.timestamp}
                     </p>
                   </div>
@@ -254,9 +252,9 @@ export default function IncidentReviewModal({ report, onClose }) {
             ) : (
               <p className="flex items-center gap-2 p-4 text-sm text-text-muted">
                 {stillUploading ? (
-                  <ShieldQuestion className="h-4 w-4 shrink-0 text-warning" />
+                  <ShieldQuestion size="sm" className="shrink-0 text-warning" />
                 ) : (
-                  <ImageOff className="h-4 w-4 shrink-0" />
+                  <ImageOff size="sm" className="shrink-0" />
                 )}
                 {stillUploading
                   ? 'The resident attached media that is still uploading.'

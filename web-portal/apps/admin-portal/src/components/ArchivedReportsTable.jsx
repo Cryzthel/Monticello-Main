@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Archive, ArchiveRestore, Search } from 'lucide-react'
+import { Archive, ArchiveRestore, Search } from '@shared/icons'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
 import TimeframeFilter from '@/components/TimeframeFilter'
@@ -7,6 +7,7 @@ import { resolveTimeframe, withinTimeframe } from '@shared/lib/timeframe'
 import { unarchiveIncidents } from '@shared/lib/incidents'
 import { formatCategory } from '@shared/lib/wpda'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
+import SearchField from '@shared/components/SearchField'
 
 const STAMP = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
 const stamp = (value) => (value ? new Date(value).toLocaleString('en-GB', STAMP).replace(',', '') : '—')
@@ -62,7 +63,7 @@ export default function ArchivedReportsTable({ incidents = [], loading = false, 
     <Card className="flex min-h-0 flex-col p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-4">
         <div className="flex items-center gap-2">
-          <Archive className="h-4 w-4 text-brand-400" />
+          <Archive size="sm" className="text-brand-400" />
           <p className="text-sm font-semibold text-text-primary">
             Archived reports
             <span className="ml-2 text-xs font-normal text-text-muted">
@@ -74,15 +75,11 @@ export default function ArchivedReportsTable({ incidents = [], loading = false, 
       </div>
 
       <div className="border-b border-hairline p-3">
-        <div className="flex items-center gap-2 rounded-xl border border-hairline bg-base-800 px-3">
-          <Search className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search archived reports"
-            className="min-w-0 flex-1 bg-transparent py-2 text-sm text-text-primary outline-none placeholder:text-text-muted"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search archived reports"
+        />
       </div>
 
       {error ? <p className="px-4 pt-3 text-xs text-danger">{error}</p> : null}
@@ -147,7 +144,7 @@ export default function ArchivedReportsTable({ incidents = [], loading = false, 
                         onClick={() => restore(incident.id)}
                         className="btn btn-sm btn-outline"
                       >
-                        <ArchiveRestore className="h-3.5 w-3.5" />
+                        <ArchiveRestore size="sm" />
                         Unarchive
                       </button>
                     </div>

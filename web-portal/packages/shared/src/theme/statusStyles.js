@@ -1,4 +1,4 @@
-import { Circle, Send, Navigation, CheckCircle2, ShieldX, ShieldCheck, Clock } from 'lucide-react'
+import { Circle, Send, Navigation, CheckCircle2, ShieldX, ShieldCheck, Clock } from '@shared/icons'
 
 // One definition of what every incident/resident status LOOKS like, for both
 // portals. Previously each surface styled its own: the tickets table printed

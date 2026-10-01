@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, Siren, MapPin, Phone, Send, CheckCircle2 } from 'lucide-react'
+import { Search, Siren, MapPin, Phone, Send, CheckCircle2 } from '@shared/icons'
 import OverflowMenu from '@shared/components/OverflowMenu'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -10,7 +10,8 @@ import { SkeletonTableRows } from '@shared/components/Skeleton'
 import { panicSignalIcon } from '@shared/theme/categoryIcons'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
 import { isOutsideBoundary } from '@shared/lib/panicGeofence'
-import { MapPinOff } from 'lucide-react'
+import { MapPinOff } from '@shared/icons'
+import SearchField from '@shared/components/SearchField'
 
 const FILTERS = [
   { value: 'all', label: 'All' },
@@ -83,16 +84,12 @@ export default function PanicAlertsTable({
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden p-0">
       <div className="flex flex-wrap items-center gap-3 border-b border-hairline p-4">
-        <div className="flex h-9 min-w-[16rem] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 transition-[border-color,box-shadow] duration-150 hover:border-slate-300 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
-          <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-          <input
-            type="text"
-            className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-            placeholder="Search by resident, address, or alert ID"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
+        <SearchField
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search by resident, address, or alert ID"
+          className="min-w-[16rem] flex-1"
+        />
         {/* The shared segmented control — now literally the shared component
             rather than a fourth hand-written copy of its markup. */}
         <SegmentedControl
@@ -151,7 +148,7 @@ export default function PanicAlertsTable({
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={hasActions ? 5 : 4} className="px-4 py-16 text-center">
-                  <Siren className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+                  <Siren size="lg" className="mx-auto mb-2 text-text-muted" />
                   <p className="text-sm text-text-secondary">
                     {alerts.length === 0
                       ? 'No panic alerts have been raised.'
@@ -181,14 +178,14 @@ export default function PanicAlertsTable({
                           panic button. There is no priority to compute, so the
                           badge states the fact rather than a derived grade. */}
                       <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-danger/12 px-2 py-0.5 text-2xs font-bold text-danger ring-1 ring-inset ring-danger/25">
-                        <Siren className="h-3 w-3" />
+                        <Siren size="sm" />
                         Urgent
                       </span>
                     </td>
                     <td className="px-4 py-3.5 align-top">
                       <p className="font-medium text-text-primary">{alert.residentName}</p>
                       <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-secondary">
-                        <MapPin className="h-3 w-3 shrink-0" />
+                        <MapPin size="sm" className="shrink-0" />
                         {alert.address}
                       </p>
                       {/* The number, as a real tel: link. "Call resident" was
@@ -200,7 +197,7 @@ export default function PanicAlertsTable({
                           href={`tel:${alert.residentPhone}`}
                           className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-400 transition hover:text-brand-300"
                         >
-                          <Phone className="h-3 w-3 shrink-0" />
+                          <Phone size="sm" className="shrink-0" />
                           {alert.residentPhone}
                         </a>
                       ) : null}

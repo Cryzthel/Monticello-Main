@@ -6,7 +6,7 @@ import {
   ShieldOff,
   SquarePen,
   UserX,
-} from 'lucide-react'
+} from '@shared/icons'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
 import OverflowMenu from '@shared/components/OverflowMenu'
@@ -166,7 +166,7 @@ export default function SecurityDirectoryTable({
             ) : accounts.length === 0 ? (
               <tr>
                 <td colSpan={COLUMNS} className="px-4 py-14 text-center">
-                  <ShieldOff className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+                  <ShieldOff size="lg" className="mx-auto mb-2 text-text-muted" />
                   <p className="text-sm text-text-secondary">
                     {filtered
                       ? 'No accounts match these filters.'
@@ -275,7 +275,7 @@ export default function SecurityDirectoryTable({
                               aria-label="Reset pending: a temporary password was issued and has not been replaced."
                               className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info ring-1 ring-inset ring-info/25"
                             >
-                              <BadgeAlert className="h-3 w-3" />
+                              <BadgeAlert size="sm" />
                             </span>
                           </Tooltip>
                         ) : null}
@@ -312,7 +312,7 @@ export default function SecurityDirectoryTable({
                             aria-label={`Reset password for ${account.name || account.email}`}
                             className="btn btn-icon-sm btn-outline"
                           >
-                            <KeyRound className="h-4 w-4" />
+                            <KeyRound size="sm" />
                           </button>
                         </Tooltip>
                         <OverflowMenu

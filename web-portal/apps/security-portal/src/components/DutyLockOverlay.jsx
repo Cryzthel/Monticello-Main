@@ -1,4 +1,4 @@
-import { LogIn, Loader2, ShieldAlert } from 'lucide-react'
+import { LogIn, Loader2, ShieldAlert } from '@shared/icons'
 import { useDutyStatus } from '@/hooks/useDutyStatus'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useRef } from 'react'
@@ -52,7 +52,7 @@ export default function DutyLockOverlay() {
     >
       <div className="card dialog-panel w-full max-w-sm bg-base-900 p-6 text-center">
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-warning/15">
-          <ShieldAlert className="h-6 w-6 text-warning" />
+          <ShieldAlert size="lg" className="text-warning" />
         </span>
 
         <h2 id="duty-lock-title" className="mt-4 text-base font-semibold text-text-primary">
@@ -72,7 +72,7 @@ export default function DutyLockOverlay() {
           disabled={busy}
           className="btn btn-success mt-5 h-11 w-full"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+          {busy ? <Loader2 size="sm" className="animate-spin" /> : <LogIn size="sm" />}
           {busy ? 'Clocking in…' : 'Clock in to continue'}
         </button>
       </div>

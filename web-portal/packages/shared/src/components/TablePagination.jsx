@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from '@shared/icons'
 import Select from '@shared/components/Select'
 import { pageItems, ROWS_PER_PAGE_OPTIONS } from '@shared/lib/pagination'
 
@@ -67,7 +67,7 @@ export default function TablePagination({
             aria-label="Previous page"
             className="icon-btn icon-btn-sm border border-slate-200 bg-base-800"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft size="sm" />
           </button>
 
           {pageItems(safePage, totalPages).map((item, index) =>
@@ -107,7 +107,7 @@ export default function TablePagination({
             aria-label="Next page"
             className="icon-btn icon-btn-sm border border-slate-200 bg-base-800"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight size="sm" />
           </button>
         </nav>
       </div>

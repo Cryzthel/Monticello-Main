@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Pencil } from '@shared/icons'
 import Select from '@shared/components/Select'
 
 const OTHER = '__other__'
@@ -63,7 +63,7 @@ export default function AddressSelect({
 
       {isManual ? (
         <div className="relative">
-          <Pencil className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+          <Pencil size="sm" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             id={id}
             type="text"

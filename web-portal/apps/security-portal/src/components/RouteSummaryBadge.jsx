@@ -7,7 +7,7 @@ import {
   Navigation,
   ShieldAlert,
   TriangleAlert,
-} from 'lucide-react'
+} from '@shared/icons'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import { staffLabel } from '@shared/lib/identity'
 import { ROUTE_TONE_COLORS } from '@shared/theme/dispatchColors'
@@ -118,7 +118,7 @@ export default function RouteSummaryBadge({ route, progress, profile, targetLabe
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
             style={{ backgroundColor: `${color}26`, color }}
           >
-            <ManeuverGlyph icon={maneuver.upcoming?.icon} className="h-4.5 w-4.5" />
+            <ManeuverGlyph size="md" icon={maneuver.upcoming?.icon} />
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-base font-semibold leading-tight text-text-primary">
@@ -137,7 +137,7 @@ export default function RouteSummaryBadge({ route, progress, profile, targetLabe
           is the one that must be right; this is the one that explains it. */}
       {simulated ? (
         <p className="flex items-center gap-2 border-b border-hairline bg-warning/15 px-3 py-2 text-caption font-medium text-warning">
-          <FlaskConical aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          <FlaskConical size="sm" aria-hidden="true" className="shrink-0" />
           <span className="min-w-0 flex-1">
             Simulated movement — this unit is not really here. Nothing is being recorded.
           </span>
@@ -146,7 +146,7 @@ export default function RouteSummaryBadge({ route, progress, profile, targetLabe
 
       {offRoute ? (
         <p className="flex items-center gap-2 border-b border-hairline bg-warning/10 px-3 py-2 text-caption text-warning">
-          <TriangleAlert aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+          <TriangleAlert size="sm" aria-hidden="true" className="shrink-0" />
           {/* Stated, not silently re-routed. Re-requesting Directions on every
               stray fix would burn the quota on GPS drift, and a guard taking a
               service road on purpose does not need the console to argue. */}
@@ -162,8 +162,8 @@ export default function RouteSummaryBadge({ route, progress, profile, targetLabe
           style={failed ? undefined : { backgroundColor: `${color}26`, color }}
         >
           <StateIcon
-            aria-hidden="true"
-            className={`h-4 w-4 ${pending ? 'animate-spin' : ''} ${failed ? 'text-warning' : ''}`}
+            size="sm"
+            className={`${pending ? 'animate-spin' : ''} ${failed ? 'text-warning' : ''}`}
           />
         </span>
 
@@ -193,7 +193,7 @@ export default function RouteSummaryBadge({ route, progress, profile, targetLabe
                 green pulsing dot beats a grey sentence every time. */}
             {simulated ? (
               <span className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full bg-pill-warning px-2 text-2xs font-semibold text-pill-warning-fg">
-                <FlaskConical aria-hidden="true" className="h-3 w-3" />
+                <FlaskConical size="sm" aria-hidden="true" />
                 Simulated
               </span>
             ) : !failed && !pending ? (
@@ -235,7 +235,7 @@ export default function RouteSummaryBadge({ route, progress, profile, targetLabe
                   was short, so the two halves of one phrase sat at opposite
                   ends of the card with a hole between them. */}
               <span className="min-w-0 truncate">{fromLabel}</span>
-              <MoveRight aria-hidden="true" className="h-3 w-3 shrink-0 text-text-muted" />
+              <MoveRight size="sm" aria-hidden="true" className="shrink-0 text-text-muted" />
               <span className="max-w-[65%] shrink-0 truncate font-medium text-text-primary">
                 {targetLabel || 'the call'}
               </span>

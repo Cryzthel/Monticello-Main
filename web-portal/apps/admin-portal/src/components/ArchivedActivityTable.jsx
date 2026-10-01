@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, Search } from 'lucide-react'
+import { Activity, Search } from '@shared/icons'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
 import TimeframeFilter from '@/components/TimeframeFilter'
@@ -7,6 +7,7 @@ import { resolveTimeframe, withinTimeframe } from '@shared/lib/timeframe'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
 import { auditEventIcon } from '@shared/theme/categoryIcons'
 import TablePagination from '@shared/components/TablePagination'
+import SearchField from '@shared/components/SearchField'
 
 const STAMP = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
 const stamp = (value) => (value ? new Date(value).toLocaleString('en-GB', STAMP).replace(',', '') : '—')
@@ -75,7 +76,7 @@ export default function ArchivedActivityTable({ events = [], loading = false }) 
     <Card className="flex min-h-0 flex-col p-0">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-4">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-brand-400" />
+          <Activity size="sm" className="text-brand-400" />
           <p className="text-sm font-semibold text-text-primary">
             Archived activity
             <span className="ml-2 text-xs font-normal text-text-muted">{rows.length} in range</span>
@@ -85,15 +86,11 @@ export default function ArchivedActivityTable({ events = [], loading = false }) 
       </div>
 
       <div className="border-b border-hairline p-3">
-        <div className="flex items-center gap-2 rounded-xl border border-hairline bg-base-800 px-3">
-          <Search className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search archived activity"
-            className="min-w-0 flex-1 bg-transparent py-2 text-sm text-text-primary outline-none placeholder:text-text-muted"
-          />
-        </div>
+        <SearchField
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search archived activity"
+        />
       </div>
 
       <div className="custom-scrollbar min-h-0 flex-1 overflow-auto pb-6">
@@ -141,7 +138,7 @@ export default function ArchivedActivityTable({ events = [], loading = false }) 
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">
                       <span className="flex items-center gap-2 font-medium text-text-primary">
-                        {Icon ? <Icon className="h-3.5 w-3.5 shrink-0 text-text-muted" /> : null}
+                        {Icon ? <Icon size="sm" className="shrink-0 text-text-muted" /> : null}
                         {event.actor}
                       </span>
                     </td>

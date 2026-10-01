@@ -1,6 +1,6 @@
 import {
   LayoutDashboard,
-  Flame,
+  Map,
   Ticket,
   Siren,
   ClipboardList,
@@ -9,8 +9,8 @@ import {
   BarChart3,
   History,
   Megaphone,
-  SlidersHorizontal,
-} from 'lucide-react'
+  Settings,
+} from '@shared/icons'
 import { useMemo } from 'react'
 import { collection, query, where } from 'firebase/firestore'
 import DashboardLayout from '@shared/layouts/DashboardLayout'
@@ -26,7 +26,12 @@ const NAV_GROUPS = [
     label: 'Platform',
     items: [
       { to: ROUTES.dashboard, label: 'Overview', icon: LayoutDashboard },
-      { to: ROUTES.heatmap, label: 'Hazard map', icon: Flame },
+      // `Map`, not `Flame`. The row leads to a map, and that is what the
+      // glyph should say; a flame described the hazards ON it, which is a
+      // different claim and one the page's own pins already make. Flame is
+      // still the `fire` CATEGORY icon in theme/categoryIcons.js, so this
+      // frees it to mean exactly one thing.
+      { to: ROUTES.heatmap, label: 'Hazard map', icon: Map },
       { to: ROUTES.tickets, label: 'Incident tickets', icon: Ticket },
       { to: ROUTES.sos, label: 'Panic alerts (SOS)', icon: Siren },
       // Officer-filed logs, not the resident ticket queue — two different
@@ -46,7 +51,11 @@ const NAV_GROUPS = [
   },
   {
     label: 'Administration',
-    items: [{ to: ROUTES.settings, label: 'Settings', icon: SlidersHorizontal }],
+    // `Settings` (the cog), not `SlidersHorizontal` (the faders). The faders
+    // are the MAP FILTER control in IncidentMap and still are; using them
+    // here too made one glyph mean both "filter this view" and "configure
+    // the system".
+    items: [{ to: ROUTES.settings, label: 'Settings', icon: Settings }],
   },
 ]
 

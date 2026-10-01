@@ -19,7 +19,7 @@ import {
   UserRound,
   X,
   Zap,
-} from 'lucide-react'
+} from '@shared/icons'
 import Card from '@shared/components/Card'
 import TablePagination from '@shared/components/TablePagination'
 import MediaAttachmentField from '@shared/components/MediaAttachmentField'
@@ -65,6 +65,7 @@ import {
 } from '@/lib/announcements'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { announcementCategoryIcon } from '@shared/theme/categoryIcons'
+import SearchField from '@shared/components/SearchField'
 
 /**
  * The Announcements workspace — one feed, with composing on top of it.
@@ -576,7 +577,7 @@ function Composer({
     <form className="flex min-h-0 flex-1 flex-col" onSubmit={onSubmit}>
       {/* ── Header ── */}
       <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
-        <Megaphone className="h-4 w-4 shrink-0 text-brand-500" />
+        <Megaphone size="sm" className="shrink-0 text-brand-500" />
         <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
           {editing ? 'Edit announcement' : 'Create announcement'}
         </h2>
@@ -591,7 +592,7 @@ function Composer({
           title={busy ? 'Wait for the upload to finish' : 'Close'}
           className="icon-btn icon-btn-sm -mr-1.5"
         >
-          <X className="h-4 w-4" />
+          <X size="sm" />
         </button>
       </header>
 
@@ -599,7 +600,7 @@ function Composer({
       <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6 pb-8">
         {editing ? (
           <div className="flex items-center gap-2 rounded-xl border border-info/25 bg-info/10 px-3 py-2.5">
-            <Pencil className="h-3.5 w-3.5 shrink-0 text-info" />
+            <Pencil size="sm" className="shrink-0 text-info" />
             <p className="min-w-0 flex-1 truncate text-xs text-info">Editing a published notice</p>
           </div>
         ) : null}
@@ -728,7 +729,7 @@ function Composer({
             onChange={(event) => updateField('isPinned', event.target.checked)}
             className="h-4 w-4 rounded border-tint/20 bg-tint/5 accent-brand-500"
           />
-          <Pin className="h-3.5 w-3.5 text-text-muted" />
+          <Pin size="sm" className="text-text-muted" />
           Pin to the top of the resident feed
         </label>
 
@@ -741,9 +742,9 @@ function Composer({
             }`}
           >
             {feedback.tone === 'danger' ? (
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
             ) : (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <CheckCircle2 size="sm" className="mt-0.5 shrink-0" />
             )}
             {feedback.message}
           </p>
@@ -769,9 +770,9 @@ function Composer({
             }
           >
             {submitting || uploadIncomplete ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 size="sm" className="animate-spin" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send size="sm" />
             )}
             {compressingCount > 0
               ? 'Optimising images…'
@@ -804,7 +805,7 @@ function IconAction({ icon: Icon, label, onClick, active = false, tone = 'defaul
         active ? tones.brand : tones[tone]
       }`}
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon size="sm" />
     </button>
   )
 }
@@ -942,7 +943,7 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
         onClick={(event) => event.stopPropagation()}
       >
         <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
-          <Megaphone className="h-4 w-4 shrink-0 text-brand-500" />
+          <Megaphone size="sm" className="shrink-0 text-brand-500" />
           <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
             Announcement details
           </h2>
@@ -952,7 +953,7 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
             aria-label="Close details"
             className="icon-btn icon-btn-sm -mr-1.5"
           >
-            <X className="h-4 w-4" />
+            <X size="sm" />
           </button>
         </header>
 
@@ -980,11 +981,11 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
             <span className="inline-flex min-w-0 items-center gap-1.5">
-              <UserRound className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+              <UserRound size="sm" className="shrink-0 text-text-muted" />
               <span className="truncate">{a.authorName || 'Admin'}</span>
             </span>
             <span className="inline-flex items-center gap-1.5 tabular-nums text-text-muted">
-              <Eye className="h-3.5 w-3.5 shrink-0" />
+              <Eye size="sm" className="shrink-0" />
               {views == null ? '—' : views.toLocaleString()}
             </span>
           </div>
@@ -1009,7 +1010,7 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
             onClick={() => onEdit(a)}
             className="btn btn-sm btn-brand min-w-[9rem]"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil size="sm" />
             Edit announcement
           </button>
         </div>
@@ -1079,7 +1080,7 @@ function AnnouncementCard({ announcement: a, onView, onEdit, onDelete }) {
 
         {/* ── Title, at the reference's weight ── */}
         <div className="flex items-start gap-2">
-          {a.isPinned ? <Pin className="mt-1 h-4 w-4 shrink-0 text-brand-400" /> : null}
+          {a.isPinned ? <Pin size="sm" className="mt-1 shrink-0 text-brand-400" /> : null}
           <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug tracking-tight text-text-primary">
             {a.title}
           </h3>
@@ -1092,7 +1093,7 @@ function AnnouncementCard({ announcement: a, onView, onEdit, onDelete }) {
             Same row, same rank, same glyph-plus-label rhythm. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
           <span className="inline-flex min-w-0 items-center gap-1.5">
-            <UserRound className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+            <UserRound size="sm" className="shrink-0 text-text-muted" />
             <span className="truncate">{author}</span>
           </span>
           <StatusBadge tone={taxonomyTone(a.priority)}>
@@ -1104,7 +1105,7 @@ function AnnouncementCard({ announcement: a, onView, onEdit, onDelete }) {
             className="inline-flex items-center gap-1.5 tabular-nums text-text-muted"
             title={views == null ? 'View tracking not enabled yet' : `${views} resident views`}
           >
-            <Eye className="h-3.5 w-3.5 shrink-0" />
+            <Eye size="sm" className="shrink-0" />
             {views == null ? '—' : views.toLocaleString()}
           </span>
         </div>
@@ -1418,7 +1419,7 @@ export default function AnnouncementsManager() {
             .join(' · ')}
           action={
             <button type="button" onClick={() => openComposer()} className="btn btn-sm btn-brand">
-              <Plus className="h-4 w-4" />
+              <Plus size="sm" />
               Create announcement
             </button>
           }
@@ -1441,16 +1442,12 @@ export default function AnnouncementsManager() {
               its life), and flattening it into the same pill row would put two
               unrelated axes in one undifferentiated strip. */}
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 transition-[border-color,box-shadow] duration-150 hover:border-slate-300 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
-              <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-              <input
-                type="text"
-                className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-                placeholder="Search by title, message, or author"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
+            <SearchField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by title, message, or author"
+              className="min-w-0 flex-1"
+            />
 
             <div className="flex flex-wrap items-center gap-2">
               {/* `.chip` — the shared filter capsule. h-9 keeps these on the
@@ -1489,7 +1486,7 @@ export default function AnnouncementsManager() {
           <SkeletonCardGrid count={3} height="h-44" className="flex flex-col gap-4" />
         ) : visible.length === 0 ? (
           <Card className="flex flex-col items-center gap-2 py-20 text-center">
-            <Megaphone className="h-7 w-7 text-text-muted" />
+            <Megaphone size={28} className="text-text-muted" />
             <p className="text-sm text-text-secondary">
               {search
                 ? 'No announcements match those filters.'

@@ -1,4 +1,12 @@
-import { Map as MapIcon, ActivitySquare, History, FilePlus2, Ticket, Siren, Settings } from 'lucide-react'
+import {
+  Map as MapIcon,
+  ActivitySquare,
+  History,
+  FilePlus2,
+  Ticket,
+  Siren,
+  Settings,
+} from '@shared/icons'
 import DashboardLayout from '@shared/layouts/DashboardLayout'
 import { useAuth } from '@shared/auth/AuthContext'
 import LocationAccessNotice from '@/components/LocationAccessNotice'

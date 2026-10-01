@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Lock, Mail } from '@shared/icons'
 
 import { useAuth } from '@shared/auth/AuthContext'
 import AuthAlert from '@shared/auth/AuthAlert'
@@ -270,7 +270,7 @@ export default function LoginForm({
           <button type="submit" disabled={submitting || normaliseCode(code).length !== 6} className={CTA}>
             {submitting ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 size="sm" className="animate-spin" />
                 Verifying…
               </>
             ) : (
@@ -334,7 +334,7 @@ export default function LoginForm({
             aria-label={showPassword ? 'Hide password' : 'Show password'}
             aria-pressed={showPassword}
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? <EyeOff size="sm" /> : <Eye size="sm" />}
           </button>
         }
       />
@@ -367,7 +367,7 @@ export default function LoginForm({
       <button type="submit" disabled={submitting} className={CTA}>
         {submitting ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 size="sm" className="animate-spin" />
             Signing in…
           </>
         ) : (

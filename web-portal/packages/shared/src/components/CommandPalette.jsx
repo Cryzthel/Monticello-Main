@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Search } from '@shared/icons'
 
 // Lightweight quick-nav palette (Cmd/Ctrl+K) — not a fuzzy search index over
 // incident data, just fast jumps between admin pages by name.
@@ -35,7 +35,7 @@ export default function CommandPalette({ open, onClose, navGroups, onNavigate })
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-hairline px-4 py-3">
-          <Search className="h-4 w-4 shrink-0 text-text-secondary" />
+          <Search size="sm" className="shrink-0 text-text-secondary" />
           <input
             ref={inputRef}
             type="text"
@@ -64,7 +64,7 @@ export default function CommandPalette({ open, onClose, navGroups, onNavigate })
                 onClick={() => handleSelect(to)}
                 className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-text-primary transition-colors duration-100 hover:bg-tint/[0.05]"
               >
-                <Icon className="h-4 w-4 shrink-0 text-brand-400" />
+                <Icon size="sm" className="shrink-0 text-brand-400" />
                 <span className="flex-1 truncate">{label}</span>
                 <span className="shrink-0 text-2xs text-text-muted">{group}</span>
               </button>

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LogIn, LogOut, Loader2 } from 'lucide-react'
+import { LogIn, LogOut, Loader2 } from '@shared/icons'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import ShiftHandoverDialog from '@/components/ShiftHandoverDialog'
 import { useDutyStatus } from '@/hooks/useDutyStatus'
@@ -94,11 +94,11 @@ export default function GuardStatusWidget() {
         className={`btn btn-sm ${onDuty ? 'btn-outline' : 'btn-success'}`}
       >
         {busy ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          <Loader2 size="sm" className="animate-spin" aria-hidden="true" />
         ) : onDuty ? (
-          <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+          <LogOut size="sm" aria-hidden="true" />
         ) : (
-          <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
+          <LogIn size="sm" aria-hidden="true" />
         )}
         {onDuty ? 'Clock out' : 'Clock in'}
       </button>

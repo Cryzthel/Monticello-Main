@@ -1,4 +1,4 @@
-import { UserX } from 'lucide-react'
+import { UserX } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { UNIT_STATE_LABELS, rankUnits } from '@/hooks/useGuardUnits'
 import { formatDistance } from '@/lib/directions'
@@ -30,7 +30,7 @@ export default function UnitPicker({ units, value, onChange, excludeUid = null, 
   if (!ranked.length) {
     return (
       <div className="flex items-start gap-2.5 rounded-xl border border-dashed border-slate-200 p-3">
-        <UserX className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+        <UserX size="sm" className="mt-0.5 shrink-0 text-text-muted" aria-hidden="true" />
         <p className="text-caption leading-snug text-text-secondary">
           {excludeUid
             ? 'No other officer is clocked in to reassign this call to.'

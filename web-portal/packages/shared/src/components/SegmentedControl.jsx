@@ -235,7 +235,9 @@ export default function SegmentedControl({
   // Equal-width figures in the UI face; the mono face read as costume beside
   // the Inter labels around it (2026-09-22).
   const labelClass = mono ? 'tabular-nums' : ''
-  const iconClass = size === 'lg' ? 'h-4 w-4' : 'h-3.5 w-3.5'
+  // One step for both sizes now. The old ladder was 16 against 14 — a
+  // difference nobody could see, bought at the price of a second number.
+  const iconSize = 'sm'
 
   return (
     <div
@@ -273,7 +275,7 @@ export default function SegmentedControl({
               active && !layout ? 'segment-active' : 'segment-idle'
             } ${active ? 'cursor-default' : ''} ${segmentClassName}`}
           >
-            <SegmentContent option={option} labelClass={labelClass} iconClass={iconClass} />
+            <SegmentContent option={option} labelClass={labelClass} iconSize={iconSize} />
           </button>
         )
       })}
@@ -294,7 +296,7 @@ export default function SegmentedControl({
                 className={`segment ${sizeClass} ${segmentClassName}`}
                 style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
               >
-                <SegmentContent option={option} labelClass={labelClass} iconClass={iconClass} />
+                <SegmentContent option={option} labelClass={labelClass} iconSize={iconSize} />
               </span>
             )
           })}
@@ -309,11 +311,11 @@ export default function SegmentedControl({
  * difference between the two (an icon in one, a different truncation in the
  * other) would show as a label that jumps when the pill arrives.
  */
-function SegmentContent({ option, labelClass, iconClass }) {
+function SegmentContent({ option, labelClass, iconSize }) {
   const Icon = option.icon
   return (
     <>
-      {Icon ? <Icon aria-hidden="true" className={`${iconClass} shrink-0`} /> : null}
+      {Icon ? <Icon size={iconSize} /> : null}
       {option.shortLabel ? (
         <>
           <span className={`truncate sm:hidden ${labelClass}`}>{option.shortLabel}</span>

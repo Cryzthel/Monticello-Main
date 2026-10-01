@@ -11,7 +11,7 @@ import {
   Navigation,
   RotateCcw,
   RotateCw,
-} from 'lucide-react'
+} from '@shared/icons'
 import { formatDistance } from '@/lib/directions'
 
 /**
@@ -44,9 +44,11 @@ import { formatDistance } from '@/lib/directions'
 /**
  * Maneuver glyphs.
  *
- * Sharp and ordinary turns share a glyph on purpose. Lucide has no sharp-turn
- * arrow, and inventing a rotated one would produce a symbol an officer has to
- * learn; the sentence already says "sharp", which is the part that matters.
+ * Sharp and ordinary turns share a glyph on purpose. No icon set the portals
+ * have used ships a sharp-turn arrow — Lucide did not, Hugeicons did not and
+ * Material Symbols does not — and inventing a rotated one would produce a
+ * symbol an officer has to learn; the sentence already says "sharp", which is
+ * the part that matters.
  */
 const GLYPHS = {
   depart: Navigation,
@@ -63,9 +65,9 @@ const GLYPHS = {
 }
 
 /** The turn arrow for a maneuver key, defaulting to "carry on". */
-export function ManeuverGlyph({ icon, className = 'h-3 w-3' }) {
+export function ManeuverGlyph({ icon, size = 'sm', className = '' }) {
   const Glyph = GLYPHS[icon] ?? ArrowUp
-  return <Glyph aria-hidden="true" className={className} />
+  return <Glyph size={size} className={className} />
 }
 
 export default function RouteSteps({ steps, activeIndex = -1 }) {
@@ -88,8 +90,8 @@ export default function RouteSteps({ steps, activeIndex = -1 }) {
         className="flex w-full items-center gap-2 px-3 py-2 text-caption text-text-secondary transition-colors duration-150 hover:bg-base-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
       >
         <ChevronDown
-          aria-hidden="true"
-          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-200 motion-reduce:transition-none ${
+          size="sm"
+          className={`transition-transform duration-200 motion-reduce:transition-none ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -136,7 +138,7 @@ export default function RouteSteps({ steps, activeIndex = -1 }) {
                         : 'bg-base-800 text-text-secondary'
                   }`}
                 >
-                  {done ? <Check aria-hidden="true" className="h-3 w-3" /> : <ManeuverGlyph icon={step.icon} />}
+                  {done ? <Check size="sm" aria-hidden="true" /> : <ManeuverGlyph icon={step.icon} />}
                 </span>
                 <span
                   className={`min-w-0 flex-1 text-caption leading-snug ${

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, Eye, EyeOff, KeyRound, Loader2, RefreshCw, X } from 'lucide-react'
+import { AlertTriangle, Eye, EyeOff, KeyRound, Loader2, RefreshCw, X } from '@shared/icons'
 import CredentialHandoff from '@/components/CredentialHandoff'
 import {
   describeCallableError,
@@ -111,7 +111,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
           <div className="p-6">
             <div className="flex items-start gap-4">
               <span className="icon-tile icon-tile-lg icon-tile-warning">
-                <KeyRound className="h-6 w-6" />
+                <KeyRound size="lg" />
               </span>
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-semibold leading-tight text-text-primary">
@@ -132,7 +132,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
                 aria-label="Close"
                 className="icon-btn icon-btn-sm -mr-1 shrink-0 text-text-secondary hover:text-text-primary"
               >
-                <X className="h-4 w-4" />
+                <X size="sm" />
               </button>
             </div>
 
@@ -163,7 +163,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
                     aria-label={revealed ? 'Hide password' : 'Show password'}
                     className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition-colors hover:text-text-primary"
                   >
-                    {revealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {revealed ? <EyeOff size="sm" /> : <Eye size="sm" />}
                   </button>
                 </div>
                 <button
@@ -171,7 +171,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
                   onClick={() => setPassword(generateTempPassword())}
                   className="btn btn-compact btn-outline shrink-0"
                 >
-                  <RefreshCw className="h-3.5 w-3.5" />
+                  <RefreshCw size="sm" />
                   New password
                 </button>
               </div>
@@ -183,7 +183,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
 
             {error ? (
               <p className="mt-4 flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <AlertTriangle size="sm" className="mt-0.5 shrink-0" />
                 <span className="min-w-0">{error}</span>
               </p>
             ) : null}
@@ -204,7 +204,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
                 disabled={busy || password.length < 8}
                 className="btn btn-sm btn-brand"
               >
-                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {busy ? <Loader2 size="sm" className="animate-spin" /> : null}
                 Issue new password
               </button>
             </div>

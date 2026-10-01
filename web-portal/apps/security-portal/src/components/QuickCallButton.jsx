@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { doc, getDoc } from 'firebase/firestore'
-import { Phone, PhoneOff, Loader2 } from 'lucide-react'
+import { Phone, PhoneOff, Loader2 } from '@shared/icons'
 import { db } from '@shared/lib/firebase'
 
 // Looks up users/{reporterUid}.phone on demand (not prefetched for every
@@ -45,11 +45,11 @@ export default function QuickCallButton({ reporterUid }) {
       }`}
     >
       {state === 'loading' ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 size="sm" className="animate-spin" />
       ) : state === 'unavailable' ? (
-        <PhoneOff className="h-4 w-4" />
+        <PhoneOff size="sm" />
       ) : (
-        <Phone className="h-4 w-4" />
+        <Phone size="sm" />
       )}
     </button>
   )

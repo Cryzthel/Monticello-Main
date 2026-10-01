@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import EvidenceImage from '@shared/components/EvidenceImage'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight } from '@shared/icons'
 
 // Full-resolution, full-screen media viewer shared by both portals'
 // forensic views — a click on any evidence thumbnail opens this instead of
@@ -45,7 +45,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
           onClick={onClose}
           className="btn btn-icon-sm text-white/70 hover:bg-tint/10 hover:text-text-primary"
         >
-          <X className="h-5 w-5" />
+          <X size="md" />
         </button>
       </div>
 
@@ -59,7 +59,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
             onClick={() => setIndex((i) => i - 1)}
             className="btn btn-icon-md absolute left-2 z-10 bg-tint/10 text-text-primary hover:bg-tint/20 sm:left-4"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft size="md" />
           </button>
         ) : null}
 
@@ -89,7 +89,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
             onClick={() => setIndex((i) => i + 1)}
             className="btn btn-icon-md absolute right-2 z-10 bg-tint/10 text-text-primary hover:bg-tint/20 sm:right-4"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight size="md" />
           </button>
         ) : null}
       </div>

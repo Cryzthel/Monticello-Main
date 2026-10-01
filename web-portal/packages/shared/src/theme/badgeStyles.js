@@ -66,10 +66,28 @@ export const BADGE_SIZES = {
   lg: 'h-7 gap-1.5 px-3.5 text-sm',
 }
 
+/*
+ * The icon step that belongs inside each pill height above (20 / 24 / 28px).
+ *
+ * These are `size` tokens from shared/icons, not Tailwind classes, because the
+ * icons carry their size as a real `width`/`height` rather than as a class the
+ * CSS has to win.
+ *
+ * ── THE FIRST TWO STEPS SHARE A GLYPH, AND THAT IS NEW ───────────────────
+ * `sm` used to be the scale's 14px step. That step no longer exists: Material
+ * Symbols are filled shapes drawn for opsz=24, and at 14px their counters
+ * close up into a blob (see shared/icons/tokens.js). So the 20px pill takes a
+ * 16px glyph, which leaves it 2px of air rather than 3.
+ *
+ * This is the one place where dropping `xs` is VISIBLE rather than merely
+ * mechanical, and it is also a trap: `resolveIconSize` falls back to the 20px
+ * DEFAULT for a token it does not know, so leaving `xs` here would not have
+ * failed — it would have quietly put a 20px glyph inside a 20px pill.
+ */
 export const BADGE_ICON_SIZES = {
-  sm: 'h-3 w-3',
-  md: 'h-3.5 w-3.5',
-  lg: 'h-4 w-4',
+  sm: 'sm',
+  md: 'sm',
+  lg: 'md',
 }
 
 /**

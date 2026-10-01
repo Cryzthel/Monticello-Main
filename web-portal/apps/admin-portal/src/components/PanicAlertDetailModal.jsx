@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, MapPin, Phone, Siren, UserRound, X } from 'lucide-react'
+import { ArrowRight, MapPin, Phone, Siren, UserRound, X } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { MetaItem, MetaList, MetaSection } from '@shared/components/MetaList'
 import { panicSignal } from '@shared/lib/panicStatus'
@@ -112,7 +112,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
       >
         <header className="flex items-start gap-3 border-b border-hairline px-5 py-4">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-danger/15 text-danger ring-1 ring-inset ring-danger/25">
-            <Siren className="h-5 w-5" />
+            <Siren size="md" />
           </span>
           <div className="min-w-0 flex-1">
             <h2 id="panic-detail-title" className="text-base font-semibold text-text-primary">
@@ -126,7 +126,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
             aria-label="Close"
             className="icon-btn h-11 w-11 shrink-0 sm:h-8 sm:w-8"
           >
-            <X className="h-4 w-4" />
+            <X size="sm" />
           </button>
         </header>
 
@@ -158,7 +158,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
             action={
               alert.residentPhone ? (
                 <a href={`tel:${alert.residentPhone}`} className="btn btn-sm btn-outline">
-                  <Phone className="h-3.5 w-3.5" />
+                  <Phone size="sm" />
                   Call
                 </a>
               ) : null
@@ -206,7 +206,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
             className="btn btn-sm btn-brand"
           >
             Open SOS log
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight size="sm" />
           </button>
         </footer>
       </div>

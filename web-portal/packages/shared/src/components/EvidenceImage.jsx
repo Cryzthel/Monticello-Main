@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ImageOff } from 'lucide-react'
+import { ImageOff } from '@shared/icons'
 import { Skeleton } from '@shared/components/Skeleton'
 
 /**
@@ -46,7 +46,7 @@ export default function EvidenceImage({
   if (!src) {
     return (
       <div className="absolute inset-0 flex items-center justify-center bg-tint/[0.03]">
-        <ImageOff className="h-5 w-5 text-text-muted" />
+        <ImageOff size="md" className="text-text-muted" />
       </div>
     )
   }
@@ -59,7 +59,7 @@ export default function EvidenceImage({
 
       {state === 'error' ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-tint/[0.03]">
-          <ImageOff className="h-5 w-5 text-text-muted" />
+          <ImageOff size="md" className="text-text-muted" />
           <p className="text-2xs text-text-muted">Evidence unavailable</p>
         </div>
       ) : null}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { collection, query, orderBy, limit } from 'firebase/firestore'
-import { Trash2, Megaphone, ShieldCheck, Activity } from 'lucide-react'
+import { Trash2, Megaphone, ShieldCheck, Activity } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
 import SectionHeading from '@shared/components/SectionHeading'

@@ -303,7 +303,7 @@ A cool slate neutral field carrying one emerald accent, a near-black action ink,
 - **Paper White** (`{colors.surface}`): every card, panel, dialog and rail. Solid and opaque, never translucent.
 - **Recessed Well** (`{colors.well}`): inset inputs, code pills, the segmented track.
 - **Whisper Hairline** (`{colors.hairline}`) and **Row Divider** (`{colors.divider}`): the lines that do the defining. The control border (`{colors.control-border}`, hover `{colors.control-border-hover}`) is one step stronger, because a field has to look operable.
-- **Slate Ink Ladder** (`{colors.text-primary}` / `{colors.text-secondary}` / `{colors.text-muted}`): headings, body and metadata. `{colors.icon-inactive}` is non-text only — inactive nav strokes — because at small text sizes it fails AA.
+- **Slate Ink Ladder** (`{colors.text-primary}` / `{colors.text-secondary}` / `{colors.text-muted}`): headings, body and metadata. `{colors.icon-inactive}` is non-text only — inactive nav glyphs — because at small text sizes it fails AA.
 
 ### Named Rules
 **The Action-Is-Not-Accent Rule.** Emerald never fills a button. Action is `{colors.cta}`; emerald means state — active nav, switch-on, success, focus, charts. If a new surface wants a green CTA, it wants the wrong token.
@@ -388,14 +388,18 @@ Dark mode reassigns all four to higher-opacity blacks (`.25`–`.40`) rather tha
 
 ## Shapes
 
-Two radii with two jobs, plus a capsule. Boxes are 12px (`rounded-xl`, compiled `--radius-xl: .75rem`): cards, data panels, KPI shells, popovers, toasts and every dialog panel. Controls are 8px (`rounded-lg`, compiled `--radius-lg: .5rem`): buttons, text inputs, search triggers, nav rows, lead-glyph tiles, the segmented track, and the KPI face. The individual segment inside a segmented control is 6px (`rounded-md`), so it nests inside its 8px track. Capsules (`rounded-full`) are status and category badges, count pills, trend pills, chips, switches, dots and avatars.
+Two radii with two jobs, plus a capsule. Boxes are 12px (`rounded-xl`, compiled `--radius-xl: .75rem`): cards, data panels, KPI shells, popovers, toasts and every dialog panel. Controls are 8px (`rounded-lg`, compiled `--radius-lg: .5rem`): buttons, text inputs, nav rows, lead-glyph tiles, the segmented track, and the KPI face. Search is the exception — every search field and the header's palette trigger are capsules; see the rule below. The individual segment inside a segmented control is 6px (`rounded-md`), so it nests inside its 8px track. Capsules (`rounded-full`) are status and category badges, count pills, trend pills, chips, switches, dots and avatars.
 
 Borders carry the form: a hairline on surfaces, the one-step-stronger control border on anything operable, and `ring-1 ring-inset` at 10–15% of the label ink on a pastel capsule — enough to hold its edge on a white card without reading as an outline.
 
 ### Named Rules
 **The Two-Tiers Rule.** 12 for boxes, 8 for controls. The surface tier moved down from 16px, so surfaces and the old "nested" tier are now the same value and the vocabulary is genuinely two steps. A radius chosen for looks rather than for tier is drift.
 
-**The Capsule-Is-Read-Not-Pressed Rule.** `rounded-full` marks a thing you *read* as a token — a status, a count, a filter's on-state. Things you *operate* are 8px rectangles. A text input is never a capsule: the curve eats the first glyph, and on a textarea it resolves to half the height and clips the first and last lines. A `textarea.field` specificity rule enforces this permanently.
+**The Capsule-Is-Read-Not-Pressed Rule.** `rounded-full` marks a thing you *read* as a token — a status, a count, a filter's on-state. Things you *operate* are 8px rectangles, because a labelled control dressed as a token reads as a badge you cannot press.
+
+**Two narrow exceptions, both unlabelled or self-evident.** *Search* is a capsule: `SearchField`, and the header's command-palette trigger. The hazard the rule guards against does not reach it — the radius resolves to half a **fixed** 36px (40px in the header) height, and the leading glyph sits at `px-4`, so the curve is nowhere near the first character. A search box is also the one field a reader identifies by silhouette before reading it, which is the argument *for* giving it one. *Header icon buttons* (`.icon-btn-plain`: the theme toggle, the notification bell, the rail and drawer toggles) are circles with no resting container at all — they carry no label, so there is no text for a capsule to mis-frame.
+
+**What the exceptions do not cover.** A multi-line field is still forbidden outright: on a textarea the radius resolves to half the *height*, which clips the first and last lines — this actually shipped, across five boxes, and a `textarea.field` specificity rule now enforces it permanently. Nor do they cover a labelled button: the header's primary CTA stays an 8px rectangle beside the oblong search.
 
 **The Concentric-Nesting Rule.** A nested radius equals the outer radius minus the gap between them. The KPI card is the reference: the shell is 12px with 4px of padding, so the face is 8px.
 
@@ -427,11 +431,11 @@ Borders carry the form: a hairline on surfaces, the one-step-stronger control bo
 
 ### Navigation
 - **Style:** 8px rows, 32px tall (`py-1.5`), body size at medium weight in secondary ink, with a fixed-width icon column (44px expanded, 56px collapsed) so glyphs stay on one axis through the collapse.
-- **Default / hover / active:** hover is a 4% ink wash; active is the emerald wash plate under deep-emerald ink. Icons are Lucide at 1.5px stroke and do **not** refill on active — the wash and the ink carry it. A group label is 12px muted; a badge count is a danger capsule with tabular figures; an unread marker is an 8px danger dot ringed in the surface colour.
+- **Default / hover / active:** hover is a 4% ink wash; active is the emerald wash plate under deep-emerald ink. Icons are Material Symbols Rounded at 24px and do **not** refill on active — the wash and the ink carry it. A group label is 12px muted; a badge count is a danger capsule with tabular figures; an unread marker is an 8px danger dot ringed in the surface colour.
 - **Mobile:** below `lg`, a full-height 256px drawer over the scrim, dismissing on navigate.
 
 ### Badges
-The portal's one capsule is `StatusBadge`, with `PriorityBadge` as a thin alias. Tone is resolved from *meaning* — status, severity or category — and never passed as a colour by the caller, which is how "Dispatched" stays the same blue on every screen. Fill, ink and ring come from one row of `BADGE_TONES`; geometry from one row of `BADGE_SIZES`, which uses fixed heights rather than vertical padding so badges of different labels share a baseline in a table row. A status badge carries a leading Lucide glyph, or a 6px dot where icons would crowd.
+The portal's one capsule is `StatusBadge`, with `PriorityBadge` as a thin alias. Tone is resolved from *meaning* — status, severity or category — and never passed as a colour by the caller, which is how "Dispatched" stays the same blue on every screen. Fill, ink and ring come from one row of `BADGE_TONES`; geometry from one row of `BADGE_SIZES`, which uses fixed heights rather than vertical padding so badges of different labels share a baseline in a table row. A status badge carries a leading Material Symbols glyph, or a 6px dot where icons would crowd.
 
 **The Badge-Rank Rule.** `md` (24px, 12px label, `px-3`) for every table row, feed row and list card — anything a reader scans down a column of. It is the default; pass nothing. `sm` (20px, 11px label) for dense chrome only: drawers, toasts, pickers, inline fields and dialog headers. `lg` (28px) exists for a badge used as a heading. Left to per-call-site judgement this drifted so badly that single rows showed two capsule heights side by side; 17 call sites were promoted to settle it, and the rule is recorded in `theme/badgeStyles.js`.
 
@@ -476,13 +480,14 @@ Three curves, all in CSS, deliberately no animation library: `--ease-spring` `cu
 - **Do** route every `role="dialog"` through `useDialogFocus`.
 
 ### Don't:
+- **Don't** give a search field its own box. There is one `SearchField`; fifteen hand-rolled copies had drifted into four different controls (two radii, two fills, two borders, the iOS zoom guard on exactly one) before it existed.
 - **Don't** add `outline-none` to a focusable control. It was removed from `.btn`, `.chip`, `.switch`, `.segment` and `.icon-btn` along with their translucent rings, and it is the thing that breaks the focus floor.
 - **Don't** fill anything with `bg-brand-500/<alpha>`. Use `{colors.brand-wash}` for a resting or selected tint and `{colors.brand-wash-active}` for an active control fill.
 - **Don't** put emerald on a button, or near-black on a status.
 - **Don't** set anything in all caps, and don't reintroduce a kicker or eyebrow line above a heading — the `.eyebrow` class is a tombstone in the stylesheet, and the retired uppercase tracked label is not a rank in this scale.
 - **Don't** use `font-mono` for a count, timer, delta or timestamp. Mono is for identifiers and log strings only.
 - **Don't** give an in-page panel a real shadow, a gradient, a blur, a translucent fill, or a hard offset shadow — none of those exist in this world, and each of the first four was measured out of an earlier pass.
-- **Don't** draw an icon as a text glyph or an icon font. Icons are Lucide components at 1.5px stroke, or an inline SVG for the leaf.
+- **Don't** draw an icon as a text glyph or an icon font — including the Material Symbols ligature font, which is how that set is most often installed. Icons come from `/icons`, which renders real `<svg>` from generated path data, or an inline SVG for the leaf.
 - **Don't** give a dialog a fixed height, and don't invent a width outside the `lg` / `xl` / `2xl` / `4xl` ladder.
 - **Don't** make a whole row the only way to act on a notification; give it an explicit action control.
 - **Don't** add a `tailwind.config.js`. This is Tailwind v4 and the `@theme` block in `packages/shared/src/styles/index.css` is the config; a config file here is silently ignored.

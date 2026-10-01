@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { History, Search, ShieldAlert, Trash2, X } from 'lucide-react'
+import { History, Search, ShieldAlert, Trash2, X } from '@shared/icons'
 import Card from '@shared/components/Card'
 import TablePagination from '@shared/components/TablePagination'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -8,6 +8,7 @@ import OverflowMenu from '@shared/components/OverflowMenu'
 import { dismissAuditEvents, describeFirestoreError } from '@shared/lib/audit'
 import { Skeleton } from '@shared/components/Skeleton'
 import { auditEventIcon } from '@shared/theme/categoryIcons'
+import SearchField from '@shared/components/SearchField'
 
 // Audit action -> badge tone. Deliberately the same tone vocabulary the
 // incident status badges use, so "Resolved" is the same green here as on a
@@ -152,16 +153,12 @@ export default function AuditHistoryTable({
     <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
       {/* Toolbar — every control on one h-9 baseline. */}
       <div className="flex flex-wrap items-center gap-3 border-b border-hairline p-4">
-        <div className="flex h-9 min-w-[16rem] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4">
-          <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-          <input
-            type="text"
-            className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-            placeholder="Search by actor, action type, or description"
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-          />
-        </div>
+        <SearchField
+          value={search}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder="Search by actor, action type, or description"
+          className="min-w-[16rem] flex-1"
+        />
         {/*
           "3 of 18 events" while searching, "18 events" otherwise.
 
@@ -189,7 +186,7 @@ export default function AuditHistoryTable({
           like it was ignored. */}
       {readError ? (
         <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
-          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           Deleted entries can’t be loaded, so removed rows may reappear.{' '}
           {describeFirestoreError(readError, 'load dismissals')}
         </p>
@@ -197,7 +194,7 @@ export default function AuditHistoryTable({
 
       {error ? (
         <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
-          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">{error}</span>
           <button
             type="button"
@@ -205,7 +202,7 @@ export default function AuditHistoryTable({
             aria-label="Dismiss error"
             className="shrink-0 rounded p-0.5 hover:bg-danger/15"
           >
-            <X className="h-3.5 w-3.5" />
+            <X size="sm" />
           </button>
         </p>
       ) : null}
@@ -224,7 +221,7 @@ export default function AuditHistoryTable({
               }
               className="btn btn-sm btn-danger"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 size="sm" />
               {`Delete ${selectedCount} ${selectedCount === 1 ? 'entry' : 'entries'}`}
             </button>
             <button
@@ -233,7 +230,7 @@ export default function AuditHistoryTable({
               aria-label="Clear selection"
               className="icon-btn icon-btn-sm"
             >
-              <X className="h-4 w-4" />
+              <X size="sm" />
             </button>
           </div>
         </div>
@@ -274,7 +271,7 @@ export default function AuditHistoryTable({
             ) : rows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
-                  <History className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+                  <History size="lg" className="mx-auto mb-2 text-text-muted" />
                   <p className="text-sm text-text-secondary">
                     {search ? 'No events match that search.' : 'No events recorded yet.'}
                   </p>
@@ -331,7 +328,7 @@ export default function AuditHistoryTable({
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">
                       <span className="flex items-center gap-2 font-medium text-text-primary">
-                        <Icon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                        <Icon size="sm" className="shrink-0 text-text-muted" />
                         {event.actor}
                       </span>
                     </td>

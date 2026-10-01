@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Building2, LogOut, ShieldCheck, X } from 'lucide-react'
+import { Building2, LogOut, ShieldCheck, X } from '@shared/icons'
 import Tooltip from '@shared/components/Tooltip'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
 
@@ -110,7 +110,7 @@ function SidebarHeader({ collapsed, onClose }) {
 
       {onClose ? (
         <button type="button" onClick={onClose} aria-label="Close navigation" className="icon-btn icon-btn-sm">
-          <X className="h-4 w-4" />
+          <X size="sm" />
         </button>
       ) : null}
     </div>
@@ -149,23 +149,22 @@ function NavItem({ to, label, icon: Icon, count, collapsed, onNavigate }) {
         {({ isActive }) => (
           <>
             <span className={`nav-icon ${slotWidth(collapsed)}`}>
-              {/* THE REFILL. Inactive rows draw clean slate-400 line art;
-                  active and hovered rows fill the glyph's paths with their own
-                  colour so the icon gains mass rather than merely changing hue.
+              {/* Colour is the only thing that changes between states — see
+                  .nav-icon-glyph / -active in styles/index.css, which also
+                  explains why the refill that used to live here is gone, and
+                  why the `fill: transparent` that used to sit beside it had to
+                  go when the icons became filled shapes.
 
-                  Both halves live in CSS (.nav-icon-glyph / -active in
-                  styles/index.css) rather than as conditional classes here,
-                  because the hover half has to be driven by the ROW's hover
-                  state — `group-hover:fill-*` cannot express "fill with a
-                  translucent mix of the current colour", and Lucide's
-                  `fill="none"` presentation attribute has to be beaten by a
-                  real CSS property either way.
-
-                  Stroke weight comes from <LucideProvider> in main.jsx. */}
+                  `lg` (24) is the nav step. It has been 18 (a number belonging
+                  to no scale), then 24, then 20 under a brief that asked for
+                  20-22; the current brief asks for 22-24 and it is back at 24.
+                  The size that actually suits the set changed with the set:
+                  these are filled Material Symbols drawn for opsz=24, so 24 is
+                  the size their counters were cut for, and the 44px slot has
+                  the room. Scale comes from shared/icons. */}
               <Icon
-                className={`nav-icon-glyph h-[1.125rem] w-[1.125rem] shrink-0 ${
-                  isActive ? 'nav-icon-glyph-active' : ''
-                }`}
+                size="lg"
+                className={`nav-icon-glyph ${isActive ? 'nav-icon-glyph-active' : ''}`}
               />
               {/* Collapsed, the numeric badge has nowhere to sit, so the count
                   degrades to a dot pinned on the glyph. The signal survives a
@@ -262,7 +261,7 @@ function SidebarOffice({ collapsed }) {
     <Tooltip label={contactEmail || 'HOA office'} hint={officeHours || undefined} disabled={!collapsed}>
       <div className="nav-link cursor-default py-2 hover:bg-transparent">
         <span className={`nav-icon ${slotWidth(collapsed)}`}>
-          <Building2 className="h-4 w-4 text-text-muted" />
+          <Building2 size="sm" className="text-text-muted" />
         </span>
         <span className={`nav-label ${labelMotion(collapsed)}`}>
           {contactEmail ? (
@@ -298,7 +297,7 @@ function SidebarFooter({ user, roleLabel, collapsed, onLogout }) {
           <span className={`nav-label ${labelMotion(collapsed)}`}>
             <span className="block truncate text-xs font-medium leading-tight text-text-primary">{email}</span>
             <span className="mt-0.5 flex items-center gap-1 text-2xs leading-tight text-text-secondary">
-              <ShieldCheck className="h-3 w-3 shrink-0 text-brand-400" />
+              <ShieldCheck size="sm" className="shrink-0 text-brand-400" />
               {roleLabel}
             </span>
           </span>
@@ -313,7 +312,7 @@ function SidebarFooter({ user, roleLabel, collapsed, onLogout }) {
           className="nav-link hover:bg-danger/10 hover:text-danger"
         >
           <span className={`nav-icon ${slotWidth(collapsed)}`}>
-            <LogOut className="h-[1.125rem] w-[1.125rem] shrink-0" />
+            <LogOut size="md" className="shrink-0" />
           </span>
           <span className={`nav-label ${labelMotion(collapsed)}`}>Sign out</span>
         </button>

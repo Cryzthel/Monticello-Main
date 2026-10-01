@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Search } from 'lucide-react'
+import { ChevronRight, Search } from '@shared/icons'
 import Card from '@shared/components/Card'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -8,6 +8,7 @@ import { formatCategory } from '@shared/lib/wpda'
 import { displayPersonName } from '@shared/lib/identity'
 import { incidentReference } from '@/lib/dispatch'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
+import SearchField from '@shared/components/SearchField'
 
 /**
  * The Incident History directory.
@@ -117,16 +118,12 @@ export default function IncidentHistoryTable({
           gutter — the same band Incident Tickets carries, so the two pages
           have the same first 57px. */}
       <div className="flex flex-wrap items-center gap-3 border-b border-hairline p-4">
-        <div className="flex h-9 min-w-[16rem] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 transition-[border-color,box-shadow] duration-150 hover:border-slate-300 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
-          <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-          <input
-            type="text"
-            className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-            placeholder="Search by reference, resident, category, block or lot"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
+        <SearchField
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search by reference, resident, category, block or lot"
+          className="min-w-[16rem] flex-1"
+        />
         {filterSlot}
       </div>
 
@@ -210,8 +207,8 @@ export default function IncidentHistoryTable({
                       `aria-hidden` because the row IS the control — announcing
                       a second one would double every entry. */}
                   <td className="px-4 py-3.5 text-right">
-                    <ChevronRight
-                      className="ml-auto h-4 w-4 text-text-muted transition-[transform,color] duration-150 group-hover:translate-x-0.5 group-hover:text-text-secondary"
+                    <ChevronRight size="sm"
+                      className="ml-auto text-text-muted transition-[transform,color] duration-150 group-hover:translate-x-0.5 group-hover:text-text-secondary"
                       aria-hidden="true"
                     />
                   </td>

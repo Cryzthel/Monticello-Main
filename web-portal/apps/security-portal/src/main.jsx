@@ -1,6 +1,5 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LucideProvider } from 'lucide-react'
 import ThemeProvider from '@shared/theme/ThemeProvider'
 import '@/styles/index.css'
 import App from '@/app/App'
@@ -11,18 +10,18 @@ import App from '@/app/App'
  * Inter and JetBrains Mono load from Google Fonts via the <link> in
  * index.html — nothing to import here.
  *
- * LucideProvider sets ONE stroke weight for every icon in the app: 1.75px,
- * per the 2026-09-17 redesign brief. It was 1.5, chosen when the flat pass
- * moved the canvas to a high-contrast white and a 2px line read as heavy;
- * 1.75 sits between the two. Lucide ships 2 as its default, so this is still
- * a deliberate override rather than an agreement.
+ * There is no icon provider here any more, and that is not a regression.
  *
- * Setting it here rather than per-icon
- * means a glyph added to a new screen next month is correct by default instead
- * of correct only if whoever adds it remembers the prop. A `strokeWidth` on an
- * individual icon still wins. `size` is intentionally NOT set: this codebase
- * sizes icons with Tailwind `h-` and `w-` utility classes, and the prop would
- * fight them.
+ * `<LucideProvider strokeWidth={1.75}>` used to wrap this tree so that one
+ * stroke weight reached every glyph in the app. There is no weight to set now:
+ * the icons are Material Symbols, which are filled shapes whose weight is
+ * baked in at export (wght=400) rather than applied at render. What a provider
+ * used to guarantee is instead guaranteed by packages/shared/src/icons, where
+ * every glyph is bound once, on one grid, at one size scale.
+ *
+ * The difference matters at the edges. A provider only covers what renders
+ * inside it, so an icon drawn into a portal, a detached toast or a `document`-
+ * level overlay escaped it; a glyph bound at the registry cannot escape.
  *
  * ThemeProvider sits outside the router and the error boundary on purpose: a
  * crashed route should still render its fallback in the user's chosen theme.
@@ -30,9 +29,7 @@ import App from '@/app/App'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ThemeProvider>
-      <LucideProvider strokeWidth={1.75}>
-        <App />
-      </LucideProvider>
+      <App />
     </ThemeProvider>
   </StrictMode>,
 )

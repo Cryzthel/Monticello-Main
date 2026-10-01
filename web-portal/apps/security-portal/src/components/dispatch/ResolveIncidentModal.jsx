@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Camera, CheckCircle2, Loader2, TriangleAlert, X } from 'lucide-react'
+import { Camera, CheckCircle2, Loader2, TriangleAlert, X } from '@shared/icons'
 import {
   RESOLUTION_NOTES_MAX,
   RESOLUTION_NOTES_MIN,
@@ -92,7 +92,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
       >
         <header className="flex shrink-0 items-start gap-3 border-b border-hairline px-5 py-3.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success ring-1 ring-inset ring-success/30">
-            <CheckCircle2 className="h-4.5 w-4.5" aria-hidden="true" />
+            <CheckCircle2 size="md" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
             <h2 id="resolve-title" className="text-base font-semibold text-text-primary">
@@ -107,7 +107,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
             aria-label="Close"
             className="icon-btn icon-btn-sm -mr-1.5"
           >
-            <X className="h-4 w-4" />
+            <X size="sm" />
           </button>
         </header>
 
@@ -183,7 +183,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
                     aria-label={`Remove ${item.name}`}
                     className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X size="sm" />
                   </button>
                 </li>
               ))}
@@ -194,7 +194,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
                     onClick={() => fileRef.current?.click()}
                     className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-300 text-text-secondary transition-colors hover:border-brand-500 hover:text-text-primary"
                   >
-                    <Camera className="h-5 w-5" aria-hidden="true" />
+                    <Camera size="md" aria-hidden="true" />
                     <span className="text-2xs font-semibold">Add photo</span>
                   </button>
                 </li>
@@ -223,7 +223,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
           <p className="flex min-w-0 items-center gap-1.5 text-caption text-text-muted" aria-live="polite">
             {touched && missing.length ? (
               <>
-                <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
+                <TriangleAlert size="sm" className="shrink-0 text-warning" aria-hidden="true" />
                 <span>Still needs {missing.join(', ')}.</span>
               </>
             ) : photos.uploading ? (
@@ -241,7 +241,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
               disabled={busy || (touched && !ready) || photos.uploading}
               className="btn btn-sm btn-brand flex-1 sm:flex-none"
             >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />}
+              {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size="sm" aria-hidden="true" />}
               Resolve incident
             </button>
           </div>

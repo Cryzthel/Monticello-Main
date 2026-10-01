@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, UserCheck, UserPlus, Info } from 'lucide-react'
+import { Search, UserCheck, UserPlus, Info } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
 import ResidentReviewDrawer from '@/components/ResidentReviewDrawer'
@@ -21,6 +21,7 @@ import {
   RESIDENT_STATUS_LABELS,
   RESIDENT_SOURCE,
 } from '@shared/lib/residents'
+import SearchField from '@shared/components/SearchField'
 
 // `all` is the default and is deliberately first: the table's job is to show
 // every registered account, and the status tabs are a filter on top of that
@@ -131,7 +132,7 @@ export default function ResidentsPage() {
             the `residents` collection directly. */}
         {profileOnly.length > 0 ? (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-info/30 bg-info/[0.07] p-4">
-            <Info className="h-5 w-5 shrink-0 text-info" />
+            <Info size="md" className="shrink-0 text-info" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-text-primary">
                 {profileOnly.length} account{profileOnly.length === 1 ? '' : 's'} visible from their
@@ -148,7 +149,7 @@ export default function ResidentsPage() {
               onClick={backfillProfileOnly}
               className="btn btn-sm btn-outline shrink-0"
             >
-              <UserPlus className="h-3.5 w-3.5" />
+              <UserPlus size="sm" />
               {backfilling ? 'Backfilling…' : `Backfill ${profileOnly.length} record${profileOnly.length === 1 ? '' : 's'}`}
             </button>
           </div>
@@ -162,16 +163,12 @@ export default function ResidentsPage() {
             onChange={setTab}
           />
 
-          <div className="flex min-w-[14rem] flex-1 items-center gap-2 rounded-xl border border-hairline bg-base-800 px-4 py-2">
-            <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-            <input
-              type="text"
-              className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-              placeholder="Search by name, email, contact, or property"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
+          <SearchField
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by name, email, contact, or property"
+            className="min-w-[14rem] flex-1"
+          />
 
           <Select
             ariaLabel="Filter by phase"
@@ -252,7 +249,7 @@ export default function ResidentsPage() {
                 ) : rows.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-14 text-center">
-                      <UserCheck className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+                      <UserCheck size="lg" className="mx-auto mb-2 text-text-muted" />
                       <p className="text-sm text-text-secondary">
                         {search || phaseFilter !== ANY || blockFilter !== ANY || lotFilter !== ANY
                           ? 'No registrations match these filters.'

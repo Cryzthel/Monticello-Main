@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from '@shared/icons'
 
 /**
  * The way back, from anywhere in the authentication flow.
@@ -31,7 +31,7 @@ export default function BackToSignIn({ onClick, disabled = false, label = 'Back 
       {/* The arrow is the directional cue; `aria-hidden` because the label
           beside it already says where this goes, and a screen reader announcing
           "left arrow, back to sign in" is one word of noise per visit. */}
-      <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <ArrowLeft size="sm" className="shrink-0" aria-hidden="true" />
       {label}
     </button>
   )

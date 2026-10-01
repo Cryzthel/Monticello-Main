@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Monitor, Moon, Sun, Play } from 'lucide-react'
+import { Monitor, Moon, Sun, Play } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import Card from '@shared/components/Card'
 import CardHeader from '@shared/components/CardHeader'
@@ -139,7 +139,7 @@ export default function SettingsPage() {
             description="What the console does when an SOS or a critical ticket arrives."
             aside={
               <button type="button" onClick={testSound} className="btn btn-compact btn-outline">
-                <Play aria-hidden="true" className="h-3.5 w-3.5" />
+                <Play size="sm" aria-hidden="true" />
                 Test tone
               </button>
             }

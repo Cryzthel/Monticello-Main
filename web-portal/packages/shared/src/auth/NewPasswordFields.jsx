@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { CheckCircle2, Eye, EyeOff, KeyRound, Lock } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, KeyRound, Lock } from '@shared/icons'
 
 import FloatingField from '@shared/auth/FloatingField'
 import { RULES, STRENGTH, scoreOf } from '@shared/auth/passwordPolicy'
@@ -53,7 +53,7 @@ export default function NewPasswordFields({
             aria-label={reveal ? 'Hide password' : 'Show password'}
             aria-pressed={reveal}
           >
-            {reveal ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {reveal ? <EyeOff size="sm" /> : <Eye size="sm" />}
           </button>
         }
       />
@@ -80,7 +80,8 @@ export default function NewPasswordFields({
                   }`}
                 >
                   <CheckCircle2
-                    className={`h-3.5 w-3.5 shrink-0 ${met ? 'opacity-100' : 'opacity-30'}`}
+                    size="sm"
+                    className={met ? 'opacity-100' : 'opacity-30'}
                   />
                   {rule.label}
                 </li>

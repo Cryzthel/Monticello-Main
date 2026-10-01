@@ -1,4 +1,4 @@
-import { Info, Plus, Trash2 } from 'lucide-react'
+import { Info, Plus, Trash2 } from '@shared/icons'
 import Select from '@shared/components/Select'
 import Switch from '@shared/components/Switch'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -31,7 +31,7 @@ import { MAX_HOTLINES } from '@shared/lib/systemSettingsStore'
 export function PendingNote({ children }) {
   return (
     <p className="mt-2 inline-flex items-start gap-1.5 text-2xs leading-snug text-text-muted">
-      <Info aria-hidden="true" className="mt-px h-3 w-3 shrink-0" />
+      <Info size="sm" aria-hidden="true" className="mt-px shrink-0" />
       <span>{children}</span>
     </p>
   )
@@ -275,7 +275,7 @@ export function HotlineEditor({ value, disabled, onChange }) {
                 onClick={() => onChange(rows.filter((_, i) => i !== index))}
                 className="icon-btn icon-btn-sm shrink-0 border border-slate-200 text-text-muted hover:text-danger"
               >
-                <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                <Trash2 size="sm" aria-hidden="true" />
               </button>
             </li>
           ))}
@@ -291,7 +291,7 @@ export function HotlineEditor({ value, disabled, onChange }) {
         className="btn btn-sm btn-outline mt-3"
         title={full ? `The list is capped at ${MAX_HOTLINES}` : undefined}
       >
-        <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+        <Plus size="sm" aria-hidden="true" />
         Add hotline
       </button>
     </div>
@@ -305,7 +305,7 @@ export function SettingsGroup({ title, description, icon: Icon, children }) {
       <header className="flex items-start gap-3 border-b border-hairline px-5 py-4">
         {Icon ? (
           <span className="icon-tile icon-tile-sm shrink-0" aria-hidden="true">
-            <Icon className="h-4 w-4" />
+            <Icon size="sm" />
           </span>
         ) : null}
         <div className="min-w-0">

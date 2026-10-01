@@ -1,4 +1,4 @@
-import { X, ArrowRight, MapPin } from 'lucide-react'
+import { X, ArrowRight, MapPin } from '@shared/icons'
 import { ToneGlyph } from '@shared/components/NotificationRow'
 import StatusBadge from '@shared/components/StatusBadge'
 import { clockTime, relativeTime } from '@shared/lib/notifications'
@@ -70,7 +70,7 @@ export default function IncidentNotificationToast({ alert, onDismiss, onView }) 
           aria-label="Dismiss notification"
           className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-tint/5 hover:text-text-primary"
         >
-          <X className="h-3.5 w-3.5" />
+          <X size="sm" />
         </button>
 
         <div className="col-start-2 col-end-4 min-w-0">
@@ -81,7 +81,7 @@ export default function IncidentNotificationToast({ alert, onDismiss, onView }) 
             </p>
           ) : null}
           <p className="mt-1 flex min-w-0 items-center gap-1 text-caption leading-none text-text-muted">
-            <MapPin className="h-3 w-3 shrink-0 text-brand-400" />
+            <MapPin size="sm" className="shrink-0 text-brand-400" />
             <span className="truncate">{alert.propertyLabel}</span>
             <span aria-hidden="true" className="shrink-0 opacity-50">·</span>
             <span className="shrink-0 font-mono tabular-nums">{clockTime(alert.at)}</span>
@@ -97,7 +97,7 @@ export default function IncidentNotificationToast({ alert, onDismiss, onView }) 
               className="btn btn-sm w-full bg-tint/[0.06] text-brand-400 hover:bg-tint/[0.12] hover:text-brand-300"
             >
               {alert.actionLabel ?? 'View incident'}
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight size="sm" />
             </button>
           </div>
         ) : null}

@@ -1,4 +1,4 @@
-import { Moon, Sun } from 'lucide-react'
+import { Moon, Sun } from '@shared/icons'
 import { useTheme } from '@shared/theme/ThemeProvider'
 
 /**
@@ -37,21 +37,24 @@ export default function ThemeToggle({ className = '' }) {
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       onClick={toggle}
-      // The same `icon-btn icon-btn-md` the bell uses, plus the matching
-      // resting border — so the two controls are literally the same component
-      // shape and cannot drift apart again.
-      className={`icon-btn icon-btn-md relative border border-slate-200 bg-base-900 hover:border-slate-300 ${className}`}
+      // The same `icon-btn icon-btn-md icon-btn-plain` the bell uses — so the
+      // two controls are literally the same component shape and cannot drift
+      // apart again. `-plain` is what removes the resting border and fill the
+      // pair used to carry; see the note on it in styles/index.css.
+      className={`icon-btn icon-btn-md icon-btn-plain relative ${className}`}
     >
       {/* Both glyphs occupy the same centred box and cross-fade. `absolute` on
           each rather than swapping the element keeps the button's content box
           stable, so nothing reflows mid-transition. */}
       <Sun
-        className={`absolute h-5 w-5 transition-opacity duration-200 ${
+        size="md"
+        className={`absolute transition-opacity duration-200 ${
           isDark ? 'opacity-100' : 'opacity-0'
         }`}
       />
       <Moon
-        className={`absolute h-5 w-5 transition-opacity duration-200 ${
+        size="md"
+        className={`absolute transition-opacity duration-200 ${
           isDark ? 'opacity-0' : 'opacity-100'
         }`}
       />

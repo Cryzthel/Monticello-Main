@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, X } from 'lucide-react'
+import { ArrowUpRight, X } from '@shared/icons'
 import { portalKey } from '@shared/config/portal'
 import { useCurrentWait } from '@/lib/waitState'
 import { DWELL_MS, getSponsorFeed } from '@/lib/sponsorFeed'
@@ -145,7 +145,7 @@ export default function EarnWhileYouWait({ collapsed = false, feed: injectedFeed
                 aria-label="Hide sponsored messages for this session"
                 className="icon-btn -mr-1.5 h-6 w-6"
               >
-                <X className="h-3 w-3" />
+                <X size="sm" />
               </button>
             </div>
             <a
@@ -159,7 +159,7 @@ export default function EarnWhileYouWait({ collapsed = false, feed: injectedFeed
               </span>
               <span className="mt-1 flex items-center gap-1 text-caption text-text-muted">
                 <span className="truncate">{placement.advertiser}</span>
-                <ArrowUpRight className="h-3 w-3 shrink-0 transition-transform duration-150 ease-[var(--ease-out-strong)] group-hover:-translate-y-px group-hover:translate-x-px" />
+                <ArrowUpRight size="sm" className="shrink-0 transition-transform duration-150 ease-[var(--ease-out-strong)] group-hover:-translate-y-px group-hover:translate-x-px" />
               </span>
             </a>
           </div>

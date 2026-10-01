@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Activity, CheckCircle2, ChevronRight, ClipboardList, Clock, LogOut, Mail, Send, User, X } from 'lucide-react'
+import {
+  Activity,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  LogOut,
+  Mail,
+  Send,
+  User,
+  X,
+} from '@shared/icons'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import StatusBadge from '@shared/components/StatusBadge'
 import IncidentDetailModal from '@shared/components/IncidentDetailModal'
@@ -11,7 +22,7 @@ function Stat({ icon: Icon, label, value, tone = 'text-text-primary' }) {
   return (
     <div className="rounded-xl border border-hairline bg-base-800 p-3">
       <p className="flex items-center gap-1.5 text-2xs font-semibold text-text-muted">
-        <Icon className="h-3 w-3" />
+        <Icon size="sm" />
         {label}
       </p>
       <p className={`mt-1 text-sm font-semibold ${tone}`}>{value}</p>
@@ -23,7 +34,7 @@ function Section({ icon: Icon, title, count, children }) {
   return (
     <section>
       <p className="mb-2 flex items-center gap-2 text-2xs font-semibold text-text-muted">
-        <Icon className="h-3.5 w-3.5 text-brand-400" />
+        <Icon size="sm" className="text-brand-400" />
         {title}
         <span className="count-pill text-text-secondary">{count}</span>
       </p>
@@ -62,7 +73,7 @@ function IncidentRow({ incident, at, onOpen }) {
         <span className="shrink-0 font-mono text-2xs text-text-muted">
           {at ? new Date(at).toLocaleTimeString() : '—'}
         </span>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+        <ChevronRight size="sm" className="shrink-0 text-text-muted" />
       </button>
     </li>
   )
@@ -159,7 +170,7 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
                 )}
               </div>
               <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-text-secondary">
-                <Mail className="h-3 w-3 shrink-0" />
+                <Mail size="sm" className="shrink-0" />
                 {shift.email || 'No email on file'}
               </p>
             </div>
@@ -168,7 +179,7 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
               onClick={onClose}
               className="btn btn-icon-sm shrink-0 text-text-secondary hover:text-text-primary"
             >
-              <X className="h-5 w-5" />
+              <X size="md" />
             </button>
           </div>
 

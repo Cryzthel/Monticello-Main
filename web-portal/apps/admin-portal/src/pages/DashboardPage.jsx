@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import KpiCard from '@shared/components/KpiCard'
 import Card from '@shared/components/Card'
@@ -228,7 +228,7 @@ export default function DashboardPage() {
                   className="btn btn-compact btn-outline"
                 >
                   View all
-                  <ArrowRight className="h-3.5 w-3.5" />
+                  <ArrowRight size="sm" />
                 </button>
                 }
               />

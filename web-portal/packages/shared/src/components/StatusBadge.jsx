@@ -49,7 +49,7 @@ export default function StatusBadge({
   severity,
   /** Explicit tone key — wins over `severity`/`status`. */
   tone,
-  /** Lucide component to render leading. Overrides the auto status icon. */
+  /** Icon from @shared/icons, rendered leading. Overrides the status icon. */
   icon,
   /** Auto status icon. Defaults on for `status`, off everywhere else. */
   withIcon,
@@ -66,7 +66,7 @@ export default function StatusBadge({
 
   const toneClass = BADGE_TONES[resolvedTone] ?? BADGE_TONES.neutral
   const sizeClass = BADGE_SIZES[size] ?? BADGE_SIZES.md
-  const iconClass = BADGE_ICON_SIZES[size] ?? BADGE_ICON_SIZES.md
+  const iconSize = BADGE_ICON_SIZES[size] ?? BADGE_ICON_SIZES.md
 
   const showIcon = withIcon ?? (Boolean(icon) || Boolean(status))
   const Icon = icon ?? (status ? statusStyle(status).icon : null)
@@ -91,7 +91,7 @@ export default function StatusBadge({
       {...rest}
     >
       {dot ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" /> : null}
-      {!dot && showIcon && Icon ? <Icon className={`${iconClass} shrink-0`} /> : null}
+      {!dot && showIcon && Icon ? <Icon size={iconSize} /> : null}
       {label}
     </Component>
   )

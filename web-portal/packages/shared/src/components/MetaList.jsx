@@ -51,7 +51,7 @@ export function MetaSection({ icon: Icon, title, action, className = '', childre
     <section className={`rounded-xl border border-hairline bg-base-800 ${className}`}>
       <header className="flex min-h-11 items-center justify-between gap-3 border-b border-hairline px-4 py-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
-          {Icon ? <Icon className="h-4 w-4 shrink-0 text-brand-400" /> : null}
+          {Icon ? <Icon size="sm" className="shrink-0 text-brand-400" /> : null}
           {title}
         </h3>
         {action}

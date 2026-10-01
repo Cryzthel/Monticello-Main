@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { collection, query } from 'firebase/firestore'
-import { CheckCircle2, Plus, X } from 'lucide-react'
+import { CheckCircle2, Plus, X } from '@shared/icons'
 import SectionHeading from '@shared/components/SectionHeading'
 import IncidentDetailModal from '@shared/components/IncidentDetailModal'
 import ErrorBoundary from '@shared/components/ErrorBoundary'
@@ -157,7 +157,7 @@ export default function ReportPage() {
                 onClick={openComposer}
                 className="btn btn-sm btn-brand w-full sm:w-auto"
               >
-                <Plus className="h-4 w-4" />
+                <Plus size="sm" />
                 File incident report
               </button>
             }
@@ -168,7 +168,7 @@ export default function ReportPage() {
               table because the row it is talking about is the first one in it. */}
           {filed ? (
             <p className="flex shrink-0 items-start gap-2 rounded-xl border border-success/25 bg-success/10 p-3 text-sm text-success">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <CheckCircle2 size="sm" className="mt-0.5 shrink-0" />
               <span className="min-w-0 flex-1">Filed — it is in the dispatch queue now.</span>
               <button
                 type="button"
@@ -176,7 +176,7 @@ export default function ReportPage() {
                 aria-label="Dismiss"
                 className="shrink-0 rounded p-0.5 hover:bg-success/15"
               >
-                <X className="h-3.5 w-3.5" />
+                <X size="sm" />
               </button>
             </p>
           ) : null}

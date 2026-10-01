@@ -21,7 +21,7 @@ import {
   UserRoundCheck,
   UserRoundCog,
   X,
-} from 'lucide-react'
+} from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { categoryTone } from '@shared/theme/badgeStyles'
 import Lightbox from '@shared/components/Lightbox'
@@ -121,7 +121,7 @@ function Receipt({ feedback, onDismiss }) {
       role="status"
       className={`absolute inset-x-3 bottom-full z-10 mb-2 flex items-start gap-2.5 rounded-xl border p-3 shadow-overlay animate-[riseIn_180ms_var(--ease-spring)] ${shell}`}
     >
-      <Icon className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+      <Icon size="sm" className="mt-px shrink-0" aria-hidden="true" />
       <p className="min-w-0 flex-1 text-xs font-medium leading-snug">{feedback.text}</p>
       <button
         type="button"
@@ -129,7 +129,7 @@ function Receipt({ feedback, onDismiss }) {
         aria-label="Dismiss"
         className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 opacity-70 transition-[opacity,background-color] duration-150 hover:bg-tint/10 hover:opacity-100"
       >
-        <X className="h-3.5 w-3.5" />
+        <X size="sm" />
       </button>
     </div>
   )
@@ -291,7 +291,7 @@ function InvestigationPanel({ report, editable, busy, run, role }) {
     <Section icon={Search} title="Investigation" meta={report.investigatingAt ? `since ${clock(report.investigatingAt)}` : null}>
       {report.escalation ? (
         <div className="mb-3 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 p-2.5 text-danger">
-          <AlertOctagon className="mt-px h-4 w-4 shrink-0" aria-hidden="true" />
+          <AlertOctagon size="sm" className="mt-px shrink-0" aria-hidden="true" />
           <p className="text-xs font-medium leading-snug">
             Escalated by {report.escalation.byName} at {clock(report.escalatedAt)}: {report.escalation.reason}
           </p>
@@ -299,7 +299,7 @@ function InvestigationPanel({ report, editable, busy, run, role }) {
       ) : null}
 
       <p className="flex items-center gap-1.5 text-caption font-semibold text-text-muted">
-        <Tags className="h-3 w-3" aria-hidden="true" />
+        <Tags size="sm" aria-hidden="true" />
         Quick tags
       </p>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -319,7 +319,7 @@ function InvestigationPanel({ report, editable, busy, run, role }) {
               }
               className={`chip px-3 ${on ? 'chip-active' : 'chip-idle'} disabled:opacity-100`}
             >
-              {busy === `tag:${tag.value}` ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> : null}
+              {busy === `tag:${tag.value}` ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : null}
               {tag.label}
             </button>
           )
@@ -329,7 +329,7 @@ function InvestigationPanel({ report, editable, busy, run, role }) {
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-caption font-semibold text-text-muted">
-          <Camera className="h-3 w-3" aria-hidden="true" />
+          <Camera size="sm" aria-hidden="true" />
           Scene photos · {photoUrls.length}
         </p>
         {editable && room > 0 ? (
@@ -339,7 +339,7 @@ function InvestigationPanel({ report, editable, busy, run, role }) {
             disabled={uploads.uploading || Boolean(busy)}
             className="btn btn-drawer btn-outline"
           >
-            {uploads.uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Camera className="h-3.5 w-3.5" aria-hidden="true" />}
+            {uploads.uploading ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <Camera size="sm" aria-hidden="true" />}
             {uploads.uploading ? 'Uploading…' : 'Add photos'}
           </button>
         ) : null}
@@ -556,7 +556,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   // ── THE FOOTER: THE ONE NEXT ACTION ──────────────────────────────────────
   let footer = null
   let hint = null
-  const spinner = <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+  const spinner = <Loader2 size="sm" className="animate-spin" aria-hidden="true" />
 
   if (pickerOpen) {
     footer = (
@@ -572,7 +572,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
           onClick={dispatchSelected}
           className="btn btn-drawer btn-brand flex-1"
         >
-          {busy === 'dispatch' ? spinner : <Radio className="h-3.5 w-3.5" aria-hidden="true" />}
+          {busy === 'dispatch' ? spinner : <Radio size="sm" aria-hidden="true" />}
           {selectedUnit
             ? `${stage === 'dispatched' ? 'Reassign to' : 'Dispatch'} ${selectedUnit.name}`
             : stage === 'dispatched'
@@ -591,7 +591,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
           className={`flex min-w-0 flex-1 items-center gap-1.5 text-xs font-semibold ${ack?.expired ? 'text-danger' : 'text-text-secondary'}`}
           aria-live="polite"
         >
-          <Timer className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <Timer size="sm" className="shrink-0" aria-hidden="true" />
           <span className="truncate">
             {ack?.expired ? 'No acknowledgement' : 'Awaiting acknowledgement'} ·{' '}
             <span className="font-mono tabular-nums">{formatStopwatch(ack?.waited ?? 0)}</span>
@@ -604,7 +604,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
             disabled={Boolean(busy)}
             className={`btn btn-drawer ${ack?.expired ? 'btn-danger' : 'btn-outline'}`}
           >
-            <UserRoundCog className="h-3.5 w-3.5" aria-hidden="true" />
+            <UserRoundCog size="sm" aria-hidden="true" />
             Reassign
           </button>
         ) : null}
@@ -615,7 +615,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
             disabled={Boolean(busy)}
             className="btn btn-drawer btn-brand"
           >
-            {busy === 'respond' ? spinner : <UserRoundCheck className="h-3.5 w-3.5" aria-hidden="true" />}
+            {busy === 'respond' ? spinner : <UserRoundCheck size="sm" aria-hidden="true" />}
             Acknowledge & respond
           </button>
         ) : null}
@@ -634,7 +634,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
         disabled={Boolean(busy) || checkingArrival}
         className="btn btn-drawer btn-brand flex-1"
       >
-        {busy === 'arrive' || checkingArrival ? spinner : <MapPinCheck className="h-3.5 w-3.5" aria-hidden="true" />}
+        {busy === 'arrive' || checkingArrival ? spinner : <MapPinCheck size="sm" aria-hidden="true" />}
         {checkingArrival ? 'Checking your position…' : 'I have arrived'}
       </button>
     ) : null
@@ -649,7 +649,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
         disabled={Boolean(busy)}
         className="btn btn-drawer btn-brand flex-1"
       >
-        {busy === 'investigate' ? spinner : <Search className="h-3.5 w-3.5" aria-hidden="true" />}
+        {busy === 'investigate' ? spinner : <Search size="sm" aria-hidden="true" />}
         Begin investigation
       </button>
     ) : null
@@ -666,7 +666,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
           className="btn btn-drawer btn-danger"
           title={report.escalation ? 'Already escalated' : undefined}
         >
-          <AlertOctagon className="h-3.5 w-3.5" aria-hidden="true" />
+          <AlertOctagon size="sm" aria-hidden="true" />
           {report.escalation ? 'Escalated' : 'Escalate'}
         </button>
         <button
@@ -675,7 +675,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
           disabled={Boolean(busy)}
           className="btn btn-drawer btn-brand flex-1"
         >
-          <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+          <CheckCircle2 size="sm" aria-hidden="true" />
           Resolve incident
         </button>
       </>
@@ -690,7 +690,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
         onClick={() => navigate(`${ROUTES.history}?incident=${report.id}`)}
         className="btn btn-drawer btn-outline flex-1"
       >
-        <History className="h-3.5 w-3.5" aria-hidden="true" />
+        <History size="sm" aria-hidden="true" />
         Open in incident history
       </button>
     )
@@ -752,7 +752,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
               aria-label="Close incident details"
               className="icon-btn icon-btn-sm -mr-1.5 -mt-1 shrink-0"
             >
-              <X className="h-4 w-4" />
+              <X size="sm" />
             </button>
           </div>
 
@@ -815,7 +815,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
               </dl>
               {contact?.phone ? (
                 <a href={`tel:${contact.phone}`} className="btn btn-drawer btn-outline mt-1">
-                  <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Phone size="sm" aria-hidden="true" />
                   Call
                 </a>
               ) : null}

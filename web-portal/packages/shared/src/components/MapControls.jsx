@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  Crosshair, Loader2, Maximize2, Minimize2, Minus, Plus,
-} from 'lucide-react'
+import { Crosshair, Loader2, Maximize2, Minimize2, Minus, Plus } from '@shared/icons'
 import Tooltip from '@shared/components/Tooltip'
 import { containsPoint } from '@shared/lib/subdivisionBoundary'
 
@@ -53,7 +51,7 @@ function ControlButton({ icon: Icon, label, hint, onClick, disabled, active, bus
             : 'text-text-secondary hover:bg-tint/[0.08] hover:text-text-primary'
         }`}
       >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+        {busy ? <Loader2 size="sm" className="animate-spin" /> : <Icon size="sm" />}
       </button>
     </Tooltip>
   )

@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react'
 import {
-  X, User, Phone, Mail, MapPin, Clock, Home, BadgeCheck,
-  CheckCircle2, ShieldX, Info, Hash,
-} from 'lucide-react'
+  X,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  Home,
+  BadgeCheck,
+  CheckCircle2,
+  ShieldX,
+  Info,
+  Hash,
+} from '@shared/icons'
 import Lightbox from '@shared/components/Lightbox'
 import ResidentAvatar from '@/components/ResidentAvatar'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -37,7 +47,7 @@ function Field({ icon: Icon, label, value }) {
   return (
     <div className="rounded-xl border border-hairline bg-base-800 p-3">
       <p className="flex items-center gap-1.5 text-2xs font-semibold text-text-secondary">
-        <Icon className="h-3 w-3" />
+        <Icon size="sm" />
         {label}
       </p>
       <p className="mt-1 break-words text-sm text-text-primary">{value || '—'}</p>
@@ -50,7 +60,7 @@ function Field({ icon: Icon, label, value }) {
 function NotCaptured({ children }) {
   return (
     <div className="flex items-start gap-2 rounded-xl border border-dashed border-slate-200 p-3">
-      <Info className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+      <Info size="sm" className="mt-0.5 shrink-0 text-text-muted" />
       <p className="text-xs text-text-secondary">{children}</p>
     </div>
   )
@@ -125,7 +135,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="icon-btn icon-btn-sm shrink-0">
-            <X className="h-4 w-4" />
+            <X size="sm" />
           </button>
         </div>
 
@@ -218,7 +228,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
               than bare red text floating above the buttons. */}
           {error ? (
             <p className="mb-3 flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
-              <ShieldX className="mt-px h-3.5 w-3.5 shrink-0" />
+              <ShieldX size="sm" className="mt-px shrink-0" />
               {error}
             </p>
           ) : null}
@@ -263,7 +273,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
                   onClick={() => run(() => rejectResident(resident, reason))}
                   className="btn btn-pill btn-md btn-danger flex-1"
                 >
-                  <ShieldX className="h-4 w-4" />
+                  <ShieldX size="sm" />
                   Confirm rejection
                 </button>
               </div>
@@ -279,7 +289,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
                 onClick={() => run(() => approveResident(resident))}
                 className="btn btn-pill btn-md btn-success flex-1"
               >
-                <CheckCircle2 className="h-4 w-4" />
+                <CheckCircle2 size="sm" />
                 {resident.status === RESIDENT_STATUS.verified ? 'Already approved' : 'Approve'}
               </button>
               <button
@@ -288,7 +298,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
                 onClick={() => setRejecting(true)}
                 className="btn btn-pill btn-md btn-danger flex-1"
               >
-                <ShieldX className="h-4 w-4" />
+                <ShieldX size="sm" />
                 Reject
               </button>
             </div>

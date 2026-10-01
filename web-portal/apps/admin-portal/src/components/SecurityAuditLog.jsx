@@ -9,7 +9,7 @@ import {
   SquarePen,
   UserPlus,
   UserX,
-} from 'lucide-react'
+} from '@shared/icons'
 import Card from '@shared/components/Card'
 import TablePagination from '@shared/components/TablePagination'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -140,7 +140,7 @@ export default function SecurityAuditLog() {
           </div>
         ) : entries.length === 0 ? (
           <div className="px-4 py-14 text-center">
-            <FileClock className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+            <FileClock size="lg" className="mx-auto mb-2 text-text-muted" />
             <p className="text-sm text-text-secondary">No provisioning activity recorded yet.</p>
             <p className="mx-auto mt-1 max-w-md text-xs text-text-muted">
               Entries are written by the Cloud Functions that perform each action, so this stays
@@ -168,7 +168,7 @@ export default function SecurityAuditLog() {
                               : ''
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon size="sm" />
                   </span>
 
                   <div className="min-w-0 flex-1">

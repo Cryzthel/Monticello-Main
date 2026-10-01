@@ -18,7 +18,7 @@ import {
   Volume2,
   Waves,
   Wrench,
-} from 'lucide-react'
+} from '@shared/icons'
 import { normalizeCategory } from '@shared/lib/incidentCategories'
 
 /**
@@ -43,7 +43,7 @@ const INCIDENT_CATEGORY_ICONS = {
   other: CircleAlert,
 }
 
-/** The Lucide component for an incident category. Never returns undefined. */
+/** The icon component for an incident category. Never returns undefined. */
 export function categoryIcon(category) {
   return INCIDENT_CATEGORY_ICONS[normalizeCategory(category)] ?? CircleAlert
 }
@@ -66,7 +66,7 @@ const AUDIT_EVENT_ICONS = {
   Deleted: Trash2,
 }
 
-/** The Lucide component for an audit event category. Never returns undefined. */
+/** The icon component for an audit event category. Never returns undefined. */
 export function auditEventIcon(category) {
   return AUDIT_EVENT_ICONS[category] ?? CircleAlert
 }
@@ -89,7 +89,7 @@ const PANIC_SIGNAL_ICONS = {
   resolved: CheckCircle2,
 }
 
-/** The Lucide component for a panic alert's signal. Unknown reads as live. */
+/** The icon component for a panic alert's signal. Unknown reads as live. */
 export function panicSignalIcon(status) {
   const key = String(status ?? '').trim().toLowerCase()
   return PANIC_SIGNAL_ICONS[key] ?? Siren

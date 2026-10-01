@@ -12,7 +12,7 @@ import {
   Smartphone,
   Ticket,
   Volume2,
-} from 'lucide-react'
+} from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { playAlert, unlockAlertSound } from '@shared/lib/alertSound'
@@ -107,7 +107,7 @@ export default function SettingsPage() {
             role="status"
             className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3.5 text-sm leading-relaxed text-text-primary"
           >
-            <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <AlertTriangle size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
             <span>
               <span className="font-semibold text-warning">Saved settings could not be loaded.</span> Every control
               is showing its default{loadError ? ` (Firestore: ${loadError})` : ''}. If the settings rules were just
@@ -232,7 +232,7 @@ export default function SettingsPage() {
             onChange={(sirenVolume) => setGroup('guardhouse', { sirenVolume })}
             footnote={
               <button type="button" onClick={testSiren} className="btn btn-sm btn-outline">
-                <Volume2 aria-hidden="true" className="h-3.5 w-3.5" />
+                <Volume2 size="sm" aria-hidden="true" />
                 Test at this level
               </button>
             }
@@ -421,7 +421,7 @@ export default function SettingsPage() {
             id="push-lock"
             title="SOS alarms always send"
             description="The alarm to on-duty officers is not covered by the switch above — it is the alarm itself."
-            control={<Lock aria-hidden="true" className="h-4 w-4 text-text-muted" />}
+            control={<Lock size="sm" aria-hidden="true" className="text-text-muted" />}
           />
         </SettingsGroup>
 
@@ -475,7 +475,7 @@ function SaveFooter({ form, settled, meta, status }) {
   } else if (justSaved) {
     message = (
       <span className="inline-flex items-center gap-1.5 text-success">
-        <Check aria-hidden="true" className="h-3.5 w-3.5" />
+        <Check size="sm" aria-hidden="true" />
         Saved — every console has the change.
       </span>
     )
@@ -499,7 +499,7 @@ function SaveFooter({ form, settled, meta, status }) {
           </button>
         ) : null}
         <button type="submit" disabled={!settled || !form.dirty || form.saving} className="btn btn-sm btn-brand">
-          {form.saving ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : null}
+          {form.saving ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
           {form.saving ? 'Saving…' : 'Save settings'}
         </button>
       </div>

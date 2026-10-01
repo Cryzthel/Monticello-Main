@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown } from '@shared/icons'
 
 /**
  * The dashboard's one dropdown control.
@@ -168,12 +168,13 @@ export default function Select({
         } ${className}`}
       >
         {prefix ? <span className="shrink-0 text-text-muted">{prefix}</span> : null}
-        {SelectedIcon ? <SelectedIcon className="h-3.5 w-3.5 shrink-0 text-text-secondary" /> : null}
+        {SelectedIcon ? <SelectedIcon size="sm" className="shrink-0 text-text-secondary" /> : null}
         <span className={`truncate ${selected ? '' : 'text-text-muted'}`}>
           {selected?.label ?? placeholder}
         </span>
         <ChevronDown
-          className={`ml-auto h-3.5 w-3.5 shrink-0 text-text-secondary transition-transform duration-150 ${
+          size="sm"
+          className={`ml-auto text-text-secondary transition-transform duration-150 ${
             open ? 'rotate-180' : ''
           }`}
         />
@@ -217,12 +218,12 @@ export default function Select({
                           : 'text-text-secondary hover:bg-tint/[0.05] hover:text-text-primary'
                       }`}
                     >
-                      {OptionIcon ? <OptionIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> : null}
+                      {OptionIcon ? <OptionIcon size="sm" className="shrink-0 opacity-70" /> : null}
                       <span className="truncate">{option.label}</span>
                       {option.hint ? (
                         <span className="ml-1 shrink-0 text-2xs text-text-muted">{option.hint}</span>
                       ) : null}
-                      {active ? <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-brand-400" /> : null}
+                      {active ? <Check size="sm" className="ml-auto shrink-0 text-brand-400" /> : null}
                     </button>
                   )
                 })

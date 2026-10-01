@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  AlignLeft, FileText, ImageOff, MapPin, Phone, ShieldCheck, ShieldQuestion, User, X,
-} from 'lucide-react'
+  AlignLeft,
+  FileText,
+  ImageOff,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  ShieldQuestion,
+  User,
+  X,
+} from '@shared/icons'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import Lightbox from '@shared/components/Lightbox'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -164,7 +172,7 @@ export default function IncidentDetailModal({ report, onClose }) {
             aria-label="Close report details"
             className="btn btn-icon-sm min-h-11 min-w-11 shrink-0 text-text-secondary hover:text-text-primary sm:min-h-0 sm:min-w-0"
           >
-            <X className="h-5 w-5" />
+            <X size="md" />
           </button>
         </div>
 
@@ -200,7 +208,7 @@ export default function IncidentDetailModal({ report, onClose }) {
                 )
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-white/70">
-                  <ImageOff className="h-6 w-6" />
+                  <ImageOff size="lg" />
                   {report.hasMedia ? 'Media still uploading…' : 'No media attached'}
                 </div>
               )}
@@ -288,7 +296,7 @@ export default function IncidentDetailModal({ report, onClose }) {
               action={
                 contact?.phone ? (
                   <a href={`tel:${contact.phone}`} className="btn btn-sm btn-outline">
-                    <Phone className="h-3.5 w-3.5" />
+                    <Phone size="sm" />
                     Call
                   </a>
                 ) : null
@@ -325,12 +333,12 @@ export default function IncidentDetailModal({ report, onClose }) {
                   <span className="inline-flex items-center gap-1.5">
                     {media.length > 0 ? (
                       <>
-                        <ShieldCheck className="h-4 w-4 text-success" />
+                        <ShieldCheck size="sm" className="text-success" />
                         Verified
                       </>
                     ) : (
                       <>
-                        <ShieldQuestion className="h-4 w-4 text-warning" />
+                        <ShieldQuestion size="sm" className="text-warning" />
                         Pending
                       </>
                     )}

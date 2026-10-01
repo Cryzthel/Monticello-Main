@@ -1,4 +1,4 @@
-import { FlaskConical, Pause, Play } from 'lucide-react'
+import { FlaskConical, Pause, Play } from '@shared/icons'
 
 /**
  * The switch that starts a simulated unit moving along the plotted route.
@@ -41,9 +41,9 @@ export default function SimulationControl({ running, disabled, onToggle, profile
         className={`btn btn-sm w-full justify-center ${running ? 'btn-outline' : 'btn-outline'}`}
       >
         {running ? (
-          <Pause aria-hidden="true" className="h-3.5 w-3.5" />
+          <Pause size="sm" aria-hidden="true" />
         ) : (
-          <Play aria-hidden="true" className="h-3.5 w-3.5" />
+          <Play size="sm" aria-hidden="true" />
         )}
         {running ? 'Stop simulation' : 'Simulate movement'}
       </button>
@@ -56,7 +56,7 @@ export default function SimulationControl({ running, disabled, onToggle, profile
 
       {running ? (
         <p className="flex items-center gap-1.5 text-2xs font-medium leading-snug text-warning">
-          <FlaskConical aria-hidden="true" className="h-3 w-3 shrink-0" />
+          <FlaskConical size="sm" aria-hidden="true" className="shrink-0" />
           The map is showing simulated movement.
         </p>
       ) : null}

@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { collection, query, where } from 'firebase/firestore'
-import { Siren, ChevronRight } from 'lucide-react'
+import { Siren, ChevronRight } from '@shared/icons'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
@@ -167,7 +167,7 @@ export function GlobalPanicBanner({ alerts }) {
             information. */}
         <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20">
           <span className="absolute inline-flex h-full w-full rounded-full bg-white/30 animate-ping" />
-          <Siren className="relative h-4 w-4" />
+          <Siren size="sm" className="relative" />
         </span>
 
         {/* ── THE OPACITY FLOOR, MEASURED ────────────────────────────────
@@ -200,7 +200,7 @@ export function GlobalPanicBanner({ alerts }) {
           </span>
         </span>
 
-        <ChevronRight className="h-4 w-4 shrink-0 opacity-80" />
+        <ChevronRight size="sm" className="shrink-0 opacity-80" />
       </button>
     </div>
   )

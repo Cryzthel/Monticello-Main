@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { collection, query, orderBy, limit } from 'firebase/firestore'
-import { Bell, BellOff, CheckCheck, Clock } from 'lucide-react'
+import { Bell, BellOff, BellRinging, CheckCheck, Clock } from '@shared/icons'
 import NotificationRow from '@shared/components/NotificationRow'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
@@ -176,15 +176,24 @@ export default function NotificationBell({ detailPath, historyPath = '/history' 
         onClick={handleToggle}
         aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
         aria-expanded={open}
-        // Same standardized icon container as the header/sidebar controls, with
-        // the shared "on" glow while the panel is open — see .icon-btn-active.
-        className={`icon-btn icon-btn-md relative border ${
-          open ? 'icon-btn-active border-brand-500/40' : 'border-slate-200 bg-base-900 hover:border-slate-300'
-        }`}
+        // Same standardized icon container as the theme toggle beside it, with
+        // the shared "on" plate while the panel is open — see .icon-btn-active
+        // and .icon-btn-plain. No resting border or fill: the only shape this
+        // draws is the hover wash, and the open plate that replaces it.
+        className={`icon-btn icon-btn-md icon-btn-plain relative ${open ? 'icon-btn-active' : ''}`}
       >
         {/* 20px — the spec's icon scale, and the size a 40px .icon-btn-md is
-            proportioned for. */}
-        <Bell className="h-5 w-5" />
+            proportioned for.
+
+            The glyph itself carries the unread state, not only the count
+            capsule pinned to it: `notifications_active` is the same rounded
+            bell with motion arcs, so the control reads as "ringing" before the
+            eye reaches the number. That matters because the capsule is 16px of
+            danger red in the far corner of the header — the first thing a
+            colour-blind or peripherally-glancing operator has to resolve — and
+            a shape change is the redundant signal it was missing. Both are
+            FILL=0, so this is a change of drawing, not of weight. */}
+        {unreadCount > 0 ? <BellRinging size="md" /> : <Bell size="md" />}
         {unreadCount > 0 ? (
           <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-2xs font-semibold tabular-nums text-white ring-2 ring-base-950">
             {unreadCount > 9 ? '9+' : unreadCount}
@@ -215,7 +224,7 @@ export default function NotificationBell({ detailPath, historyPath = '/history' 
                   disabled={unreadCount === 0}
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
-                  <CheckCheck className="h-3.5 w-3.5" />
+                  <CheckCheck size="sm" />
                   Mark all read
                 </button>
               </div>
@@ -257,7 +266,7 @@ export default function NotificationBell({ detailPath, historyPath = '/history' 
               {/* ── FEED ─────────────────────────────────────────────────── */}
               {sections.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-14 text-center">
-                  <BellOff className="h-6 w-6 text-text-muted" />
+                  <BellOff size="lg" className="text-text-muted" />
                   <p className="text-sm text-text-secondary">
                     {filter === 'all' ? 'No activity yet.' : 'Nothing in this view.'}
                   </p>
@@ -308,7 +317,7 @@ export default function NotificationBell({ detailPath, historyPath = '/history' 
                 }}
                 className="flex shrink-0 items-center justify-center gap-1.5 border-t border-hairline px-4 py-2.5 text-xs font-semibold text-brand-400 transition-colors hover:bg-tint/[0.04] hover:text-brand-300"
               >
-                <Clock className="h-3.5 w-3.5" />
+                <Clock size="sm" />
                 Notification history
               </button>
             </div>,

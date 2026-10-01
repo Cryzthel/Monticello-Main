@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, Search, Trash2, X } from 'lucide-react'
+import { ArrowDownWideNarrow, Search, Trash2, X } from '@shared/icons'
 import Card from '@shared/components/Card'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import RowActionMenu from './RowActionMenu'
@@ -15,6 +15,7 @@ import { formatCategory } from '@shared/lib/wpda'
 import { softDeleteIncidents } from '@shared/lib/incidents'
 import { displayPersonName } from '@shared/lib/identity'
 import { applyIncidentSort, DEFAULT_SORT, SORT_OPTIONS } from '@shared/lib/incidentSort'
+import SearchField from '@shared/components/SearchField'
 
 const STATUS_FILTERS = ['All', ...INCIDENT_STATUSES]
 
@@ -238,16 +239,12 @@ export default function IncidentsTable({
           `items-center` and the three align top and bottom. */}
       {!compact ? (
         <div className="flex flex-wrap items-center gap-3 border-b border-hairline p-4">
-          <div className="flex h-9 min-w-[16rem] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 transition-[border-color,box-shadow] duration-150 hover:border-slate-300 focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20">
-            <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-            <input
-              type="text"
-              className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-              placeholder="Search by ID, resident, category, or location"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
+          <SearchField
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by ID, resident, category, or location"
+            className="min-w-[16rem] flex-1"
+          />
           {/* No width override: the control's own min-w is already sized to
               its longest option, and the old `min-w-[9rem]` on a two-character
               "All" was the dead space. */}
@@ -268,7 +265,7 @@ export default function IncidentsTable({
               reader to work out why they differ. */}
           <Select
             ariaLabel="Sort tickets by date reported"
-            prefix={<ArrowDownWideNarrow className="h-3.5 w-3.5" />}
+            prefix={<ArrowDownWideNarrow size="sm" />}
             value={sort}
             onChange={setSort}
             options={SORT_OPTIONS}
@@ -287,7 +284,7 @@ export default function IncidentsTable({
               onClick={() => setConfirming({ ids: [...selectedIds] })}
               className="btn btn-sm btn-danger"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 size="sm" />
               {`Delete ${selectedIds.size} report${selectedIds.size === 1 ? '' : 's'}`}
             </button>
             <button
@@ -296,7 +293,7 @@ export default function IncidentsTable({
               aria-label="Clear selection"
               className="icon-btn icon-btn-sm"
             >
-              <X className="h-4 w-4" />
+              <X size="sm" />
             </button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ClipboardList, Loader2, LogOut, X } from 'lucide-react'
+import { ClipboardList, Loader2, LogOut, X } from '@shared/icons'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { formatMinutes } from '@shared/lib/incidents'
 
@@ -82,7 +82,7 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
         className="card dialog-panel flex max-h-[80dvh] w-full max-w-lg flex-col overflow-hidden rounded-b-none bg-base-900 sm:rounded-b-xl"
       >
         <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
-          <ClipboardList aria-hidden="true" className="h-4 w-4 shrink-0 text-brand-500" />
+          <ClipboardList size="sm" aria-hidden="true" className="shrink-0 text-brand-500" />
           <h2 id="handover-title" className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
             Duty log
           </h2>
@@ -93,7 +93,7 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
             aria-label="Close without clocking out"
             className="icon-btn icon-btn-sm shrink-0 border border-slate-200"
           >
-            <X aria-hidden="true" className="h-3.5 w-3.5" />
+            <X size="sm" aria-hidden="true" />
           </button>
         </header>
 
@@ -166,9 +166,9 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
           </button>
           <button type="submit" disabled={busy || (touched && !ready)} className="btn btn-sm btn-brand">
             {busy ? (
-              <Loader2 aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 size="sm" aria-hidden="true" className="animate-spin" />
             ) : (
-              <LogOut aria-hidden="true" className="h-3.5 w-3.5" />
+              <LogOut size="sm" aria-hidden="true" />
             )}
             File and clock out
           </button>

@@ -1,4 +1,4 @@
-import { CheckCircle2, ShieldAlert } from 'lucide-react'
+import { CheckCircle2, ShieldAlert } from '@shared/icons'
 
 /**
  * The one banner every authentication screen uses to say something went wrong
@@ -53,7 +53,7 @@ export default function AuthAlert({ tone = 'error', children }) {
       role={role}
       className={`flex items-start gap-2.5 rounded-2xl border p-3.5 text-sm leading-relaxed ${className}`}
     >
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+      <Icon size="sm" className="mt-0.5 shrink-0" />
       <span className="min-w-0">{children}</span>
     </div>
   )

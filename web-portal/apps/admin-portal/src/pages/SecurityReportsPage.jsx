@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react'
 import { collection, query } from 'firebase/firestore'
 import {
-  Archive, ArchiveRestore, ClipboardList, Eye, Search,
-  ShieldAlert, Trash2, X,
-} from 'lucide-react'
+  Archive,
+  ArchiveRestore,
+  ClipboardList,
+  Eye,
+  Search,
+  ShieldAlert,
+  Trash2,
+  X,
+} from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
 import Card from '@shared/components/Card'
@@ -24,6 +30,7 @@ import {
 import { describeFirestoreError } from '@shared/lib/audit'
 import { CATEGORY_WEIGHTS, formatCategory } from '@shared/lib/wpda'
 import { Skeleton } from '@shared/components/Skeleton'
+import SearchField from '@shared/components/SearchField'
 
 const CATEGORY_FILTERS = ['All categories', ...Object.keys(CATEGORY_WEIGHTS)]
 
@@ -132,7 +139,7 @@ function ReportCard({ report, officer, checked, onToggle, onOpen }) {
           without one there is nothing on screen saying the row opens. */}
       <div className="flex justify-end border-t border-divider px-4 py-2">
         <button type="button" onClick={onOpen} className="btn btn-sm btn-outline min-h-11 px-4">
-          <Eye className="h-4 w-4" />
+          <Eye size="sm" />
           View report
         </button>
       </div>
@@ -298,20 +305,12 @@ export default function SecurityReportsPage() {
           {/* ── Filters. One stacked column on a phone, one h-9 baseline row
                 from `sm:` up. Every control is 44px tall below `sm:`. ── */}
           <div className="grid grid-cols-1 gap-2.5 border-b border-hairline p-4 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
-            <div className="flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 sm:h-9 sm:min-w-[18rem] sm:flex-1">
-              <Search className="h-4 w-4 shrink-0 text-text-secondary" />
-              {/* text-base below `sm:` — iOS zooms the viewport on focus for
-                  any field under 16px, and the page never zooms back out. */}
-              <input
-                type="text"
-                inputMode="search"
-                autoComplete="off"
-                className="h-full w-full bg-transparent text-base text-text-primary outline-none placeholder:text-text-muted sm:text-sm"
-                placeholder="Search officer, report ID, or location"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </div>
+            <SearchField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search officer, report ID, or location"
+              className="sm:flex-1"
+            />
             <Select
               ariaLabel="Filter by category"
               size="touch"
@@ -354,10 +353,10 @@ export default function SecurityReportsPage() {
 
           {error ? (
             <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
-              <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
               <span className="min-w-0 flex-1">{error}</span>
               <button type="button" onClick={() => setError('')} aria-label="Dismiss" className="shrink-0 rounded p-0.5 hover:bg-danger/15">
-                <X className="h-3.5 w-3.5" />
+                <X size="sm" />
               </button>
             </p>
           ) : null}
@@ -376,7 +375,7 @@ export default function SecurityReportsPage() {
                 aria-label="Clear selection"
                 className="icon-btn ml-auto h-11 w-11 shrink-0 sm:order-2 sm:ml-0 sm:h-9 sm:w-9"
               >
-                <X className="h-4 w-4" />
+                <X size="sm" />
               </button>
               <div className="flex w-full items-center gap-2 sm:order-1 sm:ml-auto sm:w-auto">
                 <button
@@ -387,7 +386,7 @@ export default function SecurityReportsPage() {
                   }
                   className="btn btn-sm btn-outline min-h-11 flex-1 sm:min-h-0 sm:flex-none"
                 >
-                  {view === 'archived' ? <ArchiveRestore className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+                  {view === 'archived' ? <ArchiveRestore size="sm" /> : <Archive size="sm" />}
                   {view === 'archived' ? 'Unarchive' : 'Archive'}
                 </button>
                 <button
@@ -396,7 +395,7 @@ export default function SecurityReportsPage() {
                   onClick={() => setConfirming(selected)}
                   className="btn btn-sm btn-danger min-h-11 flex-1 sm:min-h-0 sm:flex-none"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 size="sm" />
                   {`Delete ${selected.length}`}
                 </button>
               </div>
@@ -432,7 +431,7 @@ export default function SecurityReportsPage() {
               </div>
             ) : rows.length === 0 ? (
               <div className="px-4 py-16 text-center">
-                <ClipboardList className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+                <ClipboardList size="lg" className="mx-auto mb-2 text-text-muted" />
                 <p className="text-sm text-text-secondary">{emptyMessage}</p>
               </div>
             ) : (
@@ -493,7 +492,7 @@ export default function SecurityReportsPage() {
                 ) : rows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-16 text-center">
-                      <ClipboardList className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+                      <ClipboardList size="lg" className="mx-auto mb-2 text-text-muted" />
                       <p className="text-sm text-text-secondary">{emptyMessage}</p>
                     </td>
                   </tr>
@@ -550,7 +549,7 @@ export default function SecurityReportsPage() {
                             onClick={() => setOpenId(report.id)}
                             className="btn btn-sm btn-outline"
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            <Eye size="sm" />
                             View
                           </button>
                         </td>

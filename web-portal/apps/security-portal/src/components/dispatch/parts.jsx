@@ -10,7 +10,7 @@ import {
   CircleAlert,
   LocateFixed,
   LocateOff,
-} from 'lucide-react'
+} from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { categoryColor, categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
 import { DISPATCH_STAGES, STAGE_LABELS, stageIndex } from '@shared/lib/dispatchStage'
@@ -55,7 +55,7 @@ export function CategoryIconBadge({ category, className = '' }) {
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${className}`}
       style={{ backgroundColor: `${color}1f`, color, '--tw-ring-color': `${color}55` }}
     >
-      <Icon className="h-5 w-5" aria-hidden="true" />
+      <Icon size="md" aria-hidden="true" />
     </span>
   )
 }
@@ -66,7 +66,7 @@ export function Section({ icon: Icon, title, meta, children, tone = '' }) {
     <section className={`rounded-xl border border-hairline bg-slate-50 ${tone}`}>
       <header className="flex items-center justify-between gap-3 border-b border-hairline px-3.5 py-2">
         <h3 className="flex min-w-0 items-center gap-2 text-xs font-semibold text-text-secondary">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-brand-400" aria-hidden="true" />
+          <Icon size="sm" className="shrink-0 text-brand-400" aria-hidden="true" />
           <span className="truncate">{title}</span>
         </h3>
         {meta ? <span className="shrink-0 text-2xs text-text-muted">{meta}</span> : null}
@@ -141,7 +141,7 @@ export function StageStepper({ report }) {
                     : 'bg-base-800 text-text-muted ring-1 ring-tint/15'
               }`}
             >
-              {done ? <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" /> : step}
+              {done ? <Check size="sm" strokeWidth={3} aria-hidden="true" /> : step}
             </span>
             <span
               className={`mt-1 w-full truncate px-0.5 text-2xs font-semibold ${
@@ -165,7 +165,7 @@ export function BatteryIndicator({ battery, compact = false }) {
   if (!battery || !Number.isFinite(battery.level)) {
     return (
       <span className="inline-flex items-center gap-1 text-2xs text-text-muted" title="This browser does not report battery">
-        <Battery className="h-3.5 w-3.5" aria-hidden="true" />
+        <Battery size="sm" aria-hidden="true" />
         {compact ? '—' : 'Battery n/a'}
       </span>
     )
@@ -186,7 +186,7 @@ export function BatteryIndicator({ battery, compact = false }) {
       className={`inline-flex items-center gap-1 text-2xs font-semibold tabular-nums ${tone}`}
       title={`Battery ${pct}%${battery.charging ? ', charging' : ''}`}
     >
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      <Icon size="sm" aria-hidden="true" />
       {pct}%
     </span>
   )

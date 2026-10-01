@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Loader2 } from 'lucide-react'
+import { Loader2 } from '@shared/icons'
 
 /**
  * A confirm dialog that will not confirm without a written reason. Used for
@@ -71,7 +71,7 @@ export default function ReasonDialog({
       >
         <div className="flex items-start gap-3.5">
           <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${ring}`}>
-            <Icon className="h-5 w-5" aria-hidden="true" />
+            <Icon size="md" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold leading-snug text-text-primary">{title}</h2>
@@ -114,7 +114,7 @@ export default function ReasonDialog({
             Cancel
           </button>
           <button type="submit" disabled={!ready || busy} className={`btn btn-sm ${confirmClass}`}>
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}
+            {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : null}
             {confirmLabel}
           </button>
         </div>

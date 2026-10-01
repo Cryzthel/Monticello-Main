@@ -61,7 +61,7 @@ const FLOATED_ON_FOCUS = [
 /**
  * @param filled    Whether the field has a value. Keeps the label up once the
  *                  user has typed and moved on — see the note above.
- * @param icon      Leading Lucide glyph. The resting label's left offset
+ * @param icon      Leading glyph from @shared/icons. The label's left offset
  *                  assumes one is present.
  * @param trailing  Optional control at the right edge, e.g. a reveal toggle.
  */
@@ -95,7 +95,7 @@ export default function FloatingField({
             : 'border-slate-200/80 hover:border-slate-300 group-focus-within:border-brand-500 group-focus-within:ring-2 group-focus-within:ring-brand-500/20'
         }`}
       >
-        <Icon className="h-4 w-4 shrink-0 text-text-muted transition-colors duration-200 group-focus-within:text-brand-500" />
+        <Icon size="sm" className="shrink-0 text-text-muted transition-colors duration-200 group-focus-within:text-brand-500" />
         <input
           id={id}
           aria-invalid={error ? 'true' : undefined}

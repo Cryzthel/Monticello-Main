@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import {
-  CheckCircle2, Clock, FileText, Gauge, Hash, Info, MapPin, Save, Send, Timer, User,
-} from 'lucide-react'
+  CheckCircle2,
+  Clock,
+  FileText,
+  Gauge,
+  Hash,
+  Info,
+  MapPin,
+  Save,
+  Send,
+  Timer,
+  User,
+} from '@shared/icons'
 import { incidentDurations, formatMinutes, saveResponderNotes } from '@shared/lib/incidents'
 import { computePriorityScore, formatCategory, categoryWeightOf } from '@shared/lib/wpda'
 
@@ -33,7 +43,7 @@ function Section({ icon: Icon, title, action, children }) {
             (`.meta-label`), and a 12px section title would have read SMALLER
             than the labels it heads — the hierarchy upside down. */}
         <h3 className="flex items-center gap-2 text-sm font-semibold tracking-normal text-text-primary">
-          <Icon className="h-4 w-4 text-brand-400" />
+          <Icon size="sm" className="text-brand-400" />
           {title}
         </h3>
         {action}
@@ -47,7 +57,7 @@ function Field({ icon: Icon, label, value, mono = false, tone = 'text-text-prima
   return (
     <div className="min-w-0">
       <p className="flex items-center gap-1.5 meta-label">
-        {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+        {Icon ? <Icon size="sm" /> : null}
         {label}
       </p>
       <p className={`mt-1 break-words text-sm font-medium ${mono ? 'font-mono' : ''} ${tone}`}>
@@ -70,7 +80,7 @@ function TimelineRow({ icon: Icon, label, at, duration, pendingLabel, isLast = f
             done ? 'bg-brand-100 text-brand-400 ring-brand-500/30' : 'bg-tint/5 text-text-muted ring-tint/10'
           }`}
         >
-          <Icon className="h-3 w-3" />
+          <Icon size="sm" />
         </span>
         {/* Connector to the next leg — omitted on the last row so the track
             doesn't trail off into empty space. */}
@@ -148,7 +158,7 @@ function NotesEditor({ report, canEdit = true }) {
           </>
         ) : (
           <div className="flex items-start gap-2 rounded-xl border border-dashed border-slate-200 p-3">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" />
+            <Info size="sm" className="mt-0.5 shrink-0 text-text-muted" />
             <p className="text-xs text-text-secondary">
               No responder notes on this report yet. The mobile app never writes these — they are
               recorded here by whoever handled the call.
@@ -164,7 +174,7 @@ function NotesEditor({ report, canEdit = true }) {
             the guardhouse keeps the control. */}
         {canEdit ? (
           <button type="button" onClick={() => setEditing(true)} className="btn btn-sm btn-outline">
-            <FileText className="h-3.5 w-3.5" />
+            <FileText size="sm" />
             {hasContent ? 'Edit notes' : 'Add notes'}
           </button>
         ) : null}
@@ -203,7 +213,7 @@ function NotesEditor({ report, canEdit = true }) {
       {error ? <p className="text-xs text-danger">{error}</p> : null}
       <div className="flex gap-2">
         <button type="button" disabled={busy} onClick={save} className="btn btn-sm btn-brand">
-          <Save className="h-3.5 w-3.5" />
+          <Save size="sm" />
           {busy ? 'Saving…' : 'Save to report'}
         </button>
         <button type="button" disabled={busy} onClick={() => setEditing(false)} className="btn btn-sm btn-outline">

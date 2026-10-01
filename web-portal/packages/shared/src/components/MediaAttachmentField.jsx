@@ -1,8 +1,18 @@
-// Lucide equivalents of the Phosphor glyphs the mobile widget uses — Phosphor's
-// names do not exist in this icon set, and the portals are standardised on
-// Lucide. Mapping: cloudArrowUp→CloudUpload, imagesSquare→Images,
-// cameraPlus→ImagePlus, warningCircle→CircleAlert.
-import { CircleAlert, CloudUpload, FileText, FileType, Film, Images, ImagePlus, X } from 'lucide-react'
+// The mobile widget draws these in Phosphor; the portals draw them from
+// shared/icons, which is Material Symbols. No set the portals have used
+// carries Phosphor's names, so the pairing is by meaning:
+// cloudArrowUp→CloudUpload, imagesSquare→Images, cameraPlus→ImagePlus,
+// warningCircle→CircleAlert.
+import {
+  CircleAlert,
+  CloudUpload,
+  FileText,
+  FileType,
+  Film,
+  Images,
+  ImagePlus,
+  X,
+} from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 
 /**
@@ -109,7 +119,7 @@ export default function MediaAttachmentField({
     <div className={`rounded-xl border p-4 ${error ? 'border-danger/50' : 'border-hairline'}`}>
       {/* ── Section header ── */}
       <div className="flex items-center gap-2">
-        <Images className="h-4 w-4 shrink-0 text-brand-500" />
+        <Images size="sm" className="shrink-0 text-brand-500" />
         <span className="text-sm font-semibold text-text-primary">{heading}</span>
         {attached ? (
           <StatusBadge tone="success" size="sm" className="ml-auto">
@@ -146,7 +156,7 @@ export default function MediaAttachmentField({
                         // thumbnail to show. A type glyph centred in the cell
                         // keeps the grid rhythm rather than leaving a hole.
                         <span className="flex h-full w-full items-center justify-center">
-                          <Icon className="h-7 w-7 text-text-muted" />
+                          <Icon size={28} className="text-text-muted" />
                         </span>
                       )}
 
@@ -163,7 +173,7 @@ export default function MediaAttachmentField({
                           aria-label={busy ? `Cancel upload of ${item.name}` : `Remove ${item.name}`}
                           className="absolute right-1 top-1 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-danger text-base-900 transition-transform duration-150 hover:scale-105 active:scale-95"
                         >
-                          <X className="h-3 w-3" strokeWidth={3} />
+                          <X size="sm" strokeWidth={3} />
                         </button>
                       )}
 
@@ -225,7 +235,7 @@ export default function MediaAttachmentField({
                   : 'border-dashed border-slate-300 text-text-secondary hover:border-brand-500/60 hover:bg-brand-50 hover:text-brand-400'
               }`}
             >
-              <ImagePlus className="h-4 w-4" />
+              <ImagePlus size="sm" />
               {single
                 ? uploading
                   ? `Uploading ${items[0]?.progress ?? 0}%`
@@ -252,10 +262,10 @@ export default function MediaAttachmentField({
             }`}
           >
             <CloudUpload
-              className={`h-9 w-9 transition-[transform,color] duration-200 ease-[var(--ease-out-strong)] ${
+              size={36}
+              className={`transition-[transform,color] duration-200 ease-[var(--ease-out-strong)] ${
                 dragging ? '-translate-y-1 text-brand-400' : 'text-text-muted group-hover:-translate-y-0.5 group-hover:text-brand-500'
               }`}
-              strokeWidth={1.5}
             />
             <span className="mt-2.5 text-sm font-medium text-text-primary">
               {dragging ? 'Drop to attach' : 'Click to upload'}
@@ -267,7 +277,7 @@ export default function MediaAttachmentField({
 
       {error ? (
         <p className="mt-2.5 flex items-start gap-1.5 text-xs font-semibold leading-snug text-danger">
-          <CircleAlert className="mt-px h-3.5 w-3.5 shrink-0" />
+          <CircleAlert size="sm" className="mt-px shrink-0" />
           {error}
         </p>
       ) : null}

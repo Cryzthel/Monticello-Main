@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, BadgeCheck, Check, Copy, KeyRound } from 'lucide-react'
+import { AlertTriangle, BadgeCheck, Check, Copy, KeyRound } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { copyText } from '@/lib/securityAccounts'
 
@@ -59,7 +59,7 @@ export function CopyRow({ label, value, mono = true }) {
         aria-label={`Copy ${label.toLowerCase()}`}
         className={`btn btn-compact shrink-0 ${copied ? 'btn-success' : 'btn-outline'}`}
       >
-        {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+        {copied ? <Check size="sm" /> : <Copy size="sm" />}
         {copied ? 'Copied' : 'Copy'}
       </button>
     </div>
@@ -109,7 +109,7 @@ export default function CredentialHandoff({ mode = 'created', credentials, onDon
     <div className="p-6">
       <div className="flex items-start gap-4">
         <span className="icon-tile icon-tile-lg bg-success/10 text-success">
-          {isReset ? <KeyRound className="h-6 w-6" /> : <BadgeCheck className="h-6 w-6" />}
+          {isReset ? <KeyRound size="lg" /> : <BadgeCheck size="lg" />}
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold leading-tight text-text-primary">
@@ -127,7 +127,7 @@ export default function CredentialHandoff({ mode = 'created', credentials, onDon
           after the panel has already been dismissed by someone who got what
           they came for. */}
       <p className="mt-5 flex items-start gap-2 rounded-xl border border-warning/25 bg-warning/10 p-3 text-xs leading-relaxed text-warning">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <AlertTriangle size="sm" className="mt-0.5 shrink-0" />
         <span>
           <strong className="font-semibold">This password is shown once.</strong> It was made on
           your device and is saved nowhere — not in the database, not in the audit log. Copy it
@@ -159,7 +159,7 @@ export default function CredentialHandoff({ mode = 'created', credentials, onDon
 
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={copyAll} className="btn btn-sm btn-outline">
-          {copiedAll ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          {copiedAll ? <Check size="sm" /> : <Copy size="sm" />}
           {copiedAll ? 'Copied handover slip' : 'Copy all details'}
         </button>
         <button ref={doneRef} type="button" onClick={onDone} className="btn btn-sm btn-brand">

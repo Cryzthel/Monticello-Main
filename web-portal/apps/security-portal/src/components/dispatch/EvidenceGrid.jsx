@@ -1,4 +1,4 @@
-import { PlayCircle } from 'lucide-react'
+import { PlayCircle } from '@shared/icons'
 import EvidenceImage from '@shared/components/EvidenceImage'
 
 const STAMP = {
@@ -64,7 +64,7 @@ export default function EvidenceGrid({ media, stamp, onOpen, emptyText }) {
               <>
                 <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
                 <span className="absolute inset-0 flex items-center justify-center bg-black/35">
-                  <PlayCircle className="h-6 w-6 text-white" aria-hidden="true" />
+                  <PlayCircle size="lg" className="text-white" aria-hidden="true" />
                 </span>
               </>
             ) : (

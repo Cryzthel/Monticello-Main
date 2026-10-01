@@ -1,4 +1,4 @@
-import { RotateCcw, ShieldAlert } from 'lucide-react'
+import { RotateCcw, ShieldAlert } from '@shared/icons'
 import Card from '@shared/components/Card'
 
 /**
@@ -14,7 +14,7 @@ export default function PageErrorFallback({ error, reset, title = 'This page fai
   return (
     <Card className="flex flex-col items-center justify-center gap-3 px-4 py-14 text-center">
       <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-danger/10 text-danger">
-        <ShieldAlert className="h-5 w-5" />
+        <ShieldAlert size="md" />
       </span>
       <div>
         <p className="text-sm font-semibold text-text-primary">{title}</p>
@@ -26,7 +26,7 @@ export default function PageErrorFallback({ error, reset, title = 'This page fai
       </div>
       {reset ? (
         <button type="button" onClick={reset} className="btn btn-sm btn-outline min-h-11 px-4">
-          <RotateCcw className="h-4 w-4" />
+          <RotateCcw size="sm" />
           Try again
         </button>
       ) : null}

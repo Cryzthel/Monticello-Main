@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { Satellite, Map as MapIcon, MapPinOff, SlidersHorizontal, ChevronDown } from 'lucide-react'
+import {
+  Bike,
+  ChevronDown,
+  Footprints,
+  Map as MapIcon,
+  MapPinOff,
+  Satellite,
+  SlidersHorizontal,
+} from '@shared/icons'
 import { responsePhase, RESPONSE_PHASE_COLORS, emergencyWaveColor, EMERGENCY_COLORS } from '@shared/lib/wpda'
+import { categoryLabel } from '@shared/lib/incidentCategories'
+import { relativeTime } from '@shared/lib/notifications'
 import MapControls from '@shared/components/MapControls'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import { Skeleton } from '@shared/components/Skeleton'
@@ -186,6 +196,96 @@ function ControlSection({ label, last = false, children }) {
   )
 }
 
+/**
+ * ── THE MARKER PREVIEW ─────────────────────────────────────────────────────
+ *
+ * What a pulse ring says before anyone commits to opening it.
+ *
+ * SOLID, like every other surface floating over this map, for the reason the
+ * controls panel states in full: a blurred panel over a moving canvas has to
+ * recomposite its whole region on every frame of a pan, and the map showing
+ * through makes small type unreadable over satellite imagery.
+ *
+ * Deliberately NOT the shared `Tooltip`. That component anchors to a DOM
+ * element it wraps, and these markers are drawn inside a WebGL canvas — there
+ * is no element to wrap. The position comes from `map.project()` instead.
+ *
+ * `aria-hidden`, and honestly so. Mapbox renders the whole map as ONE canvas
+ * element, so there is no per-marker node to focus and no keyboard route to
+ * this card — announcing it would promise a way in that does not exist. The
+ * same facts are reachable without a pointer from the incidents table, which
+ * is a real list of real rows, and every one of them opens the same panel.
+ */
+function HoverPreview({ record }) {
+  if (!record) return null
+
+  const isPanic = record.kind === 'panic'
+  const data = isPanic ? record.alert : record.incident
+  const address = [data.phase && `Phase ${data.phase}`, data.block && `Block ${data.block}`, data.lot && `Lot ${data.lot}`]
+    .filter(Boolean)
+    .join(' • ')
+
+  // The ring's own colour, so the card and the marker it describes are
+  // obviously the same object. An SOS is always critical red.
+  const accent = isPanic ? EMERGENCY_COLORS.critical : emergencyWaveColor(data)
+  const phase = isPanic ? null : responsePhase(data)
+
+  return (
+    <div
+      aria-hidden="true"
+      className="w-[15.5rem] -translate-x-1/2 -translate-y-full pb-2.5"
+    >
+      <div className="overflow-hidden rounded-xl border border-hairline bg-base-850 shadow-overlay">
+        <div className="flex items-start gap-2 px-3 pb-2 pt-2.5">
+          <span
+            className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white/70"
+            style={{ backgroundColor: accent }}
+          />
+          <div className="min-w-0 flex-1">
+            {/* Two lines, not one. The title is the headline of the card, and
+                at 248px wide a single truncated line cut most real report
+                titles mid-word — "Fallen power line across t…" answers less
+                than the category underneath it does. Two lines hold almost
+                every title whole; anything longer still ellipsizes. */}
+            <p className="line-clamp-2 text-xs font-semibold leading-tight text-text-primary">
+              {isPanic ? 'SOS — Emergency' : data.title || categoryLabel(data.category)}
+            </p>
+            <p className="mt-0.5 truncate text-2xs leading-tight text-text-secondary">
+              {isPanic ? data.residentName : categoryLabel(data.category)}
+            </p>
+          </div>
+          {/* The phase word, not a full StatusBadge: this card is 248px wide
+              and the badge's padding would push the title into a second line
+              on every hover. */}
+          {phase ? (
+            <span
+              className="shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-semibold capitalize"
+              style={{ backgroundColor: `${RESPONSE_PHASE_COLORS[phase]}1F`, color: RESPONSE_PHASE_COLORS[phase] }}
+            >
+              {phase}
+            </span>
+          ) : null}
+        </div>
+
+        <div className="border-t border-hairline px-3 py-2">
+          <p className="truncate text-2xs leading-tight text-text-secondary">{address || 'Address unavailable'}</p>
+          <p className="mt-0.5 text-2xs leading-tight text-text-muted">
+            {relativeTime(isPanic ? data.createdAt : data.reportedAt)}
+          </p>
+        </div>
+      </div>
+
+      {/* The notch. Without it the card floats unattached, and with six pins
+          in a cluster there is nothing saying which one it belongs to. Border
+          on two sides only, so the card's own bottom edge does not draw
+          through it. */}
+      <div className="flex justify-center">
+        <span className="-mt-[0.4375rem] h-2.5 w-2.5 rotate-45 border-b border-r border-hairline bg-base-850" />
+      </div>
+    </div>
+  )
+}
+
 const PHASE_LEGEND = [
   { key: 'resolved', label: 'Resolved', description: 'Incident closed and secured' },
   { key: 'hot', label: 'Active — hot', description: 'Reported within the last 2 hours' },
@@ -257,7 +357,7 @@ function setupBoundaryLayers(map) {
 }
 
 function setupLayers(map, initialData, opts) {
-  const { pinRadius, incidentsRef, onSelectIncidentRef, focusInsetRef, centerOnSelectRef } = opts
+  const { pinRadius, incidentsRef, onSelectIncidentRef, focusInsetRef, centerOnSelectRef, onHoverRef } = opts
 
   // NO CLUSTERING. Mapbox's clusterer replaces the real points with synthetic
   // "super-points" that carry only `point_count` — so a clustered incident is
@@ -434,11 +534,31 @@ function setupLayers(map, initialData, opts) {
   // then stay a default arrow while still hovering a clickable incident,
   // because entering already happened and will not fire again. mousemove
   // re-asserts on every frame the cursor is over the disc.
-  map.on('mousemove', 'incident-hit', () => {
+  map.on('mousemove', 'incident-hit', (event) => {
     map.getCanvas().style.cursor = 'pointer'
+
+    // ── THE PREVIEW, AND WHO OWNS IT ────────────────────────────────────────
+    // Same precedence as the click handler: the two hit discs overlap, so a
+    // report filed at the lot an SOS was raised from shares a hover, and the
+    // emergency takes it. Without this the ordinary report's card would draw
+    // over the alert's, because `incident-hit` is the lower layer and fires
+    // last.
+    if (map.getLayer('panic-hit') && map.queryRenderedFeatures(event.point, { layers: ['panic-hit'] }).length) {
+      return
+    }
+
+    const feature = event.features?.[0]
+    const incident = incidentsRef.current.find((i) => i.id === feature?.properties?.id)
+    if (!incident) return
+    // Anchored to the marker's own coordinates, NOT to the cursor. A card that
+    // follows the pointer inside a 25px disc jitters, and it stops describing
+    // any particular marker the moment two overlap. See the positioning effect
+    // in the component below, which re-projects this through a pan.
+    onHoverRef?.current?.({ kind: 'incident', id: incident.id, lngLat: feature.geometry.coordinates })
   })
   map.on('mouseleave', 'incident-hit', () => {
     map.getCanvas().style.cursor = ''
+    onHoverRef?.current?.(null)
   })
 }
 
@@ -471,7 +591,7 @@ function setupLayers(map, initialData, opts) {
 // red-on-dark both lose contrast badly; a light stroke is the one edge that
 // survives every style in the switcher.
 function setupPanicLayer(map, initialData, opts) {
-  const { panicAlertsRef, onSelectPanicAlertRef } = opts
+  const { panicAlertsRef, onSelectPanicAlertRef, onHoverRef } = opts
 
   map.addSource(PANIC_SOURCE_ID, { type: 'geojson', data: initialData })
 
@@ -539,11 +659,16 @@ function setupPanicLayer(map, initialData, opts) {
     // Alerts page, is still there for a fix worth flying to.
     onSelectPanicAlertRef.current?.(alert)
   })
-  map.on('mousemove', 'panic-hit', () => {
+  map.on('mousemove', 'panic-hit', (event) => {
     map.getCanvas().style.cursor = 'pointer'
+    const feature = event.features?.[0]
+    const alert = panicAlertsRef.current.find((a) => a.id === feature?.properties?.id)
+    if (!alert) return
+    onHoverRef?.current?.({ kind: 'panic', id: alert.id, lngLat: feature.geometry.coordinates })
   })
   map.on('mouseleave', 'panic-hit', () => {
     map.getCanvas().style.cursor = ''
+    onHoverRef?.current?.(null)
   })
 }
 
@@ -586,43 +711,48 @@ function routeArrowImage() {
 }
 
 /**
- * Transport glyphs for the route origin, as Lucide draws them.
+ * Transport glyphs for the route origin.
  *
- * ── WHY THE GEOMETRY IS HERE AS DATA ────────────────────────────────────────
+ * -- WHY THE GEOMETRY IS READ OFF THE COMPONENT ------------------------------
  * A Mapbox symbol layer needs a raster it can place, not a React component, and
  * the three ways to get one are all worse than this: `renderToStaticMarkup`
  * drags react-dom/server into a map bundle, an <img> of an SVG data URL makes
  * layer setup asynchronous for one 14px glyph, and hand-tracing the shape
  * produces an icon that quietly stops matching the one in the card beside it.
  *
- * So these are Lucide's OWN path and circle definitions for `bike` and
- * `footprints` (lucide-react 1.24.0), on the same 24x24 viewBox, stroked onto a
- * canvas exactly as `routeArrowImage` above already does for the chevrons. Same
- * icon as the card, drawn synchronously, no extra dependency.
+ * This file used to hold a hand-copied COPY of the old icon set's path data,
+ * pinned to a version, under a note admitting it would not follow an upgrade.
+ * It did not, twice: the move to Hugeicons redrew both glyphs and the move to
+ * Material Symbols redrew them again, onto a different grid and as fills
+ * rather than strokes. A pinned copy would have survived neither, so the
+ * marker on the map and the icon on the card beside it would have been two
+ * different pictures of the same thing -- the exact failure the note
+ * predicted. Reading the geometry off the component is what makes the second
+ * migration a three-line change here instead of a re-trace.
  *
- * If a Lucide upgrade redraws either icon these will not follow automatically —
- * which is why they are pinned to a version here.
+ * `Bike.glyph` and `Footprints.glyph` are the SAME data the card renders (see
+ * `Icon.glyph` in shared/icons/createIcon.jsx). One drawing, filled onto a
+ * canvas much as `routeArrowImage` above strokes the chevrons -- synchronously,
+ * with no extra dependency, and with nothing left to keep in step by hand.
+ *
+ * -- FILLED, NOT STROKED, AND ON A 960 GRID -----------------------------------
+ * Both of those changed with the move to Material Symbols and neither is
+ * cosmetic. These glyphs are FILLED shapes: `ctx.stroke()` on one traces the
+ * outline of the silhouette, which draws each limb of the bicycle as a pair of
+ * hairlines with a gap down the middle rather than as a line. And they are
+ * authored on a 960-unit grid whose origin sits at the BASELINE, so every
+ * coordinate is negative and a `scale(size / 24)` of it lands the whole glyph
+ * off the top of the canvas. The transform below is the one that puts a
+ * `0 -960 960 960` viewBox into a `size` x `size` box.
  */
 const TRANSPORT_IMAGES = { bike: 'route-transport-bike', foot: 'route-transport-foot' }
 
+/** The Material Symbols grid: see ICON_VIEW_BOX in shared/icons/tokens.js. */
+const GLYPH_GRID = 960
+
 const TRANSPORT_GEOMETRY = {
-  bike: {
-    circles: [
-      [18.5, 17.5, 3.5],
-      [5.5, 17.5, 3.5],
-      [15, 5, 1],
-    ],
-    paths: ['M12 17.5V14l-3-3 4-3 2 3h2'],
-  },
-  foot: {
-    circles: [],
-    paths: [
-      'M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z',
-      'M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z',
-      'M16 17h4',
-      'M4 13h4',
-    ],
-  },
+  bike: { path: Bike.glyph },
+  foot: { path: Footprints.glyph },
 }
 
 function transportGlyphImage(kind) {
@@ -634,20 +764,18 @@ function transportGlyphImage(kind) {
   const ctx = canvas.getContext('2d')
 
   const geometry = TRANSPORT_GEOMETRY[kind] ?? TRANSPORT_GEOMETRY.bike
-  ctx.scale(size / 24, size / 24)
-  ctx.strokeStyle = '#FFFFFF'
-  // Lucide draws at 2; a touch heavier, because this lands on a coloured disc
-  // over satellite imagery rather than on a flat panel.
-  ctx.lineWidth = 2.4
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
+  // Scale the 960 grid down to the canvas, then drop the origin by a full
+  // grid: Material Symbols run from y = -960 up to y = 0, so without the
+  // translate every coordinate is above the top edge and the canvas comes back
+  // empty. The translate is expressed in grid units because it is applied
+  // after the scale.
+  ctx.scale(size / GLYPH_GRID, size / GLYPH_GRID)
+  ctx.translate(0, GLYPH_GRID)
+  // A fill, not a stroke. There is no line weight to choose here any more --
+  // the glyph's apparent weight is the font's wght=400, baked into the shape.
+  ctx.fillStyle = '#FFFFFF'
 
-  geometry.circles.forEach(([cx, cy, r]) => {
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.stroke()
-  })
-  geometry.paths.forEach((d) => ctx.stroke(new Path2D(d)))
+  ctx.fill(new Path2D(geometry.path))
 
   // getImageData ignores the transform and reads device pixels, so this is the
   // whole canvas despite the scale() above.
@@ -1174,6 +1302,16 @@ export default function IncidentMap({
    */
   const [controlsOpen, setControlsOpen] = useState(false)
   const [ready, setReady] = useState(false)
+  /**
+   * Which marker the pointer is over — `{ kind, id, lngLat }` or null.
+   *
+   * The pulse ring was, until now, a thing you could only interrogate by
+   * opening it. A dispatcher scanning a cluster of six pins had to open and
+   * close six panels to learn what they were, and each one moved the camera
+   * and covered the map. The preview answers the question the hover is
+   * actually asking — what IS this — without committing to anything.
+   */
+  const [hovered, setHovered] = useState(null)
 
   const incidentsRef = useRef(incidents)
   incidentsRef.current = incidents
@@ -1183,6 +1321,28 @@ export default function IncidentMap({
   panicAlertsRef.current = panicAlerts ?? []
   const onSelectPanicAlertRef = useRef(onSelectPanicAlert)
   onSelectPanicAlertRef.current = onSelectPanicAlert
+  // The node the preview card renders into, positioned imperatively below.
+  const hoverCardRef = useRef(null)
+  /**
+   * `mousemove` fires on every frame the pointer is inside a hit disc, so a
+   * handler that called `setHovered` with a fresh object each time would
+   * re-render this component — and the whole controls tree with it — sixty
+   * times a second while someone simply rests their cursor on a pin.
+   *
+   * This collapses the stream down to the only event React needs to hear:
+   * the hovered marker CHANGED. Re-rendering then happens once per marker,
+   * not once per frame. The card's position is not state at all — see the
+   * projection effect below.
+   */
+  const hoveredRef = useRef(null)
+  const onHoverRef = useRef(null)
+  onHoverRef.current = (next) => {
+    const prev = hoveredRef.current
+    const same = next === null ? prev === null : prev?.id === next.id && prev?.kind === next.kind
+    if (same) return
+    hoveredRef.current = next
+    setHovered(next)
+  }
   // Read at click time, not at layer-setup time. The layers are built once on
   // `load` (and again on a style change), so a plain closure over `focusInset`
   // would freeze whatever the first render happened to pass — and this value
@@ -1493,9 +1653,10 @@ export default function IncidentMap({
         onSelectIncidentRef,
         focusInsetRef,
         centerOnSelectRef,
+        onHoverRef,
       })
       if (hasPanicLayer) {
-        setupPanicLayer(map, panicGeojsonRef.current, { panicAlertsRef, onSelectPanicAlertRef })
+        setupPanicLayer(map, panicGeojsonRef.current, { panicAlertsRef, onSelectPanicAlertRef, onHoverRef })
       }
       // Last, because it inserts itself beneath the incident layers above.
       setupRouteLayers(map, routeRef.current)
@@ -1696,55 +1857,167 @@ export default function IncidentMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.id, ready])
 
-  // Drives both pulse layers' radius/opacity on a timer rather than a full
-  // requestAnimationFrame loop — this is a background ambient cue, not a
-  // smooth animation, so ~15fps is plenty and far cheaper on the GPU.
+  /**
+   * Keep the preview pinned to its marker, without re-rendering React.
+   *
+   * The card's position is written straight to the node's `transform` rather
+   * than held in state, because `move` fires once per frame for the whole of a
+   * pan or a zoom — and a position in state would mean a full React render per
+   * frame, for a card whose CONTENT has not changed at all. `hovered` changes
+   * once per marker; this changes sixty times a second, so the two are kept on
+   * different paths deliberately.
+   *
+   * `mouseout` on the map clears it: a pointer that leaves the canvas quickly
+   * enough across a corner can miss the layer's own `mouseleave`, and a card
+   * left pinned to a marker nobody is pointing at is worse than no card.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !hovered) return undefined
+
+    const place = () => {
+      const node = hoverCardRef.current
+      if (!node) return
+      const { x, y } = map.project(hovered.lngLat)
+      // Rounded to whole pixels: a card parked on a half-pixel renders its
+      // 1px border and 10px type through a filter, which looks like a
+      // rendering fault rather than a sharp panel.
+      node.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`
+    }
+    const clear = () => onHoverRef.current?.(null)
+
+    place()
+    map.on('move', place)
+    map.on('mouseout', clear)
+    return () => {
+      map.off('move', place)
+      map.off('mouseout', clear)
+    }
+  }, [hovered])
+
+  /**
+   * ── THE PULSE, ON THE COMPOSITOR'S CLOCK ─────────────────────────────────
+   *
+   * Drives every pulse layer's radius and opacity. This was a 65ms
+   * `setInterval`, chosen because "~15fps is plenty for an ambient cue and far
+   * cheaper on the GPU". The frame rate was never the problem. Three other
+   * things were.
+   *
+   *   A TIMER DOES NOT STOP. `setInterval` keeps firing in a hidden tab, so a
+   *   console left open on a second monitor spent the night writing paint
+   *   properties into a map nobody was looking at. `requestAnimationFrame` is
+   *   parked by the browser the moment the tab is backgrounded, which is the
+   *   whole reason it exists.
+   *
+   *   65ms DOES NOT DIVIDE INTO A FRAME. At 60Hz a 65ms timer lands 3.9 frames
+   *   apart, so the ring advanced by one step on some frames and two on others.
+   *   That reads as jank, and the stutter was more visible than the extra
+   *   smoothness would have been.
+   *
+   *   A LINEAR RAMP IS NOT A WAVE. `base + t * reach` expands at a constant
+   *   speed and then cuts back to the start, which reads as a second hand
+   *   sweeping. Things that actually radiate decelerate as they spread. The
+   *   cubic ease-out below does, and the squared opacity falloff gives the
+   *   tail a soft edge instead of a straight fade.
+   *
+   * REDUCED MOTION PARKS THE RING, IT DOES NOT REMOVE IT. The ring is the only
+   * thing on this map that says "this one is still live", so switching it off
+   * would drop information rather than decoration — the line the shared
+   * stylesheet's `prefers-reduced-motion` block draws everywhere else. It is
+   * held at half extent and a steady opacity, so a marker still reads as
+   * active with nothing moving.
+   */
   useEffect(() => {
     const map = mapRef.current
     if (!map) return undefined
 
-    const interval = setInterval(() => {
-      if (!map.isStyleLoaded()) return
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+    let frame = 0
+
+    /**
+     * Write a paint property only when its value has actually changed.
+     *
+     * Earns its place now that this runs at 60fps rather than 15 — and most of
+     * all under reduced motion, where every frame computes the SAME number.
+     * Without the cache the version that holds still would be the expensive
+     * one, re-dirtying a layer sixty times a second to set it to what it
+     * already is.
+     */
+    const written = new Map()
+    function write(layer, prop, value) {
+      const key = `${layer}:${prop}`
+      if (written.get(key) === value) return
+      written.set(key, value)
+      map.setPaintProperty(layer, prop, value)
+    }
+
+    // Cubic ease-out — quick at the leading edge, settling as it reaches full
+    // extent. This is the whole difference between a ripple and a metronome.
+    const spread = (t) => 1 - (1 - t) ** 3
+
+    function pulse(layer, period, base, reach, peak, now) {
+      if (!map.getLayer(layer)) return
+      if (reduceMotion?.matches) {
+        // Half extent: a ring clearly outside the badge, rather than a second
+        // disc sitting on top of it.
+        write(layer, 'circle-radius', base + reach * 0.5)
+        write(layer, 'circle-opacity', peak * 0.45)
+        return
+      }
+      const t = (now % period) / period
+      write(layer, 'circle-radius', base + spread(t) * reach)
+      // Squared, not linear: the ring holds through the first half of its
+      // travel and then drops away, so the eye follows the leading edge rather
+      // than a uniformly dimming disc.
+      write(layer, 'circle-opacity', peak * (1 - t) ** 2)
+    }
+
+    function step() {
+      frame = requestAnimationFrame(step)
+      // A style reload rebuilds every layer from setupLayers' defaults, so the
+      // cache above would happily skip restoring them. Cleared while the style
+      // is in flight, which is exactly the window in which that happens.
+      if (!map.isStyleLoaded()) {
+        written.clear()
+        return
+      }
       const now = Date.now()
 
-      if (map.getLayer('incident-pulse')) {
-        const t = (now % 1600) / 1600
-        // INCIDENT_PULSE_REACH, not a literal 18: `incident-hit` is sized from
-        // the same constant, so the disc a dispatcher can click and the ring
-        // they are aiming at cannot be edited apart from each other.
-        map.setPaintProperty('incident-pulse', 'circle-radius', pinRadius + t * INCIDENT_PULSE_REACH)
-        map.setPaintProperty('incident-pulse', 'circle-opacity', 0.55 * (1 - t))
-      }
-      if (map.getLayer('panic-pulse')) {
-        // 900ms, not 1100 — faster than the incident pulse (1600ms) so the
-        // two read as different urgencies even in peripheral vision, which
-        // is where this has to work.
-        const t = (now % 900) / 900
-        // Reaches 32px against the incident pulse's 25px — a shade wider,
-        // and local to the marker. At the old 90px it was a wash across a
-        // quarter of the viewport that dimmed everything under it. Same
-        // constants `panic-hit` is sized from, for the same reason.
-        map.setPaintProperty('panic-pulse', 'circle-radius', PANIC_BASE_RADIUS + t * PANIC_PULSE_REACH)
-        map.setPaintProperty('panic-pulse', 'circle-opacity', 0.6 * (1 - t))
-      }
-      if (map.getLayer('unit-pulse')) {
-        // A responding unit flashes: its ring pulses at 1.1 s and the marker
-        // itself dips, which reads as "moving" where a steady glow would
-        // read as "here".
-        const t = (now % 1100) / 1100
-        map.setPaintProperty('unit-pulse', 'circle-radius', 13 + t * 14)
-        map.setPaintProperty('unit-pulse', 'circle-opacity', 0.5 * (1 - t))
-        const flash = 0.55 + 0.45 * Math.abs(Math.cos(Math.PI * t))
-        map.setPaintProperty('unit-icons', 'icon-opacity', [
-          'case',
-          ['get', 'stale'], 0.45,
-          ['==', ['get', 'state'], 'responding'], flash,
-          1,
-        ])
-      }
-    }, 65)
+      // INCIDENT_PULSE_REACH, not a literal 18: `incident-hit` is sized from
+      // the same constant, so the disc a dispatcher can click and the ring they
+      // are aiming at cannot be edited apart from each other.
+      pulse('incident-pulse', 1600, pinRadius, INCIDENT_PULSE_REACH, 0.55, now)
+      // 900ms against the incident pulse's 1600 — faster, so the two read as
+      // different urgencies even in peripheral vision, which is where this has
+      // to work. Reaches 32px against the incident ring's 25: a shade wider,
+      // and local to the marker. Same constants `panic-hit` is sized from.
+      pulse('panic-pulse', 900, PANIC_BASE_RADIUS, PANIC_PULSE_REACH, 0.6, now)
+      pulse('unit-pulse', 1100, 13, 14, 0.5, now)
 
-    return () => clearInterval(interval)
+      if (map.getLayer('unit-icons')) {
+        // A responding unit flashes: the marker itself dips, which reads as
+        // "moving" where a steady ring would read as "here". Held full under
+        // reduced motion — the unit's colour already carries its state, so
+        // nothing is lost by holding still.
+        const t = (now % 1100) / 1100
+        const flash = reduceMotion?.matches ? 1 : 0.55 + 0.45 * Math.abs(Math.cos(Math.PI * t))
+        // Cached by the scalar rather than through `write`, because the value
+        // handed to Mapbox is a fresh expression array every time and would
+        // never compare equal to the last one.
+        if (written.get('unit-icons:flash') !== flash) {
+          written.set('unit-icons:flash', flash)
+          map.setPaintProperty('unit-icons', 'icon-opacity', [
+            'case',
+            ['get', 'stale'], 0.45,
+            ['==', ['get', 'state'], 'responding'], flash,
+            1,
+          ])
+        }
+      }
+    }
+
+    frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frame)
   }, [pinRadius])
 
   // Custom sources/layers don't survive a setStyle() call, so the pins and the
@@ -1757,9 +2030,10 @@ export default function IncidentMap({
       onSelectIncidentRef,
       focusInsetRef,
       centerOnSelectRef,
+      onHoverRef,
     })
     if (hasPanicLayer) {
-      setupPanicLayer(map, panicGeojsonRef.current, { panicAlertsRef, onSelectPanicAlertRef })
+      setupPanicLayer(map, panicGeojsonRef.current, { panicAlertsRef, onSelectPanicAlertRef, onHoverRef })
     }
     setupRouteLayers(map, routeRef.current)
     if (hasUnitLayer) setupUnitLayers(map, unitsGeojsonRef.current, { unitsRef, onSelectUnitRef })
@@ -1876,6 +2150,23 @@ export default function IncidentMap({
     return () => cancelAnimationFrame(frame)
   }, [maximized])
 
+  /**
+   * Resolved from the live arrays by id on every render, not captured when the
+   * hover started. A pin whose report is resolved, reassigned or closed while
+   * the pointer rests on it updates the card in place — and an incident that
+   * drops out of the list entirely takes its card with it rather than leaving
+   * a stale panel describing a marker that is no longer drawn.
+   */
+  const hoverRecord = (() => {
+    if (!hovered) return null
+    if (hovered.kind === 'panic') {
+      const alert = (panicAlerts ?? []).find((a) => a.id === hovered.id)
+      return alert ? { kind: 'panic', alert } : null
+    }
+    const incident = incidents.find((i) => i.id === hovered.id)
+    return incident ? { kind: 'incident', incident } : null
+  })()
+
   return (
     // `isolate` creates a stacking context so the z-10 floating overlays are
     // scoped to the map. Without it they compete in the page's root stacking
@@ -1963,12 +2254,13 @@ export default function IncidentMap({
                   controlsOpen ? 'border-b border-hairline' : ''
                 }`}
               >
-                <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-brand-400" />
+                <SlidersHorizontal size="sm" className="shrink-0 text-brand-400" />
                 <span className="flex-1 text-xs font-semibold text-text-primary">
                   Map controls
                 </span>
                 <ChevronDown
-                  className={`h-4 w-4 shrink-0 text-text-secondary transition-transform duration-200 ${
+                  size="sm"
+                  className={`text-text-secondary transition-transform duration-200 ${
                     controlsOpen ? '' : '-rotate-90'
                   }`}
                 />
@@ -2168,7 +2460,7 @@ export default function IncidentMap({
       {mapFailure ? (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-base-900/95 p-6 text-center">
           <div className="max-w-xs">
-            <MapPinOff aria-hidden="true" className="mx-auto mb-2 h-6 w-6 text-text-muted" />
+            <MapPinOff size="lg" aria-hidden="true" className="mx-auto mb-2 text-text-muted" />
             <p className="text-sm font-medium text-text-primary">The map is not available</p>
             <p className="mt-1 text-xs leading-relaxed text-text-secondary">{mapFailure}</p>
           </div>
@@ -2178,6 +2470,20 @@ export default function IncidentMap({
       {!mapboxgl.accessToken ? (
         <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-base-950 text-sm text-text-secondary">
           Set VITE_MAPBOX_TOKEN to enable the incident map.
+        </div>
+      ) : null}
+
+      {/* Above the z-10 overlays, because a transient card the pointer is
+          holding open should not be clipped by a panel it happens to cross,
+          and `pointer-events-none` means it can never steal the click it is
+          inviting. Left off the compact variant: the dashboard mini-map is
+          narrower than the card. */}
+      {!isCompact && hoverRecord ? (
+        <div
+          ref={hoverCardRef}
+          className="pointer-events-none absolute left-0 top-0 z-20 will-change-transform"
+        >
+          <HoverPreview record={hoverRecord} />
         </div>
       ) : null}
 

@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown } from '@shared/icons'
 
 /**
  * One headline figure, as a layered card (2026-09-22 redesign):
@@ -58,7 +58,7 @@ export default function KpiCard({
           : 'bg-pill-danger text-pill-danger-fg ring-pill-danger-fg/15'
       }`}
     >
-      {isUp ? <TrendingUp className="h-3 w-3" aria-hidden="true" /> : <TrendingDown className="h-3 w-3" aria-hidden="true" />}
+      {isUp ? <TrendingUp size="sm" aria-hidden="true" /> : <TrendingDown size="sm" aria-hidden="true" />}
       {delta}
     </span>
   ) : null

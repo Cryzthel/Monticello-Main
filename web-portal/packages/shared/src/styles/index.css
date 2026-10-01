@@ -112,8 +112,13 @@
       at its standard size so the curve never eats the first glyph. Text
       inputs stay rectangular on purpose — a stadium-shaped field is the one
       capsule that reads as consumer rather than console.
-   5. Icons are Lucide at 1.5px stroke, uniformly. They do NOT refill on
-      active: an active row is carried by the emerald wash and the accent ink.
+   5. Icons are Material Symbols Rounded, uniformly — one registry, one
+      weight (wght=400, FILL=0), one three-step size scale of 16/20/24
+      (shared/icons). Rounded, not Outlined, because the system's own
+      geometry is soft: radiused terminals belong on a glyph that sits
+      inside a capsule. They are FILLED shapes, not strokes, so there is no
+      line weight to set at a call site. They do NOT refill on active: an
+      active row is carried by the emerald wash and the accent ink.
    6. NOTHING IS SET IN ALL CAPS. Screen headers, section titles, table column
       heads, form labels and badges are all sentence case at font-semibold.
       A `uppercase` utility in this codebase is a regression.
@@ -2323,27 +2328,32 @@
     color: var(--color-nav-active-fg);
   }
 
-  /* ── Nav glyphs: STROKE ONLY ──────────────────────────────────────────────
+  /* ── Nav glyphs: COLOUR ONLY ──────────────────────────────────────────────
      These rules used to implement a "refill": an inactive nav glyph was line
      art and an active or hovered one gained a translucent fill, so the icon
      appeared to solidify as you selected it. That is gone.
 
-     The brief asks for one standardized thin-stroke icon set used consistently,
-     and a glyph that changes WEIGHT mid-interaction is the opposite of
-     consistent — it made the sidebar the only place in either console where an
-     icon rendered two different ways. Corporate consoles carry a single stroke
-     everywhere and let colour do the state work.
+     A glyph that changes WEIGHT mid-interaction made the sidebar the only
+     place in either console where an icon rendered two different ways.
+     Corporate consoles draw one weight everywhere and let colour do the state
+     work. That argument was made of the old stroked set and survives the move
+     to Material Symbols unchanged — Symbols CAN animate their FILL axis, and
+     this is still declining to.
 
-     So an active row is now signalled by exactly two things, both of which the
-     row itself owns: the pale blue wash (--color-nav-active) and the accent
-     ink (--color-nav-active-fg). The glyph just inherits the colour.
+     So an active row is signalled by exactly two things, both of which the row
+     itself owns: the pale wash (--color-nav-active) and the accent ink
+     (--color-nav-active-fg). The glyph just inherits the colour.
 
-     `fill: transparent` is still declared, and still load-bearing: Lucide sets
-     `fill="none"` as an ATTRIBUTE on the SVG, and leaving the property unset
-     means anything that later sets `fill` on an ancestor can leak in. */
+     ── NO `fill: transparent` HERE ANY MORE, AND IT MATTERS ─────────────────
+     This block used to end with one, because the old set drew line art and set
+     `fill="none"` as an ATTRIBUTE that an ancestor could override. Material
+     Symbols are the opposite: the glyph IS a filled shape, painted with the
+     `fill="currentColor"` createIcon puts on every icon. Leaving that rule
+     here made every nav glyph paint transparent — a sidebar of correctly
+     sized, perfectly invisible icons. Colour now reaches them through
+     `color` + `currentColor`, which is what the three rules below set. */
   .nav-icon-glyph {
     @apply text-slate-400 transition-colors duration-150;
-    fill: transparent;
   }
 
   .group:hover .nav-icon-glyph {
@@ -2356,10 +2366,13 @@
   }
 
   /* ══ ICON BUTTONS ═════════════════════════════════════════════════════════
-     Global stroke weight is set once in React, not here: main.jsx wraps the
-     app in <LucideProvider strokeWidth={2}>, so every Lucide glyph in both
-     portals draws at the spec's 2px weight and a per-icon `strokeWidth` prop
-     is a deliberate exception rather than the norm.
+     There is no global stroke weight to set any more, here or in JS. Every
+     glyph in both portals is bound in packages/shared/src/icons, and the set
+     it draws from (@material-symbols/svg-400, Rounded) is FILL=0 wght=400 —
+     a weight baked into each shape at export rather than applied at render.
+     (This paragraph has named, in turn, a <LucideProvider strokeWidth={2}>,
+     then 1.75, then an ICON_STROKE constant. All three are gone; the weight
+     now lives in the package name in scripts/build-icons.mjs.)
 
      What lives here is the CONTAINER. Icon-only controls previously each
      invented their own box — the sidebar toggle, the header search, the
@@ -2392,6 +2405,36 @@
   }
 
   .icon-btn-active:hover {
+    background-color: var(--color-nav-active);
+    color: var(--color-nav-active-fg);
+  }
+
+  /* ── HEADER CHROME: NO RESTING CONTAINER ──────────────────────────────────
+     The theme toggle and the notification bell used to carry a resting border
+     and a white fill, which gave each of them a visible box sitting on the
+     header. Two boxed controls in the top-right corner read as a toolbar
+     pinned to the bar rather than as part of it — and they were the only two
+     controls in either portal drawing a container while idle.
+
+     This drops the container entirely: the glyph rests directly on the header
+     surface and the only shape that ever appears is the hover wash. That wash
+     is a CIRCLE here rather than the `.icon-btn` 8px square, which is the one
+     place the Capsule-Is-Read-Not-Pressed rule bends. It is allowed to,
+     narrowly: the rule exists so that a LABELLED, pressable control is not
+     dressed as a read-only token, and these have no label — a round wash under
+     a lone glyph is the standard header affordance and reads as a target, not
+     as a badge. Anything with text in it stays an 8px rectangle.
+
+     Pair with `.icon-btn`; this only removes and re-rounds. */
+  .icon-btn-plain {
+    @apply rounded-full border-0 bg-transparent shadow-none hover:bg-tint/[0.06];
+  }
+
+  /* The "on" state keeps its pastel plate, now as a disc so it matches the
+     hover shape it replaces. Declared after `.icon-btn-plain` so a bell that
+     is both plain and active lands on the plate, not the transparent fill. */
+  .icon-btn-plain.icon-btn-active,
+  .icon-btn-plain.icon-btn-active:hover {
     background-color: var(--color-nav-active);
     color: var(--color-nav-active-fg);
   }

@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Archive, ArchiveRestore, CheckCircle2, ClipboardCheck, FileType, Images, Loader2, Printer, Trash2, X,
-} from 'lucide-react'
+  Archive,
+  ArchiveRestore,
+  CheckCircle2,
+  ClipboardCheck,
+  FileType,
+  Images,
+  Loader2,
+  Printer,
+  Trash2,
+  X,
+} from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import EvidenceImage from '@shared/components/EvidenceImage'
@@ -273,7 +282,7 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
               aria-label="Close"
               className="icon-btn h-11 w-11 shrink-0 sm:h-8 sm:w-8"
             >
-              <X className="h-5 w-5 sm:h-4 sm:w-4" />
+              <X size="sm" />
             </button>
           </div>
 
@@ -360,7 +369,7 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                                   rel="noreferrer"
                                   className="flex min-h-11 items-center gap-2.5 rounded-xl border border-hairline bg-base-900 px-3 py-2 transition-colors duration-150 hover:border-slate-300"
                                 >
-                                  <FileType className="h-4 w-4 shrink-0 text-text-muted" />
+                                  <FileType size="sm" className="shrink-0 text-text-muted" />
                                   <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary">
                                     {decodeURIComponent(url.split('/').pop().split('?')[0])}
                                   </span>
@@ -408,9 +417,9 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                 className="btn btn-sm btn-success min-h-11 sm:min-h-0"
               >
                 {busy === 'review' ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 size="sm" className="animate-spin" />
                 ) : (
-                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <CheckCircle2 size="sm" />
                 )}
                 {report?.reviewedAt ? 'Reviewed' : 'Mark as reviewed'}
               </button>
@@ -421,7 +430,7 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                 onClick={() => window.print()}
                 className="btn btn-sm btn-outline min-h-11 sm:min-h-0"
               >
-                <Printer className="h-3.5 w-3.5" />
+                <Printer size="sm" />
                 Export PDF
               </button>
 
@@ -432,11 +441,11 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                 className="btn btn-sm btn-outline min-h-11 sm:min-h-0"
               >
                 {busy === 'archive' ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 size="sm" className="animate-spin" />
                 ) : archived ? (
-                  <ArchiveRestore className="h-3.5 w-3.5" />
+                  <ArchiveRestore size="sm" />
                 ) : (
-                  <Archive className="h-3.5 w-3.5" />
+                  <Archive size="sm" />
                 )}
                 {archived ? 'Unarchive' : 'Archive'}
               </button>
@@ -447,7 +456,7 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                 onClick={() => setConfirming(true)}
                 className="btn btn-sm btn-danger min-h-11 sm:ml-auto sm:min-h-0"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 size="sm" />
                 Delete
               </button>
             </div>

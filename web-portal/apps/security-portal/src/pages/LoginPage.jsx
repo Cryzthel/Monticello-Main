@@ -1,4 +1,4 @@
-import { Mail } from 'lucide-react'
+import { Mail } from '@shared/icons'
 
 import LoginSplitLayout from '@shared/auth/LoginSplitLayout'
 import LoginHeroAnimation from '@shared/auth/LoginHeroAnimation'

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Layers } from 'lucide-react'
+import { Layers } from '@shared/icons'
 import Card from '@shared/components/Card'
 import SectionHeading from '@shared/components/SectionHeading'
 import TimeframePills from '@shared/components/TimeframePills'
@@ -89,7 +89,7 @@ export default function CategoryBreakdownPanel({
           </ul>
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-14 text-center">
-            <Layers className="h-6 w-6 text-text-muted" />
+            <Layers size="lg" className="text-text-muted" />
             <p className="text-sm text-text-secondary">
               Nothing resolved in this window yet.
             </p>

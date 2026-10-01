@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, Trash2, RotateCcw, Loader2 } from 'lucide-react'
+import { AlertTriangle, Trash2, RotateCcw, Loader2 } from '@shared/icons'
 
 const TONES = {
   danger: {
@@ -85,7 +85,7 @@ export default function ConfirmDialog({
           <span
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${ring}`}
           >
-            <Icon className="h-5 w-5" />
+            <Icon size="md" />
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold leading-snug text-text-primary">{title}</h2>
@@ -111,7 +111,7 @@ export default function ConfirmDialog({
             onClick={onConfirm}
             className={`btn h-11 w-full px-4 text-xs sm:h-9 sm:w-auto ${confirm}`}
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {busy ? <Loader2 size="sm" className="animate-spin" /> : null}
             {confirmLabel}
           </button>
         </div>

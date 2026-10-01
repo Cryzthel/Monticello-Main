@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, MapPin, Search, ShieldAlert, UserRound, X } from 'lucide-react'
+import { Check, MapPin, Search, ShieldAlert, UserRound, X } from '@shared/icons'
 
 /**
  * Pick the resident a report concerns, and bind the location fields to their
@@ -134,12 +134,12 @@ export default function ResidentLocationPicker({
     return (
       <div className="flex items-start gap-3 rounded-lg border border-brand-500/30 bg-brand-50 p-3">
         <span className="icon-tile icon-tile-sm mt-0.5">
-          <UserRound className="h-3.5 w-3.5" />
+          <UserRound size="sm" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-text-primary">{selected.name}</p>
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-text-secondary">
-            <MapPin className="h-3 w-3 shrink-0" />
+            <MapPin size="sm" className="shrink-0" />
             {selected.label || 'No address on their profile'}
           </p>
         </div>
@@ -150,7 +150,7 @@ export default function ResidentLocationPicker({
           aria-label="Clear selected resident"
           className="shrink-0 rounded-lg p-1 text-text-muted transition-colors hover:bg-tint/10 hover:text-text-primary disabled:opacity-50"
         >
-          <X className="h-3.5 w-3.5" />
+          <X size="sm" />
         </button>
       </div>
     )
@@ -158,7 +158,7 @@ export default function ResidentLocationPicker({
 
   return (
     <div className="relative" ref={fieldRef}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-muted" />
+      <Search size="sm" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
       <input
         type="text"
         className="field pl-9"
@@ -198,7 +198,7 @@ export default function ResidentLocationPicker({
 
       {error ? (
         <p className="mt-1.5 flex items-start gap-1.5 text-2xs leading-snug text-danger">
-          <ShieldAlert className="mt-px h-3 w-3 shrink-0" />
+          <ShieldAlert size="sm" className="mt-px shrink-0" />
           Resident directory unavailable — enter the location manually below.
         </p>
       ) : null}
@@ -240,7 +240,7 @@ export default function ResidentLocationPicker({
                     </p>
                   </div>
                   {resident.hasAddress ? (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-brand-400" />
+                    <Check size="sm" className="shrink-0 text-brand-400" />
                   ) : null}
                 </button>
               </li>
