@@ -3,17 +3,12 @@ import {
   AlertOctagon,
   AlignLeft,
   Archive,
-  ArchiveRestore,
   BadgeCheck,
   Check,
-  Copy,
   IdCard,
   ImageOff,
   Images,
-  Loader2,
   MapPin,
-  Navigation,
-  Phone,
   Radio,
   ShieldAlert,
   ShieldCheck,
@@ -26,13 +21,12 @@ import StatusBadge from '@shared/components/StatusBadge'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import EvidenceImage from '@shared/components/EvidenceImage'
 import Lightbox from '@shared/components/Lightbox'
-import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { MetaItem, MetaList, MetaSection } from '@shared/components/MetaList'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useNow } from '@shared/hooks/useNow'
 import { useReporterContact } from '@shared/hooks/useReporterContact'
 import { useStaffAccounts } from '@shared/hooks/useStaffAccounts'
-import { archiveIncidents, buildMediaItems, isArchived, unarchiveIncidents } from '@shared/lib/incidents'
+import { buildMediaItems, isArchived } from '@shared/lib/incidents'
 import { isOfficerFiled } from '@shared/lib/staffFiling'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import { relativeTime } from '@shared/lib/notifications'
@@ -81,6 +75,24 @@ const STAGE_STAMPS = {
 const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : '')
 
 const PREMISES_CENTRE = boundaryCenter()
+
+/*
+ * Body padding for every card in this rail.
+ *
+ * 24px, where the shared default is 16px. This is a single column of stacked
+ * cards with nothing beside it, so the card edge is the only thing separating
+ * a label from the panel wall, and 16px read as tight once the action footer
+ * came off and the eye had nothing else to land on.
+ *
+ * Measured at the rail's real 416px before it was adopted: p-6 costs 75px of
+ * total scroll and wraps nothing. The coordinate row is the narrowest thing in
+ * here and still holds one line, which is the test that mattered — a
+ * latitude/longitude broken across two lines is unreadable as a pair.
+ *
+ * One constant rather than five literals: five cards that are supposed to be
+ * one object should not be able to disagree about their own padding.
+ */
+const CARD_BODY = 'p-6'
 
 const exactTime = (value) => {
   if (!value) return ''
@@ -200,40 +212,6 @@ function StageReadout({ report }) {
 }
 
 /**
- * One action in the footer bar.
- *
- * The brief's geometry — `px-4 py-2 text-sm font-medium rounded-lg` — expressed
- * through the portal's own `.btn` scale rather than as literal utilities, so
- * these match every other button in the console instead of being a second set
- * that happens to look right on one panel. `.btn-sm` IS that geometry here.
- */
-function BarAction({ icon: Icon, label, onClick, href, busy, disabled, tone = 'outline' }) {
-  const className = `btn btn-sm btn-${tone} w-full min-w-0 justify-center`
-  const content = (
-    <>
-      {busy ? <Loader2 size="sm" className="animate-spin" /> : <Icon size="sm" />}
-      <span className="truncate">{label}</span>
-    </>
-  )
-
-  // An anchor when there is somewhere to go, a button when there is something
-  // to do — never an anchor with a click handler faking one. A disabled link is
-  // not a thing in HTML, so a missing target falls back to a disabled button.
-  if (href && !disabled) {
-    return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
-        {content}
-      </a>
-    )
-  }
-  return (
-    <button type="button" onClick={onClick} disabled={disabled || busy} className={className}>
-      {content}
-    </button>
-  )
-}
-
-/**
  * ── THE HAZARD MAP'S INSPECTION PANEL ──────────────────────────────────────
  *
  * A RAIL, NOT A CENTRED MODAL. The Hazard Map used the shared
@@ -256,10 +234,6 @@ function BarAction({ icon: Icon, label, onClick, href, busy, disabled, tone = 'o
  */
 export default function IncidentInspectorDrawer({ report, onClose }) {
   const [lightboxIndex, setLightboxIndex] = useState(null)
-  const [copied, setCopied] = useState(false)
-  const [confirmArchive, setConfirmArchive] = useState(false)
-  const [archiving, setArchiving] = useState(false)
-  const [actionError, setActionError] = useState('')
 
   const { contact, loading: contactLoading } = useReporterContact(report?.reporterUid)
   const { staffIds } = useStaffAccounts()
@@ -276,31 +250,21 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
   // here resets on its own.
   useEffect(() => {
     setLightboxIndex(null)
-    setCopied(false)
-    setConfirmArchive(false)
-    setActionError('')
   }, [report?.id])
 
-  useEffect(() => {
-    if (!copied) return undefined
-    const timer = setTimeout(() => setCopied(false), 2000)
-    return () => clearTimeout(timer)
-  }, [copied])
-
   /*
-   * Escape closes the rail. The Lightbox owns Escape while it is open and the
-   * confirm dialog owns it while that is, so this defers to both rather than
-   * closing everything at once and dumping the operator back to a bare map from
-   * a full-screen photo.
+   * Escape closes the rail, unless the Lightbox is up — that owns Escape while
+   * it is open, so this defers rather than closing both at once and dumping the
+   * operator back to a bare map from a full-screen photo.
    */
   useEffect(() => {
-    if (!report || lightboxIndex !== null || confirmArchive) return undefined
+    if (!report || lightboxIndex !== null) return undefined
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [report, lightboxIndex, confirmArchive, onClose])
+  }, [report, lightboxIndex, onClose])
 
   const media = useMemo(() => buildMediaItems(report), [report])
 
@@ -338,43 +302,6 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
     name: report.reportedByName ?? 'Unknown resident',
     address: address || 'Address unavailable',
     timestamp: report.reportedAt ? new Date(report.reportedAt).toLocaleString() : 'Timestamp unavailable',
-  }
-
-  async function copyCoordinates() {
-    if (!hasFix) return
-    try {
-      await navigator.clipboard.writeText(coordinates)
-      setCopied(true)
-    } catch {
-      // Clipboard access is refused outright in some locked-down browsers, and
-      // a button that silently does nothing reads as broken. The coordinates are
-      // already on screen and selectable, so say that rather than retrying.
-      setActionError('Could not reach the clipboard — the coordinates above can be selected directly.')
-    }
-  }
-
-  async function toggleArchive() {
-    setArchiving(true)
-    setActionError('')
-    try {
-      if (archived) await unarchiveIncidents([report.id])
-      else await archiveIncidents([report.id])
-      setConfirmArchive(false)
-      // Archiving takes the pin off this map, so the rail it was opened from is
-      // now describing something the operator can no longer see. Restoring does
-      // not, so that one leaves the panel open.
-      if (!archived) onClose()
-    } catch (err) {
-      console.error('Archive failed', err)
-      setActionError(
-        err?.code === 'permission-denied'
-          ? 'Your account is not permitted to archive reports.'
-          : 'Could not archive this report. Try again.',
-      )
-      setConfirmArchive(false)
-    } finally {
-      setArchiving(false)
-    }
   }
 
   return (
@@ -450,9 +377,9 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           <p className="mt-1.5 text-2xs text-text-muted">{relativeTime(report.reportedAt)}</p>
         </header>
 
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-4">
+        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
           {/* ══ DISPATCH ══ */}
-          <MetaSection icon={Radio} title="Dispatch">
+          <MetaSection icon={Radio} title="Dispatch" bodyClassName={CARD_BODY}>
             <StageReadout report={report} />
             <div className="mt-3 border-t border-hairline pt-3">
               <MetaList>
@@ -478,7 +405,7 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           </MetaSection>
 
           {/* ══ GEOSPATIAL LOCATION ══ */}
-          <MetaSection icon={MapPin} title="Location">
+          <MetaSection icon={MapPin} title="Location" bodyClassName={CARD_BODY}>
             <MetaList>
               <MetaItem label="Address">{address || report.location}</MetaItem>
               {/* `location` is `describeIncidentLocation`, which composes the
@@ -505,7 +432,11 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           </MetaSection>
 
           {/* ══ REPORTER METADATA ══ */}
-          <MetaSection icon={officerFiled ? IdCard : User} title={officerFiled ? 'Filed by officer' : 'Resident'}>
+          <MetaSection
+              icon={officerFiled ? IdCard : User}
+              title={officerFiled ? 'Filed by officer' : 'Resident'}
+              bodyClassName={CARD_BODY}
+            >
             <MetaList>
               <MetaItem label="Name">{report.reportedByName}</MetaItem>
               <MetaItem label="Phone">
@@ -546,7 +477,7 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
 
           {/* ══ DESCRIPTION ══ */}
           {report.description ? (
-            <MetaSection icon={AlignLeft} title="Description">
+            <MetaSection icon={AlignLeft} title="Description" bodyClassName={CARD_BODY}>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">{report.description}</p>
             </MetaSection>
           ) : null}
@@ -560,6 +491,7 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           <MetaSection
             icon={Images}
             title="Evidence"
+            bodyClassName={CARD_BODY}
             action={
               <span className="text-2xs font-medium text-text-muted">
                 {media.length} file{media.length === 1 ? '' : 's'}
@@ -600,67 +532,32 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           </MetaSection>
         </div>
 
-        {/* ══ ACTION BAR ══ what an administrator can actually do from here.
-            Pinned to the footer rather than scrolling with the record: the
-            actions have to be reachable without reading to the bottom, and on a
-            phone the bottom is three swipes away. */}
-        <footer className="shrink-0 border-t border-hairline bg-base-900 px-4 py-3">
-          {actionError ? (
-            <p role="status" className="mb-2 text-2xs leading-relaxed text-warning">
-              {actionError}
-            </p>
-          ) : null}
-          {/* ── TWO COLUMNS, NOT FOUR ──────────────────────────────────
-              Measured in the harness at the rail's real 416px: four buttons
-              across the footer's 384px of usable width leave about 44px for a
-              label once the icon and padding are paid for, and "Directions"
-              needs 62. Every label but "Call" ellipsized — a bar of buttons
-              reading "Dire…", "Coo…", "Arc…", which is worse than no icons and
-              worse than two rows. At two columns each button gets 188px and
-              every label is whole. */}
-          <div className="grid grid-cols-2 gap-2">
-            <BarAction
-              icon={Phone}
-              label="Call reporter"
-              href={contact?.phone ? `tel:${contact.phone}` : undefined}
-              disabled={!contact?.phone}
-            />
-            <BarAction
-              icon={Navigation}
-              label="Directions"
-              // The operator's own mapping app, not this canvas: an
-              // administrator sending a contractor or meeting a resident needs
-              // a route from wherever they are, which this map does not plan
-              // and should not start planning.
-              href={hasFix ? `https://www.google.com/maps/dir/?api=1&destination=${report.lat},${report.lng}` : undefined}
-              disabled={!hasFix}
-            />
-            <BarAction
-              icon={copied ? Check : Copy}
-              label={copied ? 'Copied' : 'Copy coordinates'}
-              onClick={copyCoordinates}
-              disabled={!hasFix}
-            />
-            <BarAction
-              icon={archived ? ArchiveRestore : Archive}
-              label={archived ? 'Restore' : 'Archive'}
-              onClick={() => (archived ? toggleArchive() : setConfirmArchive(true))}
-              busy={archiving}
-            />
-          </div>
-        </footer>
-      </aside>
+        {/* ── NO ACTION BAR, AND THAT IS THE POINT ────────────────────────
+            This rail used to end in a pinned footer of four buttons: Call
+            reporter, Directions, Copy coordinates, Archive. They are gone by
+            request, and the panel is now a strictly read-only inspection view.
 
-      <ConfirmDialog
-        open={confirmArchive}
-        title="Archive this report?"
-        message="It comes off the hazard map and moves to Audit History. The record is kept and can be restored."
-        confirmLabel="Archive"
-        tone="danger"
-        busy={archiving}
-        onConfirm={toggleArchive}
-        onCancel={() => setConfirmArchive(false)}
-      />
+            The record reads better for it. A detail panel that also dispatches
+            has to answer "what can I do here" on every line, and the two
+            questions compete: the Dispatch section already explains that the
+            workflow belongs to the Guardhouse, and a row of controls under it
+            argued the opposite. What is left is one job, done plainly — what
+            was reported, where, by whom, and what the evidence shows.
+
+            The facts the buttons acted on are all still on screen and
+            selectable: the phone number in Reporter, the coordinates in
+            Location. Nothing an operator could reach from here has been
+            hidden, only the shortcuts that performed it.
+
+            ARCHIVE IS THE ONE REAL LOSS, and it is worth stating plainly
+            rather than discovering later. This rail was the only manual way an
+            administrator could archive a RESIDENT-filed incident: the ticket
+            queue has no archive control, and Admin > Reports filters to
+            `staffById.has(report.reporterUid)`, so officer-filed reports only.
+            What still archives a resident report is the scheduled sweep, and
+            only once it is RESOLVED and past its TTL. An open resident report
+            now has no manual archive path anywhere in the console. */}
+      </aside>
 
       {lightboxIndex !== null ? (
         <Lightbox

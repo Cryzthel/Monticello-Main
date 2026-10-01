@@ -46,7 +46,24 @@ export function MetaItem({ label, children, mono = false, hidden = false }) {
  * component produced them. The title is 14px semibold primary — never smaller
  * than the 14px labels inside it.
  */
-export function MetaSection({ icon: Icon, title, action, className = '', children }) {
+export function MetaSection({
+  icon: Icon,
+  title,
+  action,
+  className = '',
+  /**
+   * Padding for the body, when 16px is not the right amount of room.
+   *
+   * A prop rather than a change to the default, because the four consumers do
+   * not want the same number: the centred modals are 640px wide and read fine
+   * at `p-4`, while the Hazard Map's 416px rail is a column of stacked cards
+   * with nothing beside them, where the same 16px reads tight. Measured at the
+   * rail's real width, `p-6` costs 75px of scroll and wraps nothing — the
+   * coordinate row, the narrowest thing here, still holds one line.
+   */
+  bodyClassName = 'p-4',
+  children,
+}) {
   return (
     <section className={`rounded-xl border border-hairline bg-base-800 ${className}`}>
       <header className="flex min-h-11 items-center justify-between gap-3 border-b border-hairline px-4 py-2">
@@ -56,7 +73,7 @@ export function MetaSection({ icon: Icon, title, action, className = '', childre
         </h3>
         {action}
       </header>
-      <div className="p-4">{children}</div>
+      <div className={bodyClassName}>{children}</div>
     </section>
   )
 }
