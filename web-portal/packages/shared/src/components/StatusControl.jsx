@@ -9,7 +9,7 @@ import { statusStyle, INCIDENT_STATUSES } from '@shared/theme/statusStyles'
  * SHAPE
  * -----
  * Geometry is copied from shared/components/Select.jsx exactly: `h-9`,
- * `rounded-lg`, `border-slate-100`, `bg-base-800`, `px-3.5`, `gap-2`,
+ * `rounded-full`, `border-slate-100`, `bg-base-800`, `px-3.5`, `gap-2`,
  * `text-sm`. The two are the dashboard's only dropdowns, so they are the same
  * object — a filter in the tickets toolbar and a filter in the announcements
  * feed should not be two different controls.
@@ -101,7 +101,7 @@ export default function StatusSelect({
         onClick={handleToggle}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`inline-flex ${height} min-w-[8.5rem] items-center gap-2 rounded-lg border bg-base-800 px-3.5 font-medium text-text-primary transition hover:bg-tint/[0.06] disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={`inline-flex ${height} min-w-[8.5rem] items-center gap-2 rounded-full border bg-base-800 px-3.5 font-medium text-text-primary transition hover:bg-tint/[0.06] disabled:cursor-not-allowed disabled:opacity-50 ${
           open ? 'border-brand-500/50' : 'border-tint/10 hover:border-tint/20'
         } ${className}`}
       >

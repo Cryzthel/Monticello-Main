@@ -2301,19 +2301,38 @@
 
      `rounded-lg`: under the flat system a nav row takes the same 6px corner
      as every other control; the pill tier is retired outside dots and avatars. */
-  /* py-2 — a 36px row, and the most the nav can afford.
-     THE ARITHMETIC, because this value has now moved twice. The admin
-     nav is 11 links, 3 group labels and 2 group gaps, and at 1280x720
-     it has 540px to live in. Measured: 84px of that is labels and group
-     gaps, leaving the rows and their gaps. At py-1.5 with gap-0.5 the
-     column came to 496px — safe, but tight enough to read as cramped.
-     At py-2 with gap-1 it is 512px, which still clears 540 with room.
-     The brief's py-2.5 with gap-3 computes to 620px, which is 80px past
-     the viewport and reintroduces exactly the scrolling it also asks to
-     avoid; those two requirements cannot both hold at 11 items. If the
-     looser spacing is wanted, something has to leave the nav. */
+  /* py-2.5 — a 40px row. THE ARITHMETIC, because this value keeps moving and
+     the last two briefs disagreed about it.
+
+     The admin nav is 11 links, 3 group labels and 2 group gaps. Measured in
+     the harness at 1280x720, which is the tightest real viewport:
+
+       py-2   (36px rows)  column spans 464px, nothing scrolls
+       py-2.5 (40px rows)  column spans 508px, nothing scrolls, 212px spare
+
+     So the row padding is NOT what threatens the nav. An earlier note here
+     warned that "py-2.5 with gap-3 computes to 620px, 80px past the
+     viewport" — and that is still true, but the 620 came from GAP-3, not
+     from py-2.5. Adding 12px of gap between glyph and label on 13 rows is
+     what overflows; the 4px of extra row height does not. The two were
+     asked for together and only one of them is affordable.
+
+     NO `gap` HERE, AND NOT ONLY FOR SPACE. The distance between glyph and
+     label is owned by the fixed-width icon column below (`.nav-icon`), which
+     ANIMATES between rail states — 2.75rem expanded, 3.5rem collapsed — and
+     is what holds every glyph on one vertical axis through the 300ms
+     collapse. Handing that spacing to a flex gap would make the icons drift
+     sideways mid-animation, which is a worse bug than a tight row.
+
+     40px also suits the glyph it now carries: the icons came down from 24 to
+     20 and stopped filling their slot, so the row had to lose a little of
+     the tightness that 24 was hiding.
+
+     `rounded-lg`, not a capsule: a nav row is a full-width list item, and a
+     stadium-shaped one reads as a button that failed to size itself — the
+     same reasoning as the rows inside a dropdown panel. */
   .nav-link {
-    @apply relative flex w-full items-center rounded-lg py-2 text-left text-sm font-medium tracking-normal text-text-secondary transition-colors duration-150 hover:bg-tint/[0.04] hover:text-text-primary;
+    @apply relative flex w-full items-center rounded-lg py-2.5 text-left text-sm font-medium tracking-normal text-text-secondary transition-colors duration-150 hover:bg-tint/[0.04] hover:text-text-primary;
   }
 
   /* Fixed-width icon column, animated in step with the rail. At w-64/px-4 the

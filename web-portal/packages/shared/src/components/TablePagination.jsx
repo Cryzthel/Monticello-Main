@@ -89,7 +89,11 @@ export default function TablePagination({
                 onClick={() => onPageChange(item)}
                 aria-label={`Page ${item}`}
                 aria-current={item === safePage ? 'page' : undefined}
-                className={`h-9 min-w-9 rounded-lg px-2.5 text-xs font-semibold tabular-nums transition-colors duration-150 ${
+                // `min-w-9` on a `rounded-full` box is what makes a single
+                // digit a circle and a double digit a stadium, which is the
+                // right behaviour: the control grows along one axis only, so
+                // a row of page numbers keeps one baseline and one height.
+                className={`h-9 min-w-9 rounded-full px-2.5 text-xs font-semibold tabular-nums transition-colors duration-150 ${
                   item === safePage
                     ? 'surface-brand'
                     : 'border border-slate-200 bg-base-800 text-text-secondary hover:border-slate-300 hover:text-brand-400'

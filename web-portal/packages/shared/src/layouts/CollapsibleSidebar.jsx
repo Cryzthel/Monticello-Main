@@ -155,15 +155,20 @@ function NavItem({ to, label, icon: Icon, count, collapsed, onNavigate }) {
                   why the `fill: transparent` that used to sit beside it had to
                   go when the icons became filled shapes.
 
-                  `lg` (24) is the nav step. It has been 18 (a number belonging
-                  to no scale), then 24, then 20 under a brief that asked for
-                  20-22; the current brief asks for 22-24 and it is back at 24.
-                  The size that actually suits the set changed with the set:
-                  these are filled Material Symbols drawn for opsz=24, so 24 is
-                  the size their counters were cut for, and the 44px slot has
-                  the room. Scale comes from shared/icons. */}
+                  `md` (20) is the nav step, and this is the fourth number it
+                  has been: 18 (belonging to no scale), 24, 20 under a brief
+                  asking for 20-22, 24 under one asking for 22-24, and now 20
+                  under one asking for 18-20. The band has moved every time;
+                  20 is the only value inside three of the four, which is the
+                  argument for settling here.
+
+                  It is also the value that matches the rest of the console:
+                  20 is the action-button step, so a nav glyph and a toolbar
+                  glyph are now the same size, and 24 was the only place in
+                  either portal drawing icons larger than its own buttons.
+                  Scale comes from shared/icons. */}
               <Icon
-                size="lg"
+                size="md"
                 className={`nav-icon-glyph ${isActive ? 'nav-icon-glyph-active' : ''}`}
               />
               {/* Collapsed, the numeric badge has nowhere to sit, so the count

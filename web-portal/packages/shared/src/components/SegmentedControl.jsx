@@ -147,9 +147,27 @@ export default function SegmentedControl({
       width,
       height,
       rects,
+      /*
+       * A capsule clip, and this radius is NOT free to drift from the
+       * segment's own.
+       *
+       * The clip is what paints the selected pill: the mirrored label layer
+       * is clipped to the active segment's rectangle, so the CLIP's corners
+       * ARE the pill's corners. This said `round 6px`, matching `.segment`
+       * when it was `rounded-md`. The segments became capsules and the clip
+       * did not follow, so the fill painted as a 6px-cornered rectangle
+       * inside an oblong track — square edges bleeding out of a pill, on
+       * every segmented control in both portals.
+       *
+       * `9999px` rather than `height / 2`: CSS clamps a border-radius to
+       * half its box anyway, so this is self-correcting at any segment
+       * height and cannot fall out of step with the class the way a literal
+       * did. If `.segment` ever stops being a capsule, this line has to
+       * change with it.
+       */
       clip: `inset(${active.top}px ${round(width - active.left - active.width)}px ${round(
         height - active.top - active.height,
-      )}px ${active.left}px round 6px)`,
+      )}px ${active.left}px round 9999px)`,
     }
 
     // Only a change of SELECTION slides. A reflow — a window resize, a web
