@@ -263,7 +263,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
                   type="button"
                   disabled={busy}
                   onClick={() => setRejecting(false)}
-                  className="btn btn-pill btn-md btn-outline"
+                  className="btn btn-md btn-outline"
                 >
                   Cancel
                 </button>
@@ -271,7 +271,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
                   type="button"
                   disabled={busy}
                   onClick={() => run(() => rejectResident(resident, reason))}
-                  className="btn btn-pill btn-md btn-danger flex-1"
+                  className="btn btn-md btn-danger flex-1"
                 >
                   <ShieldX size="sm" />
                   Confirm rejection
@@ -287,7 +287,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
                 type="button"
                 disabled={busy || resident.status === RESIDENT_STATUS.verified}
                 onClick={() => run(() => approveResident(resident))}
-                className="btn btn-pill btn-md btn-success flex-1"
+                className="btn btn-md btn-success flex-1"
               >
                 <CheckCircle2 size="sm" />
                 {resident.status === RESIDENT_STATUS.verified ? 'Already approved' : 'Approve'}
@@ -296,7 +296,7 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
                 type="button"
                 disabled={busy || resident.status === RESIDENT_STATUS.rejected}
                 onClick={() => setRejecting(true)}
-                className="btn btn-pill btn-md btn-danger flex-1"
+                className="btn btn-md btn-danger flex-1"
               >
                 <ShieldX size="sm" />
                 Reject

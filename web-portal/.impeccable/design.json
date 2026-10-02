@@ -386,7 +386,7 @@
     "keyCharacteristics": [
       "Flat, dual-tone, mobile-aligned: border plus a whisper defines a surface; real shadows are reserved for floating layers.",
       "One emerald accent at two lightnesses (#047857 light, #10B981 dark) for state, focus and charts; a near-black for action.",
-      "One surface radius and one control shape: 12px boxes, capsules for everything you press or read, 8px only for list rows and multi-line fields.",
+      "Two shape tiers: a capsule filters or is read, a 12px box commits. Surfaces are 12px; 8px is only list rows and multi-line fields.",
       "Inter for all language and all figures (with tabular-nums); JetBrains Mono for identifiers and machine data only.",
       "Sentence case everywhere; an uppercase utility in this codebase is a regression.",
       "Both themes measured to WCAG 2.1 AA; a solid single-value focus outline is the floor, not a per-component decision."

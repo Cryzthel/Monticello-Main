@@ -1882,30 +1882,40 @@
      severity, not by which page uses them, so "Resolve" on the guard queue
      and "Resolve" in the admin modal are visually identical.
 
-     THE CAPSULE, AND THE FOURTH TIME THIS HAS BEEN DECIDED. Every pressable
-     control in both portals is `rounded-full`: buttons, icon buttons,
-     segmented tracks and their segments, chips and switches. Text inputs and
-     surfaces are NOT — see the radius note further down.
+     TWO SHAPE TIERS, AND THE FIFTH TIME THIS HAS BEEN DECIDED.
 
-     The history is short and worth keeping, because the comment you are
-     reading has been wrong twice. Claymorphism, then an 8px corporate tier,
-     then the 2026-09-17 oblong brief (capsules), then a corporate-SaaS
-     direction that reverted to 8px, and now 2026-10-02, which restores the
-     capsule deliberately and system-wide. Each reversal left the prose here
-     describing the previous one — `.btn-pill` still said ".btn is already a
-     pill" through the entire 8px era.
+       FILTERS are capsules   `rounded-full` — .chip, .segment, the
+                              segmented track, switches, badges, count pills.
+       ACTIONS are 12px       `rounded-xl` — .btn, in every variant and size.
+                              This block.
+
+     Shape now tells a filter apart from a commit. Pressing a capsule changes
+     what you are LOOKING at; pressing a 12px button changes something. That
+     is the distinction the old Capsule-Is-Read-Not-Pressed rule was really
+     protecting, kept now without the part that made every button a rectangle.
+
+     UNLABELLED icon buttons stay round (.icon-btn). They carry no text for a
+     capsule to mis-frame, and a round wash under a lone glyph is the standard
+     header and pagination affordance; a squircle there reads as a button that
+     lost its label.
+
+     The history is worth keeping, because the comment you are reading has now
+     been wrong twice. Claymorphism, an 8px corporate tier, the 2026-09-17
+     oblong brief, a corporate-SaaS revert to 8px, the 2026-10-02 capsule, and
+     this. Each reversal left the prose describing the previous one —
+     `.btn-pill` still said ".btn is already a pill" through the whole 8px era,
+     and `Select` still said "Pill geometry" over a `rounded-lg` class.
 
      So: if this block and the declaration below ever disagree again, THE
-     DECLARATION IS THE ONE THAT SHIPS, and the prose is the bug. The one
-     rule that has survived every flip is that a MULTI-LINE field is never a
-     capsule — that one is enforced in CSS, not prose, because it actually
-     broke. */
+     DECLARATION IS THE ONE THAT SHIPS, and the prose is the bug. The one rule
+     that has survived every flip is that a MULTI-LINE field is never a capsule
+     — that one is enforced in CSS, not prose, because it actually broke. */
   /* ── PRESS ────────────────────────────────────────────────────────────────
      Transform is listed in the transition so the press both lands and releases
      on the same strong ease-out. `:not(:disabled)` keeps a disabled control
      inert to the pointer rather than merely faded. */
   .btn {
-    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50;
     transition-property: color, background-color, border-color, box-shadow, transform, opacity;
     transition-duration: 150ms;
     transition-timing-function: var(--ease-out-strong);
@@ -1976,15 +1986,6 @@
 
   .btn-icon-sm {
     @apply h-9 w-9 px-0;
-  }
-
-  /* A no-op alias. `.btn` is a pill again, so this adds nothing — it is kept
-     only so the handful of `btn btn-pill` call sites do not need sweeping,
-     and because declaring `rounded-full` here means that if `.btn` is ever
-     reverted a fifth time, these sites keep the shape they asked for by name
-     rather than silently changing with it. Do not add it to new call sites. */
-  .btn-pill {
-    @apply rounded-full;
   }
 
   /* Any surface filled with brand that carries a label on top. One class, so
