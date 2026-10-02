@@ -281,8 +281,17 @@ export default function SecurityAccountsPage() {
                 ? undefined
                 : 'Only a Super Admin can add accounts — the server refuses any other role.'
             }
-            // Compact, like every other action in this workflow. See .btn-compact.
-            className="btn btn-compact btn-brand"
+            // `btn-sm`, like every other PRIMARY creation trigger in both portals.
+            //
+            // This was the only `btn-brand` wearing `btn-compact`. That class is
+            // for compact SECONDARY actions — Copy, Test sound, View — and six
+            // outline buttons still use it correctly; this one brand button was
+            // the outlier. The comment here used to claim it matched "every other
+            // action in this workflow", which was the reverse of true: it made the
+            // page's one create button shorter than the Create announcement button
+            // it is a sibling of, and shorter than the Search field beneath it,
+            // because `btn-compact` sizes by padding rather than by a height token.
+            className="btn btn-sm btn-brand"
           >
             <UserPlus size="sm" />
             Add account

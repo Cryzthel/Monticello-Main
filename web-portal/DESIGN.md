@@ -410,7 +410,9 @@ Borders carry the form: a hairline on surfaces, the one-step-stronger control bo
 
 ### Buttons
 - **Shape:** 8px rectangle (`{rounded.control}`), sized by fixed **height** rather than vertical padding, so buttons in a row align regardless of label length.
-- **Sizes:** `.btn-md` is 40px tall at `px-4`, the page-level standard; `.btn-sm` is 36px at `px-3.5` with control type and is the standard for dialog footers; `.btn-icon-md` / `.btn-icon-sm` are square at 44px / 36px.
+- **Sizes — three height tiers, each belonging to a baseline.** `.btn-md` is **40px** (`px-4`): the TOP BAR tier, matching the header search trigger and the 40px icon buttons beside it. `.btn-sm` is **36px** (`px-3.5`, control type): the TOOLBAR tier, matching `SearchField`, `Select` and the filter row — and the standard for every primary creation trigger (Create announcement, Add account, dialog footers). `.btn-compact` / `.btn-drawer` land at **30px** by padding: compact SECONDARY actions only (Copy, Test sound, View) and the dispatch rail. `.btn-icon-md` / `.btn-icon-sm` are square at 44px / 36px.
+
+  **A primary CTA is always `.btn-sm`.** It is the tier the filter row runs on, so a create button sits level with the search field under it. "Add account" was the one `btn-brand` wearing `btn-compact` and stood 6px short of its own sibling "Create announcement"; the comment on it claimed it matched "every other action in this workflow", which was the reverse of true. 40px is not the answer either — a 40px button beside a 36px input is the same mismatch pointing the other way.
 - **Primary:** near-black plate under a white label (`{colors.cta}` / `{colors.cta-fg}`) with a 1px contact shadow; hover darkens one step.
 - **Outline:** white on the control border; hover darkens the border and drops the fill to the well.
 - **Semantic:** success / warning / danger are a 10% wash under full-strength ink inside a 25% border, deepening to 20% on hover.
