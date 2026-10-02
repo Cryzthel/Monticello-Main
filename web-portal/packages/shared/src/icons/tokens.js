@@ -8,45 +8,49 @@
  */
 
 /*
- * ── THE GRID MATERIAL SYMBOLS ARE DRAWN ON ────────────────────────────────
+ * ── THE GRID PHOSPHOR IS DRAWN ON ─────────────────────────────────────────
  *
- * Not `0 0 24 24`. Material Symbols are authored on a 960-unit grid with the
- * origin at the BASELINE, so the box runs from y = -960 up to y = 0 and every
- * path's coordinates are negative. Dropping this on a 24-box viewBox renders
- * an empty square, which is the first thing that goes wrong when someone adds
- * a glyph by hand instead of through scripts/build-icons.mjs.
+ * Not `0 0 24 24`. Phosphor authors on a 256-unit grid, origin top-left.
+ * Dropping its paths on a 24-box viewBox renders a glyph roughly ten times too
+ * large, clipped to a corner — the first thing that goes wrong when someone
+ * adds an icon by hand instead of through scripts/build-icons.mjs.
+ *
+ * Worth knowing if you are reading old commits: the set this replaced used
+ * `0 -960 960 960`, origin at the BASELINE, so its coordinates were all
+ * negative. Any code that assumed that offset — the Mapbox marker canvas did —
+ * had to lose it. A 256 grid needs no translate at all.
  *
  * The generator asserts every glyph it emits is on this exact grid, so this
  * constant and glyphs.js cannot drift apart.
  */
-export const ICON_VIEW_BOX = '0 -960 960 960'
+export const ICON_VIEW_BOX = '0 0 256 256'
 
 /*
  * ── NO STROKE WEIGHT, AND WHY THERE ISN'T ONE ─────────────────────────────
  *
  * There used to be an `ICON_STROKE` here, and before that a `strokeWidth` on a
- * provider. Both are gone, because Material Symbols are FILLED shapes, not
+ * provider. Both are gone, because Phosphor icons are FILLED shapes, not
  * stroked outlines: a glyph's apparent line thickness is baked into its
  * geometry by the font's `wght` axis at the moment it is exported, not applied
  * at render time. There is no runtime stroke to set.
  *
  * So "one weight for every icon" is decided by WHICH DIRECTORY we read from
- * rather than by a constant here: @material-symbols/svg-400 is wght=400, and
- * the `rounded` directory within it is FILL=0. GRAD=0 and opsz=24 are the
- * export defaults — so `FILL=0, wght=400, GRAD=0, opsz=24`, enforced by the
- * one import path in scripts/build-icons.mjs. Swapping the house weight to 300
- * or 500 is a one-line change there (svg-300 / svg-500), and swapping the
- * style back to `outlined` or on to `sharp` is the same one line.
+ * rather than by a constant here. @phosphor-icons/core ships each weight as
+ * its own folder — thin, light, regular, bold, fill, duotone — and
+ * scripts/build-icons.mjs points at exactly one of them. Changing the house
+ * weight is that one line, and the generator refuses a mapping entry that
+ * tries to name a weight itself.
  *
- * ── WHY ROUNDED, NOT OUTLINED ─────────────────────────────────────────────
+ * ── WHY `regular`, WHEN MOBILE USES `fill` ────────────────────────────────
  *
- * Material Symbols ships three styles cut from the same skeleton: Outlined
- * (square terminals), Rounded (radiused terminals) and Sharp (mitred). All
- * three are equally "outlined" in the sense that matters — FILL=0, line art,
- * no solid variants. Rounded is the house style because the portal's own
- * geometry is soft: 12px cards, 8px controls, capsule badges and now capsule
- * search fields. Square-cut terminals on a glyph sitting inside a
- * `rounded-full` pill were the one hard corner left in the system.
+ * The library is shared with the mobile app on purpose: same family, same
+ * major version, so a glyph means the same thing on a resident's phone and an
+ * administrator's screen. The WEIGHT is not shared, and that is deliberate.
+ * Mobile is overwhelmingly Fill — 356 of its 427 icon uses — which suits a
+ * phone, where icons are large and often the only thing in a tap target. A
+ * filled glyph at 16px in a dense table loses its counters and reads as a
+ * blob, and this codebase has been asked three times for outlined icons with
+ * no filled variants. So: shared library, weight chosen for the medium.
  *
  * A `strokeWidth` prop passed by an old call site is accepted and ignored by
  * createIcon rather than forwarded, so it cannot reach the DOM as an attribute

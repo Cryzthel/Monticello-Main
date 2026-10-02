@@ -1,8 +1,9 @@
-// The mobile widget draws these in Phosphor; the portals draw them from
-// shared/icons, which is Material Symbols. No set the portals have used
-// carries Phosphor's names, so the pairing is by meaning:
-// cloudArrowUp→CloudUpload, imagesSquare→Images, cameraPlus→ImagePlus,
-// warningCircle→CircleAlert.
+// The mobile widget and the portals now draw these from the SAME family —
+// Phosphor — so this pairing is finally between two spellings of one icon
+// rather than between two icon sets: cloudArrowUp→CloudUpload,
+// imagesSquare→Images, cameraPlus→ImagePlus, warningCircle→CircleAlert.
+// The names still differ because shared/icons keeps the codebase's own
+// vocabulary; the drawings underneath are the same.
 import {
   CircleAlert,
   CloudUpload,

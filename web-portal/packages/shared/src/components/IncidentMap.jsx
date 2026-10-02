@@ -747,8 +747,8 @@ function routeArrowImage() {
  */
 const TRANSPORT_IMAGES = { bike: 'route-transport-bike', foot: 'route-transport-foot' }
 
-/** The Material Symbols grid: see ICON_VIEW_BOX in shared/icons/tokens.js. */
-const GLYPH_GRID = 960
+/** The Phosphor grid: see ICON_VIEW_BOX in shared/icons/tokens.js. */
+const GLYPH_GRID = 256
 
 const TRANSPORT_GEOMETRY = {
   bike: { path: Bike.glyph },
@@ -764,13 +764,13 @@ function transportGlyphImage(kind) {
   const ctx = canvas.getContext('2d')
 
   const geometry = TRANSPORT_GEOMETRY[kind] ?? TRANSPORT_GEOMETRY.bike
-  // Scale the 960 grid down to the canvas, then drop the origin by a full
-  // grid: Material Symbols run from y = -960 up to y = 0, so without the
-  // translate every coordinate is above the top edge and the canvas comes back
-  // empty. The translate is expressed in grid units because it is applied
-  // after the scale.
+  // Scale the glyph grid down to the canvas. NO TRANSLATE: Phosphor draws
+  // from the top-left, so the paths are already in the box. The set this
+  // replaced ran from y = -960 up to y = 0 and needed its origin dropped a
+  // full grid, and that translate is gone with it — left in, it would push
+  // every glyph one canvas-height below the bottom edge and the marker would
+  // come back blank.
   ctx.scale(size / GLYPH_GRID, size / GLYPH_GRID)
-  ctx.translate(0, GLYPH_GRID)
   // A fill, not a stroke. There is no line weight to choose here any more --
   // the glyph's apparent weight is the font's wght=400, baked into the shape.
   ctx.fillStyle = '#FFFFFF'

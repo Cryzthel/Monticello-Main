@@ -6,7 +6,7 @@ import { ICON_VIEW_BOX, DEFAULT_ICON_SIZE, resolveIconSize } from './tokens'
  *
  * ── WHY A REGISTRY AND NOT 146 INLINE <svg> BLOCKS ────────────────────────
  *
- * @material-symbols/svg-400 ships .svg FILES, not components, so there is no
+ * @phosphor-icons/core ships .svg FILES, not components, so there is no
  * library component to call — something has to turn a path string into an
  * element. Doing that at each call site would put a viewBox, a fill rule and
  * a size on every icon in the codebase and invite all three to drift.
@@ -16,7 +16,7 @@ import { ICON_VIEW_BOX, DEFAULT_ICON_SIZE, resolveIconSize } from './tokens'
  * shield rather than as a generic icon component told to be one, the maps in
  * theme/categoryIcons.js go on storing components, and the grid, the size
  * scale and the a11y default are decided here — in one file — for both
- * portals. The left-hand names have now survived two icon-set migrations
+ * portals. The left-hand names have now survived three icon-set migrations
  * unchanged, which is the whole point of them.
  */
 export function createIcon(displayName, d) {

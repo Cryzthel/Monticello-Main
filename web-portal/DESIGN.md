@@ -436,11 +436,11 @@ Borders carry the form: a hairline on surfaces, the one-step-stronger control bo
 
 ### Navigation
 - **Style:** 8px rows, 32px tall (`py-1.5`), body size at medium weight in secondary ink, with a fixed-width icon column (44px expanded, 56px collapsed) so glyphs stay on one axis through the collapse.
-- **Default / hover / active:** hover is a 4% ink wash; active is the emerald wash plate under deep-emerald ink. Icons are Material Symbols Rounded at 24px and do **not** refill on active — the wash and the ink carry it. A group label is 12px muted; a badge count is a danger capsule with tabular figures; an unread marker is an 8px danger dot ringed in the surface colour.
+- **Default / hover / active:** hover is a 4% ink wash; active is the emerald wash plate under deep-emerald ink. Icons are Phosphor (regular weight) at 20px and do **not** refill on active — the wash and the ink carry it. A group label is 12px muted; a badge count is a danger capsule with tabular figures; an unread marker is an 8px danger dot ringed in the surface colour.
 - **Mobile:** below `lg`, a full-height 256px drawer over the scrim, dismissing on navigate.
 
 ### Badges
-The portal's one capsule is `StatusBadge`, with `PriorityBadge` as a thin alias. Tone is resolved from *meaning* — status, severity or category — and never passed as a colour by the caller, which is how "Dispatched" stays the same blue on every screen. Fill, ink and ring come from one row of `BADGE_TONES`; geometry from one row of `BADGE_SIZES`, which uses fixed heights rather than vertical padding so badges of different labels share a baseline in a table row. A status badge carries a leading Material Symbols glyph, or a 6px dot where icons would crowd.
+The portal's one capsule is `StatusBadge`, with `PriorityBadge` as a thin alias. Tone is resolved from *meaning* — status, severity or category — and never passed as a colour by the caller, which is how "Dispatched" stays the same blue on every screen. Fill, ink and ring come from one row of `BADGE_TONES`; geometry from one row of `BADGE_SIZES`, which uses fixed heights rather than vertical padding so badges of different labels share a baseline in a table row. A status badge carries a leading Phosphor glyph, or a 6px dot where icons would crowd.
 
 **The Badge-Rank Rule.** `md` (24px, 12px label, `px-3`) for every table row, feed row and list card — anything a reader scans down a column of. It is the default; pass nothing. `sm` (20px, 11px label) for dense chrome only: drawers, toasts, pickers, inline fields and dialog headers. `lg` (28px) exists for a badge used as a heading. Left to per-call-site judgement this drifted so badly that single rows showed two capsule heights side by side; 17 call sites were promoted to settle it, and the rule is recorded in `theme/badgeStyles.js`.
 
@@ -492,7 +492,7 @@ Three curves, all in CSS, deliberately no animation library: `--ease-spring` `cu
 - **Don't** set anything in all caps, and don't reintroduce a kicker or eyebrow line above a heading — the `.eyebrow` class is a tombstone in the stylesheet, and the retired uppercase tracked label is not a rank in this scale.
 - **Don't** use `font-mono` for a count, timer, delta or timestamp. Mono is for identifiers and log strings only.
 - **Don't** give an in-page panel a real shadow, a gradient, a blur, a translucent fill, or a hard offset shadow — none of those exist in this world, and each of the first four was measured out of an earlier pass.
-- **Don't** draw an icon as a text glyph or an icon font — including the Material Symbols ligature font, which is how that set is most often installed. Icons come from `/icons`, which renders real `<svg>` from generated path data, or an inline SVG for the leaf.
+- **Don't** draw an icon as a text glyph or an icon font — including an icon font, which is how most sets are most often installed. Icons come from `/icons`, which renders real `<svg>` from generated path data, or an inline SVG for the leaf.
 - **Don't** give a dialog a fixed height, and don't invent a width outside the `lg` / `xl` / `2xl` / `4xl` ladder.
 - **Don't** make a whole row the only way to act on a notification; give it an explicit action control.
 - **Don't** add a `tailwind.config.js`. This is Tailwind v4 and the `@theme` block in `packages/shared/src/styles/index.css` is the config; a config file here is silently ignored.

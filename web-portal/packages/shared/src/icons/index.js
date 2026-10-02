@@ -14,20 +14,25 @@
  *                 what the app calls it                  path data, generated
  *
  * The left name is the codebase's own vocabulary and is deliberately stable.
- * It has now survived two icon-set migrations — Lucide to Hugeicons, Hugeicons
- * to Material Symbols — without a single one of the ~190 call sites across
- * both portals changing. That is what the registry is FOR: the set underneath
- * is an implementation detail, and swapping it is this file plus a codegen
- * mapping, not a sweep of the codebase.
+ * It has now survived three icon-set migrations — Lucide to Hugeicons,
+ * Hugeicons to Material Symbols, Material Symbols to Phosphor — without a
+ * single one of the ~190 call sites across both portals changing. That is what
+ * the registry is FOR: the set underneath is an implementation detail, and
+ * swapping it is this file plus a codegen mapping, not a sweep of the
+ * codebase. The third migration also changed the GRID the glyphs are drawn on,
+ * and still touched no call site.
  *
  * ── WHERE THE GLYPHS COME FROM ────────────────────────────────────────────
  *
- * `./glyphs.js` is GENERATED — path data pulled from
- * @material-symbols/svg-400/rounded (FILL=0, wght=400, GRAD=0, opsz=24) by
- * scripts/build-icons.mjs, which also holds the curated name mapping and the
- * reasoning behind the pairs that are easy to get wrong.
+ * `./glyphs.js` is GENERATED — path data pulled from @phosphor-icons/core
+ * (regular weight) by scripts/build-icons.mjs, which also holds the curated
+ * name mapping and the reasoning behind the pairs that are easy to get wrong.
  *
- * To change which Material Symbol a name draws, edit MAPPING in that script
+ * Phosphor is the family the MOBILE app draws with, at the same major version,
+ * so a glyph means the same thing on a resident's phone and an
+ * administrator's screen. The weight differs on purpose — see tokens.js.
+ *
+ * To change which Phosphor icon a name draws, edit MAPPING in that script
  * and run `npm run build:icons`. Do not hand-edit glyphs.js, and do not add an
  * icon by pasting a path here — a glyph that bypasses the generator also
  * bypasses its viewBox and single-path assertions.
