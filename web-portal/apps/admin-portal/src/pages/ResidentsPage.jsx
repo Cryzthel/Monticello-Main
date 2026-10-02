@@ -8,7 +8,6 @@ import ResidentAvatar from '@/components/ResidentAvatar'
 import RowActionMenu from '@shared/components/RowActionMenu'
 import StatusBadge from '@shared/components/StatusBadge'
 import SegmentedControl from '@shared/components/SegmentedControl'
-import Select from '@shared/components/Select'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
 import { useResidents } from '@shared/hooks/useResidents'
 import {
@@ -21,7 +20,12 @@ import {
   RESIDENT_STATUS_LABELS,
   RESIDENT_SOURCE,
 } from '@shared/lib/residents'
-import SearchField from '@shared/components/SearchField'
+import AddressSearch from '@shared/components/AddressSearch'
+import {
+  buildAddressIndex,
+  matchesAddress,
+  parseAddressQuery,
+} from '@shared/lib/addressQuery'
 
 // `all` is the default and is deliberately first: the table's job is to show
 // every registered account, and the status tabs are a filter on top of that
@@ -34,8 +38,6 @@ const TABS = [
   { key: RESIDENT_STATUS.verified, label: 'Verified' },
   { key: RESIDENT_STATUS.rejected, label: 'Rejected' },
 ]
-
-const ANY = 'any'
 
 // Resident statuses reuse the shared badge so "Verified" here is the same
 // green as "Resolved" on an incident, and "Pending" the same amber — one
@@ -63,10 +65,17 @@ function SourceChip({ source }) {
 
 export default function ResidentsPage() {
   const [tab, setTab] = useState(ALL)
+  /*
+   * ONE query string, where there used to be four controls.
+   *
+   * `search` now carries both halves — the address parts and whatever is left
+   * over for the person — because lib/addressQuery can tell them apart. The
+   * `phaseFilter`/`blockFilter`/`lotFilter` trio is gone with the dropdowns
+   * that set them; a URL or a saved view that wants an exact address can put
+   * "Phase 2 Block 14 Lot 7" in here and get the same result the three
+   * dropdowns gave.
+   */
   const [search, setSearch] = useState('')
-  const [phaseFilter, setPhaseFilter] = useState(ANY)
-  const [blockFilter, setBlockFilter] = useState(ANY)
-  const [lotFilter, setLotFilter] = useState(ANY)
   const [selectedId, setSelectedId] = useState(null)
 
   const { residents, counts, profileOnly, loading, error } = useResidents()
@@ -84,27 +93,41 @@ export default function ResidentsPage() {
     }
   }
 
-  // Options come from the data actually present, so the dropdowns can never
-  // offer a Phase/Block/Lot that matches nothing.
-  const { phases, blocks, lots } = useMemo(() => {
-    const uniq = (key) => [...new Set(residents.map((r) => r[key]).filter(Boolean))].sort()
-    return { phases: uniq('phase'), blocks: uniq('block'), lots: uniq('lot') }
-  }, [residents])
+  /*
+   * THE ADDRESS INDEX, derived rather than stored.
+   *
+   * Every distinct Phase/Block/Lot the registered residents actually occupy,
+   * with a count of how many sit at each. It is recomputed from the live
+   * collection, so it cannot offer an address that matches nothing and cannot
+   * fall behind a resident who registered a second ago — the two failure modes
+   * of a separately-maintained index.
+   *
+   * This replaces three `uniq` lists that were independent of each other: the
+   * old Block dropdown offered every block in the subdivision whatever phase
+   * was selected, so "Phase 1 + Block 14" was a reachable combination that
+   * matched nobody. A list of real COMBINATIONS cannot express that.
+   */
+  const addressIndex = useMemo(() => buildAddressIndex(residents), [residents])
+
+  const parsedQuery = useMemo(() => parseAddressQuery(search), [search])
 
   const rows = useMemo(() => {
-    const term = search.trim().toLowerCase()
+    const { text } = parsedQuery
     return residents
       .filter((r) => (tab === ALL ? true : r.status === tab))
-      .filter((r) => (phaseFilter === ANY ? true : r.phase === phaseFilter))
-      .filter((r) => (blockFilter === ANY ? true : r.block === blockFilter))
-      .filter((r) => (lotFilter === ANY ? true : r.lot === lotFilter))
+      // The address half is an EXACT match per part, which is what makes
+      // "Lot 7" exclude Lot 17. Only the parts actually typed are tested.
+      .filter((r) => matchesAddress(r, parsedQuery))
+      // Whatever was not an address part is matched against the person. The
+      // address is still in the haystack so a pasted "Phase 2 • Block 14"
+      // keeps working even though the parser has already consumed it.
       .filter((r) => {
-        if (!term) return true
-        return [r.name, r.email, r.phone, residentAddress(r)].join(' ').toLowerCase().includes(term)
+        if (!text) return true
+        return [r.name, r.email, r.phone, residentAddress(r)].join(' ').toLowerCase().includes(text)
       })
       // Newest applications first — that's the queue an admin works down.
       .sort((a, b) => (b.createdAt?.getTime?.() ?? 0) - (a.createdAt?.getTime?.() ?? 0))
-  }, [residents, tab, search, phaseFilter, blockFilter, lotFilter])
+  }, [residents, tab, parsedQuery])
 
   // Re-derived from the live collection so the drawer reflects an approval
   // the instant onSnapshot echoes it back.
@@ -163,44 +186,16 @@ export default function ResidentsPage() {
             onChange={setTab}
           />
 
-          <SearchField
+          {/* One box for names, emails, phones and addresses. The three
+              Phase/Block/Lot dropdowns that used to sit here are gone — see
+              AddressSearch for what replaced them and why. */}
+          <AddressSearch
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by name, email, contact, or property"
-            className="min-w-[14rem] flex-1"
+            onChange={setSearch}
+            index={addressIndex}
+            placeholder="Search by name, email, or address — try “Block 14” or “P2 B14 L7”"
+            className="min-w-[18rem] flex-1"
           />
-
-          <Select
-            ariaLabel="Filter by phase"
-            value={phaseFilter}
-            onChange={setPhaseFilter}
-            className="min-w-[8.5rem]"
-            options={[
-              { value: ANY, label: 'All phases' },
-              ...phases.map((p) => ({ value: p, label: `Phase ${p}` })),
-            ]}
-          />
-          <Select
-            ariaLabel="Filter by block"
-            value={blockFilter}
-            onChange={setBlockFilter}
-            className="min-w-[8.5rem]"
-            options={[
-              { value: ANY, label: 'All blocks' },
-              ...blocks.map((b) => ({ value: b, label: `Block ${b}` })),
-            ]}
-          />
-          <Select
-            ariaLabel="Filter by lot"
-            value={lotFilter}
-            onChange={setLotFilter}
-            className="min-w-[8.5rem]"
-            options={[
-              { value: ANY, label: 'All lots' },
-              ...lots.map((l) => ({ value: l, label: `Lot ${l}` })),
-            ]}
-          />
-
         </div>
 
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
@@ -251,8 +246,8 @@ export default function ResidentsPage() {
                     <td colSpan={6} className="px-4 py-14 text-center">
                       <UserCheck size="lg" className="mx-auto mb-2 text-text-muted" />
                       <p className="text-sm text-text-secondary">
-                        {search || phaseFilter !== ANY || blockFilter !== ANY || lotFilter !== ANY
-                          ? 'No registrations match these filters.'
+                        {search
+                          ? 'No registrations match this search.'
                           : tab === ALL
                             ? 'No accounts have registered yet.'
                             : 'No accounts in this status.'}
