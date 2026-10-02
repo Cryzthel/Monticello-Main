@@ -1882,29 +1882,27 @@
      severity, not by which page uses them, so "Resolve" on the guard queue
      and "Resolve" in the admin modal are visually identical.
 
-     TWO SHAPE TIERS, AND THE FIFTH TIME THIS HAS BEEN DECIDED.
+     EVERYTHING PRESSABLE IS A CAPSULE. `rounded-full` at `font-medium`:
+     buttons in every variant and size, icon buttons, segmented tracks and
+     their segments, dropdown triggers, chips, switches, search fields,
+     badges and count pills. Surfaces are 12px; nav rows, dropdown menu rows
+     and multi-line fields are 8px. Nothing else.
 
-       FILTERS are capsules   `rounded-full` — .chip, .segment, the
-                              segmented track, switches, badges, count pills.
-       ACTIONS are 12px       `rounded-xl` — .btn, in every variant and size.
-                              This block.
+     SIXTH DECISION, AND THE SECOND TIME THIS EXACT ONE HAS BEEN MADE.
+     Claymorphism, an 8px corporate tier, the 2026-09-17 oblong brief, a
+     corporate-SaaS revert to 8px, the 2026-10-02 all-capsule pass, a
+     two-tier split that made actions 12px boxes, and back to the capsule.
 
-     Shape now tells a filter apart from a commit. Pressing a capsule changes
-     what you are LOOKING at; pressing a 12px button changes something. That
-     is the distinction the old Capsule-Is-Read-Not-Pressed rule was really
-     protecting, kept now without the part that made every button a rectangle.
+     The two-tier split is the one worth remembering, because its reasoning
+     was sound and it was reversed anyway: shape telling a FILTER apart from
+     a COMMIT is a real distinction, and a 12px action button expressed it.
+     It is gone because one shape was wanted, not because the argument was
+     wrong. If it comes back a third time, it comes back whole — the box
+     tier carried `font-semibold` with it, so the weight moves too.
 
-     UNLABELLED icon buttons stay round (.icon-btn). They carry no text for a
-     capsule to mis-frame, and a round wash under a lone glyph is the standard
-     header and pagination affordance; a squircle there reads as a button that
-     lost its label.
-
-     The history is worth keeping, because the comment you are reading has now
-     been wrong twice. Claymorphism, an 8px corporate tier, the 2026-09-17
-     oblong brief, a corporate-SaaS revert to 8px, the 2026-10-02 capsule, and
-     this. Each reversal left the prose describing the previous one —
-     `.btn-pill` still said ".btn is already a pill" through the whole 8px era,
-     and `Select` still said "Pill geometry" over a `rounded-lg` class.
+     Each reversal has left the prose here describing the previous one.
+     `.btn-pill` still said ".btn is already a pill" through the whole 8px
+     era, and `Select` still said "Pill geometry" over a `rounded-lg` class.
 
      So: if this block and the declaration below ever disagree again, THE
      DECLARATION IS THE ONE THAT SHIPS, and the prose is the bug. The one rule
@@ -1915,7 +1913,7 @@
      on the same strong ease-out. `:not(:disabled)` keeps a disabled control
      inert to the pointer rather than merely faded. */
   .btn {
-    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
     transition-property: color, background-color, border-color, box-shadow, transform, opacity;
     transition-duration: 150ms;
     transition-timing-function: var(--ease-out-strong);
