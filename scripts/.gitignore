@@ -1,0 +1,11 @@
+# firebase-admin and its tree. Matches how web-portal/ and functions/ each
+# ignore their own, rather than adding a repo-wide rule — this directory is an
+# independent npm package with its own package.json, not part of a workspace.
+#
+# Without this, `git add scripts/` stages the whole dependency tree, and these
+# admin scripts are exactly the kind of thing someone adds in a hurry.
+node_modules/
+
+# The service account key the scripts require. The root .gitignore already has
+# *serviceAccountKey*.json; repeated here so the rule travels with the folder.
+*serviceAccountKey*.json
