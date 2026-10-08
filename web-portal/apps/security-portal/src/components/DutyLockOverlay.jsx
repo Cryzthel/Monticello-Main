@@ -1,7 +1,8 @@
 import { LogIn, Loader2, ShieldAlert } from '@shared/icons'
+import { shiftForTime } from '@shared/lib/shiftTypes'
 import { useDutyStatus } from '@/hooks/useDutyStatus'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 
 /**
  * Blocks the guardhouse console until the signed-in guard has clocked in.
@@ -27,6 +28,19 @@ import { useRef } from 'react'
  */
 export default function DutyLockOverlay() {
   const { onDuty, loading, busy, error, toggle } = useDutyStatus()
+
+  // ── WHICH SHIFT, ASKED HERE AND NOWHERE ELSE ────────────────────────────
+  // This is the moment the guard_shifts row is created, so it is the only
+  // moment at which the answer and the record cannot drift apart. Asking on
+  // the SIGN-IN form instead would mean a guard who signs in and never clocks
+  // in has chosen a shift that was never written — and the sign-in form is
+  // shared verbatim with the admin portal, which has no shifts at all.
+  //
+  // Seeded from the clock and freely changeable: someone arriving early,
+  // relieving a late colleague or covering a double must not be forced to file
+  // under the wrong name. There is no empty state, so the button is never
+  // blocked on a choice the guard has already effectively made.
+  const [shift] = useState(() => shiftForTime())
 
   // While the lock is up it IS the page: a guard who has not clocked in
   // must not be able to tab to the console behind it.
@@ -66,14 +80,32 @@ export default function DutyLockOverlay() {
 
         {error ? <p className="mt-3 text-xs text-danger">{error}</p> : null}
 
+        {/* THE SHIFT PICKER WAS HERE: a Morning / Evening / Night segmented
+            control and the window text under it ("22:00 – 06:00").
+
+            It is gone, but the VALUE is not. `shift` is still derived from
+            `shiftForTime()` above and still committed with the clock-in, so
+            `guard_shifts` carries the same field it always did and the admin
+            timesheet is unaffected. What went is the asking.
+
+            It was asking a question the clock already answers. A guard clocking
+            in at 22:40 is on the night shift; offering them Morning is offering
+            them a way to file a wrong record, and the overwhelmingly common
+            case was selecting the option that was already selected.
+
+            THE COST, AND IT IS REAL: a guard covering someone else's shift, or
+            clocking in near a boundary, can no longer say so here. If that
+            turns out to matter, the fix is a correction on the admin
+            timesheet — which already edits these rows — not putting a picker
+            back in front of every clock-in to serve the rare one. */}
         <button
           type="button"
-          onClick={toggle}
+          onClick={() => toggle({ shift })}
           disabled={busy}
-          className="btn btn-success mt-5 h-11 w-full"
+          className="btn btn-success mt-4 h-11 w-full"
         >
           {busy ? <Loader2 size="sm" className="animate-spin" /> : <LogIn size="sm" />}
-          {busy ? 'Clocking in…' : 'Clock in to continue'}
+          {busy ? 'Clocking in…' : 'Clock in & begin shift'}
         </button>
       </div>
     </div>

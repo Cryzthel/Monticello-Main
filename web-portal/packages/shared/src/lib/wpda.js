@@ -12,7 +12,6 @@ export const CATEGORY_WEIGHTS = {
   medical: 9,
   security: 7,
   hazard: 6,
-  flooding: 5,
   maintenance: 2,
   noise: 2,
 }
@@ -80,7 +79,7 @@ export function responsePhase(incident) {
 // regardless of category; everything else follows its category.
 export const EMERGENCY_COLORS = {
   critical: '#F2545C', // red — medical / critical severity
-  fire: '#FB923C', // orange — fire, hazard, flooding
+  fire: '#FB923C', // orange — fire and hazard
   maintenance: '#FBBF24', // amber — maintenance
   security: '#38BDF8', // blue — security, noise, and anything uncategorized
 }
@@ -88,7 +87,7 @@ export const EMERGENCY_COLORS = {
 export function emergencyWaveColor(incident) {
   const category = String(incident.category ?? '').toLowerCase()
   if (incident.severity === 'critical' || category === 'medical') return EMERGENCY_COLORS.critical
-  if (category === 'fire' || category === 'hazard' || category === 'flooding') return EMERGENCY_COLORS.fire
+  if (category === 'fire' || category === 'hazard') return EMERGENCY_COLORS.fire
   if (category === 'maintenance') return EMERGENCY_COLORS.maintenance
   return EMERGENCY_COLORS.security
 }

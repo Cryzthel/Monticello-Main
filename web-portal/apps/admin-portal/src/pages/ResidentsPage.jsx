@@ -144,7 +144,6 @@ export default function ResidentsPage() {
   return (
     <AppShell
       title="Residents"
-      subtitle="Every registered account, live. Verification status is recorded, not required to appear."
       scroll={false}
     >
       <div className="flex min-h-0 flex-col gap-4 lg:h-full">

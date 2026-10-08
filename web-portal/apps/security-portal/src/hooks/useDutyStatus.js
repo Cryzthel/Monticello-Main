@@ -4,6 +4,8 @@ import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { auth, db } from '@shared/lib/firebase'
 import { useAuth } from '@shared/auth/AuthContext'
 import { mapShiftDoc, clockIn, clockOut } from '@shared/lib/shifts'
+import { shiftForTime } from '@shared/lib/shiftTypes'
+import { captureShiftFix } from '@/lib/shiftFix'
 
 /**
  * Whether the signed-in guard has an open shift, and the control to change it.
@@ -27,6 +29,9 @@ import { mapShiftDoc, clockIn, clockOut } from '@shared/lib/shifts'
 export function useDutyStatus() {
   const { role } = useAuth()
   const [busy, setBusy] = useState(false)
+  // Separate from `error`: a missing fix is not a failed clock-in. The shift
+  // opens either way, and this is what lets the panel say so.
+  const [locationError, setLocationError] = useState(null)
   const [error, setError] = useState('')
 
   const uid = auth.currentUser?.uid
@@ -52,17 +57,40 @@ export function useDutyStatus() {
    * @param {{ summary: string, outstanding?: string }} [handover] Filed with
    *   the clock-out when the handover requirement is on. Ignored on clock-in.
    */
-  async function toggle(handover = null) {
+  /**
+   * Clock in or out, whichever applies.
+   *
+   * One options object rather than a positional `handover`, because the two
+   * directions now take different things: clocking IN carries the shift the
+   * guard picked, clocking OUT carries their handover. The old signature also
+   * meant `onClick={toggle}` handed a MouseEvent in as `handover` — harmless
+   * while it was ignored on the clock-in branch, and exactly the kind of thing
+   * that stops being harmless when a second field arrives.
+   */
+  async function toggle({ handover = null, shift = null } = {}) {
     setBusy(true)
     setError('')
     try {
+      // Captured on BOTH ends, and awaited before the write so the record is
+      // whole in one document version rather than a row that gains a position
+      // a moment after an auditor might read it. `captureShiftFix` resolves
+      // rather than throwing — see its header for why a denied fix must never
+      // stop a shift opening or closing.
+      const { fix, error: fixError } = await captureShiftFix()
+      setLocationError(fixError)
+
       if (openShift) {
-        await clockOut(openShift.id, handover)
+        await clockOut(openShift.id, handover, { location: fix })
       } else {
         await clockIn({
           name: auth.currentUser?.displayName || auth.currentUser?.email || 'Guard',
           email: auth.currentUser?.email || '',
           role: role ?? '',
+          // Never null. The lock always passes an explicit choice; this falls
+          // back to the shift the clock is currently inside so a record can
+          // never land without one.
+          shift: shift ?? shiftForTime(),
+          location: fix,
         })
       }
     } catch (err) {
@@ -79,6 +107,7 @@ export function useDutyStatus() {
     loading: Boolean(uid) && loading,
     busy,
     error,
+    locationError,
     toggle,
   }
 }

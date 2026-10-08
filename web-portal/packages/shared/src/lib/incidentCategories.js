@@ -45,7 +45,6 @@ export const INCIDENT_CATEGORIES = [
   'medical',
   'fire',
   'noise',
-  'flooding',
   OTHER_CATEGORY,
 ]
 
@@ -60,6 +59,17 @@ const CATEGORY_SET = new Set(INCIDENT_CATEGORIES)
  */
 const CATEGORY_ALIASES = {
   hazard: OTHER_CATEGORY,
+  // Retired 2026-10-08. It is HERE rather than simply deleted because the
+  // reports that were filed under it still exist and still have to render: an
+  // alias turns them into Others, where a bare deletion would leave
+  // `normalizeCategory` returning a key with no label, no colour and no icon.
+  //
+  // The mobile picker still OFFERS Flooding (report_incident_screen.dart), and
+  // the Cloud Function still scores it (functions/index.js, flooding: 55), so
+  // new reports can still arrive under this key until both are changed and the
+  // functions deploy is unblocked. Until then this alias is not only
+  // back-compatibility — it is what keeps incoming reports legible.
+  flooding: OTHER_CATEGORY,
   uncategorized: OTHER_CATEGORY,
   others: OTHER_CATEGORY,
 }
@@ -94,7 +104,6 @@ export const CATEGORY_LABELS = {
   medical: 'Medical',
   fire: 'Fire',
   noise: 'Noise',
-  flooding: 'Flooding',
   [OTHER_CATEGORY]: 'Others',
 }
 
@@ -121,7 +130,6 @@ export const CATEGORY_COLORS = {
   medical: '#F43F5E',
   fire: '#F97316',
   noise: '#A855F7',
-  flooding: '#06B6D4',
   [OTHER_CATEGORY]: '#94A3B8',
 }
 

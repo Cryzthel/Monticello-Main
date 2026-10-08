@@ -23,9 +23,43 @@
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Chillax is the wordmark's FALLBACK now, not its face.
+
+      The brand face is Affinik, which is a licensed retail font with no CDN
+      behind it, so it is self-hosted instead — see the @font-face at the top
+      of the shared stylesheet. `--font-brand` lists Affinik first and Chillax
+      behind it, which is why this <link> is still here: until the licence
+      file is committed to apps/*/public/fonts/, Chillax is what the wordmark
+      ACTUALLY renders in, and dropping this early would degrade the lockup to
+      Inter.
+
+      So: once that file lands, DELETE this stylesheet link and the two
+      Fontshare preconnects below it. A render-blocking stylesheet plus a font
+      download that nothing uses any more is pure cost on every cold load.
+      apps/*/public/fonts/README.md says the same thing next to the file.
+
+      Fontshare needs its own pair of hints while it is here — the stylesheet
+      is served by api.fontshare.com and the font files by cdn.fontshare.com.
+      Same reasoning as the Google pair above: without the second hint that
+      connection is only opened after this CSS has parsed.
+
+      Requested in BOTH consoles, unlike Plus Jakarta Sans. That exception
+      holds for a face used by one heading on one screen; this one dresses the
+      brand wordmark in the shared sidebar and the shared sign-in header, so
+      both portals render it and both must ask for it.
+
+      ONE WEIGHT. The wordmark sets 600 and nothing else does.
+    -->
+    <link rel="preconnect" href="https://api.fontshare.com" />
+    <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap"
+      href="https://api.fontshare.com/v2/css?f%5B%5D=chillax@600&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap"
     />
     <!--
       Theme resolution BEFORE first paint.

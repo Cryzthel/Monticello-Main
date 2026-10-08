@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import BrandMark from '@shared/components/BrandMark'
 import { Building2, LogOut, ShieldCheck, X } from '@shared/icons'
 import Tooltip from '@shared/components/Tooltip'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
@@ -43,12 +44,43 @@ function labelMotion(collapsed) {
   return collapsed ? 'opacity-0 duration-150' : 'opacity-100 delay-100 duration-200'
 }
 
-// The wordmark's squircle tile — the same geometry as .icon-tile, so the
-// brand lockup and the lead glyphs in the nav below read as one family.
-// brand-600 rather than brand-500 for the same reason .btn-brand is: this is
-// a pale label sitting ON emerald, so it needs the AA-safe step.
-const BRAND_MARK =
-  'surface-brand flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-bold'
+// The mark, sized to sit inside the 44px slot the rail is built around.
+//
+// This replaced an "MV" monogram on a `surface-brand` squircle. The monogram
+// was a stand-in for artwork that did not exist yet; the artwork exists now
+// (Figma node 271-71), so the tile goes with it — a coloured tile would have
+// had to carry a mark in some other colour, and the brand's own lockup puts
+// the mark directly on the surface with nothing behind it.
+//
+// `text-brand-logo` is the colour: the token alternates per theme, so the mark
+// is #05171B on white here and #FFFDD7 in dark. The WORDMARK beside it takes
+// the same token, so the lockup is one colour by construction rather than two
+// values someone has to keep equal.
+//
+// `w-auto`, not `w-7`: the real artwork is a 192x179 viewBox — wider than it
+// is tall — so a square box would letterbox it and render it shorter than the
+// height asked for. Height is the only dimension set; the width follows.
+//
+// 24px, and this has been 36 → 28 → 24 → 32 → 24. The churn is worth one
+// paragraph so the next person does not restart it.
+//
+// Every one of those rounds came in as "the mark renders black". It does not,
+// and never did: it is the brand ink, confirmed by sampling painted pixels off
+// screenshots, and that ink is a near-black that only shows its teal across
+// enough solid area. 32px was a deliberate step UP to make the hue visible
+// again, and it worked. 24px is a step back DOWN, by request, with the colour
+// essentially unchanged — so the mark reads as near-black at this size. That is
+// the expected outcome of the trade, not a regression to chase.
+//
+// If it should read teal at 24px, the lever is the ink, not this number:
+// `--color-brand-logo` in styles/index.css. Size and colour are coupled here,
+// and moving one without the other is what produced the churn.
+//
+// The slot it sits in is 44px wide and unchanged, so the mark does not fill it:
+// ~10px of air either side. That air IS the lockup's optical gap here. It is
+// not a `gap-*` utility, and deliberately — the slot's WIDTH is what animates
+// on collapse, and a gap would be a second, unanimated space fighting it.
+const BRAND_MARK = 'h-6 w-auto shrink-0 text-brand-logo'
 
 /**
  * Sidebar header: logo and wordmark.
@@ -73,9 +105,32 @@ function SidebarHeader({ collapsed, onClose }) {
 
   return (
     // `min-w-0 flex-1`, NOT shrink-0: this row has to be allowed to squeeze
-    // below its content width, or the wordmark keeps its full 156px inside an
+    // below its content width, or the wordmark keeps its full width inside an
     // 80px rail and overflows it.
-    <div className="flex min-w-0 flex-1 items-center">
+    //
+    // The label gets 180px here (w-64, less px-4 and the 44px mark slot), and
+    // 144px in the mobile drawer once the close button takes its 36px. Groote
+    // sets "Monticello Villas" at 131px / 150px / 169px for 14 / 16 / 18px,
+    // measured in the browser with the face actually loaded. 14px clears both
+    // with room, which is what let the drawer branch go.
+    //
+    // Back to 14px after a brief spell at 16px, and this is the size that was
+    // right all along: the rail is dense chrome, and a brand line bigger than
+    // the 14px nav items beneath it makes the top of the panel heavy. It now
+    // matches the login lockup exactly, so the brand reads at one size
+    // everywhere instead of two.
+    // `pb-4 border-b`: the lockup used to sit 12px (the column's `gap-3`) above
+    // the first nav item, which read as the brand being the first entry in the
+    // menu rather than the thing the menu belongs to. The rule is doing the
+    // separating; the padding is what keeps the rule off the wordmark's
+    // descenders. Together with the column gap that is 28px of air, which is
+    // enough at the rail's density without spending a nav row's worth of height.
+    //
+    // It spans the padded content width when expanded and the full rail when
+    // collapsed, because the container's `px-4` only applies in the former. That
+    // difference is fine — collapsed, an edge-to-edge rule reads as a rail
+    // divider, which is what it is.
+    <div className="flex min-w-0 flex-1 items-center border-b border-hairline pb-4">
       <span
         className={`${slotWidth(collapsed)} flex shrink-0 items-center justify-center transition-[width] duration-300 ease-spring`}
       >
@@ -86,10 +141,10 @@ function SidebarHeader({ collapsed, onClose }) {
             onError={() => setLogoFailed(true)}
             // `object-contain` on a square tile: a wordmark is usually wider
             // than it is tall, and `cover` would crop it to initials.
-            className="h-9 w-9 shrink-0 rounded-lg object-contain"
+            className="h-6 w-6 shrink-0 rounded-lg object-contain"
           />
         ) : (
-          <span className={BRAND_MARK}>MV</span>
+          <BrandMark className={BRAND_MARK} />
         )}
       </span>
 
@@ -105,7 +160,23 @@ function SidebarHeader({ collapsed, onClose }) {
           layouts to reach a line that no longer exists is a trail the next
           person has to walk before finding out it goes nowhere. */}
       <div className={`nav-label ${labelMotion(collapsed)}`}>
-        <p className="truncate text-sm font-semibold leading-tight text-text-primary">Monticello Villas</p>
+        {/* 14px, and it stays 14px while the mark grows to 32px. The two are
+            not locked together: the mark is competing with a 44px slot and the
+            page beyond it, the label is competing with the 14px nav items
+            directly beneath it, and a brand line larger than every item under
+            it makes the rail top-heavy.
+
+            It is also the size that fits everywhere without a branch. Measured
+            in the browser with Groote loaded, "Monticello Villas" sets 131px
+            at 14px, 150px at 16px, 169px at 18px. The desktop rail gives the
+            label 180px (w-64, less px-4 and the 44px slot); the mobile drawer
+            gives it 144px once the close button takes its 36px. 14px clears
+            both. 16px briefly did not, which is why this once branched on
+            `onClose` — that branch is gone, and a conditional that always
+            evaluates the same way is worse than no conditional. */}
+        <p className="truncate font-brand text-sm font-normal leading-tight tracking-tight text-brand-logo">
+          Monticello Villas
+        </p>
       </div>
 
       {onClose ? (

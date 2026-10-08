@@ -15,6 +15,7 @@ import {
 } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
+import SegmentedControl from '@shared/components/SegmentedControl'
 import { playAlert, unlockAlertSound } from '@shared/lib/alertSound'
 import { saveSettings } from '@shared/lib/systemSettings'
 import {
@@ -37,6 +38,24 @@ import {
   VolumeSetting,
 } from '@/components/settings/SettingsFields'
 
+/**
+ * The five configuration domains, and which settings groups live under each.
+ *
+ * `groups` is the list of DOCUMENT keys a tab owns, not a list of components —
+ * it is what the dirty dot is computed from, so a tab gaining a section means
+ * adding its key here too or the dot silently stops reporting.
+ *
+ * `integrations` owns no keys on purpose: that tab holds the note explaining
+ * why provider credentials are NOT stored in this document. It has nothing to
+ * save, and so can never be dirty.
+ */
+const TABS = [
+  { value: 'general', label: 'General', icon: Building2, groups: ['organisation'] },
+  { value: 'safety', label: 'Emergency', icon: Siren, groups: ['sos'] },
+  { value: 'operations', label: 'Operations', icon: Radio, groups: ['incidents', 'guardhouse'] },
+  { value: 'residents', label: 'Residents', icon: Smartphone, groups: ['residentApp', 'push'] },
+  { value: 'integrations', label: 'Integrations', icon: Plug, groups: [] },
+]
 /**
  * Admin settings — the subdivision's operating policy, in one document.
  *
@@ -78,6 +97,21 @@ export default function SettingsPage() {
   const settled = status === 'live' || status === 'default' || status === 'error'
   const disabled = !settled || form.saving
   const [confirmingSilence, setConfirmingSilence] = useState(false)
+  const [tab, setTab] = useState('general')
+
+  // Compared as JSON because a settings group is plain Firestore data —
+  // primitives and one array of hotlines — so a key-by-key Object.is would
+  // report the hotline list as changed on every render.
+  const tabOptions = useMemo(
+    () =>
+      TABS.map(({ value: id, label, icon, groups }) => ({
+        value: id,
+        label,
+        icon,
+        count: groups.some((g) => JSON.stringify(draft[g]) !== JSON.stringify(value[g])) ? '•' : undefined,
+      })),
+    [draft, value],
+  )
 
   /** Groups are replaced whole, so a patch never drops a sibling field. */
   const setGroup = useCallback(
@@ -116,314 +150,350 @@ export default function SettingsPage() {
             </span>
           </p>
         ) : null}
+        {/* ── Section tabs ─────────────────────────────────────────────── */}
+        {/* Seven groups down one scroll was the whole problem: the page was a
+            list you read rather than a console you operate, and the two
+            settings an administrator actually came for were never both on
+            screen. The groups are unchanged — this only decides which are
+            mounted.
+
+            THE DIRTY DOT IS NOT DECORATION. Tabs can hide an edit the stacked
+            page could not: change a field, switch tab, and the footer insists
+            something is unsaved with nothing on screen to show for it. The dot
+            marks which section holds it. One draft still spans every tab, and
+            Save still writes the whole document in one go — switching tabs is
+            not a commit and does not discard anything. */}
+        <SegmentedControl
+          options={tabOptions}
+          value={tab}
+          onChange={setTab}
+          ariaLabel="Settings sections"
+          kind="tabs"
+          size="lg"
+          className="self-start"
+        />
 
         {/* ── 1. SOS ───────────────────────────────────────────────────── */}
-        <SettingsGroup
-          icon={Siren}
-          title="SOS and panic button"
-          description="What happens between a resident pressing the button and an officer arriving."
-        >
-          <SwitchSetting
-            id="sos-siren"
-            title="Emergency sound alerts"
-            description="The siren every guardhouse console sounds when a resident presses the panic button."
-            checked={draft.sos.sirenEnabled}
-            disabled={disabled}
-            onChange={(sirenEnabled) => setGroup('sos', { sirenEnabled })}
-          />
+        {tab === 'safety' ? (
+          <SettingsGroup
+            icon={Siren}
+            title="SOS and panic button"
+            description="What happens between a resident pressing the button and an officer arriving."
+          >
+            <SwitchSetting
+              id="sos-siren"
+              title="Emergency sound alerts"
+              description="The siren every guardhouse console sounds when a resident presses the panic button."
+              checked={draft.sos.sirenEnabled}
+              disabled={disabled}
+              onChange={(sirenEnabled) => setGroup('sos', { sirenEnabled })}
+            />
 
-          <NumberSetting
-            id="sos-escalate"
-            title="Auto-escalation window"
-            description="How long an unacknowledged SOS waits before escalating to secondary administrators."
-            value={draft.sos.escalateAfterMinutes}
-            min={1}
-            max={10}
-            unit="minutes"
-            disabled={disabled}
-            onChange={(next) => setGroup('sos', { escalateAfterMinutes: Number(next) })}
-            pending="The scheduled sweep stamps an alert nobody has acknowledged within this window, so both consoles can show it went unattended. Written and tested, but it cannot deploy on the current plan."
-          />
+            <NumberSetting
+              id="sos-escalate"
+              title="Auto-escalation window"
+              description="How long an unacknowledged SOS waits before escalating to secondary administrators."
+              value={draft.sos.escalateAfterMinutes}
+              min={1}
+              max={10}
+              unit="minutes"
+              disabled={disabled}
+              onChange={(next) => setGroup('sos', { escalateAfterMinutes: Number(next) })}
+              pending="The scheduled sweep stamps an alert nobody has acknowledged within this window, so both consoles can show it went unattended. Written and tested, but it cannot deploy on the current plan."
+            />
 
-          <SwitchSetting
-            id="sos-geofence"
-            title="Geofence boundary alert"
-            description="Flag an SOS whose reported position falls outside the registered subdivision boundary, on the guardhouse alert and in the SOS list."
-            checked={draft.sos.geofenceAlert}
-            disabled={disabled}
-            onChange={(geofenceAlert) => setGroup('sos', { geofenceAlert })}
-          />
+            <SwitchSetting
+              id="sos-geofence"
+              title="Geofence boundary alert"
+              description="Flag an SOS whose reported position falls outside the registered subdivision boundary, on the guardhouse alert and in the SOS list."
+              checked={draft.sos.geofenceAlert}
+              disabled={disabled}
+              onChange={(geofenceAlert) => setGroup('sos', { geofenceAlert })}
+            />
 
-          <HotlineEditor
-            value={draft.sos.hotlines}
-            disabled={disabled}
-            onChange={(hotlines) => setGroup('sos', { hotlines })}
-          />
-        </SettingsGroup>
+            <HotlineEditor
+              value={draft.sos.hotlines}
+              disabled={disabled}
+              onChange={(hotlines) => setGroup('sos', { hotlines })}
+            />
+          </SettingsGroup>
+        ) : null}
 
         {/* ── 2. Incidents ─────────────────────────────────────────────── */}
-        <SettingsGroup
-          icon={Ticket}
-          title="Incident and hazard rules"
-          description="How reports are routed, how fast they are expected to move, and how long hazards stay on the map."
-        >
-          <SwitchSetting
-            id="incident-autoassign"
-            title="Automatic assignment"
-            description="Route a new report to an on-duty officer from the shift roster instead of waiting for an admin to dispatch it."
-            checked={draft.incidents.autoAssign}
-            disabled={disabled}
-            onChange={(autoAssign) => setGroup('incidents', { autoAssign })}
-            pending="Stored, not yet acted on: assigning on arrival needs a Firestore write trigger."
-          />
+        {tab === 'operations' ? (
+          <SettingsGroup
+            icon={Ticket}
+            title="Incident and hazard rules"
+            description="How reports are routed, how fast they are expected to move, and how long hazards stay on the map."
+          >
+            <SwitchSetting
+              id="incident-autoassign"
+              title="Automatic assignment"
+              description="Route a new report to an on-duty officer from the shift roster instead of waiting for an admin to dispatch it."
+              checked={draft.incidents.autoAssign}
+              disabled={disabled}
+              onChange={(autoAssign) => setGroup('incidents', { autoAssign })}
+              pending="Stored, not yet acted on: assigning on arrival needs a Firestore write trigger."
+            />
 
-          <NumberSetting
-            id="incident-ack"
-            title="Acknowledgement target"
-            description="How quickly a new report should be picked up. Drives the overdue marker on the dispatch drawer."
-            value={draft.incidents.ackTargetMinutes}
-            min={1}
-            max={120}
-            unit="minutes"
-            disabled={disabled}
-            onChange={(next) => setGroup('incidents', { ackTargetMinutes: Number(next) })}
-            pending="The scheduled sweep flags reports that miss this target and publishes the totals. The report drawer's own overdue marker still uses its built-in threshold. The sweep cannot deploy on the current plan."
-          />
+            <NumberSetting
+              id="incident-ack"
+              title="Acknowledgement target"
+              description="How quickly a new report should be picked up. Drives the overdue marker on the dispatch drawer."
+              value={draft.incidents.ackTargetMinutes}
+              min={1}
+              max={120}
+              unit="minutes"
+              disabled={disabled}
+              onChange={(next) => setGroup('incidents', { ackTargetMinutes: Number(next) })}
+              pending="The scheduled sweep flags reports that miss this target and publishes the totals. The report drawer's own overdue marker still uses its built-in threshold. The sweep cannot deploy on the current plan."
+            />
 
-          <NumberSetting
-            id="incident-resolve"
-            title="Resolution target"
-            description="How long a report may stay open before it counts as breaching its target."
-            value={draft.incidents.resolveTargetHours}
-            min={1}
-            max={336}
-            unit="hours"
-            disabled={disabled}
-            onChange={(next) => setGroup('incidents', { resolveTargetHours: Number(next) })}
-            pending="The scheduled sweep flags reports still open past this target and publishes the totals. It cannot deploy on the current plan."
-          />
+            <NumberSetting
+              id="incident-resolve"
+              title="Resolution target"
+              description="How long a report may stay open before it counts as breaching its target."
+              value={draft.incidents.resolveTargetHours}
+              min={1}
+              max={336}
+              unit="hours"
+              disabled={disabled}
+              onChange={(next) => setGroup('incidents', { resolveTargetHours: Number(next) })}
+              pending="The scheduled sweep flags reports still open past this target and publishes the totals. It cannot deploy on the current plan."
+            />
 
-          <NumberSetting
-            id="hazard-ttl"
-            title="Hazard pin lifetime"
-            description="How long an open hazard pin stays current before it needs re-verifying. Measured from when it was reported."
-            value={draft.incidents.hazardTtlHours}
-            min={1}
-            max={720}
-            unit="hours"
-            disabled={disabled}
-            onChange={(next) => setGroup('incidents', { hazardTtlHours: Number(next) })}
-            pending="Used by the scheduled sweep to file away reports that have been RESOLVED for this long. It does NOT hide anything: the hazard map draws every open report whatever its age, because one that ages out of the queue is one nobody is coming to fix. Archiving cannot deploy on the current plan."
-          />
-        </SettingsGroup>
+            <NumberSetting
+              id="hazard-ttl"
+              title="Hazard pin lifetime"
+              description="How long an open hazard pin stays current before it needs re-verifying. Measured from when it was reported."
+              value={draft.incidents.hazardTtlHours}
+              min={1}
+              max={720}
+              unit="hours"
+              disabled={disabled}
+              onChange={(next) => setGroup('incidents', { hazardTtlHours: Number(next) })}
+              pending="Used by the scheduled sweep to file away reports that have been RESOLVED for this long. It does NOT hide anything: the hazard map draws every open report whatever its age, because one that ages out of the queue is one nobody is coming to fix. Archiving cannot deploy on the current plan."
+            />
+          </SettingsGroup>
+        ) : null}
 
         {/* ── 3. Guardhouse ────────────────────────────────────────────── */}
-        <SettingsGroup
-          icon={Radio}
-          title="Guardhouse console"
-          description="Defaults for the consoles officers work from."
-        >
-          <VolumeSetting
-            id="guard-volume"
-            title="Alarm volume"
-            description="Default level for the SOS siren and alert tones on a guardhouse console."
-            value={draft.guardhouse.sirenVolume}
-            disabled={disabled}
-            onChange={(sirenVolume) => setGroup('guardhouse', { sirenVolume })}
-            footnote={
-              <button type="button" onClick={testSiren} className="btn btn-sm btn-outline">
-                <Volume2 size="sm" aria-hidden="true" />
-                Test at this level
-              </button>
-            }
-          />
+        {tab === 'operations' ? (
+          <SettingsGroup
+            icon={Radio}
+            title="Guardhouse console"
+            description="Defaults for the consoles officers work from."
+          >
+            <VolumeSetting
+              id="guard-volume"
+              title="Alarm volume"
+              description="Default level for the SOS siren and alert tones on a guardhouse console."
+              value={draft.guardhouse.sirenVolume}
+              disabled={disabled}
+              onChange={(sirenVolume) => setGroup('guardhouse', { sirenVolume })}
+              footnote={
+                <button type="button" onClick={testSiren} className="btn btn-sm btn-outline">
+                  <Volume2 size="sm" aria-hidden="true" />
+                  Test at this level
+                </button>
+              }
+            />
 
-          <SwitchSetting
-            id="guard-handover"
-            title="Shift handover required"
-            description="Officers must file a duty log before they can clock out of a shift. With this off, clocking out is a single confirmation."
-            checked={draft.guardhouse.requireHandover}
-            disabled={disabled}
-            onChange={(requireHandover) => setGroup('guardhouse', { requireHandover })}
-          />
+            <SwitchSetting
+              id="guard-handover"
+              title="Shift handover required"
+              description="Officers must file a duty log before they can clock out of a shift. With this off, clocking out is a single confirmation."
+              checked={draft.guardhouse.requireHandover}
+              disabled={disabled}
+              onChange={(requireHandover) => setGroup('guardhouse', { requireHandover })}
+            />
 
-          <ChoiceSetting
-            id="guard-telemetry"
-            title="Location ping interval"
-            description="How often an on-duty officer's console reports its position to the dispatch map."
-            value={draft.guardhouse.telemetryIntervalSeconds}
-            options={TELEMETRY_INTERVALS.map((s) => ({ value: String(s), label: `Every ${s} seconds` }))}
-            disabled={disabled}
-            onChange={(next) => setGroup('guardhouse', { telemetryIntervalSeconds: Number(next) })}
-          />
-        </SettingsGroup>
+            <ChoiceSetting
+              id="guard-telemetry"
+              title="Location ping interval"
+              description="How often an on-duty officer's console reports its position to the dispatch map."
+              value={draft.guardhouse.telemetryIntervalSeconds}
+              options={TELEMETRY_INTERVALS.map((s) => ({ value: String(s), label: `Every ${s} seconds` }))}
+              disabled={disabled}
+              onChange={(next) => setGroup('guardhouse', { telemetryIntervalSeconds: Number(next) })}
+            />
+          </SettingsGroup>
+        ) : null}
 
         {/* ── 4. Resident app ──────────────────────────────────────────── */}
-        <SettingsGroup
-          icon={Smartphone}
-          title="Resident app"
-          description="Limits and gates on what residents can send."
-        >
-          <NumberSetting
-            id="resident-rate"
-            title="Reports per hour"
-            description="How many non-emergency reports one resident may file in an hour."
-            value={draft.residentApp.reportsPerHour}
-            min={1}
-            max={50}
-            unit="per hour"
-            disabled={disabled}
-            onChange={(next) => setGroup('residentApp', { reportsPerHour: Number(next) })}
-            pending="Advisory only: the app can refuse, but a limit that cannot be bypassed has to be counted on the server."
-          />
+        {tab === 'residents' ? (
+          <SettingsGroup
+            icon={Smartphone}
+            title="Resident app"
+            description="Limits and gates on what residents can send."
+          >
+            <NumberSetting
+              id="resident-rate"
+              title="Reports per hour"
+              description="How many non-emergency reports one resident may file in an hour."
+              value={draft.residentApp.reportsPerHour}
+              min={1}
+              max={50}
+              unit="per hour"
+              disabled={disabled}
+              onChange={(next) => setGroup('residentApp', { reportsPerHour: Number(next) })}
+              pending="Advisory only: the app can refuse, but a limit that cannot be bypassed has to be counted on the server."
+            />
 
-          <ChoiceSetting
-            id="resident-upload"
-            title="Attachment size limit"
-            description="Largest photo or video a resident may attach to a report."
-            value={draft.residentApp.maxUploadMb}
-            options={UPLOAD_LIMITS_MB.map((mb) => ({ value: String(mb), label: `${mb} MB` }))}
-            disabled={disabled}
-            onChange={(next) => setGroup('residentApp', { maxUploadMb: Number(next) })}
-            pending="Enforced in the guardhouse uploader before a file is sent. Storage rules would make it unbypassable."
-          />
+            <ChoiceSetting
+              id="resident-upload"
+              title="Attachment size limit"
+              description="Largest photo or video a resident may attach to a report."
+              value={draft.residentApp.maxUploadMb}
+              options={UPLOAD_LIMITS_MB.map((mb) => ({ value: String(mb), label: `${mb} MB` }))}
+              disabled={disabled}
+              onChange={(next) => setGroup('residentApp', { maxUploadMb: Number(next) })}
+              pending="Enforced in the guardhouse uploader before a file is sent. Storage rules would make it unbypassable."
+            />
 
-          <SwitchSetting
-            id="resident-verify"
-            title="Verification required for SOS"
-            description="A newly registered household must be approved by an administrator before the panic button unlocks."
-            checked={draft.residentApp.requireVerificationForSos}
-            disabled={disabled}
-            onChange={(requireVerificationForSos) =>
-              setGroup('residentApp', { requireVerificationForSos })
-            }
-            pending="Stored, not yet acted on: the mobile app does not read this gate yet."
-          />
-        </SettingsGroup>
+            <SwitchSetting
+              id="resident-verify"
+              title="Verification required for SOS"
+              description="A newly registered household must be approved by an administrator before the panic button unlocks."
+              checked={draft.residentApp.requireVerificationForSos}
+              disabled={disabled}
+              onChange={(requireVerificationForSos) =>
+                setGroup('residentApp', { requireVerificationForSos })
+              }
+              pending="Stored, not yet acted on: the mobile app does not read this gate yet."
+            />
+          </SettingsGroup>
+        ) : null}
 
         {/* ── 5. Organisation ──────────────────────────────────────────── */}
-        <SettingsGroup
-          icon={Building2}
-          title="Subdivision profile"
-          description="Who residents reach, and how long the record is kept."
-        >
-          <TextSetting
-            id="org-email"
-            title="Contact email"
-            description="Shown in the sidebar of both consoles so staff on shift can reach the office."
-            value={draft.organisation.contactEmail}
-            placeholder="hoa@monticellovillas.ph"
-            type="email"
-            disabled={disabled}
-            onChange={(contactEmail) => setGroup('organisation', { contactEmail })}
-          />
+        {tab === 'general' ? (
+          <SettingsGroup
+            icon={Building2}
+            title="Subdivision profile"
+            description="Who residents reach, and how long the record is kept."
+          >
+            <TextSetting
+              id="org-email"
+              title="Contact email"
+              description="Shown in the sidebar of both consoles so staff on shift can reach the office."
+              value={draft.organisation.contactEmail}
+              placeholder="hoa@monticellovillas.ph"
+              type="email"
+              disabled={disabled}
+              onChange={(contactEmail) => setGroup('organisation', { contactEmail })}
+            />
 
-          <TextSetting
-            id="org-hours"
-            title="Office hours"
-            description="Shown beside the contact email in both consoles."
-            value={draft.organisation.officeHours}
-            placeholder="Mon–Fri, 8:00–17:00"
-            disabled={disabled}
-            onChange={(officeHours) => setGroup('organisation', { officeHours })}
-          />
+            <TextSetting
+              id="org-hours"
+              title="Office hours"
+              description="Shown beside the contact email in both consoles."
+              value={draft.organisation.officeHours}
+              placeholder="Mon–Fri, 8:00–17:00"
+              disabled={disabled}
+              onChange={(officeHours) => setGroup('organisation', { officeHours })}
+            />
 
-          <TextSetting
-            id="org-logo"
-            title="Broadcast header logo"
-            description="Replaces the MV mark in both consoles’ sidebars. Falls back to MV if the image cannot load."
-            value={draft.organisation.logoUrl}
-            placeholder="https://…"
-            type="url"
-            disabled={disabled}
-            onChange={(logoUrl) => setGroup('organisation', { logoUrl })}
-          />
+            <TextSetting
+              id="org-logo"
+              title="Broadcast header logo"
+              description="Replaces the MV mark in both consoles’ sidebars. Falls back to MV if the image cannot load."
+              value={draft.organisation.logoUrl}
+              placeholder="https://…"
+              type="url"
+              disabled={disabled}
+              onChange={(logoUrl) => setGroup('organisation', { logoUrl })}
+            />
 
-          <ChoiceSetting
-            id="org-retention"
-            title="Audit history retention"
-            description="How far back the audit history goes."
-            value={draft.organisation.auditRetentionDays}
-            options={AUDIT_RETENTION_DAYS.map((d) => ({
-              value: String(d),
-              label: d === 0 ? 'Keep indefinitely' : `${d} days`,
-            }))}
-            disabled={disabled}
-            onChange={(next) => setGroup('organisation', { auditRetentionDays: Number(next) })}
-            pending="The scheduled sweep deletes Security Account provisioning records past this window. Audit History is not trimmed and never will be: it is built from the incident and announcement documents themselves, so a retention policy there would delete the records rather than a log. Deleting cannot deploy on the current plan."
-          />
-        </SettingsGroup>
+            <ChoiceSetting
+              id="org-retention"
+              title="Audit history retention"
+              description="How far back the audit history goes."
+              value={draft.organisation.auditRetentionDays}
+              options={AUDIT_RETENTION_DAYS.map((d) => ({
+                value: String(d),
+                label: d === 0 ? 'Keep indefinitely' : `${d} days`,
+              }))}
+              disabled={disabled}
+              onChange={(next) => setGroup('organisation', { auditRetentionDays: Number(next) })}
+              pending="The scheduled sweep deletes Security Account provisioning records past this window. Audit History is not trimmed and never will be: it is built from the incident and announcement documents themselves, so a retention policy there would delete the records rather than a log. Deleting cannot deploy on the current plan."
+            />
+          </SettingsGroup>
+        ) : null}
 
         {/* ── Integrations ─────────────────────────────────────────────── */}
-        <SettingsGroup
-          icon={Plug}
-          title="Notification providers"
-          description="Where the SMS and push credentials live."
-        >
-          <SettingRow
-            id="integrations"
-            title="Provider credentials are not stored here"
-            description="Firebase Cloud Messaging, Twilio and Semaphore keys are held as Cloud Functions secrets and injected at run time."
+        {tab === 'integrations' ? (
+          <SettingsGroup
+            icon={Plug}
+            title="Notification providers"
+            description="Where the SMS and push credentials live."
           >
-            {/*
-              THIS IS A DELIBERATE OMISSION, NOT A MISSING FEATURE.
+            <SettingRow
+              id="integrations"
+              title="Provider credentials are not stored here"
+              description="Firebase Cloud Messaging, Twilio and Semaphore keys are held as Cloud Functions secrets and injected at run time."
+            >
+              {/*
+                THIS IS A DELIBERATE OMISSION, NOT A MISSING FEATURE.
 
-              The brief asked for API credential fields on this page. Putting
-              them here would write third-party secrets into
-              `system_settings/operations` — a document every approved staff
-              account can READ, which is every guard on every console. A key
-              that bills the HOA, or sends SMS in its name, would be one
-              devtools panel away from anyone who has ever been issued a
-              guardhouse login.
+                The brief asked for API credential fields on this page. Putting
+                them here would write third-party secrets into
+                `system_settings/operations` — a document every approved staff
+                account can READ, which is every guard on every console. A key
+                that bills the HOA, or sends SMS in its name, would be one
+                devtools panel away from anyone who has ever been issued a
+                guardhouse login.
 
-              The project already does this correctly elsewhere: the OTP mailer
-              takes SMTP_USER and SMTP_PASS through
-              `functions.runWith({ secrets: [...] })`, so the value never
-              reaches a client. New providers belong in the same place.
+                The project already does this correctly elsewhere: the OTP mailer
+                takes SMTP_USER and SMTP_PASS through
+                `functions.runWith({ secrets: [...] })`, so the value never
+                reaches a client. New providers belong in the same place.
 
-              The Firestore rules were written to make the wrong version hard
-              to reintroduce: `organisation` accepts four named string keys, so
-              a future `smsApiKey` is refused by the database, not just absent
-              from this form.
-            */}
-            <div className="mt-3 rounded-lg border border-hairline bg-base-800 p-4">
-              <p className="text-xs leading-relaxed text-text-secondary">
-                Storing them in this document would put them in reach of every account that can read settings —
-                which is every guardhouse console. Set them where the OTP mailer already keeps its SMTP
-                credentials:
-              </p>
-              <p className="mt-2">
-                <code className="code-pill">firebase functions:secrets:set TWILIO_AUTH_TOKEN</code>
-              </p>
-              <PendingNote>
-                Secrets are read by Cloud Functions at run time, so a new provider also needs a functions deploy —
-                which is blocked until billing is enabled.
-              </PendingNote>
-            </div>
-          </SettingRow>
-        </SettingsGroup>
+                The Firestore rules were written to make the wrong version hard
+                to reintroduce: `organisation` accepts four named string keys, so
+                a future `smsApiKey` is refused by the database, not just absent
+                from this form.
+              */}
+              <div className="mt-3 rounded-lg border border-hairline bg-base-800 p-4">
+                <p className="text-xs leading-relaxed text-text-secondary">
+                  Storing them in this document would put them in reach of every account that can read settings —
+                  which is every guardhouse console. Set them where the OTP mailer already keeps its SMTP
+                  credentials:
+                </p>
+                <p className="mt-2">
+                  <code className="code-pill">firebase functions:secrets:set TWILIO_AUTH_TOKEN</code>
+                </p>
+                <PendingNote>
+                  Secrets are read by Cloud Functions at run time, so a new provider also needs a functions deploy —
+                  which is blocked until billing is enabled.
+                </PendingNote>
+              </div>
+            </SettingRow>
+          </SettingsGroup>
+        ) : null}
 
         {/* ── Notifications + save ─────────────────────────────────────── */}
-        <SettingsGroup
-          icon={ShieldAlert}
-          title="Resident notifications"
-          description="Phone alerts about a resident's own reports."
-        >
-          <SwitchSetting
-            id="push-enabled"
-            title="Push notifications"
-            description="Told when a unit is dispatched, arrives on site, and when the report is closed."
-            checked={draft.push.enabled}
-            disabled={disabled}
-            onChange={(enabled) => setGroup('push', { enabled })}
-          />
-          <SettingRow
-            id="push-lock"
-            title="SOS alarms always send"
-            description="The alarm to on-duty officers is not covered by the switch above — it is the alarm itself."
-            control={<Lock size="sm" aria-hidden="true" className="text-text-muted" />}
-          />
-        </SettingsGroup>
+        {tab === 'residents' ? (
+          <SettingsGroup
+            icon={ShieldAlert}
+            title="Resident notifications"
+            description="Phone alerts about a resident's own reports."
+          >
+            <SwitchSetting
+              id="push-enabled"
+              title="Push notifications"
+              description="Told when a unit is dispatched, arrives on site, and when the report is closed."
+              checked={draft.push.enabled}
+              disabled={disabled}
+              onChange={(enabled) => setGroup('push', { enabled })}
+            />
+            <SettingRow
+              id="push-lock"
+              title="SOS alarms always send"
+              description="The alarm to on-duty officers is not covered by the switch above — it is the alarm itself."
+              control={<Lock size="sm" aria-hidden="true" className="text-text-muted" />}
+            />
+          </SettingsGroup>
+        ) : null}
 
         <SaveFooter form={form} settled={settled} meta={meta} status={status} />
       </form>

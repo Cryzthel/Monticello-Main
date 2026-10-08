@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { collection, query, orderBy, limit } from 'firebase/firestore'
 import AppShell from '@/layouts/AppShell'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
+import DutyPanel from '@/components/DutyPanel'
 import PriorityBreakdownChart from '@shared/components/PriorityBreakdownChart'
 import CategoryBreakdownPanel from '@/components/CategoryBreakdownPanel'
 import KpiCard from '@shared/components/KpiCard'
@@ -64,6 +65,15 @@ export default function PerformancePage() {
       topBarSlot={<GuardHeaderActions />}
     >
       <div className="flex flex-col gap-6">
+        {/* ── THE DUTY PANEL ──────────────────────────────────────────────
+            First, and on this page specifically, because this is the only
+            console page that renders with `dutyLock={false}` — so it is the
+            only one where the OFF-duty half of the panel can ever be seen.
+            It takes the page's own `reports` array rather than subscribing
+            again; the same documents answering two listeners is two answers
+            that can disagree. */}
+        <DutyPanel reports={reports} />
+
         {/* ── THE RESPONSE ROW ────────────────────────────────────────────
             Six cards, in the order a call passes through them: how much is
             open, how much of it is late, how fast we assign, when the next

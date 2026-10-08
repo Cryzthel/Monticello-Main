@@ -160,17 +160,11 @@ export function resolveAccessRole(account) {
 
 // ── ROSTER ──────────────────────────────────────────────────────────────────
 //
-// Shift options carry the label AND the clock window, because a guardhouse
-// roster is a human artefact: "Night Shift · 22:00–06:00" is what is pinned on
-// the wall, and a portal that renders "shift_3" instead is asking an operator
-// to translate.
-export const SHIFTS = [
-  { value: 'morning', label: 'Morning shift', window: '06:00 – 14:00' },
-  { value: 'evening', label: 'Evening shift', window: '14:00 – 22:00' },
-  { value: 'night', label: 'Night shift', window: '22:00 – 06:00' },
-]
-
-export const SHIFT_BY_VALUE = Object.fromEntries(SHIFTS.map((s) => [s.value, s]))
+// Re-exported, not re-declared. A shift is no longer something assigned here —
+// a guard picks one at clock-in — so the list lives in @shared where BOTH
+// portals can reach it. Every existing `from '@/lib/securityAccounts'` import
+// keeps resolving.
+export { SHIFTS, SHIFT_BY_VALUE, shiftForTime } from '@shared/lib/shiftTypes'
 
 export const POSTS = [
   { value: 'main_gate', label: 'Main gate' },
@@ -349,11 +343,11 @@ export function validateAccountForm(form, { requireCredentials = true } = {}) {
     errors.badgeNumber = 'Letters, numbers and dashes only (2–16 characters).'
   }
 
-  if (!form.accessRole) errors.accessRole = 'Choose a role.'
-  else if (!ACCESS_ROLE_BY_VALUE[form.accessRole]) errors.accessRole = 'That role is not valid.'
-
-  if (!form.assignedPost) errors.assignedPost = 'Choose a post.'
-  if (!form.shift) errors.shift = 'Choose a shift.'
+  // No role, post or shift checks. The form no longer asks for any of them —
+  // every credential is a Security Officer unless the supervisor toggle is on,
+  // and the shift is chosen per-shift at clock-in. ProvisionAccountModal still
+  // SENDS all three as constants because the callable requires them on create;
+  // see the note beside EMPTY_FORM there.
 
   if (requireCredentials) {
     // The form no longer lets anyone type here — the value is generated on the
@@ -475,10 +469,10 @@ export function describeCallableError(err, action = 'complete that') {
     const informative = bare && bare !== code ? err.message : ''
     return (
       informative ||
-      'Could not reach the provisioning function. It is either not deployed, or ' +
-        'deployed but unable to start — Cloud Functions need billing enabled on ' +
-        'the Firebase project. Accounts can be created directly in the Firebase ' +
-        'Console in the meantime.'
+      'Could not reach the provisioning function. It is deployed, but the project ' +
+        'cannot start it — Cloud Functions need billing (Blaze) enabled. Until it ' +
+        'is, create accounts with scripts/provision-guard.js, which writes exactly ' +
+        'what this function would.'
     )
   }
   return err?.message || `Could not ${action}. Please try again.`

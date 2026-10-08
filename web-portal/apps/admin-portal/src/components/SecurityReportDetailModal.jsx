@@ -27,6 +27,7 @@ import { describeFirestoreError } from '@shared/lib/audit'
 import { formatCategory } from '@shared/lib/wpda'
 import { Skeleton } from '@shared/components/Skeleton'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
+import { exportReportPdf } from '@/lib/reportPdf'
 
 const STAMP = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
 const stamp = (value) => (value ? new Date(value).toLocaleString('en-GB', STAMP).replace(',', '') : '')
@@ -58,7 +59,11 @@ function SkeletonSection({ title, rows = 2 }) {
 
 function SkeletonBody() {
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+    // Mirrors the loaded body's single column exactly. A skeleton in a shape
+    // the real content does not take is worse than no skeleton: it promises a
+    // two-column panel, then reflows the moment the data lands, which reads as
+    // the page breaking rather than as it loading.
+    <div className="flex flex-col gap-6">
       <div className="space-y-3">
         <SkeletonSection title="Classification & priority" rows={3} />
         <SkeletonSection title="Resident data" rows={3} />
@@ -67,7 +72,7 @@ function SkeletonBody() {
       </div>
       <div className="space-y-3">
         <section className="rounded-xl border border-hairline bg-base-800 p-4">
-          <Skeleton variant="surface" className="aspect-video w-full" />
+          <Skeleton variant="surface" className="aspect-video w-full max-w-2xl" />
         </section>
         <SkeletonSection title="Review" rows={4} />
       </div>
@@ -294,14 +299,33 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
             {pending ? (
               <SkeletonBody />
             ) : (
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+              /* ── ONE COLUMN, TOP TO BOTTOM ───────────────────────────────
+                 This was a two-column split: the narrative on the left and a
+                 20rem evidence rail on the right, stuck to the top so it
+                 stayed beside whatever was being read.
+
+                 The rail is gone because the two halves were not peers. A
+                 report is read in one order — what happened, where, then what
+                 was photographed — and a fixed sidebar cut the narrative to
+                 about 60% of the panel, so the one piece of prose anyone
+                 actually reads got the narrowest measure on screen. Sticky
+                 made it worse rather than better: evidence pinned beside a
+                 paragraph it does not illustrate is just a thing that will not
+                 scroll away.
+
+                 Stacked, the narrative gets the full width and evidence lands
+                 where it belongs — after the account it supports.
+
+                 This is a plain block comment rather than a braced JSX one,
+                 because a ternary branch holds exactly one expression. A braced
+                 comment here is a second expression and the build fails with
+                 "Expected `,` or `)`". */
+              <div className="flex flex-col gap-6">
                 <div className="min-w-0">
                   <IncidentBreakdown report={report} mediaCount={media.length} canEditNotes={false} />
                 </div>
 
-                {/* `lg:sticky top-0`: the scroll container is the body above, so
-                    the evidence stays beside whichever section is being read. */}
-                <aside className="space-y-3 lg:sticky lg:top-0">
+                <div className="space-y-3">
                   <MetaSection
                     icon={Images}
                     title="Evidence"
@@ -322,7 +346,7 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                             type="button"
                             onClick={() => setLightboxIndex(media.indexOf(preview))}
                             aria-label="Open evidence full screen"
-                            className="relative block aspect-video w-full overflow-hidden rounded-lg border border-slate-200 bg-black"
+                            className="relative block aspect-video w-full max-w-2xl overflow-hidden rounded-lg border border-slate-200 bg-black"
                           >
                             {preview.type === 'video' ? (
                               <video src={preview.url} className="h-full w-full object-contain" muted />
@@ -333,7 +357,7 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                         ) : null}
 
                         {media.length > 1 ? (
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
                             {media.map((item, index) => (
                               <button
                                 key={item.url}
@@ -341,10 +365,17 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                                 onClick={() => setPreviewIndex(index)}
                                 aria-label={`Show evidence ${index + 1} of ${media.length}`}
                                 aria-pressed={item === preview}
-                                className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-[border-color,opacity] duration-150 ${
+                                /* `border-hairline`, not `border-transparent`:
+                                   unselected thumbnails had no edge at all, so
+                                   a dark photo — a night shot, which is most of
+                                   them — bled into the panel and the grid lost
+                                   its gutters. The selected ring still reads
+                                   because it is a brand colour against a
+                                   neutral, not because it is the only border. */
+                                className={`relative aspect-square overflow-hidden rounded-xl border-2 transition-[border-color,opacity] duration-150 ${
                                   item === preview
                                     ? 'border-brand-500'
-                                    : 'border-transparent opacity-70 hover:opacity-100'
+                                    : 'border-hairline opacity-70 hover:opacity-100'
                                 }`}
                               >
                                 {item.type === 'video' ? (
@@ -390,10 +421,9 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                       </MetaItem>
                       <MetaItem label="Reviewed by">{report.reviewedAt ? report.reviewedByName || 'An admin' : ''}</MetaItem>
                       <MetaItem label="Reviewed">{stamp(report.reviewedAt)}</MetaItem>
-                      <MetaItem label="Archived">{archived ? stamp(report.archivedAt) || 'Yes' : 'No'}</MetaItem>
                     </MetaList>
                   </MetaSection>
-                </aside>
+                </div>
               </div>
             )}
           </div>
@@ -424,10 +454,16 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
                 {report?.reviewedAt ? 'Reviewed' : 'Mark as reviewed'}
               </button>
 
+              {/* Was `window.print()`, which is not an export: it opened the
+                  browser's print dialog on the whole page, printed the dark
+                  modal as grey, and left whether a FILE appeared entirely up to
+                  whichever printer the admin picked. This builds the document
+                  itself and downloads it — see lib/reportPdf.js for why it is
+                  drawn as text rather than screenshotted. */}
               <button
                 type="button"
-                disabled={pending}
-                onClick={() => window.print()}
+                disabled={pending || !report}
+                onClick={() => exportReportPdf(report, { attachmentCount: media.length + documents.length })}
                 className="btn btn-sm btn-outline min-h-11 sm:min-h-0"
               >
                 <Printer size="sm" />

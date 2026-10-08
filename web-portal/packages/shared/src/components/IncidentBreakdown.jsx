@@ -244,9 +244,12 @@ export default function IncidentBreakdown({ report, mediaCount = 0, canEditNotes
           <div className="min-w-0">
             <p className="meta-label">WPDA urgency</p>
             <p className="mt-1 font-mono text-sm font-semibold text-brand-400">{Math.round(wpdaScore)}</p>
-            <p className="mt-0.5 text-xs text-text-muted">
-              {serverScore ? 'Server-scored' : 'Client estimate'} • weight ×{categoryWeightOf(report.category)}
-            </p>
+            {/* The "Server-scored • weight ×10" line was here and is gone. It
+                explained the scorer's internals — where the number came from
+                and what the category multiplier was — to an audience that acts
+                on the number, not on its derivation. Nothing downstream reads
+                `serverScore` for display any more; it stays computed because
+                the sort does. */}
           </div>
           <Field
             label="Evidence files"

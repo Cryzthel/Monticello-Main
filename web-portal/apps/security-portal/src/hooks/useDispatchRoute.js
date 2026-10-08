@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { auth } from '@shared/lib/firebase'
+import { publishRoute, summariseRoute } from '@/lib/guardTelemetry'
 import { fetchRoute, distanceMeters } from '@/lib/directions'
 import { GUARDHOUSE_LNGLAT } from '@/lib/routeOrigin'
 
@@ -113,6 +115,54 @@ export function useDispatchRoute({ incident, units, previewUid, profile }) {
   }, [key, originLng, originLat, destLng, destLat, profile])
 
   useEffect(() => () => controllerRef.current?.abort(), [])
+
+  // ── PUBLISHING THIS UNIT'S OWN ROUTE ──────────────────────────────────────
+  //
+  // Only ever OUR OWN. This hook also plots PREVIEW routes — the line a
+  // dispatcher sees while choosing between units — and those belong to a
+  // different officer's unit. `guard_telemetry` may only be written by the
+  // officer it describes (firestore.rules), so publishing a preview would be
+  // both a rule violation and a lie: nobody is driving it.
+  //
+  // Deduped on the summary rather than on the route object, which is a new
+  // identity on every refresh. Without that, a stationary unit whose route is
+  // re-plotted on a timer would rewrite several hundred coordinates to say
+  // exactly what the document already said.
+  const selfUid = auth.currentUser?.uid ?? null
+  const ownUid = unit?.uid && selfUid && unit.uid === selfUid ? selfUid : null
+  const publishedRef = useRef(null)
+
+  useEffect(() => {
+    if (!ownUid) return undefined
+
+    const summary = state.route
+      ? summariseRoute(state.route, { incidentId: incident?.id, tone })
+      : null
+    const signature = summary
+      ? `${summary.incidentId}:${summary.tone}:${summary.distance}:${summary.duration}:${summary.coordinates.length}`
+      : 'cleared'
+
+    if (publishedRef.current !== signature) {
+      publishedRef.current = signature
+      publishRoute(ownUid, summary)
+    }
+    return undefined
+    // `unit` is deliberately absent: a battery or heading update must not
+    // republish a route that has not changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownUid, state.route, incident?.id, tone])
+
+  // Leaving the console mid-call must not strand a line on the dispatcher's
+  // map that nothing is updating any more.
+  useEffect(
+    () => () => {
+      if (publishedRef.current && publishedRef.current !== 'cleared' && ownUid) {
+        publishedRef.current = 'cleared'
+        publishRoute(ownUid, null)
+      }
+    },
+    [ownUid],
+  )
 
   if (!key) return IDLE
   // Straight-line distance, so the drawer has a number even while the road

@@ -1734,11 +1734,17 @@ export default function IncidentMap({
    * fix, so the marker cannot lead the unit — at worst it is a moment behind,
    * which is the honest direction to err.
    *
+   * HEADING TWEENS ON THE SAME TERMS. The dot used to slide while the arrow on
+   * it snapped, which is the one combination that looks broken: a unit gliding
+   * north with its nose already pointing east. Both ends of a turn are reported
+   * bearings, and the interpolation takes the short way round the compass — see
+   * `lerpBearing` for why that cannot be a plain lerp.
+   *
    * Driven imperatively against the Mapbox source rather than through React
    * state: this runs a frame at a time, and re-rendering the dashboard sixty
    * times a second to move a dot would cost far more than it shows.
    */
-  const unitTweenRef = useRef({ frame: 0, positions: new Map() })
+  const unitTweenRef = useRef({ frame: 0, positions: new Map(), bearings: new Map() })
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready || !hasUnitLayer) return undefined
@@ -1746,33 +1752,90 @@ export default function IncidentMap({
     if (!source) return undefined
 
     const tween = unitTweenRef.current
-    const from = tween.positions
     const target = new Map(
       unitsGeojson.features.map((f) => [f.properties.id, f.geometry.coordinates]),
+    )
+    const targetBearing = new Map(
+      unitsGeojson.features
+        .filter((f) => f.properties.hasHeading)
+        .map((f) => [f.properties.id, f.properties.bearing]),
     )
 
     // A unit appearing for the first time, or returning after its fix went
     // stale, is placed rather than flown in from wherever it used to be.
     const starts = new Map()
-    target.forEach((coords, id) => starts.set(id, from.get(id) ?? coords))
+    target.forEach((coords, id) => starts.set(id, tween.positions.get(id) ?? coords))
+
+    // Same rule for heading: a unit that had no bearing a moment ago gets the
+    // new one outright. Spinning up from a default of 0 would animate a turn
+    // the unit never made.
+    const startBearings = new Map()
+    targetBearing.forEach((deg, id) => startBearings.set(id, tween.bearings.get(id) ?? deg))
 
     cancelAnimationFrame(tween.frame)
+
+    const settle = () => {
+      tween.positions = target
+      tween.bearings = targetBearing
+    }
+
+    /**
+     * Reduced motion gets the fix, not the journey.
+     *
+     * The tween is a comfort for reading movement, not information — the
+     * position it ends on is the only one that is true. Somebody who has asked
+     * the OS for less animation is better served by the marker simply being
+     * where the unit last reported.
+     */
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      source.setData(unitsGeojson)
+      settle()
+      return undefined
+    }
+
     const DURATION_MS = 900
     const startedAt = performance.now()
 
+    /**
+     * Shortest way round the compass.
+     *
+     * A unit turning from 350° to 10° has moved 20° clockwise, but a plain
+     * lerp between those numbers sweeps 340° the other way — the arrow spins
+     * almost a full turn to express a slight bend in the road. Normalising the
+     * delta into ±180 picks the short arc every time.
+     */
+    const lerpBearing = (a, b, t) => {
+      const delta = ((b - a + 540) % 360) - 180
+      return (a + delta * t + 360) % 360
+    }
+
     const paint = (t) => {
       const eased = t >= 1 ? 1 : 1 - (1 - t) * (1 - t) // easeOutQuad
+      if (eased >= 1) {
+        source.setData(unitsGeojson)
+        return
+      }
       const features = unitsGeojson.features.map((feature) => {
         const id = feature.properties.id
         const a = starts.get(id)
         const b = target.get(id)
-        if (!a || !b || eased >= 1) return feature
+        const from = startBearings.get(id)
+        const to = targetBearing.get(id)
+        const moved = a && b
+        const turned = from != null && to != null
+
+        if (!moved && !turned) return feature
         return {
           ...feature,
-          geometry: {
-            type: 'Point',
-            coordinates: [a[0] + (b[0] - a[0]) * eased, a[1] + (b[1] - a[1]) * eased],
-          },
+          properties: turned
+            ? { ...feature.properties, bearing: lerpBearing(from, to, eased) }
+            : feature.properties,
+          geometry: moved
+            ? {
+                type: 'Point',
+                coordinates: [a[0] + (b[0] - a[0]) * eased, a[1] + (b[1] - a[1]) * eased],
+              }
+            : feature.geometry,
         }
       })
       source.setData({ type: 'FeatureCollection', features })
@@ -1781,11 +1844,8 @@ export default function IncidentMap({
     const step = (now) => {
       const t = Math.min(1, (now - startedAt) / DURATION_MS)
       paint(t)
-      if (t < 1) {
-        tween.frame = requestAnimationFrame(step)
-      } else {
-        tween.positions = target
-      }
+      if (t < 1) tween.frame = requestAnimationFrame(step)
+      else settle()
     }
 
     tween.frame = requestAnimationFrame(step)

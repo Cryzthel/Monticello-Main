@@ -11,6 +11,7 @@ import {
   Loader2,
   IdCard,
   MapPinCheck,
+  MapPin,
   Navigation,
   Phone,
   Radio,
@@ -210,14 +211,17 @@ function AssignedUnit({ report, unit, route, eta }) {
       </div>
 
       <dl className="mt-3 border-t border-hairline pt-2">
-        {report.dispatchStage === 'dispatched' || report.dispatchStage === 'responding' ? (
+        {/* The READY figure is in the header chip now, so this row carries
+            only what the chip cannot: why there is no ETA yet. A card that
+            repeated "4 min · 1.2 km" eight lines under the header would be
+            spending a row to say it twice. */}
+        {(report.dispatchStage === 'dispatched' || report.dispatchStage === 'responding') && !roadEta ? (
           <Row label="Road ETA">
-            {roadEta ??
-              (route?.phase === 'routing'
-                ? 'Plotting…'
-                : route?.phase === 'no-origin'
-                  ? 'No position to route from'
-                  : route?.error ?? distance)}
+            {route?.phase === 'routing'
+              ? 'Plotting…'
+              : route?.phase === 'no-origin'
+                ? 'No position to route from'
+                : route?.error ?? distance}
           </Row>
         ) : null}
         {distance && report.dispatchStage !== 'resolved' ? <Row label="Distance">{distance}</Row> : null}
@@ -433,6 +437,22 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   const uid = user?.uid
   const { contact, loading: contactLoading } = useReporterContact(report?.reporterUid)
   const action = useStageAction(report?.id)
+
+  // ── THE LIVE ETA ────────────────────────────────────────────────────────
+  // The road figure the responding officer is actually driving to, promoted
+  // into the header. It was only ever in "Assigned unit & telemetry", five
+  // sections down a scrolling panel — which is the one place it is no use: an
+  // officer glancing at a call to decide whether to take it, and a dispatcher
+  // watching one in flight, are both asking "how far out are they" before they
+  // are asking anything else.
+  //
+  // Guarded on the route belonging to THIS call. The hook plots preview routes
+  // for other calls too, and an ETA from someone else's route is worse than no
+  // ETA at all.
+  const liveRoute = route?.incidentId === report?.id && route?.phase === 'ready' ? route.route : null
+  const etaChip = liveRoute
+    ? `ETA ${formatDuration(liveRoute.duration)} · ${formatDistance(liveRoute.distance)}`
+    : null
   const { busy, feedback, run, dismiss } = action
 
   // Focus moves into the panel, stays inside it, and returns to whatever
@@ -739,7 +759,21 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
               </p>
             </div>
             <div className="shrink-0 text-right">
-              <p className="text-2xs font-semibold text-text-muted">{report.resolvedAt ? 'Took' : 'Elapsed'}</p>
+              {/* "Open for", not "Elapsed" — and deliberately NOT "Response
+                  time", which the brief suggested.
+
+                  This clock runs from `reportedAt`: the moment the RESIDENT
+                  filed, not the moment a guard was dispatched. It therefore
+                  includes however long the call sat unclaimed. Labelling that
+                  "response time" would quietly turn a queue-length figure into
+                  a performance figure, and the number it reports is the one an
+                  admin would later hold a guard to.
+
+                  "Open for" is plain English and says exactly what is being
+                  counted. A real response time — dispatch to on-site — is
+                  derivable from the stage stamps below, and belongs on the
+                  metrics page rather than in a drawer header. */}
+              <p className="text-2xs font-semibold text-text-muted">{report.resolvedAt ? 'Took' : 'Open for'}</p>
               <ElapsedClock
                 since={report.reportedAt}
                 until={report.resolvedAt}
@@ -766,6 +800,14 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
             <StatusBadge severity={report.severity} size="sm">
               {SEVERITY_LABELS[report.severity] ?? 'Medium'} priority
             </StatusBadge>
+            {/* Only while someone is actually travelling to it. On a resolved
+                call or one nobody has taken, an ETA is a number with nothing
+                behind it. */}
+            {etaChip && (stage === 'dispatched' || stage === 'responding') ? (
+              <StatusBadge tone="info" size="sm" icon={Navigation}>
+                {etaChip}
+              </StatusBadge>
+            ) : null}
             {ack?.expired ? (
               <StatusBadge tone="danger" size="sm" icon={Timer}>
                 No acknowledgement
@@ -799,7 +841,24 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
               name" would wrap inside it, and widening it to fit two words
               would take the space from every value in the drawer — on a panel
               this narrow the values are what the officer is reading. */}
-          <Section icon={IdCard} title="Incident details">
+          {/* ── WHO, THEN WHERE ───────────────────────────────────────────
+              One card used to carry both, under the title "Incident details"
+              — itself a rename of "Location" made when the reporter's name and
+              number were folded in. Six rows covering two different questions,
+              and the officer scanning for an address read past a phone number
+              to reach it.
+
+              They are two cards now, in the order the work happens: an officer
+              takes a call, then drives to it. The reasoning that moved
+              Category and Reported out of the header still holds and they stay
+              in the column — beside the resident they describe, rather than
+              beside the coordinates they do not.
+
+              The label gutter stays `w-20` in both. "Contact number" and
+              "Resident name" would wrap inside it, and widening it to fit two
+              words would take that space from every value in the drawer — on a
+              panel this narrow the values are what the officer is reading. */}
+          <Section icon={IdCard} title="Reporter">
             <div className="flex items-start gap-3">
               <dl className="min-w-0 flex-1">
                 <Row label="Resident">{report.reportedByName}</Row>
@@ -808,10 +867,6 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
                 </Row>
                 <Row label="Category">{categoryLabel(report.category)}</Row>
                 <Row label="Reported">{clock(report.reportedAt)}</Row>
-                <Row label="Address">{address || report.location}</Row>
-                <Row label="GPS" mono>
-                  {typeof report.lat === 'number' ? forensicCoordinates(report.lat, report.lng) : null}
-                </Row>
               </dl>
               {contact?.phone ? (
                 <a href={`tel:${contact.phone}`} className="btn btn-drawer btn-outline mt-1">
@@ -820,6 +875,15 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
                 </a>
               ) : null}
             </div>
+          </Section>
+
+          <Section icon={MapPin} title="Location">
+            <dl>
+              <Row label="Address">{address || report.location}</Row>
+              <Row label="GPS" mono>
+                {typeof report.lat === 'number' ? forensicCoordinates(report.lat, report.lng) : null}
+              </Row>
+            </dl>
           </Section>
 
           <Section icon={FileText} title="Reported description">

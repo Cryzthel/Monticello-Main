@@ -266,7 +266,6 @@ export default function SecurityReportsPage() {
   return (
     <AppShell
       title="Reports"
-      subtitle="Incident logs filed by security officers on duty."
       scroll={false}
     >
       {/* `lg:h-full` rather than `h-full`: below lg the shell scrolls and this
@@ -291,7 +290,7 @@ export default function SecurityReportsPage() {
               ariaLabel="Report views"
               className="w-full sm:w-auto"
               segmentClassName="min-h-11 flex-1 sm:min-h-0 sm:flex-none"
-              options={VIEWS.map((v) => ({ value: v.key, label: v.label, count: counts[v.key] }))}
+              options={VIEWS.map((v) => ({ value: v.key, label: v.label }))}
               value={view}
               onChange={(next) => {
                 setView(next)

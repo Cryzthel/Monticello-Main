@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
-  Briefcase,
   Check,
   Eye,
   EyeOff,
@@ -18,13 +17,10 @@ import {
   UserRound,
   X,
 } from '@shared/icons'
-import Select from '@shared/components/Select'
 import { MetaItem, MetaList } from '@shared/components/MetaList'
+import Switch from '@shared/components/Switch'
 import CredentialHandoff from '@/components/CredentialHandoff'
 import {
-  ACCESS_ROLES,
-  POSTS,
-  SHIFTS,
   createSecurityAccount,
   describeCallableError,
   generateTempPassword,
@@ -80,26 +76,48 @@ const EMPTY_FORM = {
   fullName: '',
   email: '',
   badgeNumber: '',
-  accessRole: '',
-  assignedPost: '',
-  shift: '',
+  isSupervisor: false,
   password: '',
 }
+
+// ── WHAT THIS FORM NO LONGER ASKS, AND WHAT IT STILL SENDS ─────────────────
+//
+// The access-role, post and shift selectors are gone. Every security
+// credential is a Security Officer, because every officer patrols and answers
+// emergencies — the three job titles the dropdown offered described posts, not
+// privilege. Supervisors are the one real exception (a DIFFERENT RBAC role,
+// `security_head`, which firestore.rules grants powers an officer does not
+// have) and they survive as the single toggle below rather than as a
+// four-option select.
+//
+// THE CALLABLE STILL REQUIRES ALL THREE FIELDS. `readAssignment` in
+// functions/securityProvisioning.js fails `invalid-argument` the moment
+// `accessRole`, `assignedPost` or `shift` is undefined on a CREATE — they are
+// optional only on the `partial` path an edit takes. Relaxing that needs a
+// functions deploy, and this project is on the Spark plan where functions
+// deploys are blocked, so the client keeps satisfying the contract with
+// constants instead of shipping a form that fails on every submit.
+//
+// `assignedPost` is the patrol post because universal patrolling is the very
+// responsibility this simplification asserts every officer shares. `shift` is
+// now vestigial: it is a per-SHIFT fact, chosen at clock-in and written onto
+// the guard_shifts row, so the account-level value is no longer shown anywhere
+// — the directory's shift filter went with it. The constant exists only to
+// satisfy the validator.
+const OFFICER_ACCESS_ROLE = 'gate_guard'
+const SUPERVISOR_ACCESS_ROLE = 'security_supervisor'
+const DEFAULT_POST = 'perimeter_patrol'
+const ROSTER_SHIFT = 'morning'
+
+const accessRoleFor = (isSupervisor) => (isSupervisor ? SUPERVISOR_ACCESS_ROLE : OFFICER_ACCESS_ROLE)
 
 const STEPS = [
   {
     key: 'guard',
     label: 'Guard details',
-    description: 'Who is being added to the roster.',
+    description: 'Who is being added to the roster, and what they can do.',
     icon: UserRound,
     fields: ['fullName', 'badgeNumber'],
-  },
-  {
-    key: 'assignment',
-    label: 'Role and post',
-    description: 'What they can do in the portal, where they report, and when.',
-    icon: Briefcase,
-    fields: ['accessRole', 'assignedPost', 'shift'],
   },
   {
     key: 'credentials',
@@ -262,9 +280,7 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
             // Derived rather than read straight off the document, so an account
             // provisioned before this field existed still opens with its role
             // selected instead of an empty dropdown.
-            accessRole: resolveAccessRole(account),
-            assignedPost: account.assignedPost ?? '',
-            shift: account.shift ?? '',
+            isSupervisor: resolveAccessRole(account) === SUPERVISOR_ACCESS_ROLE,
             password: '',
           }
         : { ...EMPTY_FORM, password: generateTempPassword() },
@@ -350,9 +366,9 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
           uid: account.uid,
           fullName: form.fullName.trim(),
           badgeNumber: form.badgeNumber.trim(),
-          accessRole: form.accessRole,
-          assignedPost: form.assignedPost,
-          shift: form.shift,
+          accessRole: accessRoleFor(form.isSupervisor),
+          assignedPost: DEFAULT_POST,
+          shift: ROSTER_SHIFT,
         })
         onSaved?.({ kind: 'updated', name: form.fullName.trim() })
         onClose?.()
@@ -361,9 +377,9 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
           fullName: form.fullName.trim(),
           email: form.email.trim().toLowerCase(),
           badgeNumber: form.badgeNumber.trim(),
-          accessRole: form.accessRole,
-          assignedPost: form.assignedPost,
-          shift: form.shift,
+          accessRole: accessRoleFor(form.isSupervisor),
+          assignedPost: DEFAULT_POST,
+          shift: ROSTER_SHIFT,
           password: form.password,
           // Not a form value. Every new guardhouse credential is one-time by
           // construction — see the file header.
@@ -390,12 +406,8 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
 
   if (!open) return null
 
-  const roleOptions = ACCESS_ROLES.map((r) => ({ value: r.value, label: r.label }))
-  const postOptions = POSTS.map((p) => ({ value: p.value, label: p.label }))
-  const shiftOptions = SHIFTS.map((s) => ({ value: s.value, label: s.label, hint: s.window }))
   const current = STEPS[step]
   const StepIcon = current.icon
-  const labelOf = (list, value) => list.find((item) => item.value === value)?.label ?? ''
 
   return createPortal(
     <div
@@ -496,73 +508,35 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
                       onChange={(e) => update({ badgeNumber: e.target.value.toUpperCase() })}
                     />
                   </Field>
-                </div>
-              ) : null}
 
-              {current.key === 'assignment' ? (
-                /* The role also decides the duty list, SERVER-SIDE — a Gate
-                   Guard guards a gate — which is why there is no second control
-                   asking the operator to keep the two consistent. */
-                <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-3">
-                  <Field
-                    label="Access role"
-                    htmlFor="sa-role"
-                    required
-                    error={errors.accessRole}
-                    hint={
-                      ACCESS_ROLES.find((r) => r.value === form.accessRole)?.hint ??
-                      'Sets what they can see and do.'
-                    }
-                  >
-                    <Select
-                      ariaLabel="Access role"
-                      value={form.accessRole}
-                      onChange={(value) => update({ accessRole: value })}
-                      options={roleOptions}
-                      placeholder="Select a role"
-                      size="touch"
-                      variant="field"
-                      className="w-full"
-                    />
-                  </Field>
-
-                  <Field
-                    label="Assigned post"
-                    htmlFor="sa-post"
-                    required
-                    error={errors.assignedPost}
-                    hint="Where they report for duty."
-                  >
-                    <Select
-                      ariaLabel="Assigned post"
-                      value={form.assignedPost}
-                      onChange={(value) => update({ assignedPost: value })}
-                      options={postOptions}
-                      placeholder="Select a post"
-                      size="touch"
-                      variant="field"
-                      className="w-full"
-                    />
-                  </Field>
-
-                  <Field
-                    label="Shift"
-                    htmlFor="sa-shift"
-                    required
-                    error={errors.shift}
-                    hint="Can be changed at any time."
-                  >
-                    <Select
-                      ariaLabel="Shift"
-                      value={form.shift}
-                      onChange={(value) => update({ shift: value })}
-                      options={shiftOptions}
-                      placeholder="Select a shift"
-                      size="touch"
-                      variant="field"
-                      className="w-full"
-                    />
-                  </Field>
+                  {/* ── THE ONE PRIVILEGE CONTROL ──────────────────────────
+                      Off by default and deliberately a single switch rather
+                      than a role select: the other three options the select
+                      carried were POSTS wearing a role's clothes, and all of
+                      them resolved to the same RBAC role. This one does not —
+                      it provisions `security_head`, which firestore.rules
+                      checks directly — so it is the only choice on this form
+                      that changes what the credential can do. */}
+                  <div className="sm:col-span-2">
+                    <div className="flex items-start justify-between gap-4 rounded-xl border border-hairline bg-base-800 p-4">
+                      <label htmlFor="sa-supervisor" className="min-w-0 cursor-pointer">
+                        <span className="block text-sm font-medium text-text-primary">
+                          Shift supervisor
+                        </span>
+                        <span id="sa-supervisor-hint" className="mt-0.5 block text-xs text-text-secondary">
+                          Oversees the officer roster. Leave off for a standard security officer —
+                          which is every other account.
+                        </span>
+                      </label>
+                      <Switch
+                        id="sa-supervisor"
+                        checked={form.isSupervisor}
+                        onChange={(next) => update({ isSupervisor: next })}
+                        ariaLabel="Shift supervisor"
+                        describedBy="sa-supervisor-hint"
+                      />
+                    </div>
+                  </div>
                 </div>
               ) : null}
 
@@ -574,9 +548,9 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
                     <MetaList>
                       <MetaItem label="Guard">{form.fullName.trim()}</MetaItem>
                       <MetaItem label="Badge ID" mono>{form.badgeNumber.trim()}</MetaItem>
-                      <MetaItem label="Access role">{labelOf(ACCESS_ROLES, form.accessRole)}</MetaItem>
-                      <MetaItem label="Assigned post">{labelOf(POSTS, form.assignedPost)}</MetaItem>
-                      <MetaItem label="Shift">{labelOf(SHIFTS, form.shift)}</MetaItem>
+                      <MetaItem label="Role">
+                        {form.isSupervisor ? 'Shift supervisor' : 'Security officer'}
+                      </MetaItem>
                     </MetaList>
                   </div>
 

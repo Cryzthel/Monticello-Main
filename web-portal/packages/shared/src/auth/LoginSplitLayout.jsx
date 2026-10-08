@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 
+import BrandMark from '@shared/components/BrandMark'
 import { useForcedTheme } from '@shared/theme/ThemeProvider'
 
 /**
@@ -176,7 +177,109 @@ export default function LoginSplitLayout({ children, illustration, title, descri
           in BOTH directions and the top becomes unreachable, because scrolling
           cannot go above the origin. Auto margins resolve to 0 once free space
           is negative, so the card sits at the top and the page scrolls. */}
-      <div className="flex w-full justify-center px-6 py-12 sm:px-8 md:px-16">
+      <div className="flex w-full flex-col px-6 py-12 sm:px-8 md:px-16">
+        {/* ── Brand lockup, pinned to the pane's top-left corner ───────────── */}
+        {/* IT IS A FLEX CHILD, NOT `absolute`, and that is the whole decision.
+            Absolute is what the brief suggests and what the reference does, and
+            it works right up until the pane is shorter than its content: the
+            centred column's auto margins collapse to 0, the column starts at
+            the pane's top padding, and the heading slides under a logo that is
+            no longer in the flow to push it. A second-factor step on a 600px
+            window is exactly that case. In flow, the collision cannot happen —
+            and the lockup still lands in the corner, because the pane's own
+            padding is what positions it.
+
+            `self-end` keeps it at its intrinsic width against a stretching
+            column, so the hit area ends at the wordmark rather than running the
+            full pane, and parks it on the pane's RIGHT padding edge (24 → 32 →
+            64px). It steps with the pane rather than sitting at some fixed
+            inset of its own.
+
+            Right, not left, and above `lg` that reads as the far corner of the
+            window: the hero pane owns the left half, so the form pane's right
+            edge IS the screen's right edge. Below `lg` the hero is not
+            rendered and the pane is the whole screen, so it lands in the same
+            corner by a different route — no breakpoint needed either way.
+
+            It sits RIGHT of the centred form's right edge at `lg`, where the
+            pane is 720px and the measure 448px. That is deliberate, not a
+            misalignment: the lockup belongs to the pane, the form to its own
+            column, and the two are not meant to share an edge. */}
+        {/* Brand mark. Chrome, not a control — it belongs to the shell for
+            the same reason it did in the single-card layout: a component
+            named LoginForm rendering a wordmark is the seam that let the two
+            consoles' headers drift apart in the first place. */}
+        <div className={`inline-flex shrink-0 items-center gap-2.5 self-end ${ENTRANCE}`}>
+          {/* The mark, not a monogram on a tile — see the note in
+              CollapsibleSidebar. This screen is pinned light, so
+              `text-brand-logo` resolves to #05171B — the lockup's own field
+              colour, used here as ink — permanently, regardless of the theme
+              the administrator left the dashboard in. */}
+          <BrandMark className="h-6 w-auto shrink-0 text-brand-logo" />
+
+          {/* ONE LINE, AND IT IS THE BRAND NAME.
+
+              "Incident management system" sat under this as a second line
+              and is gone. It was a caption doing a subtitle's job on a
+              screen that already says the same thing twice: the h1 below
+              names who is signing in and the description under it names
+              what they are signing into. The line restated the product to
+              the handful of people who administer it.
+
+              Removing it is also what let the wordmark grow, and the two
+              changes only work together. At `text-label` (13px) this was the
+              larger of two stacked lines, which is why it read as a label
+              above a caption rather than as the brand — a 13px line cannot
+              anchor a 40px mark, and the pair straddled the mark's centre
+              instead of meeting it. Alone, at the size below, one line
+              centres on the mark and the lockup reads as a lockup.
+
+              14px against a 24px mark, by request. This line has been 13,
+              18, 20, 14, 20 and 14 again, and the history only matters for
+              one thing it teaches: SIZE AND INK ARE COUPLED HERE.
+
+              The brand ink is a near-black. It shows its teal across large
+              solid shapes and loses it in small thin ones, so every time
+              this lockup shrank it read blacker, and every time it read
+              blacker it came back as a colour bug. It went to 20px/40px
+              precisely to bring the hue back, and that worked. It is at
+              14px/24px now, with the ink essentially unchanged, so it
+              reads as near-black again. That is the trade, taken
+              knowingly — not a defect to re-report.
+
+              If this must stay compact AND read teal, the ink has to move:
+              `--color-brand-logo` in styles/index.css. Shrinking the
+              lockup without lifting the ink is the loop.
+
+              Measured in the browser with Groote loaded, "Monticello
+              Villas" sets 131px at 14px and 187px at 20px. At 14px the
+              lockup — mark, gap and wordmark — comes to ~175px, which
+              clears the pane at every breakpoint including 320px, so
+              `truncate` below is now a guard rather than a working
+              constraint. If the full commercial cut of Groote replaces the
+              demo, re-measure: a complete character set can ship different
+              metrics.
+
+              It still has to sit under the h1, which sets at 30px. 20/30
+              is a smaller step than 18/30 but an audible one; past 22px
+              the wordmark starts competing with the heading it is there to
+              introduce, and that is the line.
+
+              `min-w-0 truncate` moved onto the <p> now that it is the only
+              child — the wrapper div existed to hold the second line. Both
+              still matter at 320px, where the measure is narrower than the
+              wordmark.
+
+              `text-brand-logo`, NOT `text-text-primary`: the wordmark takes
+              the same token as the mark beside it, so the two are one
+              colour by construction and cannot drift apart. It is a visible
+              change even here in light — the ink moves off slate-900
+              (#0F172A) onto the brand's #05171B. */}
+          <p className="min-w-0 truncate font-brand text-sm font-normal leading-tight tracking-tight text-brand-logo">
+            Monticello Villas
+          </p>
+        </div>
+
         {/* No surface — this is a plain measure. `max-w-md` (448px) is the
             whole of the form's width discipline, and it is 64px wider than the
             column the card allowed, which is the point of removing it.
@@ -187,24 +290,15 @@ export default function LoginSplitLayout({ children, illustration, title, descri
             a 600px text input reads as a search bar rather than a credential
             field. The `md:px-16` on the pane and the air either side of this
             measure are doing the same job from opposite directions. */}
-        <div className={`my-auto w-full max-w-md ${ENTRANCE}`}>
-          {/* Brand mark. Chrome, not a control — it belongs to the shell for
-              the same reason it did in the single-card layout: a component
-              named LoginForm rendering a wordmark is the seam that let the two
-              consoles' headers drift apart in the first place. */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg surface-brand text-sm font-bold">
-              MV
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-label font-semibold leading-tight text-text-primary">
-                Monticello Villas
-              </p>
-              <p className="truncate text-caption leading-tight text-text-secondary">
-                Incident management system
-              </p>
-            </div>
-          </div>
+        {/* CENTRED COLUMN. `items-center` centres the lockup, the heading and
+            the description as blocks; `text-center` centres the text inside
+            them. The pair is deliberate — `text-center` alone would leave the
+            lockup's flex row stretched full width, and `items-center` alone
+            would leave a wrapped description ragged against a centred box.
+
+            `text-center` cascades, which is why the form wrapper below turns
+            it back off. */}
+        <div className={`my-auto flex w-full max-w-md flex-col items-center self-center text-center ${ENTRANCE}`}>
 
           {/* THE HEADING, AND THE ONE PLACE THIS PRODUCT USES A SECOND FACE.
               Plus Jakarta Sans at 800, via `--font-display` — see that token
@@ -235,7 +329,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
 
               It steps down to 24px below `sm`, where the full string would
               otherwise orphan "Admin" onto a second line. */}
-          <h1 className="mt-9 font-display text-2xl font-extrabold leading-[1.1] tracking-[-0.025em] text-text-primary sm:text-[1.875rem]">
+          <h1 className="font-display text-2xl font-extrabold leading-[1.1] tracking-[-0.025em] text-text-primary sm:text-[1.875rem]">
             {title}
           </h1>
 
@@ -250,7 +344,22 @@ export default function LoginSplitLayout({ children, illustration, title, descri
             </p>
           ) : null}
 
-          <div className="mt-9">{children}</div>
+          {/* THE FORM IS CENTRED AS A BLOCK, NOT AS TEXT.
+
+              `w-full` keeps the fields spanning the measure, so the column
+              they form is centred under the centred greeting. `text-left`
+              undoes the inherited `text-center` for everything inside.
+
+              That reset is the one place this layout reads the brief rather
+              than following it literally. Centred field labels and centred
+              placeholder text break the left edge every input on the screen
+              shares, and a label that starts in a different place for every
+              field is measurably slower to scan — the eye has no column to
+              run down. Centring is a property of the CARD here, which is what
+              makes it read as balanced; it is not a property of the controls
+              inside it. The sign-in button is full-width and so is centred by
+              construction, label included. */}
+          <div className="mt-9 w-full text-left">{children}</div>
         </div>
       </div>
     </div>

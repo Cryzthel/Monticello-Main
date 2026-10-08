@@ -50,6 +50,15 @@ export default function ConfirmDialog({
   busy = false,
   onConfirm,
   onCancel,
+  /**
+   * Optional content under the message — a summary panel, a short list, the
+   * figures the decision is actually being made on.
+   *
+   * Additive and unused by every existing caller, which is the point: a
+   * confirmation whose whole job is "are you sure" should not have to become a
+   * bespoke dialog the moment it needs to show one number.
+   */
+  children,
 }) {
   const cancelRef = useRef(null)
 
@@ -92,6 +101,7 @@ export default function ConfirmDialog({
             {message ? (
               <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">{message}</p>
             ) : null}
+            {children ? <div className="mt-4">{children}</div> : null}
           </div>
         </div>
 

@@ -52,7 +52,6 @@ export default function TicketsPage() {
       // "Status is set by the Guardhouse" says where the authority went, not
       // just that it is gone. Without it, the static pills read as a broken
       // dropdown rather than a deliberate boundary.
-      subtitle="Resident-filed reports — status is set by the Guardhouse. Security's own reports are under Reports; deleted ones under Audit history."
       scroll={false}
     >
       {/* ── FULL WIDTH, NO SIDE RAIL ──────────────────────────────────────

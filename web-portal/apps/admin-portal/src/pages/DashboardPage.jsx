@@ -98,7 +98,6 @@ export default function DashboardPage() {
   return (
     <AppShell
       title="Overview"
-      subtitle="Subdivision-wide incident analytics and the latest activity."
       headerActions={<TimeframePills value={rangeDays} onChange={setRangeDays} />}
     >
       {/* -- THREE NAMED SECTIONS, NOT ONE RUN OF PANELS --------------------
@@ -113,10 +112,7 @@ export default function DashboardPage() {
           the shared stylesheet. It was gap-8, a third value no rule names. */}
       <div className="flex flex-col gap-6">
         <section className="flex flex-col gap-3">
-          <SectionHeading
-            title="Analytics overview"
-            description={`Incident activity over the last ${rangeDays} days, compared with the period before it.`}
-          />
+          <SectionHeading title="Analytics overview" />
           {/* The KPI strip is the page's worst layout-shift offender and the
               reason it is skeletoned first: it sits at the very top, so every
               pixel it changes height pushes the charts, the table and the feed
@@ -178,10 +174,7 @@ export default function DashboardPage() {
             click away. */}
 
         <section className="flex flex-col gap-3">
-          <SectionHeading
-            title="Where and when"
-            description="The same reports as the cards above, broken down by day and by category."
-          />
+          <SectionHeading title="Where and when" />
           {/* Receives the WINDOWED array for its volume chart and the
               already-computed breakdown for its donut. The panel derives no
               metric of its own, so there is nothing inside it that can
@@ -195,9 +188,22 @@ export default function DashboardPage() {
         </section>
 
         <section className="flex flex-col gap-3">
+          {/* "View all" sits on the SECTION header, not inside the card.
+              It used to be pinned to the card's own header so it read as
+              belonging to the table it opens. That was true, and it is still
+              where the link goes — but the section header is the only full
+              -width row on this band, so the control now has a baseline to
+              align to instead of floating inside a panel beside a caption.
+              SectionHeading already owns the right-hand action slot; this is
+              the rank it was built for. */}
           <SectionHeading
             title="Latest activity"
-            description="The newest resident reports, and what the security team has filed."
+            action={
+              <button type="button" onClick={() => navigate('/tickets')} className="btn btn-compact btn-outline">
+                View all
+                <ArrowRight size="sm" />
+              </button>
+            }
           />
           {/* The fixed height and the split move TOGETHER, at `xl`. The height
               exists so the table and the feed can share one row; left at `lg`
@@ -205,33 +211,11 @@ export default function DashboardPage() {
               single 26rem box. See .page-grid for why the split waits for xl. */}
           <div className="page-grid xl:h-[26rem]">
             <Card className="col-span-12 flex h-full min-h-0 flex-col overflow-hidden p-0">
-              {/* Header lives INSIDE the card, with "View all" pinned to its
-                  top-right, so the link reads as belonging to the table it
-                  opens rather than to the page. */}
-              {/* "Resident-filed · newest first" was "Highest WPDA priority
-                  first". That stopped being true when the tickets table moved
-                  to a single chronological sort — this embed shares that
-                  component, so it silently changed order while the caption
-                  kept describing the old one. A caption that lies about
-                  ordering is worse than none. */}
-              <CardHeader
-                title="Recent incidents"
-                description="Resident-filed · newest first"
-                action={
-                <button
-                  type="button"
-                  onClick={() => navigate('/tickets')}
-                  // The design system's compact outline button, rather than the
-                  // bespoke `border-tint/10 bg-tint/[0.03] …` string this was.
-                  // Same control, same size tier as every other secondary
-                  // action in both portals.
-                  className="btn btn-compact btn-outline"
-                >
-                  View all
-                  <ArrowRight size="sm" />
-                </button>
-                }
-              />
+              {/* Title only. The "Resident-filed · newest first" caption is
+                  gone with the rest of this page's descriptions, and "View all"
+                  moved up to the section header — so this row is now the one
+                  thing a header inside a card has to do: name the card. */}
+              <CardHeader title="Recent incidents" />
               <div className="min-h-0 flex-1">
                 <IncidentsTable
                   bare

@@ -16,7 +16,7 @@ import {
   Siren,
   Trash2,
   Volume2,
-  Waves,
+
   Wrench,
 } from '@shared/icons'
 import { normalizeCategory } from '@shared/lib/incidentCategories'
@@ -39,7 +39,6 @@ const INCIDENT_CATEGORY_ICONS = {
   medical: HeartPulse,
   fire: Flame,
   noise: Volume2,
-  flooding: Waves,
   other: CircleAlert,
 }
 

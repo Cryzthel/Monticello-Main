@@ -28,21 +28,11 @@ import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
  * entirely rather than showing disabled controls.
  */
 export default function PanicAlertsPage() {
-  const { alerts, liveCount, loading, error } = usePanicAlerts()
+  const { alerts, loading, error } = usePanicAlerts()
 
   return (
     <AppShell
       title="Panic alerts (SOS)"
-      // The read-only state is STATED, not merely enacted. An administrator
-      // who used to dispatch from here and now finds no controls will read
-      // that as the page being broken unless something says otherwise, and
-      // "where did the buttons go" is a support ticket that costs more than
-      // the eight words it takes to answer in advance.
-      subtitle={
-        liveCount > 0
-          ? `${liveCount} still live — monitoring only; the Guardhouse responds.`
-          : 'Every SOS ever raised, newest first — monitoring only.'
-      }
       scroll={false}
     >
       <div className="min-h-0 lg:h-full">

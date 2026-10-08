@@ -27,6 +27,27 @@ export function mapShiftDoc(d) {
     name: d.name || d.email || 'Unknown guard',
     email: d.email ?? '',
     role: d.role ?? '',
+    /**
+     * Which of the three shifts this is, as the officer picked it at clock-in.
+     *
+     * This mapper is the only way a reader sees a shift document, so a field
+     * written but not mapped here is a field that does not exist as far as
+     * every consumer is concerned — which is exactly what happened when
+     * `shift` was first written: the duty panel and the clock-out summary both
+     * read `undefined` and quietly fell back to the word "Shift".
+     */
+    shift: d.shift ?? '',
+    /**
+     * Where the officer stood at each end of the shift: `{ lat, lng, accuracy,
+     * capturedAt, source }`, or null when the device could not produce a fix.
+     *
+     * Null is a real answer here and is kept as one. A shift opened with
+     * location blocked is a different fact from a shift opened before
+     * positions were recorded at all, and flattening both to "no coordinate"
+     * would lose the distinction an audit actually asks about.
+     */
+    clockInLocation: d.clockInLocation ?? null,
+    clockOutLocation: d.clockOutLocation ?? null,
     timeIn,
     timeOut,
     open: Boolean(timeIn) && !timeOut,
@@ -53,8 +74,15 @@ export function mapShiftDoc(d) {
   }
 }
 
-/** Opens a shift for the signed-in guard. */
-export async function clockIn({ name, email, role } = {}) {
+/**
+ * Opens a shift for the signed-in guard.
+ *
+ * `shift` is which of the three the guard is working, chosen on the clock-in
+ * lock. It is written at CREATE, which the rules allow freely — but note that
+ * the UPDATE rule whitelists keys with `hasOnly`, so 'shift' had to be added
+ * there too or clock-out would start failing the moment this field existed.
+ */
+export async function clockIn({ name, email, role, shift, location = null } = {}) {
   const user = auth.currentUser
   if (!user) throw new Error('Not signed in.')
 
@@ -63,6 +91,16 @@ export async function clockIn({ name, email, role } = {}) {
     name: name || user.displayName || user.email || 'Guard',
     email: email || user.email || '',
     role: role ?? '',
+    shift: shift ?? '',
+    // Where the officer stood when the shift opened. A MAP, not four flat
+    // fields: the clock-out rule whitelists top-level keys, and one key is
+    // one entry to keep in step there rather than four.
+    //
+    // Null when the device could not produce a fix. Deliberately stored as
+    // null rather than omitted — an absent field is indistinguishable from a
+    // shift opened before this was captured at all, and an auditor asking
+    // "was a position taken" deserves an answer either way.
+    clockInLocation: location ?? null,
     timeIn: serverTimestamp(),
     // Explicit null, not omitted — see the note above about the update rule.
     timeOut: null,
@@ -83,8 +121,8 @@ export async function clockIn({ name, email, role } = {}) {
  * @param {string} shiftId
  * @param {{ summary: string, outstanding?: string }} [handover]
  */
-export async function clockOut(shiftId, handover = null) {
-  const patch = { timeOut: serverTimestamp() }
+export async function clockOut(shiftId, handover = null, { location = null } = {}) {
+  const patch = { timeOut: serverTimestamp(), clockOutLocation: location ?? null }
 
   if (handover) {
     const summary = String(handover.summary ?? '').trim().slice(0, 1000)

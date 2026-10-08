@@ -1,10 +1,8 @@
-import { useState } from 'react'
-import { LogIn, LogOut, Loader2 } from '@shared/icons'
-import ConfirmDialog from '@shared/components/ConfirmDialog'
-import ShiftHandoverDialog from '@/components/ShiftHandoverDialog'
+import { LogIn, Loader2 } from '@shared/icons'
+import ClockOutButton from '@/components/ClockOutButton'
 import { useDutyStatus } from '@/hooks/useDutyStatus'
-import { useSystemSettings } from '@shared/lib/systemSettingsStore'
-import { formatMinutes } from '@shared/lib/incidents'
+import { useNow } from '@shared/hooks/useNow'
+import { shiftForTime, formatElapsed } from '@shared/lib/shiftTypes'
 
 /**
  * On-duty pulse plus the clock in/out control.
@@ -17,7 +15,11 @@ import { formatMinutes } from '@shared/lib/incidents'
  * The shift query itself moved to [useDutyStatus] once the duty lock started
  * asking the same question — see that hook for why one answer matters.
  *
- * ── CLOCKING OUT ASKS FIRST ─────────────────────────────────────────────────
+ * ── CLOCKING OUT ASKS FIRST, AND ASKS FROM ClockOutButton ──────────────────
+ * The control and both of its dialogs moved there so the duty panel on
+ * Response Metrics ends a shift exactly the way this does. What follows is
+ * why it asks at all.
+ *
  * Clocking IN is immediate: it starts a shift, and starting one you did not
  * mean to costs a clock-out. Clocking OUT is not symmetrical. It closes the
  * `guard_shifts` row that the admin timesheet bills from, it drops the guard
@@ -28,14 +30,17 @@ import { formatMinutes } from '@shared/lib/incidents'
  */
 export default function GuardStatusWidget() {
   const { openShift, busy, error, toggle } = useDutyStatus()
-  const [confirmingOut, setConfirmingOut] = useState(false)
 
   const onDuty = Boolean(openShift)
 
-  // Admin › Settings decides which of the two exits an officer gets. With the
-  // requirement off this stays a single confirmation, because a log nobody
-  // asked for is a toll on the way out of a shift rather than a record.
-  const requireHandover = useSystemSettings((state) => state.values.guardhouse.requireHandover)
+  // ── THE COUNTER TICKS ───────────────────────────────────────────────────
+  // `durationMinutes` is computed when the shift SNAPSHOT changes, so a quiet
+  // console showed a figure frozen at whatever minute the guard clocked in —
+  // the one number on screen that is supposed to prove the console is live.
+  // One second, and only while a shift is open: `useNow(0)` does not start an
+  // interval, so an off-duty console pays nothing for this.
+  const now = useNow(onDuty ? 1000 : 0)
+  const elapsedMs = onDuty && openShift?.timeIn ? now - openShift.timeIn.getTime() : 0
 
   return (
     <div className="flex items-center gap-2">
@@ -79,60 +84,31 @@ export default function GuardStatusWidget() {
             <span aria-hidden="true" className="opacity-40">
               ·
             </span>
-            <span className="tabular-nums" aria-label="Time on shift">
-              {formatMinutes(openShift.durationMinutes)}
+            <span className="font-mono tabular-nums" aria-label="Time on shift">
+              {formatElapsed(elapsedMs)}
             </span>
           </>
         ) : null}
       </span>
 
-      <button
-        type="button"
-        onClick={() => (onDuty ? setConfirmingOut(true) : toggle())}
-        aria-haspopup={onDuty ? 'dialog' : undefined}
-        disabled={busy}
-        className={`btn btn-sm ${onDuty ? 'btn-outline' : 'btn-success'}`}
-      >
-        {busy ? (
-          <Loader2 size="sm" className="animate-spin" aria-hidden="true" />
-        ) : onDuty ? (
-          <LogOut size="sm" aria-hidden="true" />
-        ) : (
-          <LogIn size="sm" aria-hidden="true" />
-        )}
-        {onDuty ? 'Clock out' : 'Clock in'}
-      </button>
+      {onDuty ? (
+        <ClockOutButton className="btn btn-sm btn-outline" />
+      ) : (
+        <button
+          type="button"
+          onClick={() => toggle({ shift: shiftForTime() })}
+          disabled={busy}
+          className="btn btn-sm btn-success"
+        >
+          {busy ? (
+            <Loader2 size="sm" className="animate-spin" aria-hidden="true" />
+          ) : (
+            <LogIn size="sm" aria-hidden="true" />
+          )}
+          Clock in
+        </button>
+      )}
 
-      <ShiftHandoverDialog
-        open={confirmingOut && requireHandover}
-        shift={openShift}
-        busy={busy}
-        error={error || null}
-        onCancel={() => setConfirmingOut(false)}
-        onSubmit={async (handover) => {
-          await toggle(handover)
-          setConfirmingOut(false)
-        }}
-      />
-
-      <ConfirmDialog
-        open={confirmingOut && !requireHandover}
-        title="Clock out of this shift?"
-        // The elapsed time is repeated here on purpose: it is the figure the
-        // timesheet keeps, and the moment to check it is before the row closes.
-        message={
-          openShift?.durationMinutes != null
-            ? `This closes your shift after ${formatMinutes(openShift.durationMinutes)} and removes you from the live unit list.`
-            : 'This closes your shift and removes you from the live unit list.'
-        }
-        confirmLabel="Clock out"
-        busy={busy}
-        onConfirm={() => {
-          toggle()
-          setConfirmingOut(false)
-        }}
-        onCancel={() => setConfirmingOut(false)}
-      />
     </div>
   )
 }

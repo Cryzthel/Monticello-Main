@@ -34,7 +34,6 @@ export default function MetricsPage() {
   return (
     <AppShell
       title="System metrics"
-      subtitle="Platform status and community safety performance."
       headerActions={<TimeframePills value={rangeDays} onChange={setRangeDays} />}
     >
       {/* gap-6, as a scrolling page — see "the two vertical rhythms" in the

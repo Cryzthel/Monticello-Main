@@ -21,9 +21,8 @@ import StatusBadge from '@shared/components/StatusBadge'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import EvidenceImage from '@shared/components/EvidenceImage'
 import Lightbox from '@shared/components/Lightbox'
-import { MetaItem, MetaList, MetaSection } from '@shared/components/MetaList'
+import { MetaItem, MetaList } from '@shared/components/MetaList'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
-import { useNow } from '@shared/hooks/useNow'
 import { useReporterContact } from '@shared/hooks/useReporterContact'
 import { useStaffAccounts } from '@shared/hooks/useStaffAccounts'
 import { buildMediaItems, isArchived } from '@shared/lib/incidents'
@@ -32,9 +31,6 @@ import { categoryLabel } from '@shared/lib/incidentCategories'
 import { relativeTime } from '@shared/lib/notifications'
 import { DISPATCH_STAGES, STAGE_LABELS, stageIndex } from '@shared/lib/dispatchStage'
 import { normalizeResidentStatus, RESIDENT_STATUS, RESIDENT_STATUS_LABELS } from '@shared/lib/residents'
-import { boundaryCenter, containsPoint } from '@shared/lib/subdivisionBoundary'
-import { useSystemSettings } from '@shared/lib/systemSettingsStore'
-import { describeSlaBreach, isServerRecordedBreach, slaBreachState } from '@shared/lib/operationsTargets'
 
 /**
  * Width of the desktop rail, in px, exported so the Hazard Map can tell
@@ -74,26 +70,6 @@ const STAGE_STAMPS = {
 /** Human-quotable code, derived from the document id — the one IncidentsTable prints. */
 const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : '')
 
-const PREMISES_CENTRE = boundaryCenter()
-
-/*
- * Body padding for every card in this rail.
- *
- * 24px, where the shared default is 16px. This is a single column of stacked
- * cards with nothing beside it, so the card edge is the only thing separating
- * a label from the panel wall, and 16px read as tight once the action footer
- * came off and the eye had nothing else to land on.
- *
- * Measured at the rail's real 416px before it was adopted: p-6 costs 75px of
- * total scroll and wraps nothing. The coordinate row is the narrowest thing in
- * here and still holds one line, which is the test that mattered — a
- * latitude/longitude broken across two lines is unreadable as a pair.
- *
- * One constant rather than five literals: five cards that are supposed to be
- * one object should not be able to disagree about their own padding.
- */
-const CARD_BODY = 'p-6'
-
 const exactTime = (value) => {
   if (!value) return ''
   const date = new Date(value)
@@ -109,39 +85,6 @@ const shortTime = (value) => {
 }
 
 /**
- * Great-circle distance in metres.
- *
- * Written here rather than pulled from the Guardhouse's `directions` module
- * because that one is about a ROUTE — it formats the distance the Mapbox
- * Directions API returns for a path along roads. This is a straight line from
- * the premises centre, a different measurement that must not be mistaken for a
- * driving distance. The two deliberately do not share a helper.
- */
-function haversineMetres([lngA, latA], [lngB, latB]) {
-  const R = 6_371_000
-  const rad = (d) => (d * Math.PI) / 180
-  const dLat = rad(latB - latA)
-  const dLng = rad(lngB - lngA)
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(latA)) * Math.cos(rad(latB)) * Math.sin(dLng / 2) ** 2
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)))
-}
-
-const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
-
-/** Eight points, not sixteen. "NNE" is false precision across a 400 m estate. */
-function compassFrom([lngA, latA], [lngB, latB]) {
-  const rad = (d) => (d * Math.PI) / 180
-  const dLng = rad(lngB - lngA)
-  const y = Math.sin(dLng) * Math.cos(rad(latB))
-  const x =
-    Math.cos(rad(latA)) * Math.sin(rad(latB)) - Math.sin(rad(latA)) * Math.cos(rad(latB)) * Math.cos(dLng)
-  const deg = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
-  return COMPASS[Math.round(deg / 45) % 8]
-}
-
-const formatMetres = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2)} km`)
-
-/**
  * ── THE DISPATCH STAGE, READ-ONLY AND SAYING SO ────────────────────────────
  *
  * The same five-step machine the Guardhouse drives, drawn here as a readout
@@ -155,6 +98,50 @@ const formatMetres = (m) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toF
  * looking at a pin needs to know whether anyone is on it, and until now the
  * only way to find out was to leave the map.
  */
+/**
+ * One titled group inside the unified inspection card.
+ *
+ * This is MetaSection's header with the panel taken away: inside a single
+ * divided surface the per-group border, background and rounding are exactly
+ * the chrome the merge set out to remove, but the icon + 14px semibold title
+ * is what still tells two groups apart at a glance.
+ *
+ * `p-6` by request and because the rail earns it — measured at 416px the
+ * coordinate row, the narrowest thing here, still holds one line.
+ */
+/**
+ * The key/value treatment for this rail: 12px uppercase labels on wide
+ * tracking against semibold values, by request.
+ *
+ * Applied with child selectors on the <dl> rather than by editing
+ * `.meta-label`, which four other detail views share and which deliberately
+ * sets labels at the SAME 14px as their values — see the note in
+ * shared/components/MetaList.jsx. This rail opts out; nothing else moves.
+ *
+ * The tradeoff is real and worth stating: 12px uppercase on wide tracking is
+ * a weaker read than 14px sentence case, and it is the label — the word naming
+ * the fact — that pays. It buys a sharper value column, which is the B2B
+ * convention this panel was asked for.
+ */
+const META =
+  '[&>dt]:text-xs [&>dt]:uppercase [&>dt]:tracking-wider [&>dt]:text-text-muted [&>dd]:font-semibold'
+
+function Group({ icon: Icon, title, action, children }) {
+  return (
+    <div className="p-6">
+      <header className="mb-4 flex min-h-6 items-center justify-between gap-3">
+        <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-text-primary">
+          {Icon ? <Icon size="sm" className="shrink-0 text-brand-400" /> : null}
+          {title}
+        </h3>
+        {action}
+      </header>
+      {children}
+    </div>
+  )
+}
+
+
 function StageReadout({ report }) {
   const current = stageIndex(report.dispatchStage)
 
@@ -237,9 +224,6 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
 
   const { contact, loading: contactLoading } = useReporterContact(report?.reporterUid)
   const { staffIds } = useStaffAccounts()
-  const now = useNow()
-  const ackTargetMinutes = useSystemSettings((state) => state.values.incidents.ackTargetMinutes)
-  const resolveTargetHours = useSystemSettings((state) => state.values.incidents.resolveTargetHours)
 
   const panelRef = useRef(null)
   useDialogFocus({ open: Boolean(report), containerRef: panelRef })
@@ -278,13 +262,6 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
 
   const hasFix = typeof report.lat === 'number' && typeof report.lng === 'number'
   const coordinates = hasFix ? `${report.lat.toFixed(5)}, ${report.lng.toFixed(5)}` : ''
-  const inBounds = hasFix && containsPoint({ lat: report.lat, lng: report.lng })
-  const proximity = hasFix
-    ? `${formatMetres(haversineMetres(PREMISES_CENTRE, [report.lng, report.lat]))} ${compassFrom(
-        PREMISES_CENTRE,
-        [report.lng, report.lat],
-      )} of centre`
-    : ''
 
   const address = [
     report.phase && `Phase ${report.phase}`,
@@ -295,8 +272,7 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
     .join(' • ')
 
   const household = normalizeResidentStatus(contact?.verificationStatus ?? contact?.status)
-  const slaTargets = { ackTargetMinutes, resolveTargetHours }
-  const slaBreach = describeSlaBreach(slaBreachState(report, now, slaTargets), slaTargets)
+  const reporterInitial = (report.reportedByName || '?').trim().charAt(0).toUpperCase() || '?'
 
   const watermark = {
     name: report.reportedByName ?? 'Unknown resident',
@@ -335,15 +311,19 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           <span className="h-1 w-9 rounded-full bg-tint/25" />
         </button>
 
-        {/* ══ HEADER BANNER ══ what this is, how urgent, and exactly when. */}
+        {/* ══ HEADER BANNER ══ what this is, and its quotable code.
+            The severity pill, the status and the category moved down into
+            "Incident" and the timestamps into "Reporter", where the
+            reorganised card asks for them. They are NOT also printed here:
+            this header sits 16px above that card, and a severity stated twice
+            inside one viewport is the redundancy the rest of this panel has
+            been spending changes to remove. */}
         <header className="shrink-0 border-b border-hairline px-4 pb-3 pt-3.5">
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <h2 className="line-clamp-2 text-base font-semibold leading-snug text-text-primary">{title}</h2>
-              <p className="mt-1 text-caption text-text-muted">
-                <span className="font-mono font-semibold text-text-secondary">{ticketCode(report.id)}</span>
-                {' · '}
-                {exactTime(report.reportedAt) || 'Time unavailable'}
+              <p className="mt-1 font-mono text-caption font-semibold text-text-secondary">
+                {ticketCode(report.id)}
               </p>
             </div>
             <button
@@ -355,181 +335,183 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
               <X size="sm" />
             </button>
           </div>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <PriorityBadge severity={severity} size="sm" icon={SeverityIcon}>
-              {SEVERITY_LABELS[severity] ?? 'Medium'}
-            </PriorityBadge>
-            <StatusBadge status={report.status ?? 'Pending'} size="sm" />
-            <StatusBadge tone="neutral" size="sm" dot>
-              {categoryLabel(report.category)}
-            </StatusBadge>
-            {archived ? (
-              <StatusBadge tone="neutral" size="sm" icon={Archive}>
-                Archived
-              </StatusBadge>
-            ) : null}
-          </div>
-
-          {/* Relative time under the exact one, not instead of it. "14 minutes
-              ago" is what an operator reasons with; the timestamp is what they
-              quote into a log. A record needs both. */}
-          <p className="mt-1.5 text-2xs text-text-muted">{relativeTime(report.reportedAt)}</p>
         </header>
 
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-4">
-          {/* ══ DISPATCH ══ */}
-          <MetaSection icon={Radio} title="Dispatch" bodyClassName={CARD_BODY}>
-            <StageReadout report={report} />
-            <div className="mt-3 border-t border-hairline pt-3">
-              <MetaList>
-                <MetaItem label="Assigned to">{report.assignedGuardName}</MetaItem>
-                <MetaItem label="Dispatched by">{report.dispatchedByName}</MetaItem>
-              </MetaList>
-            </div>
-            {slaBreach ? (
-              <p className="mt-2 text-2xs leading-relaxed text-warning">
-                {slaBreach}{' '}
-                {isServerRecordedBreach(report)
-                  ? 'Recorded against the report by the scheduled sweep.'
-                  : 'Derived from this report’s timestamps; the scheduled sweep has not recorded it.'}
-              </p>
-            ) : null}
-            {/* Stated once, plainly, where the buttons would otherwise be. An
-                administrator who cannot find a Dispatch control should learn
-                that its absence is deliberate, not go hunting for it. */}
-            <p className="mt-2 text-2xs leading-relaxed text-text-muted">
-              Dispatch, escalation and resolution are performed by the Guardhouse, which holds the
-              officer telemetry each stage is recorded with. This console reads the workflow.
-            </p>
-          </MetaSection>
+        {/* ══ ONE CARD ═══════════════════════════════════════════════════
+            One surface divided by hairlines rather than five bordered cards
+            stacked in a 416px column. `divide-y` rather than a border on each
+            child, so there is no doubled rule where two groups meet and no
+            leading rule under the header; `overflow-hidden` keeps the dividers
+            inside the rounded corners.
 
-          {/* ══ GEOSPATIAL LOCATION ══ */}
-          <MetaSection icon={MapPin} title="Location" bodyClassName={CARD_BODY}>
-            <MetaList>
-              <MetaItem label="Address">{address || report.location}</MetaItem>
-              {/* `location` is `describeIncidentLocation`, which composes the
-                  very phase/block/lot string above whenever the document has no
-                  `propertyLabel` and no free-text location — so for most reports
-                  this row printed the Address again, verbatim, one line below
-                  it. Shown only when it actually says something else. */}
-              <MetaItem label="Reported at" hidden={!report.location || report.location === address}>
-                {report.location}
-              </MetaItem>
-              <MetaItem label="Coordinates" mono>
-                {coordinates}
-              </MetaItem>
-              <MetaItem label="Proximity">{proximity}</MetaItem>
-              <MetaItem label="Premises">
-                {hasFix ? (
-                  <span className={`inline-flex items-center gap-1.5 ${inBounds ? '' : 'text-warning'}`}>
-                    {inBounds ? <ShieldCheck size="sm" className="text-success" /> : <ShieldAlert size="sm" />}
-                    {inBounds ? 'Inside Monticello Villas' : 'Outside the boundary'}
-                  </span>
-                ) : null}
-              </MetaItem>
-            </MetaList>
-          </MetaSection>
+            ── WHY THERE IS STILL EXACTLY ONE SCROLLBAR ────────────────────
+            The <aside> is height-bounded (`h-[88dvh]`, `lg:h-full`) and is a
+            flex column; THIS div is the only `overflow-y-auto` in the panel
+            and takes `min-h-0 flex-1`, which is what lets a flex child shrink
+            below its content and scroll instead of pushing the panel taller.
+            That is already the "fits the viewport, no double scrollbar"
+            behaviour — a `max-h-[calc(100vh-80px)]` on top of a parent that
+            is exactly 100vh would simply strand 80px of empty rail under the
+            card, so the bound stays on the panel where it belongs. */}
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          <section className="divide-y divide-hairline overflow-hidden rounded-xl border border-hairline bg-base-800">
+            {/* ── 1. REPORTER PROFILE ───────────────────────────────────
+                Who filed it, answered before anything else on the card. The
+                name is the only `text-base` on the surface and the only bold
+                weight, so it wins the first fixation; everything below it is
+                14px or smaller. */}
+            <Group icon={officerFiled ? IdCard : User} title={officerFiled ? 'Filed by officer' : 'Reporter'}>
+              <div className="flex items-start gap-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-400 ring-1 ring-inset ring-brand-500/25"
+                >
+                  {reporterInitial}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-bold leading-tight text-text-primary">
+                    {report.reportedByName || 'Unknown reporter'}
+                  </p>
 
-          {/* ══ REPORTER METADATA ══ */}
-          <MetaSection
-              icon={officerFiled ? IdCard : User}
-              title={officerFiled ? 'Filed by officer' : 'Resident'}
-              bodyClassName={CARD_BODY}
-            >
-            <MetaList>
-              <MetaItem label="Name">{report.reportedByName}</MetaItem>
-              <MetaItem label="Phone">
-                {contactLoading ? <span className="text-text-muted">{'Looking up…'}</span> : contact?.phone}
-              </MetaItem>
-              {/* ── HOUSEHOLD, NOT "VERIFIED CONTACT" ───────────────────────
-                  This is the household's VERIFICATION status — whether an
-                  administrator has confirmed the resident owns or occupies the
-                  lot. It is not a verified phone number: nothing in this system
-                  sends a code to that handset, so a tick beside the number would
-                  claim a check that never happened. The badge sits on the row
-                  whose claim it actually supports. */}
-              <MetaItem label="Household" hidden={officerFiled}>
-                {contactLoading ? (
-                  <span className="text-text-muted">{'Looking up…'}</span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    {household === RESIDENT_STATUS.verified ? (
-                      <BadgeCheck size="sm" className="text-success" />
+                  {/* The verification badge, which is the whole reason this
+                      block is a banner and not another key/value row. It
+                      states whether an administrator has confirmed the
+                      resident owns or occupies the lot. It is NOT a verified
+                      phone number — nothing here sends a code to a handset. */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {officerFiled ? (
+                      <StatusBadge tone="neutral" size="sm" icon={IdCard}>
+                        Security officer
+                      </StatusBadge>
+                    ) : contactLoading ? (
+                      <span className="text-2xs text-text-muted">{'Looking up…'}</span>
+                    ) : household === RESIDENT_STATUS.verified ? (
+                      <StatusBadge tone="success" size="sm" icon={BadgeCheck}>
+                        Verified resident
+                      </StatusBadge>
                     ) : household === RESIDENT_STATUS.rejected ? (
-                      <ShieldX size="sm" className="text-danger" />
+                      <StatusBadge tone="danger" size="sm" icon={ShieldX}>
+                        {RESIDENT_STATUS_LABELS[household]}
+                      </StatusBadge>
                     ) : (
-                      <ShieldQuestion size="sm" className="text-warning" />
+                      <StatusBadge tone="warning" size="sm" icon={ShieldQuestion}>
+                        {RESIDENT_STATUS_LABELS[household]}
+                      </StatusBadge>
                     )}
-                    {RESIDENT_STATUS_LABELS[household]}
-                  </span>
-                )}
-              </MetaItem>
-              {/* NO "Residence" ROW. It was here, and it printed the Address
-                  from the Location section again — the same characters, eight
-                  lines apart. They are not two facts that happen to agree:
-                  `phase`/`block`/`lot` on an incident ARE the reporting
-                  resident's property fields, so the two rows can never differ.
-                  The pin's own coordinates, above, are the one piece of
-                  geography that says where the incident actually is. */}
-            </MetaList>
-          </MetaSection>
+                    {archived ? (
+                      <StatusBadge tone="neutral" size="sm" icon={Archive}>
+                        Archived
+                      </StatusBadge>
+                    ) : null}
+                  </div>
 
-          {/* ══ DESCRIPTION ══ */}
-          {report.description ? (
-            <MetaSection icon={AlignLeft} title="Description" bodyClassName={CARD_BODY}>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">{report.description}</p>
-            </MetaSection>
-          ) : null}
-
-          {/* ══ EVIDENCE ══ a grid, not a stage with a filmstrip.
-              The shared modal gives evidence a large frame because it has a
-              two-column body to spend it on. This rail is 416px wide, so one
-              big frame would push every fact below the fold. A three-up grid
-              shows the whole set at a glance and opens any of it full-screen,
-              which is the gesture that actually gets used. */}
-          <MetaSection
-            icon={Images}
-            title="Evidence"
-            bodyClassName={CARD_BODY}
-            action={
-              <span className="text-2xs font-medium text-text-muted">
-                {media.length} file{media.length === 1 ? '' : 's'}
-              </span>
-            }
-          >
-            {media.length ? (
-              <div className="grid grid-cols-3 gap-2">
-                {media.map((item, index) => (
-                  <button
-                    key={item.url}
-                    type="button"
-                    onClick={() => setLightboxIndex(index)}
-                    aria-label={`Open evidence ${index + 1} of ${media.length}`}
-                    className="relative aspect-square overflow-hidden rounded-lg border border-hairline bg-base-950 transition-[border-color] duration-150 hover:border-brand-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                  >
-                    {item.type === 'video' ? (
-                      <>
-                        <video src={item.url} className="h-full w-full object-cover" muted />
-                        <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-2xs font-semibold text-white">
-                          Video
-                        </span>
-                      </>
-                    ) : (
-                      <EvidenceImage src={item.url} />
-                    )}
-                  </button>
-                ))}
+                  {/* Both times, one line. "14 minutes ago" is what an
+                      operator reasons with; the timestamp is what they quote
+                      into a log. A record needs both. */}
+                  <p className="mt-2 text-2xs leading-relaxed text-text-muted">
+                    {exactTime(report.reportedAt) || 'Time unavailable'}
+                    {report.reportedAt ? ` · ${relativeTime(report.reportedAt)}` : ''}
+                  </p>
+                </div>
               </div>
-            ) : (
-              <div className="flex flex-col items-center gap-1.5 py-4 text-center">
-                <ImageOff size="md" className="text-text-muted" />
-                <p className="text-caption text-text-secondary">
-                  {report.hasMedia ? 'Media still uploading…' : 'No media attached'}
+            </Group>
+
+            {/* ── 2. INCIDENT OVERVIEW & SEVERITY ───────────────────────── */}
+            <Group icon={Radio} title="Incident">
+              <p className="text-sm font-semibold text-text-primary">{categoryLabel(report.category)}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <PriorityBadge severity={severity} size="sm" icon={SeverityIcon}>
+                  {SEVERITY_LABELS[severity] ?? 'Medium'}
+                </PriorityBadge>
+                <StatusBadge status={report.status ?? 'Pending'} size="sm" />
+              </div>
+              <div className="mt-4">
+                <StageReadout report={report} />
+              </div>
+              <MetaList className={`mt-4 ${META}`}>
+                <MetaItem label="Assigned to">{report.assignedGuardName}</MetaItem>
+              </MetaList>
+            </Group>
+
+            {/* ── 3. GEOSPATIAL LOCATION ────────────────────────────────
+                The address lives HERE and only here. It is not repeated in
+                the reporter banner above: `phase`/`block`/`lot` on an incident
+                ARE the reporting resident's property fields, so the two rows
+                could never disagree — printing them twice in a 416px rail
+                spends a line to say nothing new. */}
+            <Group icon={MapPin} title="Location">
+              <MetaList className={META}>
+                <MetaItem label="Address">{address || report.location}</MetaItem>
+                {/* `location` is `describeIncidentLocation`, which composes the
+                    very phase/block/lot string above whenever the document has
+                    no `propertyLabel` and no free-text location — so for most
+                    reports this row printed the Address again, verbatim, one
+                    line below it. Shown only when it says something else. */}
+                <MetaItem label="Reported at" hidden={!report.location || report.location === address}>
+                  {report.location}
+                </MetaItem>
+                <MetaItem label="Coordinates" mono>
+                  {coordinates}
+                </MetaItem>
+              </MetaList>
+            </Group>
+
+            {/* ── 4. INCIDENT DESCRIPTION ───────────────────────────────── */}
+            {report.description ? (
+              <Group icon={AlignLeft} title="Description">
+                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
+                  {report.description}
                 </p>
-              </div>
-            )}
-          </MetaSection>
+              </Group>
+            ) : null}
+
+            {/* ── 5. ATTACHED EVIDENCE ──────────────────────────────────
+                A grid, not a stage with a filmstrip. The shared modal gives
+                evidence a large frame because it has a two-column body to
+                spend it on. This rail is 416px wide, so one big frame would
+                push every fact below the fold. */}
+            <Group
+              icon={Images}
+              title="Evidence"
+              action={
+                <span className="text-2xs font-medium text-text-muted">
+                  {media.length} file{media.length === 1 ? '' : 's'}
+                </span>
+              }
+            >
+              {media.length ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {media.map((item, index) => (
+                    <button
+                      key={item.url}
+                      type="button"
+                      onClick={() => setLightboxIndex(index)}
+                      aria-label={`Open evidence ${index + 1} of ${media.length}`}
+                      className="relative aspect-square overflow-hidden rounded-lg border border-hairline bg-base-950 transition-[border-color] duration-150 hover:border-brand-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    >
+                      {item.type === 'video' ? (
+                        <>
+                          <video src={item.url} className="h-full w-full object-cover" muted />
+                          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-2xs font-semibold text-white">
+                            Video
+                          </span>
+                        </>
+                      ) : (
+                        <EvidenceImage src={item.url} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 py-4 text-center">
+                  <ImageOff size="md" className="text-text-muted" />
+                  <p className="text-caption text-text-secondary">
+                    {report.hasMedia ? 'Media still uploading…' : 'No media attached'}
+                  </p>
+                </div>
+              )}
+            </Group>
+          </section>
         </div>
 
         {/* ── NO ACTION BAR, AND THAT IS THE POINT ────────────────────────
@@ -539,10 +521,15 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
 
             The record reads better for it. A detail panel that also dispatches
             has to answer "what can I do here" on every line, and the two
-            questions compete: the Dispatch section already explains that the
-            workflow belongs to the Guardhouse, and a row of controls under it
-            argued the opposite. What is left is one job, done plainly — what
-            was reported, where, by whom, and what the evidence shows.
+            questions compete. What is left is one job, done plainly — what was
+            reported, where, by whom, and what the evidence shows.
+
+            The paragraph that used to say so inside the Dispatch group — that
+            dispatch, escalation and resolution belong to the Guardhouse — was
+            removed with the "Dispatched by" row. Nothing on the panel now
+            states that the absence of controls is deliberate, so an
+            administrator hunting for a Dispatch button has only this comment
+            and the read-only stage readout to go on.
 
             The facts the buttons acted on are all still on screen and
             selectable: the phone number in Reporter, the coordinates in

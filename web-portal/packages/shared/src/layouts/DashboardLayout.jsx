@@ -5,6 +5,7 @@ import CollapsibleSidebar from '@shared/layouts/CollapsibleSidebar'
 import TopHeader from '@shared/layouts/TopHeader'
 import CommandPalette from '@shared/components/CommandPalette'
 import PageHeader from '@shared/components/PageHeader'
+import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { useIncidentAlerts } from '@shared/hooks/useIncidentAlerts'
 
 /**
@@ -87,6 +88,24 @@ export default function DashboardLayout({
   scroll = true,
   /** Full-bleed content below `lg` — see the note above before using it. */
   bleed = false,
+  /** Copy for the sign-out confirmation. Portals name their own console. */
+  logoutMessage = 'You will be signed out of this console.',
+  /**
+   * A portal-owned gate on signing out.
+   *
+   * The guardhouse needs one: a guard who signs out mid-shift leaves the
+   * `guard_shifts` row open forever, so the duty log records a shift that
+   * never ended. The admin console has nothing equivalent, which is why this
+   * is a prop rather than logic in here — the shared layout has no idea what
+   * "on duty" means and should not learn.
+   *
+   * When `logoutBlocked` is true the sign-out control calls
+   * `onBlockedLogout()` and this layout's own confirmation never opens; the
+   * portal is then responsible for the whole interaction, including actually
+   * signing out once its gate is satisfied.
+   */
+  logoutBlocked = false,
+  onBlockedLogout,
 }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -94,6 +113,7 @@ export default function DashboardLayout({
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapseKey) === '1')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [confirmingLogout, setConfirmingLogout] = useState(false)
 
   // Live incident/status toasts for whichever portal is mounted.
   useIncidentAlerts({ detailPath: alertPath })
@@ -152,7 +172,10 @@ export default function DashboardLayout({
     navGroups,
     badgeCounts,
     user,
-    onLogout: logout,
+    onLogout: () => {
+      if (logoutBlocked) onBlockedLogout?.()
+      else setConfirmingLogout(true)
+    },
     sidebarSlot,
   }
 
@@ -246,6 +269,29 @@ export default function DashboardLayout({
         onClose={() => setPaletteOpen(false)}
         navGroups={navGroups}
         onNavigate={navigate}
+      />
+
+      {/* Sign out asks first.
+          The control sits at the bottom of the rail, directly under "Settings",
+          and it is the only item there that cannot be undone by clicking back.
+          On the guardhouse console that matters more than on the admin one: a
+          mis-click mid-shift drops a guard out of a console that is watching
+          for an SOS, and getting back in costs a sign-in on a shared machine.
+
+          `tone="warning"`, deliberately not `danger`. ConfirmDialog has three
+          tones and falls back to `danger` for anything it does not recognise,
+          so an invented value here would silently render a red dialog with a
+          TRASH icon over the word "Log out". Signing out destroys nothing; it
+          is simply not reversible in place, which is what warning is for. */}
+      <ConfirmDialog
+        open={confirmingLogout}
+        title="Log out?"
+        message={logoutMessage}
+        confirmLabel="Log out"
+        cancelLabel="Stay signed in"
+        tone="warning"
+        onConfirm={logout}
+        onCancel={() => setConfirmingLogout(false)}
       />
     </div>
   )

@@ -4,9 +4,7 @@ import {
   User,
   Phone,
   Mail,
-  MapPin,
   Clock,
-  Home,
   BadgeCheck,
   CheckCircle2,
   ShieldX,
@@ -95,8 +93,6 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
   const phase = resident.phase || property?.phase || ''
   const block = resident.block || property?.block || ''
   const lot = resident.lot || property?.lot || ''
-  const street = property?.street || ''
-  const unit = property?.unit || ''
 
   async function run(action) {
     setBusy(true)
@@ -172,10 +168,16 @@ export default function ResidentReviewDrawer({ resident, onClose }) {
               <Field icon={Hash} label="Block" value={block} />
               <Field icon={Hash} label="Lot" value={lot} />
             </div>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <Field icon={Home} label="Street address" value={street} />
-              <Field icon={MapPin} label="Unit" value={unit} />
-            </div>
+            {/* STREET ADDRESS AND UNIT WERE HERE, AND THEY WERE NOISE.
+                Phase / Block / Lot is the address in this subdivision — it is
+                what the boundary GeoJSON, the dispatch map and the resident's
+                own property verification all key on. `street` and `unit` were
+                free text the mobile form happened to collect: usually blank,
+                and when filled, a restatement of the three numbers above in
+                prose. Two empty rows under a populated grid read as missing
+                data rather than as absent fields, which is worse than not
+                asking. The values are still on the document if they are ever
+                wanted — nothing was deleted from Firestore. */}
             {!phase && !block && !lot ? (
               <div className="mt-3">
                 <NotCaptured>

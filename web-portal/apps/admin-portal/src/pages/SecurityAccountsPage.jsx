@@ -25,7 +25,6 @@ import {
   ACCOUNT_STATUS,
   ACCESS_ROLES,
   resolveAccessRole,
-  SHIFTS,
   STATUS_LABELS,
   deleteSecurityAccount,
   describeCallableError,
@@ -73,10 +72,11 @@ const ROLE_OPTIONS = [
   ...ACCESS_ROLES.map((r) => ({ value: r.value, label: r.label })),
 ]
 
-const SHIFT_OPTIONS = [
-  { value: ANY, label: 'All shifts' },
-  ...SHIFTS.map((s) => ({ value: s.value, label: s.label, hint: s.window })),
-]
+// NO SHIFT FILTER. A shift stopped being an account attribute when guards
+// began choosing one at clock-in: every credential now carries the same
+// placeholder value, so filtering on it would silently return everybody or
+// nobody. Which shifts a guard actually worked is a guard_shifts question, and
+// the Shift history tab beside this one already answers it.
 
 
 /**
@@ -128,7 +128,6 @@ export default function SecurityAccountsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(ANY)
   const [roleFilter, setRoleFilter] = useState(ANY)
-  const [shiftFilter, setShiftFilter] = useState(ANY)
 
   const [modal, setModal] = useState(null) // { account } | { account: null }
   const [resetting, setResetting] = useState(null)
@@ -153,7 +152,6 @@ export default function SecurityAccountsPage() {
       // "Gate Guard" and "Roving Patrol" are both `security_officer`, so
       // filtering on `a.role` would make those two options select the same set.
       .filter((a) => (roleFilter === ANY ? true : resolveAccessRole(a) === roleFilter))
-      .filter((a) => (shiftFilter === ANY ? true : a.shift === shiftFilter))
       .filter((a) => {
         if (!term) return true
         // Badge number is in the haystack because it is what an admin has in
@@ -165,10 +163,10 @@ export default function SecurityAccountsPage() {
           .toLowerCase()
           .includes(term)
       })
-  }, [accounts, search, statusFilter, roleFilter, shiftFilter])
+  }, [accounts, search, statusFilter, roleFilter])
 
   const filtersActive =
-    Boolean(search.trim()) || statusFilter !== ANY || roleFilter !== ANY || shiftFilter !== ANY
+    Boolean(search.trim()) || statusFilter !== ANY || roleFilter !== ANY
 
   // Clicking a tile that is already applied clears it, so the strip is a
   // toggle rather than a one-way trip that needs the Select to undo.
@@ -323,13 +321,6 @@ export default function SecurityAccountsPage() {
                 onChange={setRoleFilter}
                 options={ROLE_OPTIONS}
                 className="min-w-[11rem]"
-              />
-              <Select
-                ariaLabel="Filter by shift"
-                value={shiftFilter}
-                onChange={setShiftFilter}
-                options={SHIFT_OPTIONS}
-                className="min-w-[10rem]"
               />
             </div>
 

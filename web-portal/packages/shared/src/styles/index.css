@@ -10,6 +10,89 @@
    below covers this package, and each app names its own src/ in its own entry
    stylesheet — see apps/admin-portal/src/styles/index.css. */
 @import "tailwindcss" source(none);
+
+
+/* ══ AFFINIK — THE BRAND WORDMARK'S FACE ════════════════════════════════════
+   Self-hosted, because Affinik is a licensed retail font (Pekotype) with no
+   CDN behind it — unlike Chillax, which Fontshare serves, and Inter, which
+   Google does. A licensed font is a file you are entitled to serve, so it
+   ships with the app instead of being linked.
+
+   ONE WEIGHT, the same discipline Chillax kept: 600 is what the wordmark sets
+   and nothing else uses the face. Another weight is another block, not a
+   wider range here — a range would let the browser synthesise a fake bold off
+   this file and call it 700.
+
+   `local()` FIRST, so anyone with Affinik installed — the designer who owns
+   the licence — renders it with no download at all.
+
+   THE `url()` IS A PUBLIC-DIR PATH, NOT A BUNDLED IMPORT, and that is load
+   bearing. Vite passes `/fonts/…` through untouched, so this file is ALLOWED
+   TO BE MISSING: the build succeeds and the wordmark falls through to Chillax
+   until the licence file is committed. A bundled `url('../assets/…')` would
+   fail the build outright until then, which is the wrong failure mode for an
+   asset the repository cannot legally carry by default.
+
+   Drop it at apps/<app>/public/fonts/affinik-600.woff2 in BOTH apps — the
+   same duplication favicon.svg and icons.svg already live with. There is a
+   README beside it. */
+/* ══ GROOTE — THE BRAND WORDMARK'S FACE ═════════════════════════════════════
+   Groote supersedes Affinik as the wordmark's face. Affinik stays declared
+   below, and stays SECOND in `--font-brand`, for one reason: this file is
+   allowed to be missing (see the note on the url() below), and a missing
+   Groote should fall to the face the lockup was last measured against rather
+   than all the way to the body sans.
+
+   ⚠ THIS IS THE **DEMO** CUT OF GROOTE (Artiveko), AND ITS LICENCE IS
+   PERSONAL / EDUCATIONAL USE ONLY — commercial use, modification and
+   redistribution are all forbidden. The licence text ships beside the file at
+   apps/<app>/public/fonts/groote-LICENSE.txt. A public commercial deployment
+   needs the full cut from artiveko.com; serving this one from a production
+   origin is the thing the licence does not grant.
+
+   400, NOT 600 — and the file is why. The demo is a single Regular master
+   (usWeightClass 400), so the wordmark sets `font-normal`. It used to set
+   `font-semibold`, which against a 400-only family is not a heavier cut, it
+   is the browser smearing the stems of this one to fake a weight that does
+   not exist. Regular is also what the artwork specifies: the Figma wordmark
+   is Affinik **Regular**, so this is the lockup matching the design rather
+   than a concession to the file.
+
+   SERVED AS .otf, UNCONVERTED, which is the one place this file pays a cost
+   on purpose. woff2 would be roughly half the bytes — but the licence
+   forbids modifying the font, and re-compressing it into another container
+   is exactly the kind of thing that argument is had about. The whole face is
+   9,984 bytes, so the saving is ~4 KB on one request; that is not worth
+   buying a licence question. Convert it when the full commercial cut lands.
+
+   BASIC LATIN ONLY: 92 glyphs, A–Z a–z 0–9. It covers "Monticello Villas"
+   exactly and nothing else is set in this face, which is the discipline that
+   keeps that true. Anything else routed through `--font-brand` will fall
+   through to the next family mid-string.
+
+   `local()` FIRST, so anyone with Groote installed renders it with no
+   download at all. */
+@font-face {
+  font-family: 'Groote';
+  src:
+    local('Groote'),
+    url('/fonts/groote-400.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Affinik';
+  src:
+    local('Affinik SemiBold'),
+    local('Affinik-SemiBold'),
+    local('Affinik'),
+    url('/fonts/affinik-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
 @source "../";
 
 /* NOTE ON CONFIG SHAPE
@@ -773,9 +856,36 @@
      would rather not make a third-party request, `npm i @fontsource-variable/
      inter @fontsource/jetbrains-mono` and import them in main.jsx instead —
      the token below does not change. */
-  --font-sans:
-    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  /* ── THE UI FACE: EFFRA, SUBSTITUTED ──────────────────────────────────────
+     The brief asks for Effra "or an Effra-inspired clean geometric sans".
+     Effra itself is Dalton Maag's, licensed per-seat with a separate web
+     embedding fee, so it cannot ship here — the same wall the brand wordmark
+     hit (see apps/<app>/public/fonts/README.md).
+
+     NUNITO SANS IS THE SUBSTITUTE, AND NOT THE OBVIOUS ONE. The usual
+     recommendation for Effra is Poppins, which scores higher on look-alike
+     tooling. It was rejected on purpose: Poppins is a geometric face with a
+     single-storey `a`, near-circular bowls and wide, even widths, and this
+     product is mostly 11-14px table text. Geometry that reads as confident at
+     32px reads as indistinct at 12px, where `a`/`o`/`e` stop being
+     differentiable at a glance.
+
+     Effra is not actually geometric either — it is humanist, closer to
+     Frutiger, which is why it works as an interface face at all. Nunito Sans
+     is humanist, has a two-storey `a`, ships variable weights and full Latin
+     Extended under the OFL, and keeps the rounded, friendly terminals that
+     make Effra look like Effra. It is the closer functional match even where
+     it is the lower-scoring visual one.
+
+     `font-effra` is the utility this token generates, so the brief's class
+     name works verbatim. `--font-sans` points here, which is what makes it
+     global — revert that one line to the Inter stack below and the whole
+     product goes back without touching a component. */
+  --font-effra:
+    "Nunito Sans", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --font-sans: var(--font-effra);
   --font-mono:
     "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
@@ -883,6 +993,97 @@
   --ease-slide: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
+/* ══ BRAND IDENTITY ═════════════════════════════════════════════════════════
+   `@theme static`, NOT `@theme`, and the difference is load-bearing.
+
+   Tailwind v4 tree-shakes the plain `@theme` block: a token no utility
+   references is dropped from the emitted `:root`, so `var(--color-brand-dark)`
+   resolves to nothing in hand-written CSS even though `bg-brand-dark` would
+   still compile. Measured — both constants came back as empty strings from
+   getComputedStyle until this block was split out.
+
+   `static` forces emission of everything declared inside it. These three are
+   brand constants rather than surface roles: they must be readable as raw
+   custom properties from @layer components, from inline styles, and from the
+   `.dark` override below, whether or not a utility happens to use them yet. */
+@theme static {
+  /* The three brand constants, lifted out of the tree-shaken block above.
+     The two constants of the Monticello Villas identity, taken straight off
+     the lockup (Figma node 271-71), where the mark sits in #F2F1D6 cream on a
+     #05171B field. They are named tokens rather than hexes at the call sites,
+     which is the entire reason the dark re-skin further down is a list of
+     values and not a search-and-replace across 138 components.
+
+     NEITHER OF THESE IS A SURFACE TOKEN. `--color-brand-dark` was the dark
+     canvas for part of 2026-10-07 and is not any more — the canvas is black
+     again (see the .dark block). It is kept because it is still the field the
+     lockup is drawn on in Figma, and a marketing panel or a print header that
+     wants the real brand field should say `bg-brand-dark` rather than
+     re-typing the hex. Reach for `--color-base-*` for anything that is
+     actually application chrome.
+
+     `--font-brand` is the brand face, and it is scoped as narrowly as the
+     colours: it dresses the "Monticello Villas" wordmark and nothing else.
+
+     IT IS NAMED FOR THE ROLE, NOT THE FAMILY, and the rename is the lesson.
+     This was `--font-chillax` until the wordmark moved to Affinik — and a
+     token named after a typeface has to be renamed at every call site on the
+     day the typeface changes, which is the day you least want to be editing
+     call sites. `font-brand` survives the next change too.
+
+     THREE DEEP, AND EVERY STEP IS A REAL FALLBACK, not padding:
+       · Affinik is the brand face and arrives as a FILE — see the @font-face
+         at the top of this sheet.
+       · Chillax is what the wordmark set before it, still served by
+         Fontshare. It covers the window before the licence file is
+         committed, so the wordmark looks finished today rather than
+         degraded — which is the whole reason it is still requested in
+         index.html. Drop that <link> once Affinik is in place.
+       · The UI face ends the chain, so a blocked CDN *and* a missing file
+         still render Inter rather than Times.
+
+     `--color-brand-logo` is the one that ALTERNATES, and it is the whole
+     theme-switch mechanism for the mark: the lockup's ink on white here, the
+     brand cream on the dark canvas in dark.
+
+     IN LIGHT IT IS `var(--color-brand-cta)` — THE SIGN-IN BUTTON'S GREEN,
+     #047857 — and the var() is the point. The brief asked for the mark to
+     match the primary button "exactly"; a second hex copied from the button
+     matches it today and silently stops matching the first time either moves.
+     Pointing at the token makes that impossible: re-colour the CTA and the
+     lockup follows in the same commit.
+
+     This walks back the near-black the mark wore from 2026-09 to 2026-10-08
+     (#05171B, then #07191D). The history is in git, and the one number worth
+     carrying forward is the cost:
+
+         #07191D on white   18.0:1      near-black
+         #047857 on white    5.5:1      this
+
+     5.5:1 clears AA for normal text (4.5:1) and does NOT clear AAA (7:1).
+     That is a real drop and it is the trade being made deliberately: brand
+     recognition over maximum legibility, on a 14px label that names the
+     product rather than carrying information. If the wordmark ever has to
+     carry information — a value, a status, anything read rather than
+     recognised — this is the wrong colour for it.
+
+     `--color-brand-dark` (#05171B) stays as the artwork's field colour, now
+     unreferenced by the lockup. It is kept because it is what the Figma is
+     painted in, and the dark half still needs the pair it belongs to.
+
+     DARK IS UNCHANGED: the `.dark` block overrides this with the cream, which
+     is the one thing in dark mode allowed to be warm. The mark is therefore
+     emerald on white and cream on black — not the same hue in both. If it
+     should be emerald in dark too, delete the override below and this var()
+     resolves to #10B981 there on its own. */
+  --font-brand: 'Groote', 'Affinik', 'Chillax', var(--font-sans);
+
+  --color-brand-dark: #05171B;
+  --color-brand-cream: #F2F1D6;
+  --color-brand-logo: var(--color-brand-cta);
+}
+
+
 /* ══ DARK MODE ══════════════════════════════════════════════════════════════
    Same token names, different values. Nothing below this point in the file,
    and nothing in any component, needs to know which theme is active.
@@ -918,25 +1119,34 @@
        · now, per the admin refactor brief, a PURE BLACK canvas under zinc-900
          cards with zinc-800 hairlines.
 
-     The brief allowed zinc-900 or slate-900 for cards. Zinc was chosen: on
-     pure black a blue-tinted slate card reads as navy, and the brief's
-     hairline is zinc-800, so a slate card would put two colour temperatures
-     on one edge. The rule is the conventional one:
+     On 2026-10-07 the ramp was briefly re-skinned to the BRAND TEAL — a
+     #05171B canvas with teal-tinted surfaces above it, taken from the logo
+     lockup's field. It was reverted the same day, by request, for a true
+     black foundation. The teal is still an identity colour and still lives in
+     `--color-brand-dark`; it is simply no longer a SURFACE. Keep that
+     distinction: the brand's field colour and the application's canvas are
+     two different jobs, and the lockup reads on either.
+
+     So the ramp is black and zinc, and the rule is the conventional one:
 
        IN DARK, EVERY LAYER THAT SITS HIGHER IS LIGHTER.
 
-       #000000  canvas      pure black — the page
+       #09090B  canvas      zinc-950 — the page
        #18181B  card        zinc-900 — panels, sidebar, table headers
-       #232326  floating    just above zinc-900 — dropdowns, popovers,
+       #202024  floating    just above zinc-900 — dropdowns, popovers,
                             modals. NOT zinc-800: that is also the hairline,
                             and a zinc-800 panel inside a zinc-800 border
                             measures 1.00:1, i.e. no outline at all
-       #09090B  well        zinc-950 — inset fields, search, code pills:
-                            one step back from the card
+       #111114  well        inset fields, search, code pills: one step back
+                            toward the canvas, so a field reads as recessed
 
-     Measured: card on canvas 1.19:1, floating on card 1.13:1, well on card
-     1.12:1. None of those states an edge by itself, so the `slate-200`
-     hairline below (zinc-800) keeps doing that work. */
+     Measured: card on canvas 1.12:1, floating on card 1.09:1, hairline on
+     card 1.19:1. None of those states an edge by itself, so the `slate-200`
+     hairline below (zinc-800) keeps doing that work.
+
+     The INK is the one thing the teal episode left behind: the type ramp
+     below is cream rather than slate, and it measures better on zinc than it
+     did on teal. See the note there. */
   --color-base-950: #09090B;   /* canvas — zinc-950, one step under the cards */
   --color-base-900: #18181B;   /* cards, sidebar, table headers — zinc-900 */
   --color-base-850: #202024;   /* dropdowns, popovers, modals — the lift */
@@ -1020,30 +1230,78 @@
   --color-focus: #10B981;
 
   /* Inverted against light: an emerald fill carrying DARK ink. #000000 on
-     #10B981 measures 8.28:1; WHITE on the same fill is 2.54:1, which is
+     #10B981 measures 8.28:1; CREAM on the same fill is 2.21:1, which is
      exactly why this is declared as a pair and never as
-     `bg-brand-* text-white`. The ink is the canvas colour, so a CTA reads as a
+     `bg-brand-* text-brand-cream`. The ink is black, so a CTA reads as a
      shape punched through to the page. Hover brightens rather than darkens,
      the convention this block has always kept for dark. */
   --color-brand-cta: #10B981;
   --color-brand-cta-fg: #000000;
   --color-brand-cta-hover: #34D399;   /* brighter on hover — 10.92:1 */
 
-  /* The type ramp, dark: slate-100 / slate-300 / slate-400. Kept from the
-     earlier brief, which asked for slate text by name; on neutral zinc its
-     slight coolness reads as crispness rather than as a cast. Measured on the
-     surfaces text actually lands on:
+  /* The lockup's dark half — MARK AND WORDMARK BOTH. They share this one
+     token now, which is what makes "the logo and the label always match" a
+     property of the system rather than a thing to remember: there is no
+     second value that could drift.
 
-                   card    canvas   floating
-       primary    16.17    19.17    14.31
-       secondary  11.93    14.14    10.56
-       muted       6.91     8.19     6.11   <- the floor: menus and modals
+     #FFFDD7, and deliberately NOT `var(--color-brand-cream)` (#F2F1D6).
+     The two are a few points apart and read as the same colour in isolation,
+     so this looks like a typo and will keep looking like one — it is not.
+     Brand cream is the lockup's print field; #FFFDD7 is the on-screen ink the
+     brand brief specifies, a touch warmer and brighter, and it is the one the
+     dark canvas is tuned against. Both stay.
 
-     The floor was 4.84 on the slate palette; on zinc the muted step has real
-     headroom again. Still re-measure before lightening `--color-base-850`. */
-  --color-text-primary: #F1F5F9;
-  --color-text-secondary: #CBD5E1;
-  --color-text-muted: #94A3B8;
+     IT WAS #FEFBAE UNTIL 2026-10-08 — a pale yellow, where this is a cream:
+     same hue family, less saturation, and it reads as off-white rather than as
+     a tint. Worth knowing that the Figma artwork's own dark lockup (Logo page,
+     Frame 4) is still painted #FEFBAE, so the file and the product now differ
+     by this one step. The product follows the brief; if the artwork is meant
+     to follow too, that frame's fill is the thing to change.
+
+     #FFFDD7 measures 19.2:1 on the #09090B canvas and 17.1:1 on a #18181B
+     card — a shade brighter than the 18.6:1 / 16.6:1 it replaces, so the swap
+     costs nothing in contrast. */
+  --color-brand-logo: #FFFDD7;
+
+  /* The type ramp, dark: WHITE AND NEUTRAL ZINC.
+
+     This WAS cream — #F2F1D6 at the top with two warm steps under it, so the
+     ramp read as one material. It was measured, it cleared AAA, and it was
+     removed anyway on 2026-10-08 by a deliberate call: the brand's cream is
+     to be the LOGO's colour and nothing else. A brand accent that also prints
+     every heading, every table cell and every caption is not an accent — it
+     is the product's text colour wearing the brand's name, and the mark loses
+     the thing that made it stand out.
+
+     So cream now appears in exactly one place in dark mode, directly above:
+     `--color-brand-logo`. Verified by scanning the emitted `.dark` block for
+     warm-tinted values — the only others are semantic status colours
+     (warning, danger, severity, the pill pairs), which are warm because the
+     meaning is warm, and must stay.
+
+     ZINC, NOT SLATE, for the two steps below white. The dark surfaces are
+     zinc (#09090B canvas, #18181B card, #202024 floating); slate-300/400
+     would introduce a second, bluer hue into a neutral system for no reason.
+     These are zinc-300 and zinc-400.
+
+     Measured on the surfaces text actually lands on, with the cream values
+     they replace in brackets:
+
+                   card           canvas         floating
+       primary    17.72 (15.46)  19.90 (17.36)  16.24 (14.17)
+       secondary  11.99 (11.01)  13.46 (12.36)  10.98 (10.08)
+       muted       6.91  (7.08)   7.76  (7.96)   6.33  (6.49)
+
+     Primary and secondary improve on every surface. Muted loses about 2%
+     relative — 6.91 against 7.08 on the card — which is the one number worth
+     naming rather than hiding: it sits just under AAA on the card and the
+     floating surface, exactly as the cream it replaces did, and comfortably
+     over AA. Nothing crossed a threshold in either direction.
+
+     Re-measure before lightening `--color-base-850`. */
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #D4D4D8;
+  --color-text-muted: #A1A1AA;
 
   --color-success: #22C55E;
   --color-warning: #FBBF24;
@@ -2029,8 +2287,26 @@
     @apply border border-danger/25 bg-danger/10 text-danger hover:bg-danger/20;
   }
 
+  /* The neutral secondary: Export, Archive, Cancel, Discard.
+   *
+   * ── THE DARK OVERRIDE IS A BUG FIX, NOT A PREFERENCE ──────────────────────
+   * `bg-base-900` is #FFFFFF in light and #18181B in dark. Cards and modal
+   * panels are ALSO `bg-base-900`. In light that is the familiar white-button-
+   * on-white-card pattern and the slate-200 border carries it. In dark it meant
+   * the button's fill was byte-identical to the surface behind it, leaving a
+   * #27272a hairline as the only thing saying a control was there at all — so
+   * Export and Archive read as dark holes rather than as buttons.
+   *
+   * Measured, the TEXT was never the problem: white on #18181B is 17.7:1. The
+   * failure was button-against-surface, which no text-contrast check catches,
+   * and which is why this survived several passes looking at the wrong number.
+   *
+   * `base-700` is #27272a in dark — one step up from the panel, enough fill to
+   * read as a raised control, and it leaves the border free to do edge work
+   * rather than all the work. Light is untouched. */
   .btn-outline {
     @apply border border-slate-200 bg-base-900 text-text-primary hover:border-slate-300 hover:bg-slate-50;
+    @apply dark:border-slate-300 dark:bg-base-700 dark:text-text-primary dark:hover:bg-base-850;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   }
 

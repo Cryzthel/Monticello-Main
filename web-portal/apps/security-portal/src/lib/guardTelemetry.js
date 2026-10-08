@@ -105,3 +105,74 @@ export function publishTelemetry(uid, payload) {
     updatedAt: serverTimestamp(),
   })
 }
+
+// ── THE ROUTE, PUBLISHED ────────────────────────────────────────────────────
+//
+// The guard's console plots its own route and counts its own ETA down. Until
+// now that lived entirely in one browser: an admin watching the same call on
+// the Hazard Map could see WHERE the unit was and nothing about where it was
+// going. Publishing the computed line is what makes the two canvases agree,
+// and it is strictly cheaper than the alternative — the admin renders the
+// polyline the guard already paid the Directions API for rather than asking
+// for a second one that would differ by a refresh.
+
+/** How many coordinates a published line may carry. */
+const MAX_ROUTE_POINTS = 300
+
+/**
+ * The compact, publishable form of a plotted route.
+ *
+ * Coordinates are rounded to five decimals (~1 m) and thinned to at most
+ * MAX_ROUTE_POINTS by even stride. A subdivision route is far below that, so
+ * the cap is a guard against a pathological response rather than a routine
+ * path — but a Firestore document is capped at 1 MB and a telemetry doc that
+ * can be refused for size is a unit that vanishes off the dispatcher's map.
+ *
+ * `etaAt` is an absolute epoch, not a remaining duration. A countdown stored
+ * as "412 seconds" is wrong the instant it is written and has no way to say
+ * how stale it is; an arrival time stays meaningful on a reader's clock.
+ */
+export function summariseRoute(route, { incidentId, tone = 'live' } = {}) {
+  const coords = route?.geometry?.coordinates
+  if (!Array.isArray(coords) || coords.length < 2) return null
+
+  const stride = Math.ceil(coords.length / MAX_ROUTE_POINTS)
+  const thinned = stride > 1 ? coords.filter((_, i) => i % stride === 0 || i === coords.length - 1) : coords
+
+  const r5 = (n) => Math.round(n * 1e5) / 1e5
+  return {
+    incidentId: incidentId ?? null,
+    tone,
+    coordinates: thinned.map(([lng, lat]) => [r5(lng), r5(lat)]),
+    distance: Number.isFinite(route.distance) ? Math.round(route.distance) : null,
+    duration: Number.isFinite(route.duration) ? Math.round(route.duration) : null,
+    etaAt: Number.isFinite(route.duration) ? Date.now() + Math.round(route.duration) * 1000 : null,
+    plottedAt: Date.now(),
+  }
+}
+
+/**
+ * Merge the active route onto this unit's telemetry document.
+ *
+ * A MERGE, and separate from `publishTelemetry`, because the two change at
+ * completely different rates: position heartbeats every 20 s while responding,
+ * while a route is re-plotted only when the unit has actually moved enough to
+ * invalidate it. Folding the geometry into the heartbeat would rewrite a few
+ * hundred coordinates every twenty seconds to say nothing new.
+ *
+ * Never throws. A route that failed to publish is a worse map for the
+ * dispatcher; a route that threw would be a broken console for the officer
+ * actually driving to the call, and only one of those is an emergency.
+ */
+export async function publishRoute(uid, summary) {
+  if (!uid) return
+  try {
+    await setDoc(
+      doc(db, 'guard_telemetry', uid),
+      { uid, route: summary ?? null, updatedAt: serverTimestamp() },
+      { merge: true },
+    )
+  } catch (err) {
+    console.warn('Route publish failed', err)
+  }
+}

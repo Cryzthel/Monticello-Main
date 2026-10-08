@@ -7,6 +7,7 @@ import IncidentInspectorDrawer, { DRAWER_WIDTH_PX } from '@/components/IncidentI
 import PanicAlertDetailModal from '@/components/PanicAlertDetailModal'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
+import { useGuardFleet } from '@shared/hooks/useGuardFleet'
 import { db } from '@shared/lib/firebase'
 import { mapIncidentDoc, isResolvedExpired } from '@shared/lib/incidents'
 import { isPanicLive } from '@shared/lib/panicStatus'
@@ -22,6 +23,11 @@ import { isPanicLive } from '@shared/lib/panicStatus'
 const DETAIL_PANEL_INSET = { right: DRAWER_WIDTH_PX }
 
 export default function HeatmapPage() {
+  // Live units and the routes their own consoles published. Read, never
+  // recomputed — see the hook for why the admin draws the officer's line
+  // rather than asking the Directions API for a second opinion.
+  const { units: guardUnits, routes: guardRoutes } = useGuardFleet()
+
   const [selectedId, setSelectedId] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -145,6 +151,11 @@ export default function HeatmapPage() {
           onSelectIncident={(incident) => setSelectedId(incident.id)}
           panicAlerts={livePanicAlerts}
           onSelectPanicAlert={(alert) => setSelectedPanicId(alert.id)}
+          units={guardUnits}
+          route={guardRoutes}
+          /* Re-frames the camera only when the SET of routed units changes,
+             not on every refresh as a moving unit re-plots its line. */
+          routeKey={guardRoutes ? guardRoutes.features.map((f) => f.properties.uid).join(',') : null}
           focus={focus}
           centerOnSelect
           focusInset={DETAIL_PANEL_INSET}

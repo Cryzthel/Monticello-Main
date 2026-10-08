@@ -126,10 +126,7 @@ export default function MetricsPanel({
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3">
-        <SectionHeading
-          title="Key numbers"
-          description={`The last ${days} days. These are the same figures the Overview shows.`}
-        />
+        <SectionHeading title="Key numbers" />
         {loading ? (
           <SkeletonKpiRow count={4} />
         ) : (
@@ -163,10 +160,7 @@ export default function MetricsPanel({
       </section>
 
       <section className="flex flex-col gap-3">
-        <SectionHeading
-          title="Trends and hot-spots"
-          description="How the workload is moving, what takes longest to close, and where it clusters."
-        />
+        <SectionHeading title="Trends and hot-spots" />
 
         {/* Open reports by urgency — live, not windowed, and captioned as such
             inside the chart itself. */}
@@ -256,10 +250,10 @@ export default function MetricsPanel({
 
           <Card className="col-span-12 flex h-72 min-h-0 flex-col p-5 xl:col-span-6">
             <p className="mb-1 shrink-0 text-sm font-semibold text-text-primary">
-              Busiest phases
+              Reports by Phases
             </p>
             <p className="mb-3 shrink-0 text-xs text-text-secondary">
-              Reports in the last {days} days, by phase
+              Reports in the last {days} days
             </p>
             {loading ? (
               /* The real content is a list of labelled progress bars, so the

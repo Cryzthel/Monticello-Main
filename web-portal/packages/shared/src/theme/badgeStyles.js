@@ -95,7 +95,7 @@ export const BADGE_ICON_SIZES = {
  *
  * Distinct hue per category, so a queue can be scanned by KIND without reading
  * a word. Assigned by meaning rather than by list order: fire owns red,
- * flooding owns the water blue, maintenance is the deliberately quiet one.
+ * maintenance is the deliberately quiet one.
  *
  * Severity is a SEPARATE axis (SEVERITY_TONES below) — a maintenance call can
  * still be critical. Which axis a given badge colours by is the caller's
@@ -107,7 +107,6 @@ export const INCIDENT_CATEGORY_TONES = {
   fire: 'danger',
   medical: 'high',
   hazard: 'warning',
-  flooding: 'info',
   security: 'violet',
   maintenance: 'neutral',
   noise: 'success',

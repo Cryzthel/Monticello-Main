@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import ShiftSummary from '@/components/ShiftSummary'
 import { ClipboardList, Loader2, LogOut, X } from '@shared/icons'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
-import { formatMinutes } from '@shared/lib/incidents'
 
 const MAX = 1000
 
@@ -98,10 +98,16 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
         </header>
 
         <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6 pb-8">
+          {/* The figures first, the prose second. An officer asked what
+              happened on shift answers better from a number they can check
+              than from memory — and the sentence under it now says what the
+              box is FOR, rather than reassuring them about a record they
+              cannot see. */}
+          <ShiftSummary shift={shift} open={open} />
+
           <p className="text-xs leading-relaxed text-text-secondary">
-            Filed against this shift
-            {shift?.durationMinutes != null ? ` — ${formatMinutes(shift.durationMinutes)} on duty` : ''}. The calls
-            you handled are recorded automatically; this is for what they do not cover.
+            Those are recorded automatically. This is for what they do not cover — a
+            handover is read by the officer relieving you.
           </p>
 
           <div>

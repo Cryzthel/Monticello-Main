@@ -21,7 +21,14 @@ export default function SectionHeading({
   actionClassName = '',
 }) {
   return (
-    <div className={`flex shrink-0 flex-wrap items-end justify-between gap-x-4 gap-y-1 ${className}`}>
+    // `items-end` aligns the action with the DESCRIPTION's baseline, which is
+    // the right answer only while there is a description. Without one the title
+    // is a single line and a taller control beside it would hang off its
+    // bottom edge, so the row centres instead. Both portals have call sites of
+    // each kind, which is why this is conditional rather than a new default.
+    <div
+      className={`flex shrink-0 flex-wrap ${description ? 'items-end' : 'items-center'} justify-between gap-x-4 gap-y-1 ${className}`}
+    >
       {/* H2 in the type scale: text-base / semibold. These sit above panels
           ("System events", "Broadcast feed"), one level under the page
           title's text-2xl bold (PageHeader) and one above the text-sm body
