@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { X, Siren, ShieldCheck, MapPin, MapPinOff, Clock } from '@shared/icons'
+import { X, Siren, ShieldCheck, MapPin, MapPinOff, Clock, Navigation } from '@shared/icons'
 import { minutesWaiting } from '@shared/lib/wpda'
 import { acknowledgePanicAlert, acknowledgedByLabel } from '@shared/lib/panicAlerts'
 import { useAuth } from '@shared/auth/AuthContext'
@@ -30,7 +30,7 @@ function formatAgo(createdAt) {
  * covers the map only while a guard is deliberately acting on an alert, and
  * one click on a node that is now impossible to miss is what opens it.
  */
-export default function PanicAlertModal({ alert, onClose }) {
+export default function PanicAlertModal({ alert, onClose, onRespond }) {
   const geofenceAlert = useSystemSettings((state) => state.values.sos.geofenceAlert)
 
   const { user } = useAuth()
@@ -62,6 +62,19 @@ export default function PanicAlertModal({ alert, onClose }) {
   // its acknowledged state because the alert did — not because this component
   // remembered a click that may not have landed.
   const isActive = alert.status === 'active'
+
+  /**
+   * Can this alert be navigated to?
+   *
+   * Only with a REAL fix. An SOS whose phone reported no position is anchored
+   * at the premises centre (see the panicGeojson note in IncidentMap), and
+   * plotting a route to that anchor would draw a confident blue line to a
+   * point nobody is standing at — the single most dangerous thing this console
+   * could do with an emergency, because the line looks identical to a real
+   * one. The address above is what a responder acts on in that case, and
+   * Acknowledge still works.
+   */
+  const canNavigate = Number.isFinite(alert.lat) && Number.isFinite(alert.lng)
 
   async function run(action) {
     setBusy(true)
@@ -210,6 +223,67 @@ export default function PanicAlertModal({ alert, onClose }) {
             <ShieldCheck size="sm" />
             {isActive ? (busy ? 'Acknowledging…' : 'Acknowledge report') : 'Acknowledged'}
           </button>
+
+          {/* ── RESPOND TO SOS ─────────────────────────────────────────────
+              The second action, and the one that was missing: until now a
+              guard could SEE an SOS and acknowledge it, and then had to find
+              the address on a map by eye. Every other call on this console
+              routes; the emergencies did not.
+
+              ── IT ACKNOWLEDGES TOO, AND THAT IS NOT A SHORTCUT ─────────────
+              Pressing this is a stronger statement than Acknowledge — "I am
+              going" implies "I have seen it" — and an officer who drives off
+              having pressed only this would otherwise leave an alert reading
+              unattended on every other console, with the escalation sweep
+              counting down against it. One press, both facts. The write is
+              awaited before the handoff so the record is straight before the
+              map changes under them, and a failure shows here rather than
+              silently starting a response nobody else can see.
+
+              ── BELOW ACKNOWLEDGE, NOT ABOVE IT ─────────────────────────────
+              It is the heavier commitment of the two and the last thing in
+              the reading order, which is the ordinary rule for a dialog whose
+              final control sends somebody somewhere. A responder who meant
+              only to acknowledge should not meet Respond first. */}
+          {canNavigate ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                // ── THE HANDOFF DOES NOT DEPEND ON THE WRITE ─────────────
+                // Acknowledging is attempted first and its failure is
+                // swallowed, which is the opposite of how every other action
+                // on this console behaves and is right only here. The
+                // acknowledgement is a courtesy to the OTHER consoles — it
+                // stops the alert reading unattended and pauses the
+                // escalation sweep. Navigating is this officer getting to a
+                // person in trouble, it is entirely local, and it must not be
+                // blocked because a phone at a gate lost signal for a second.
+                //
+                // A failed write is not lost: the alert simply stays active,
+                // which is the state it was already in, and the sweep that
+                // escalates unattended alerts still runs.
+                setBusy(true)
+                try {
+                  if (isActive) await acknowledgePanicAlert(alert.id, user?.displayName)
+                } catch (err) {
+                  console.warn('Could not acknowledge before responding', err)
+                } finally {
+                  setBusy(false)
+                }
+                onRespond?.(alert)
+              }}
+              className="btn btn-sm btn-danger w-full"
+            >
+              <Navigation size="sm" />
+              {busy ? 'Starting…' : 'Respond to SOS'}
+            </button>
+          ) : (
+            <p className="w-full rounded-xl border border-hairline bg-base-800 p-3 text-xs leading-relaxed text-text-secondary">
+              This SOS carries no position, so there is nothing to route to. Head for the address
+              above.
+            </p>
+          )}
         </div>
       </div>
     </div>

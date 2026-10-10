@@ -14,6 +14,33 @@ import { GUARDHOUSE_LNGLAT } from '@/lib/routeOrigin'
 const REFETCH_MOVE_M = 25
 const REFETCH_MIN_MS = 10_000
 
+/**
+ * ── RECALCULATING WHEN THE UNIT IS NOT ON THE LINE ─────────────────────────
+ *
+ * The route already re-plots from the unit's live position every time they
+ * move REFETCH_MOVE_M, so a unit that takes a wrong turn is usually handed a
+ * corrected route within twenty-five metres without anything special
+ * happening. The case that rule misses is narrow and real: a unit that moves
+ * only a few metres but ends up far from the LINE — out of a side gate, into
+ * a car park, round the back of a block — then stops. They are visibly off
+ * the plotted route, they have not moved far enough to trigger a refetch, and
+ * nothing re-plots until they drive again.
+ *
+ * So being off-route is now itself a reason to re-plot, subject to the same
+ * time floor. `REROUTE_LIMIT` is what keeps that from becoming a loop: a fix
+ * that is genuinely nowhere near any road — a basement car park, a bad
+ * indoor fix — comes back off-route against the NEW route too, and without a
+ * cap this would re-request directions every ten seconds for as long as the
+ * call stayed open. Three attempts, then it stops and the panel's off-route
+ * notice stands, which is the honest end state: the console has tried, and a
+ * position that no route can reach is information for the officer, not a
+ * reason to keep spending the quota.
+ *
+ * The counter resets the moment the unit is back on a line, so a response
+ * with three separate wrong turns gets three separate reroutes.
+ */
+const REROUTE_LIMIT = 3
+
 const IDLE = { phase: 'idle', route: null, error: null, originSource: null, tone: null, unit: null }
 
 /**
@@ -33,14 +60,34 @@ const IDLE = { phase: 'idle', route: null, error: null, originSource: null, tone
  * `tone` is 'live' once the officer has acknowledged and is moving, and
  * 'preview' before that. The map draws them emerald and blue.
  */
-export function useDispatchRoute({ incident, units, previewUid, profile }) {
+export function useDispatchRoute({ incident, units, previewUid, profile, offRoute = false }) {
   const [state, setState] = useState(IDLE)
   const lastRef = useRef({ key: null, origin: null, at: 0 })
   const controllerRef = useRef(null)
 
+  /**
+   * Read through refs inside the effect, and `offRoute` is ALSO a dependency.
+   *
+   * Both halves are needed and they do different jobs. The dependency is what
+   * wakes the effect when a unit strays without a new fix arriving; the ref is
+   * what stops the value being captured stale by the closure. Using only the
+   * dependency would re-run the effect on every flip of a boolean that
+   * flickers around the 45 m threshold; using only the ref would mean a unit
+   * that strays and stops never triggers anything, which is the exact case
+   * this is for.
+   */
+  const offRouteRef = useRef(offRoute)
+  offRouteRef.current = offRoute
+  const rerouteCountRef = useRef(0)
+  if (!offRoute && rerouteCountRef.current) rerouteCountRef.current = 0
+
   const stage = incident?.dispatchStage
   let unitUid = null
   let tone = null
+  // An SOS arrives here already shaped as a call in progress — see
+  // `sosRouteTarget` in DashboardPage — so it needs no branch of its own.
+  // That is the point of shaping it that way: one routing path, one publish
+  // path, one set of states the panel can be in.
   if (incident && (stage === 'dispatched' || stage === 'responding') && incident.assignedGuardUid) {
     unitUid = incident.assignedGuardUid
     tone = stage === 'responding' ? 'live' : 'preview'
@@ -71,6 +118,7 @@ export function useDispatchRoute({ incident, units, previewUid, profile }) {
     if (!key) {
       controllerRef.current?.abort()
       lastRef.current = { key: null, origin: null, at: 0 }
+      rerouteCountRef.current = 0
       setState(IDLE)
       return
     }
@@ -86,7 +134,15 @@ export function useDispatchRoute({ incident, units, previewUid, profile }) {
     const sameCall = last.key === key && last.origin
     if (sameCall) {
       const moved = distanceMeters(last.origin, nextOrigin)
-      if (moved < REFETCH_MOVE_M || Date.now() - last.at < REFETCH_MIN_MS) return
+      const stale = Date.now() - last.at >= REFETCH_MIN_MS
+      // The time floor binds in BOTH cases. Movement alone is not enough, and
+      // neither is being off-route — what changes when a unit has strayed is
+      // that the distance floor is waived, because the whole problem is a unit
+      // that is badly placed without having gone far.
+      const wantsReroute = offRouteRef.current && rerouteCountRef.current < REROUTE_LIMIT
+      if (!stale) return
+      if (!wantsReroute && moved < REFETCH_MOVE_M) return
+      if (wantsReroute && moved < REFETCH_MOVE_M) rerouteCountRef.current += 1
     }
 
     controllerRef.current?.abort()
@@ -112,7 +168,7 @@ export function useDispatchRoute({ incident, units, previewUid, profile }) {
     // `unit` and `tone` are carried in state below, not triggers: a battery
     // update must not re-plot the route.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, originLng, originLat, destLng, destLat, profile])
+  }, [key, originLng, originLat, destLng, destLat, profile, offRoute])
 
   useEffect(() => () => controllerRef.current?.abort(), [])
 
@@ -135,11 +191,16 @@ export function useDispatchRoute({ incident, units, previewUid, profile }) {
   useEffect(() => {
     if (!ownUid) return undefined
 
+    const sos = incident?.kind === 'sos'
     const summary = state.route
-      ? summariseRoute(state.route, { incidentId: incident?.id, tone })
+      ? summariseRoute(state.route, {
+          incidentId: sos ? null : incident?.id,
+          alertId: sos ? incident?.id : null,
+          tone,
+        })
       : null
     const signature = summary
-      ? `${summary.incidentId}:${summary.tone}:${summary.distance}:${summary.duration}:${summary.coordinates.length}`
+      ? `${summary.incidentId ?? summary.alertId}:${summary.tone}:${summary.distance}:${summary.duration}:${summary.coordinates.length}`
       : 'cleared'
 
     if (publishedRef.current !== signature) {
@@ -150,7 +211,7 @@ export function useDispatchRoute({ incident, units, previewUid, profile }) {
     // `unit` is deliberately absent: a battery or heading update must not
     // republish a route that has not changed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ownUid, state.route, incident?.id, tone])
+  }, [ownUid, state.route, incident?.id, incident?.kind, tone])
 
   // Leaving the console mid-call must not strand a line on the dispatcher's
   // map that nothing is updating any more.

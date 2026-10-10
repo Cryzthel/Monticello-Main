@@ -4,7 +4,6 @@ import {
   FlaskConical,
   Footprints,
   Loader2,
-  Maximize2,
   MapPin,
   MoveRight,
   Navigation,
@@ -27,7 +26,7 @@ import {
   formatDuration,
   routeProfile,
 } from '@/lib/directions'
-import { isOffRoute } from '@/lib/routeProgress'
+import { isOffRoute, WAYPOINT_RADIUS_M } from '@/lib/routeProgress'
 
 const PROFILE_OPTIONS = Object.values(ROUTE_PROFILES).map((option) => ({
   value: option.key,
@@ -144,10 +143,9 @@ export default function RouteSummaryBadge({
   simulated = false,
   navigating = false,
   onToggleNavigation,
-  voice = false,
   voiceSupported = true,
-  onToggleVoice,
-  onOverview,
+  onRepeat,
+  waypointM = null,
 }) {
   /**
    * The clock the arrival time is measured against.
@@ -242,6 +240,29 @@ export default function RouteSummaryBadge({
                 <p className="mt-1.5 truncate text-sm font-medium leading-snug">
                   {maneuver.upcoming?.instruction ?? 'Continue'}
                 </p>
+                {/* ── WHY THE BANNER HAS NOT MOVED ON ────────────────────
+                    The console will not advance to the next instruction until
+                    the unit has physically been within WAYPOINT_RADIUS_M of
+                    this corner (see `gateStepIndex`). That is the right
+                    behaviour and it is invisible: an officer who has cut
+                    through a car park and rejoined past the junction sees a
+                    banner apparently stuck on a turn they have already made,
+                    with nothing saying why.
+
+                    So on the one occasion the two figures disagree — the
+                    along-the-route countdown above is near zero while the
+                    straight-line distance to the corner is not — the panel
+                    says what it is waiting for. The rest of the time this
+                    line is absent, because the two agree and repeating a
+                    figure is worse than omitting it. */}
+                {waypointM != null && waypointM > WAYPOINT_RADIUS_M && maneuver.distanceToManeuver < 20 ? (
+                  <p
+                    className="mt-1 truncate text-2xs leading-snug"
+                    style={{ color: GUIDANCE_BANNER.inkMuted }}
+                  >
+                    Waiting to reach the junction · {formatDistance(waypointM)} off
+                  </p>
+                ) : null}
               </>
             ) : (
               <p className="truncate text-lg font-semibold leading-tight">
@@ -437,34 +458,36 @@ export default function RouteSummaryBadge({
         <div className="flex flex-wrap items-center gap-2 border-t border-hairline p-3">
           {navigating ? (
             <>
-              {/* ── ONE ICON, TWO STATES ────────────────────────────────
-                  The brief asks for Volume2 / VolumeX. The icon registry is
-                  GENERATED from one Phosphor set, deliberately matched to the
-                  mobile app's, and it has no muted-speaker glyph — the same
-                  constraint VoiceControl ran into and solved the same way.
-                  Hand-adding one would put a glyph in the registry that
-                  `build-icons.mjs` does not know about and the next
-                  regeneration would silently drop it. So the state is carried
-                  by the label and the button's tone. */}
+              {/* ── REPEAT, WHERE MUTE USED TO BE ───────────────────────
+                  Mute is gone by protocol: spoken guidance stays on for the
+                  whole of a navigation session, so a control whose only job
+                  was to switch it off had nothing left to do.
+
+                  Removing it and leaving a gap would have been the wrong
+                  read of why anyone pressed it. An officer reaching for Mute
+                  mid-drive is almost never saying "I want silence" — they are
+                  saying "that prompt was no use to me", and overwhelmingly
+                  because they missed it: a door slammed, a radio talked over
+                  it, they were parking. The useful answer to that is the
+                  instruction AGAIN, not less of it.
+
+                  So the slot carries the opposite control. It is also the
+                  on-demand half of the repeat requirement, with the timed
+                  half in `useVoiceGuidance` — the officer does not have to
+                  wait out the interval if they need it now. */}
               <button
                 type="button"
-                onClick={onToggleVoice}
-                disabled={!voiceSupported}
-                aria-pressed={voice}
-                className={`btn btn-form ${voice ? 'btn-outline' : 'btn-success'}`}
+                onClick={onRepeat}
+                disabled={!voiceSupported || !onRepeat}
+                className="btn btn-form btn-outline"
                 title={
                   voiceSupported
-                    ? undefined
+                    ? 'Say the current instruction again'
                     : 'This browser has no speech synthesis. The written steps are unaffected.'
                 }
               >
                 <Volume2 size="sm" aria-hidden="true" />
-                {voice ? 'Mute' : 'Unmute'}
-              </button>
-
-              <button type="button" onClick={onOverview} className="btn btn-form btn-outline">
-                <Maximize2 size="sm" aria-hidden="true" />
-                Overview
+                Repeat
               </button>
 
               {/* ── A WASH, NOT A SOLID RED ─────────────────────────────

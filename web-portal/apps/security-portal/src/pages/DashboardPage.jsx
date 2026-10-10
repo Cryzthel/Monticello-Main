@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVoiceGuidance } from '@/hooks/useVoiceGuidance'
 import { useSearchParams } from 'react-router-dom'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
@@ -22,6 +22,7 @@ import { blockLotLabel } from '@/lib/dispatch'
 import { routeProfile, routeToGeojson } from '@/lib/directions'
 import { isOffRoute, routeProgress } from '@/lib/routeProgress'
 import { useRouteSimulation } from '@/hooks/useRouteSimulation'
+import { useDeviceHeading } from '@/hooks/useDeviceHeading'
 import SimulationControl from '@/components/SimulationControl'
 import FollowControl from '@/components/FollowControl'
 import VoiceControl from '@/components/VoiceControl'
@@ -65,6 +66,53 @@ export default function DashboardPage() {
   const { alerts: panicAlerts } = useLivePanicAlerts()
   const selectedPanic = panicAlerts.find((a) => a.id === selectedPanicId) ?? null
 
+  /**
+   * The SOS this console is responding to, if any.
+   *
+   * ── WHY AN SOS IS SHAPED LIKE A CALL ───────────────────────────────────
+   * `panic_alerts` and `incidents` are two collections with two schemas, and
+   * everything downstream of here — the routing hook, the route publish, the
+   * marker state machine, the navigation panel, the voice guidance — takes a
+   * call. Teaching each of them about a second shape would be five branches
+   * for one feature, and five places for the two paths to drift.
+   *
+   * So the adaptation happens once, here, at the boundary: an accepted alert
+   * becomes an object with the four fields the route needs, already at
+   * `responding` and already assigned to the officer who pressed the button,
+   * because both of those are true the moment they press it. `kind: 'sos'` is
+   * the one field that survives further in, and only so the published
+   * telemetry records the alert id in a field that is not `incidentId`.
+   *
+   * It is deliberately NOT written to Firestore as an incident. An SOS is its
+   * own record with its own lifecycle and its own escalation sweep; this is a
+   * routing target, held in memory on the console that is driving it.
+   */
+  const [respondingAlertId, setRespondingAlertId] = useState(null)
+  const respondingAlert = panicAlerts.find((a) => a.id === respondingAlertId) ?? null
+  const sosRouteTarget = useMemo(() => {
+    if (!respondingAlert || !user?.uid) return null
+    if (!Number.isFinite(respondingAlert.lat) || !Number.isFinite(respondingAlert.lng)) return null
+    return {
+      kind: 'sos',
+      id: respondingAlert.id,
+      lat: respondingAlert.lat,
+      lng: respondingAlert.lng,
+      dispatchStage: 'responding',
+      assignedGuardUid: user.uid,
+      category: 'emergency',
+      severity: 'critical',
+    }
+  }, [respondingAlert, user?.uid])
+
+  // An alert somebody else resolved, or that the sweep closed, stops being a
+  // thing to drive to — the route and the session go with it rather than
+  // leaving a line to a finished emergency on the map.
+  useEffect(() => {
+    if (respondingAlertId && respondingAlert && respondingAlert.status !== 'active') {
+      setRespondingAlertId(null)
+    }
+  }, [respondingAlertId, respondingAlert])
+
   // The open call is read from its OWN document listener, not picked out of
   // the live list. The list only holds open calls, so a call resolved while
   // its drawer is open would vanish from under the officer's thumb at the
@@ -91,7 +139,13 @@ export default function DashboardPage() {
     () => reports.find((r) => r.assignedGuardUid === user?.uid && isActiveStage(r.dispatchStage)) ?? null,
     [reports, user?.uid],
   )
-  const routeIncident = selectedReport ?? myActive
+  /**
+   * AN SOS OUTRANKS EVERYTHING. A guard who has pressed Respond to SOS is
+   * driving to it, and a routine call they happen to click afterwards must
+   * not quietly re-plot the line under them mid-response. Clearing the SOS is
+   * an explicit act — Exit navigation, or the alert being resolved.
+   */
+  const routeIncident = sosRouteTarget ?? selectedReport ?? myActive
 
   const target = useMemo(
     () => (typeof routeIncident?.lng === 'number' ? [routeIncident.lng, routeIncident.lat] : null),
@@ -99,11 +153,23 @@ export default function DashboardPage() {
   )
   const { units } = useGuardUnits(reports, target)
 
+  /**
+   * Off-route is read from the PREVIOUS render's progress, through a ref.
+   *
+   * It has to be: `progress` is computed from `route`, so passing it straight
+   * back in would be a cycle React cannot evaluate. A fix that strays
+   * therefore reaches the routing hook one render late, which is a few
+   * milliseconds against a ten-second refetch floor — and the alternative,
+   * lifting the whole progress computation above the route it measures
+   * against, is not available at any price.
+   */
+  const offRouteRef = useRef(false)
   const route = useDispatchRoute({
     incident: routeIncident,
     units,
     previewUid: routeIncident?.id === selectedId ? previewUid : null,
     profile,
+    offRoute: offRouteRef.current,
   })
   /**
    * The demonstration simulator (see useRouteSimulation for the rules).
@@ -146,15 +212,16 @@ export default function DashboardPage() {
   const [navigating, setNavigating] = useState(false)
 
   /**
-   * Overview: a counter the map watches, bumped on every press.
+   * This device's compass, listened to only while a session is running.
    *
-   * See `frameRouteSignal` in IncidentMap for why this is a nonce rather than
-   * an imperative handle. The short version is that the map's entire interface
-   * is props in and callbacks out, and one `ref.frameRoute()` would be the
-   * only exception to that.
+   * Not always-on, for two reasons that point the same way: the orientation
+   * sensor costs power on the phone an officer is about to drive with, and a
+   * cone on a dispatcher's desktop map would be pointing wherever that
+   * monitor happens to face. The cone answers "which way am I pointed", and
+   * nobody asks that until they are getting out of a vehicle.
    */
-  const [overviewSignal, setOverviewSignal] = useState(0)
-  const showOverview = useCallback(() => setOverviewSignal((n) => n + 1), [])
+  const { heading: deviceHeading, request: requestCompass } = useDeviceHeading({ enabled: navigating })
+
 
   const routeCoordinates = route.route?.geometry?.coordinates ?? null
 
@@ -189,10 +256,50 @@ export default function DashboardPage() {
    * collapses every live figure below back to the route's original numbers
    * rather than to a confident guess.
    */
-  const progress = useMemo(
-    () => (route.route && fix ? routeProgress(route.route, fix) : null),
-    [route.route, fix],
-  )
+  /**
+   * WHICH set of instructions is on screen: this call, this unit, this
+   * profile. Declared HERE rather than beside the map props it is passed to,
+   * because the step latch below keys on it and a `const` read before its
+   * declaration is a temporal-dead-zone throw, not a lint warning.
+   */
+  const routeKey = route.route ? `${route.incidentId}|${route.unit?.uid ?? 'guardhouse'}|${route.route.profile}` : null
+
+  /**
+   * The furthest step this console has accepted, latched per route.
+   *
+   * ── WHY THE STEP INDEX IS STATE AND NOT A PURE DERIVATION ───────────────
+   * It used to be a pure function of the fix, and that is what let a unit
+   * standing at the gate be told to make the last turn: on a route that comes
+   * back down a street near its own start, projecting a position onto the
+   * line has two correct answers and distance alone picks the wrong one. The
+   * gate fixes it by requiring that every corner was physically VISITED,
+   * which is a fact about history, and history has to be remembered.
+   *
+   * A ref rather than `useState`, because nothing renders from it directly —
+   * it is an input to the memo below, and `setState` here would schedule a
+   * second render per telemetry fix to produce the value this render already
+   * has. Written during render, which is the same thing `routeRef` and the
+   * other prop mirrors in IncidentMap do.
+   */
+  const stepLatchRef = useRef({ key: null, index: 0, point: null })
+  const progress = useMemo(() => {
+    if (!route.route || !fix) return null
+    // A new call, a new unit or a new profile is a new set of instructions,
+    // and the latch must not carry step 7 of the old route into step 7 of a
+    // route that has four — nor the previous position, which belongs to a
+    // different line. `routeKey` is already exactly this identity.
+    if (stepLatchRef.current.key !== routeKey) {
+      stepLatchRef.current = { key: routeKey, index: 0, point: null }
+    }
+    const { index, point } = stepLatchRef.current
+    const next = routeProgress(route.route, fix, { stepFloor: index, prevPoint: point })
+    // The SNAPPED point goes back in, matching what the gate compares
+    // against — see the note on `point` in gateStepIndex.
+    if (next?.step) stepLatchRef.current = { key: routeKey, index: next.step.index, point: next.snapped }
+    offRouteRef.current = isOffRoute(next)
+    return next
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.route, fix, routeKey])
 
   /**
    * The responding unit, pointed along the road and sitting on it.
@@ -242,6 +349,23 @@ export default function DashboardPage() {
   // A route that ends, or hands off to a different unit, leaves follow mode
   // pointing at nobody. Clearing it here rather than leaving a toggle that
   // looks armed and does nothing.
+  /**
+   * ── SPOKEN GUIDANCE IS NOT OPTIONAL DURING A SESSION ────────────────────
+   * Protocol: once an officer is navigating to a call, the turns are spoken,
+   * full stop. The Mute control is gone from the panel and this is what makes
+   * that more than a hidden button — `voice` alone can be switched off from
+   * the controls drawer, and `navigating` overrides it rather than merely
+   * setting it, so the two can never disagree about whether the console is
+   * speaking.
+   *
+   * The drawer's own toggle still serves the case it was built for: a
+   * DISPATCHER at the desk who wants to hear a unit's turns without running a
+   * session. See VoiceControl, which reports the override rather than
+   * pretending to control it.
+   */
+  const speaking = (navigating || voice) && voiceSupported
+  const { repeat } = useVoiceGuidance(progress, { enabled: speaking, routeKey })
+
   const followUid = route.unit?.uid ?? null
   useEffect(() => {
     if (!followUid) {
@@ -250,9 +374,6 @@ export default function DashboardPage() {
     }
   }, [followUid])
 
-  const routeKey = route.route ? `${route.incidentId}|${route.unit?.uid ?? 'guardhouse'}|${route.route.profile}` : null
-
-  useVoiceGuidance(progress, { enabled: voice && voiceSupported, routeKey })
 
   /**
    * NAVIGATING IS ITS OWN STATE, and the previous version got this wrong.
@@ -274,9 +395,25 @@ export default function DashboardPage() {
       const next = !current
       setFollowing(next)
       setVoice(next)
+      // Safari will not deliver orientation events unless permission was
+      // asked for from a user gesture, and there is no second chance — this
+      // press is the gesture. Fired without awaiting: a refusal leaves the
+      // cone off and changes nothing else, so the navigation session must not
+      // wait on a permission dialog to start.
+      if (next) requestCompass()
       return next
     })
-  }, [])
+    // Ending a session also ends an SOS response. Exit navigation is the
+    // explicit act that releases the alert's hold on the route (see
+    // `routeIncident`) — without this the line would stay drawn to an
+    // emergency the officer has just stepped away from.
+    setRespondingAlertId((id) => (navigatingRef.current ? null : id))
+  }, [requestCompass])
+
+  // Read inside the callback above without making `navigating` a dependency,
+  // which would rebuild the handler on every toggle.
+  const navigatingRef = useRef(navigating)
+  navigatingRef.current = navigating
 
   /**
    * WHILE NAVIGATING, THE CAMERA ALWAYS FOLLOWS — there is no Re-centre button
@@ -410,7 +547,9 @@ export default function DashboardPage() {
              officer's own marker is. */
           routeUnitId={followUid}
           navigating={navigating}
-          frameRouteSignal={overviewSignal}
+          /* This device's own compass, for the orientation cone. Null unless
+             a session is running and the hardware is reporting. */
+          selfHeading={deviceHeading}
           onFollowBreak={() => {
             // Only the standalone watch. Navigation keeps its camera, and gets
             // it back on the next fix.
@@ -426,9 +565,13 @@ export default function DashboardPage() {
                 onToggle={() => setFollowing((current) => !current)}
               />
               <VoiceControl
-                enabled={voice}
+                enabled={speaking}
                 supported={voiceSupported}
                 disabled={!routeCoordinates}
+                /* While a session is running the toggle cannot switch
+                   anything off — protocol — so it says so rather than
+                   offering a press that would be overruled. */
+                locked={navigating}
                 onToggle={() => setVoice((current) => !current)}
               />
               <SimulationControl
@@ -452,15 +595,15 @@ export default function DashboardPage() {
                 targetDetail={routeTargetDetail}
                 stage={routeIncident?.dispatchStage}
                 onChangeProfile={changeProfile}
-                /* The SAME voice state the controls drawer toggles, not a
-                   second one. Mute on the navigation bar and "Voice on" in the
-                   drawer are one setting reached two ways — an officer who
-                   mutes mid-drive and then opens the controls must not find a
-                   switch claiming the voice is still on. */
-                voice={voice}
                 voiceSupported={voiceSupported}
-                onToggleVoice={() => setVoice((current) => !current)}
-                onOverview={showOverview}
+                /* Says the current instruction again, now. The panel's only
+                   audio control — see the note on the Repeat button for why
+                   this is what replaced Mute. */
+                onRepeat={repeat}
+                /* Straight-line metres to the corner the current step ends
+                   at, so the banner can explain itself on the one occasion
+                   the gate is visibly holding a step back. */
+                waypointM={progress?.waypointM ?? null}
               />
             )
           }
@@ -475,7 +618,35 @@ export default function DashboardPage() {
         onPreviewUnit={setPreviewUid}
         onClose={closeDetail}
       />
-      <PanicAlertModal alert={selectedPanic} onClose={() => setSelectedPanicId(null)} />
+      <PanicAlertModal
+        alert={selectedPanic}
+        onClose={() => setSelectedPanicId(null)}
+        /**
+         * Respond to SOS: take the alert as the route target, close the
+         * modal, and start the session in one go.
+         *
+         * STRAIGHT INTO NAVIGATING, with no standby step in between. The
+         * standby ring exists so a dispatcher can look at a plotted route
+         * and decide; somebody who has just pressed "Respond to SOS" has
+         * decided, and making them press Start Navigation as well would be a
+         * second confirmation on the most urgent action this console has.
+         *
+         * `setNavigating` rather than `toggleNavigation`, because toggling
+         * from an unknown state could switch a running session OFF — and the
+         * one case where that happens is a guard pressing Respond on a
+         * SECOND alert while already driving to the first, which must start
+         * the new response, not end navigation entirely.
+         */
+        onRespond={(alert) => {
+          setRespondingAlertId(alert.id)
+          setSelectedPanicId(null)
+          setSelectedId(null)
+          setNavigating(true)
+          setFollowing(true)
+          setVoice(true)
+          requestCompass()
+        }}
+      />
     </AppShell>
   )
 }

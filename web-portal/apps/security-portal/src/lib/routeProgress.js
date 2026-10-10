@@ -166,6 +166,139 @@ export function stepBoundaries(steps, totalM) {
 }
 
 /**
+ * How close the unit has to physically get to a maneuver before the console
+ * accepts that they have reached it.
+ *
+ * ── WHY A RADIUS GATE EXISTS AT ALL ─────────────────────────────────────────
+ * The step index used to be a pure function of `along` — distance travelled
+ * measured by projecting the fix onto the line — and that is correct right up
+ * until the route passes near itself, which inside a subdivision grid is most
+ * routes. `projectOnLine` returns the GLOBALLY closest point, so a unit
+ * standing at the guardhouse on a street the route comes back down can project
+ * onto a segment eight maneuvers ahead. The console then announces "turn left
+ * onto Lot 12 driveway" to an officer who has not left the gate.
+ *
+ * Nothing about that is a timer, and no amount of removing timers fixes it. It
+ * is the projection being asked a question it cannot answer: "which part of
+ * this line is the unit on" has two right answers whenever the line is near
+ * itself, and distance alone cannot choose between them.
+ *
+ * The gate chooses. A step is only completed once the unit has been physically
+ * within this radius of where that maneuver happens. A projection onto a later
+ * segment no longer advances anything by itself, because the waypoints between
+ * here and there were never visited.
+ *
+ * 25 m, against OFF_ROUTE_METERS' 45. It is deliberately the tighter of the
+ * two: 45 m is "is this unit still on this route at all", which must tolerate
+ * GPS drift in both directions, while this is "has this unit actually been at
+ * that corner", which should not. At a subdivision junction 25 m is the
+ * junction and a little of each road into it.
+ */
+export const WAYPOINT_RADIUS_M = 25
+
+/**
+ * Where each step's maneuver physically happens: the point on the line at that
+ * step's boundary, as `[lng, lat]`.
+ *
+ * Derived from the GEOMETRY rather than read off the Directions response,
+ * which does carry a `maneuver.location` per step. That location is snapped to
+ * the road graph and the boundaries here are scaled to the geometry's own
+ * length (see `stepBoundaries`), so the two disagree by a few metres — and the
+ * gate below compares a distance against a radius, which is exactly the
+ * measurement a few metres of disagreement corrupts. One source for both.
+ */
+export function stepWaypoints(coords, boundaries) {
+  if (!Array.isArray(coords) || coords.length < 2 || !Array.isArray(boundaries)) return []
+  return boundaries.map((end) => interpolateAlong(coords, end))
+}
+
+/**
+ * The step the unit is on, given where the projection says they are, where
+ * they were last time, and where the corners actually are.
+ *
+ * Three rules, and the third one is not optional however much it looks like
+ * an optimisation:
+ *
+ *   MONOTONIC. The index never decreases within one route. A fix that drifts
+ *   back across a boundary while an officer waits at a junction would
+ *   otherwise re-announce the turn they are mid-way through making, and
+ *   re-arm every voice prompt for the step behind them.
+ *
+ *   ONE STEP AT A TIME. Even a fix that lands on the far end of the route can
+ *   only move the console forward by one. This is the half that bounds the
+ *   damage from a bad projection: eight maneuvers cannot be skipped in a
+ *   single update, whatever the geometry does.
+ *
+ *   REACHED, OR TRAVELLED FAR ENOUGH TO HAVE REACHED. Explained below.
+ *
+ * ── WHY THE 25 m RADIUS CANNOT BE THE ONLY TEST ────────────────────────────
+ * The obvious gate — "advance when the unit is within 25 m of this step's
+ * corner" — is what the brief asks for and, on its own, it strands every
+ * moving vehicle on step one for the whole call. Measured, not predicted: a
+ * patrol at 40 km/h with this console's own 15-second telemetry cadence moves
+ * 167 m between fixes, so the 50 m window around each corner is sampled
+ * roughly one time in four. Walked at that cadence the gated index reached
+ * step 1 and stopped there for all 780 m of the route.
+ *
+ * That failure is worse than the one the gate exists to fix. A unit told the
+ * wrong turn at least has a console that is trying; a unit whose instructions
+ * froze at the gate has one that has silently stopped navigating, and the
+ * officer finds out at the junction.
+ *
+ * So arriving within the radius is ONE way to complete a step — the direct
+ * one, and the only one that applies to somebody on foot or crawling in
+ * traffic. The other is physical travel: if the unit has covered at least as
+ * much ground since the last fix as the corner was away from it at that fix,
+ * then it has been there, whether or not anybody sampled the moment.
+ *
+ * ── WHAT THAT SECOND TEST ACTUALLY RULES OUT ───────────────────────────────
+ * The case the whole gate exists for is a unit standing still whose position
+ * projects onto a far part of a route that loops back past it. The projection
+ * says step 8; the officer has not left the gate. Straight-line travel since
+ * the last fix is a metre or two of GPS noise, the first corner is 200 m
+ * away, and 2 >= 175 is false — so the console stays on step one, through any
+ * number of fixes, which is exactly right.
+ *
+ * It is deliberately a STRAIGHT-LINE comparison on both sides. Distance along
+ * the route is the quantity the bad projection has already corrupted, so
+ * using it to validate itself would prove nothing.
+ *
+ * @returns {number} the accepted index
+ */
+export function gateStepIndex({
+  current = 0,
+  candidate = 0,
+  waypoints = [],
+  point,
+  prevPoint = null,
+  radiusM = WAYPOINT_RADIUS_M,
+}) {
+  const floor = Number.isFinite(current) && current > 0 ? current : 0
+  if (!Number.isFinite(candidate) || candidate <= floor) return floor
+
+  // The corner the CURRENT step ends at — not the candidate's, which is the
+  // question that would let one fix skip the gap between them.
+  const waypoint = waypoints[floor]
+  if (!waypoint || !Array.isArray(point)) return floor
+
+  const project = projector(waypoint[1])
+  if (planarDistance(waypoint, point, project) <= radiusM) return floor + 1
+
+  // The first fix of a route is a position, not a journey, and nothing can be
+  // concluded from it about where the unit has been. Holding here is also what
+  // makes the opening state correct: a console that has just plotted a route
+  // is on step one by definition.
+  if (!Array.isArray(prevPoint)) return floor
+
+  const moved = planarDistance(prevPoint, point, project)
+  const wasAway = planarDistance(prevPoint, waypoint, project)
+  // `- radiusM` on the right: having come within the radius of the corner is
+  // already enough, so travel that gets the unit that close counts too.
+  // Without it the two tests would disagree about the same arrival.
+  return moved >= wasAway - radiusM ? floor + 1 : floor
+}
+
+/**
  * The maneuver the unit is approaching, and how far to it.
  *
  * The step whose span CONTAINS the unit is the one being travelled, so the
@@ -199,9 +332,19 @@ export function activeStep(steps, boundaries, along) {
  *
  * @param {{ geometry: { coordinates: Array }, distance: number, duration: number, steps: Array }} route
  * @param {{ lat: number, lng: number }} position
+ * @param {{ stepFloor?: number, prevPoint?: Array, waypointRadiusM?: number }} [options]
+ *   `stepFloor` is the furthest step the caller has already accepted and
+ *   `prevPoint` the `[lng, lat]` it was accepted at. Pass both back on every
+ *   call and the index becomes monotonic and physically gated (see
+ *   `gateStepIndex`); omit them and the step is the raw projection, which is
+ *   what the pure unit tests and any non-navigating reader want.
  * @returns {null | object} null when there is nothing to measure against.
  */
-export function routeProgress(route, position) {
+export function routeProgress(
+  route,
+  position,
+  { stepFloor = null, prevPoint = null, waypointRadiusM = WAYPOINT_RADIUS_M } = {},
+) {
   const coords = route?.geometry?.coordinates
   if (!Array.isArray(coords) || coords.length < 2) return null
 
@@ -228,7 +371,47 @@ export function routeProgress(route, position) {
   const remainingDuration = duration == null ? null : duration * (1 - fraction)
 
   const boundaries = stepBoundaries(route.steps, total)
-  const step = activeStep(route.steps, boundaries, along)
+  let step = activeStep(route.steps, boundaries, along)
+
+  /**
+   * The gate, applied only when the caller is latching.
+   *
+   * Re-derived through `activeStep` rather than patched onto the object,
+   * because `upcoming`, `isLast` and `distanceToManeuver` all hang off the
+   * index and a half-updated step is a card that says "turn right" over a
+   * countdown belonging to a different corner. Feeding the gated index back
+   * through the same function is what keeps the five fields consistent.
+   *
+   * `distanceToManeuver` is then measured from the unit's position ALONG the
+   * line to the gated step's end, which is what it already meant — the only
+   * thing that changed is which step is current.
+   */
+  const waypoints = stepFloor == null ? [] : stepWaypoints(coords, boundaries)
+  if (stepFloor != null && step) {
+    const index = gateStepIndex({
+      current: stepFloor,
+      candidate: step.index,
+      waypoints,
+      // The SNAPPED point on both sides, not the raw fix. The waypoints are
+      // on the line, so measuring from a fix that sits 20 m off the
+      // carriageway would add that offset to every comparison and make the
+      // radius effectively 5 m on one side of the road and 45 on the other.
+      point: hit.point,
+      prevPoint,
+      radiusM: waypointRadiusM,
+    })
+    if (index !== step.index) {
+      const end = boundaries[index]
+      step = {
+        index,
+        step: route.steps[index],
+        upcoming: route.steps[index + 1] ?? route.steps[index],
+        distanceToManeuver: Math.max(0, end - along),
+        isLast: index >= route.steps.length - 1,
+      }
+    }
+  }
+
   const { covered, remaining: ahead } = splitLine(coords, hit.index, hit.t)
 
   return {
@@ -243,6 +426,19 @@ export function routeProgress(route, position) {
     snapped: hit.point,
     bearing: bearingAt(coords, hit.index),
     step,
+    /**
+     * Metres from the unit to the CURRENT step's corner, in a straight line —
+     * not along the route.
+     *
+     * `step.distanceToManeuver` is the along-the-line figure and is the one to
+     * show a driver, because it is how far they will travel. This is the one
+     * the gate judges on, and the two differ by however much the road bends.
+     * Surfaced so a reader can see why the console has not advanced yet.
+     */
+    waypointM:
+      stepFloor != null && waypoints[step?.index ?? 0]
+        ? planarDistance(waypoints[step.index], hit.point, projector(hit.point[1]))
+        : null,
     coveredCoords: covered,
     remainingCoords: ahead,
   }

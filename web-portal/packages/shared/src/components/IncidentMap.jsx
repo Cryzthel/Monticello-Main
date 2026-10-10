@@ -1127,6 +1127,87 @@ function navigationArrowImage() {
 }
 
 /**
+ * ── THE ORIENTATION CONE ───────────────────────────────────────────────────
+ *
+ * A field-of-view wedge spreading from the officer's own marker along the
+ * direction their DEVICE is pointing, the way Life360 and every phone map
+ * draw "you are facing this way".
+ *
+ * ── IT IS NOT THE HEADING BEAM, AND IT REPLACES IT ─────────────────────────
+ * `unitHeadingImage` above draws a wedge too, and the two would be
+ * indistinguishable on screen while saying different things: that one is the
+ * direction of the ROAD at the unit's position, derived from the route, and
+ * this one is the direction the officer is FACING, from the compass. Stacking
+ * them produces two overlapping wedges that disagree the moment somebody
+ * turns their head, which is worse than either alone.
+ *
+ * So the cone takes precedence on the marker it applies to — the viewer's own,
+ * and only while their compass is actually reporting — and the beam carries
+ * every other unit, where a compass reading does not exist (see
+ * `useDeviceHeading` for why it is never published).
+ *
+ * ── WIDER, SOFTER AND LONGER THAN THE BEAM, ON PURPOSE ─────────────────────
+ * A compass tells you roughly where somebody is pointed, not precisely, and a
+ * phone held in a hand swings. The beam is ±24° because a route bearing is
+ * tight; this is ±32° with a gradient that fades to nothing, because the cone
+ * is a field of view and a hard edge would claim a precision the sensor does
+ * not have. Reach is longer for the opposite reason to the beam's: this one is
+ * read while STANDING STILL, at close zoom, where a short wedge is hidden
+ * under the dot it comes out of.
+ */
+const UNIT_CONE_IMAGE = 'unit-orientation-cone'
+
+function unitConeImage(color) {
+  // 140px across, against the 36px navigation arrow it sits under. A cone
+  // has to project well clear of the marker to read as a direction at all —
+  // at 96px the visible part was 37px of fade beyond the dot and rendered as
+  // a glow around it rather than as a wedge pointing anywhere. Judged on the
+  // real basemap at z18, which is the zoom an officer navigates at.
+  const ratio = 2
+  const size = 140 * ratio
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const c = size / 2
+  const r = c - 2 * ratio
+
+  // Drawn pointing UP, like every other rotatable image here, so `icon-rotate`
+  // takes a compass bearing unmodified under `icon-rotation-alignment: map`.
+  //
+  // A RADIAL gradient, not the beam's linear one: a field of view fades with
+  // DISTANCE from the observer, evenly across the arc, where a linear fade
+  // would leave one edge of the wedge brighter than the other and read as a
+  // lighting effect rather than as a direction.
+  // ── WHERE THE OPACITY ACTUALLY HAS TO BE ────────────────────────────────
+  // The first cut peaked at the centre and faded from there, which is the
+  // textbook field-of-view gradient and rendered as almost nothing: the
+  // innermost quarter of this raster sits UNDER the 22px unit dot, so every
+  // bit of the peak was hidden and what remained visible started at a third
+  // of it and fell away. Measured on the real basemap, not reasoned about.
+  //
+  // The ramp now holds near full strength out to the edge of the dot and
+  // fades over the part that can be seen. It still reads as a field of view
+  // rather than a solid wedge, and it is legible on both basemaps.
+  const rgb = hexToRgb(color)
+  const gradient = ctx.createRadialGradient(c, c, 0, c, c, r)
+  gradient.addColorStop(0, `rgba(${rgb}, 0.6)`)
+  gradient.addColorStop(0.25, `rgba(${rgb}, 0.5)`)
+  gradient.addColorStop(0.65, `rgba(${rgb}, 0.22)`)
+  gradient.addColorStop(1, `rgba(${rgb}, 0)`)
+
+  const halfAngle = 0.56 // ~32 degrees either side of straight ahead
+  ctx.beginPath()
+  ctx.moveTo(c, c)
+  ctx.arc(c, c, r, -Math.PI / 2 - halfAngle, -Math.PI / 2 + halfAngle)
+  ctx.closePath()
+  ctx.fillStyle = gradient
+  ctx.fill()
+
+  return { image: ctx.getImageData(0, 0, size, size), ratio }
+}
+
+/**
  * The two marker MODES a routed unit moves between, carried on the feature as
  * `navState` so one source feeds every layer below and the filters decide
  * which silhouette is drawn.
@@ -1197,6 +1278,11 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     map.addImage(NAV_ARROW_IMAGE, image, { pixelRatio: ratio })
   }
 
+  if (!map.hasImage(UNIT_CONE_IMAGE)) {
+    const { image, ratio } = unitConeImage(NAV_MARKER_COLORS.standby)
+    map.addImage(UNIT_CONE_IMAGE, image, { pixelRatio: ratio })
+  }
+
   const inNavState = (state) => ['==', ['get', 'navState'], state]
   const notNavigating = ['!=', ['get', 'navState'], NAV_STATE.navigating]
 
@@ -1216,6 +1302,32 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
       'circle-radius': 13,
       'circle-color': UNIT_COLORS.responding,
       'circle-opacity': 0.5,
+    },
+  })
+
+  /**
+   * The orientation cone, at the very bottom of the unit stack.
+   *
+   * Under the standby ring and under the dot, because it is the GROUND the
+   * marker stands on pointing somewhere — not another marker. Drawn only for
+   * the feature carrying a compass reading, which is at most one: the viewer's
+   * own.
+   */
+  map.addLayer({
+    id: 'unit-cone',
+    type: 'symbol',
+    source: UNITS_SOURCE_ID,
+    filter: ['==', ['get', 'hasCompass'], true],
+    layout: {
+      'icon-image': UNIT_CONE_IMAGE,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-rotate': ['coalesce', ['get', 'compassBearing'], 0],
+      'icon-rotation-alignment': 'map',
+      // Grows with the zoom rather than holding a pixel size: a field of view
+      // is a thing in the WORLD, so at lot detail it should cover more of the
+      // screen, the way the route line widens.
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.5, 18, 1],
     },
   })
 
@@ -1305,10 +1417,20 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     id: 'unit-heading',
     type: 'symbol',
     source: UNITS_SOURCE_ID,
+    // Two layers can claim this marker's direction, and only one may draw it.
+    //
     // The arrow states its own direction, so the beam is redundant beneath it
-    // — and a wedge spreading out of a chevron that already points the same way
-    // just blurs the one edge a driver is reading.
-    filter: ['all', ['==', ['get', 'hasHeading'], true], notNavigating],
+    // — a wedge spreading out of a chevron that already points the same way
+    // just blurs the one edge a driver is reading. And the COMPASS CONE is the
+    // better answer wherever it exists: it is true while stationary, where a
+    // route bearing is only meaningful in motion. So the beam is what is left
+    // when neither applies, which is every unit on a dispatcher's map.
+    filter: [
+      'all',
+      ['==', ['get', 'hasHeading'], true],
+      ['!=', ['get', 'hasCompass'], true],
+      notNavigating,
+    ],
     layout: {
       'icon-image': UNIT_HEADING_IMAGE,
       'icon-allow-overlap': true,
@@ -1521,6 +1643,16 @@ export default function IncidentMap({
    * every unit is the same shape.
    */
   selfUnitId = null,
+  /**
+   * The compass bearing of THIS console's own device, in degrees, or null.
+   *
+   * Drawn as an orientation cone on `selfUnitId`'s marker and nowhere else —
+   * it is this device's hardware reading and means nothing about any other
+   * unit. Null whenever the device has no compass, the browser refused the
+   * permission, or nothing is listening (see useDeviceHeading), and the
+   * marker then falls back to the route-derived heading beam.
+   */
+  selfHeading = null,
   followUnitId = null,
   /**
    * The uid of the unit the current route STARTS FROM, or null.
@@ -1559,25 +1691,6 @@ export default function IncidentMap({
   route = null,
   /** Identifies whose route this is. The camera re-frames only when it changes. */
   routeKey = null,
-  /**
-   * A nonce. Every time it CHANGES, the camera re-frames the whole route — the
-   * navigation panel's Overview action.
-   *
-   * ── WHY A NONCE AND NOT A `ref` HANDLE ───────────────────────────────────
-   * The alternative is `useImperativeHandle` and a `mapRef.current.frameRoute()`
-   * call from the page, which is the shape this would take in most codebases
-   * and would be the only imperative handle on a component whose entire
-   * interface is otherwise props in, callbacks out. A counter keeps the data
-   * flow one-directional: the page says "frame it, this is the 4th time I have
-   * asked", and the map's existing effects are still the only thing that
-   * touches the camera.
-   *
-   * It also gets the semantics right for free. Overview is a thing a
-   * dispatcher presses REPEATEDLY — look at the route, pan to the gate, look
-   * again — and a counter fires every press where a boolean would fire once
-   * and then need clearing.
-   */
-  frameRouteSignal = 0,
   /**
    * A node floated top-centre over the map — the Guardhouse's route badge.
    * Rendered inside the map's own frame so it follows the map into its
@@ -1807,6 +1920,10 @@ export default function IncidentMap({
             bearing: Number.isFinite(unit.bearing) ? unit.bearing : 0,
             stale: Boolean(unit.stale),
             isSelf: Boolean(selfUnitId) && unit.uid === selfUnitId,
+            // Only ever one feature can carry this: the viewer's own.
+            hasCompass:
+              Boolean(selfUnitId) && unit.uid === selfUnitId && Number.isFinite(selfHeading),
+            compassBearing: Number.isFinite(selfHeading) ? selfHeading : 0,
             /**
              * Which marker mode this unit is in — '', 'standby' or
              * 'navigating' (see NAV_STATE).
@@ -1827,7 +1944,7 @@ export default function IncidentMap({
           geometry: { type: 'Point', coordinates: [unit.position.lng, unit.position.lat] },
         })),
     }),
-    [units, selfUnitId, routeUnitId, navigating],
+    [units, selfUnitId, selfHeading, routeUnitId, navigating],
   )
   const unitsGeojsonRef = useRef(unitsGeojson)
   unitsGeojsonRef.current = unitsGeojson
@@ -2195,12 +2312,12 @@ export default function IncidentMap({
   /**
    * Put the whole route on screen, clear of the map's own furniture.
    *
-   * Pulled out of the effect below because TWO things now ask for it: a new
-   * route arriving (once), and the navigation panel's Overview button (every
-   * press). It is a callback rather than duplicated padding maths for the
-   * usual reason — the padding has four terms that each track a different
-   * piece of chrome, and a second copy of it would be correct on the day it
-   * was written and wrong by the next time the coverage bar changed height.
+   * One caller again — a new route arriving, once. It briefly had two, when
+   * the navigation panel carried an Overview button, and it stays a callback
+   * rather than being folded back into the effect below: the padding has four
+   * terms that each track a different piece of chrome, and it reads far
+   * better as a named thing than as twenty lines inlined between a
+   * `setData` and a `fitBounds`.
    */
   const frameRoute = useCallback(() => {
     const map = mapRef.current
@@ -2245,19 +2362,6 @@ export default function IncidentMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, routeKey, ready, barClearance, controlsOpen, isCompact])
 
-  /**
-   * Overview, on demand.
-   *
-   * Skips the first run — `frameRouteSignal` starts at 0 and mounting is not a
-   * press. Without that, every console would fit the route's bounds on load,
-   * overriding the camera the page had just set.
-   */
-  const framedSignalRef = useRef(frameRouteSignal)
-  useEffect(() => {
-    if (!ready || framedSignalRef.current === frameRouteSignal) return
-    framedSignalRef.current = frameRouteSignal
-    frameRoute()
-  }, [frameRouteSignal, ready, frameRoute])
 
   // ── LOCATE: FLY TO A POINT THE OPERATOR CANNOT SEE ───────────────────────
   //

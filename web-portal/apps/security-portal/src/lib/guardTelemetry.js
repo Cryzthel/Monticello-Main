@@ -132,7 +132,7 @@ const MAX_ROUTE_POINTS = 300
  * as "412 seconds" is wrong the instant it is written and has no way to say
  * how stale it is; an arrival time stays meaningful on a reader's clock.
  */
-export function summariseRoute(route, { incidentId, tone = 'live' } = {}) {
+export function summariseRoute(route, { incidentId, alertId = null, tone = 'live' } = {}) {
   const coords = route?.geometry?.coordinates
   if (!Array.isArray(coords) || coords.length < 2) return null
 
@@ -142,6 +142,17 @@ export function summariseRoute(route, { incidentId, tone = 'live' } = {}) {
   const r5 = (n) => Math.round(n * 1e5) / 1e5
   return {
     incidentId: incidentId ?? null,
+    /**
+     * The panic alert this route answers, when it is answering one.
+     *
+     * A separate field rather than reusing `incidentId`, because they are ids
+     * in two different collections and nothing downstream could tell them
+     * apart. `useGuardFleet` puts `incidentId` on the route feature it draws
+     * on the Hazard Map; handing it a `panic_alerts` id under that name would
+     * be a value that looks joinable and is not — the quiet kind of wrong
+     * that survives until somebody writes the join.
+     */
+    alertId,
     tone,
     coordinates: thinned.map(([lng, lat]) => [r5(lng), r5(lat)]),
     distance: Number.isFinite(route.distance) ? Math.round(route.distance) : null,

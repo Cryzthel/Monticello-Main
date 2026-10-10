@@ -89,16 +89,6 @@ const SEVERITY_LABELS = {
   low: 'Low',
 }
 
-const TARGET_TONES = {
-  resolved: 'text-success',
-  met: 'text-success',
-  en_route: 'text-info',
-  awaiting: 'text-warning',
-  missed: 'text-danger',
-  overdue: 'text-danger',
-  unknown: 'text-text-muted',
-}
-
 const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
 const clock = (at) => (at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—')
 
