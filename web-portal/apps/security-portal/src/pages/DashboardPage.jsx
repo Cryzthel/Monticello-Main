@@ -27,6 +27,7 @@ import { useRouteSimulation } from '@/hooks/useRouteSimulation'
 import { useDeviceHeading } from '@/hooks/useDeviceHeading'
 import { useOffRoute } from '@/hooks/useOffRoute'
 import SimulationControl from '@/components/SimulationControl'
+import RouteProfileControl from '@/components/RouteProfileControl'
 import FollowControl from '@/components/FollowControl'
 import VoiceControl from '@/components/VoiceControl'
 import { loadGuardPrefs, saveGuardPrefs } from '@/lib/guardPrefs'
@@ -242,6 +243,19 @@ export default function DashboardPage() {
   const [navigating, setNavigating] = useState(false)
 
   /**
+   * Recentre: a counter the map watches, bumped on every press.
+   *
+   * It also turns follow mode back ON, which is the half a one-shot camera
+   * move would miss — an operator asking to be put back on the unit almost
+   * never means "once, and then let it walk off screen again".
+   */
+  const [recenterSignal, setRecenterSignal] = useState(0)
+  const recenter = useCallback(() => {
+    setFollowing(true)
+    setRecenterSignal((n) => n + 1)
+  }, [])
+
+  /**
    * This device's compass — live from the moment there is a route, not just
    * once a session starts.
    *
@@ -430,7 +444,7 @@ export default function DashboardPage() {
   const offRoute = useOffRoute(progress)
 
   const speaking = (navigating || voice) && voiceSupported
-  const { repeat } = useVoiceGuidance(progress, { enabled: speaking, routeKey })
+  useVoiceGuidance(progress, { enabled: speaking, routeKey })
 
   useEffect(() => {
     if (!followUid) {
@@ -615,6 +629,7 @@ export default function DashboardPage() {
           /* This device's own compass, for the orientation cone. Null unless
              a session is running and the hardware is reporting. */
           selfHeading={deviceHeading}
+          recenterSignal={recenterSignal}
           onFollowBreak={() => {
             // Only the standalone watch. Navigation keeps its camera, and gets
             // it back on the next fix.
@@ -638,6 +653,11 @@ export default function DashboardPage() {
                    offering a press that would be overruled. */
                 locked={navigating}
                 onToggle={() => setVoice((current) => !current)}
+              />
+              <RouteProfileControl
+                profile={profile}
+                disabled={!routeCoordinates}
+                onChange={changeProfile}
               />
               <SimulationControl
                 running={simulating}
@@ -672,12 +692,7 @@ export default function DashboardPage() {
                 targetLabel={routeTargetLabel}
                 targetDetail={routeTargetDetail}
                 stage={routeIncident?.dispatchStage}
-                onChangeProfile={changeProfile}
-                voiceSupported={voiceSupported}
-                /* Says the current instruction again, now. The panel's only
-                   audio control — see the note on the Repeat button for why
-                   this is what replaced Mute. */
-                onRepeat={repeat}
+                onRecenter={followUid ? recenter : undefined}
                 offRoute={offRoute}
               />
             )

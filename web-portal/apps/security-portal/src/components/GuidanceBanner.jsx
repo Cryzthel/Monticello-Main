@@ -1,5 +1,5 @@
 import { GUIDANCE_BANNER } from '@shared/theme/dispatchColors'
-import { ManeuverGlyph } from '@/components/RouteSteps'
+import ManeuverGlyph from '@/components/ManeuverGlyph'
 import { formatDistance } from '@/lib/directions'
 import { WAYPOINT_RADIUS_M } from '@/lib/routeProgress'
 

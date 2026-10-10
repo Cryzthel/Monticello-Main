@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { formatDistance } from '@/lib/directions'
 
 /**
@@ -52,18 +52,29 @@ const ARRIVED_M = 30
  * changed — so without this the console says one sentence and then goes quiet
  * for as long as the officer sits there.
  *
- * 30 s between repeats, and at most three of them per step. The cap is the
- * part worth defending: an unbounded repeat is a console talking to an empty
- * vehicle, in a guardhouse, all night, and the officer's only recourse would
- * be a mute button that security protocol says must not exist. Three is
- * enough to catch someone coming back to the console and not enough to become
- * the reason it gets turned off.
+ * ── THE CAP IS GONE, BECAUSE THE BUTTON IS GONE ───────────────────────────
+ * This was capped at three repeats per step, and the cap was defensible only
+ * while a Repeat button existed: an officer who needed a fourth could ask for
+ * it. That button has been removed — the automated repeat is now the entire
+ * mechanism — so a cap would mean an officer who missed the first three
+ * prompts has no way at all to hear the instruction again, which is the exact
+ * situation the repeat exists for.
  *
- * The count resets whenever the step changes — a unit that is actually moving
- * never reaches the cap, because each new step starts a fresh budget.
+ * So it continues for as long as the step does not change, which is precisely
+ * "stationary, or has not yet reached the turn". A unit that is driving never
+ * hears a repeat at all, because reaching the corner starts a new step.
+ *
+ * WHAT STOPS IT, since nothing else does now: the session. Spoken guidance
+ * only runs while `enabled`, Exit navigation clears that, and the route going
+ * away clears it too. A console left talking is a console somebody left
+ * navigating, with a red button on screen to end it — which is a different
+ * and much more visible state than the silent-forever one a cap produces.
+ *
+ * Arrival also stops it: once the last step is reached the hook falls into
+ * the `@arrived` branch, which speaks once and is keyed like every other
+ * prompt.
  */
 const REPEAT_MS = 30_000
-const REPEAT_LIMIT = 3
 
 function speak(text) {
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
@@ -78,11 +89,8 @@ function speak(text) {
 }
 
 /**
- * @returns {{ repeat: () => void }} `repeat` says the current instruction
- *   again, now, and restarts the interval. Wired to the panel's Repeat
- *   button — the on-demand half of the requirement, and the control that
- *   replaced Mute: an officer who missed a prompt needs it AGAIN, which is
- *   the opposite of what a mute button offers them.
+ * Returns nothing. It briefly handed out a `repeat()` for the panel's Repeat
+ * button; that button is gone and the timer below covers what it was for.
  */
 export function useVoiceGuidance(progress, { enabled, routeKey }) {
   // Which prompts have already been spoken, as `${stepIndex}@${threshold}`.
@@ -128,11 +136,6 @@ export function useVoiceGuidance(progress, { enabled, routeKey }) {
   // should not finish the sentence.
   useEffect(() => () => window.speechSynthesis?.cancel(), [])
 
-  const repeat = useCallback(() => {
-    const phrase = phraseRef.current
-    if (!phrase) return
-    speak(phrase)
-  }, [])
 
   useEffect(() => {
     if (!enabled || !progress?.step) return
@@ -216,17 +219,14 @@ export function useVoiceGuidance(progress, { enabled, routeKey }) {
   const stepIndex = progress?.step?.index ?? null
   useEffect(() => {
     if (!enabled || stepIndex == null) return undefined
-    let said = 0
     const id = setInterval(() => {
-      if (said >= REPEAT_LIMIT) return
-      // Never talk over the officer's own prompt, or over one another: if the
-      // synth is mid-sentence this tick simply passes.
+      // Never talk over a prompt already in flight: if the synth is
+      // mid-sentence this tick simply passes, which also means a slow device
+      // cannot build a backlog of identical instructions.
       if (window.speechSynthesis?.speaking) return
-      said += 1
-      repeat()
+      const phrase = phraseRef.current
+      if (phrase) speak(phrase)
     }, REPEAT_MS)
     return () => clearInterval(id)
-  }, [enabled, stepIndex, routeKey, repeat])
-
-  return { repeat }
+  }, [enabled, stepIndex, routeKey])
 }
