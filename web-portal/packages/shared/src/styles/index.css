@@ -2236,6 +2236,46 @@
     @apply border border-slate-200 px-3 py-1.5 text-xs;
   }
 
+  /* The COMMIT tier, for the dispatch drawer's pinned action bar:
+     `px-6 py-2.5 text-sm font-semibold`, a 40px capsule.
+
+     ── WHY THE DRAWER NEEDED A SECOND TIER OF ITS OWN ──────────────────────
+     `.btn-drawer` above is right for the controls that live INSIDE a drawer
+     section — Call, Add photos, Cancel-the-picker — which sit beside body
+     text and must not out-shout it. It was also carrying "Acknowledge &
+     respond", "I have arrived" and "Resolve incident", and those are not the
+     same kind of thing: they advance a live emergency, they are pressed once,
+     and on a phone at a gate in the dark they were a 27px target with an 11px
+     label.
+
+     So the split is by WHAT A PRESS DOES, not by where the button sits. A
+     control that changes a filter, opens a tray or dials a number is
+     `.btn-drawer`. A control that writes a stage to the record is this.
+
+     ── px-6 IS AFFORDABLE HERE AND NOT EVERYWHERE ──────────────────────────
+     Measured in the 416px rail, which leaves 387px of row. The busiest bar
+     is "Escalate" (124px) beside "Resolve incident", and they share the line
+     exactly — the commit button is `flex-1` and takes whatever is left, so
+     the pair cannot overflow however the labels are translated. Close then
+     wraps to its own row rather than squeezing either, which is why the bar
+     is `flex-wrap`. Do not reach for this tier on a toolbar — `.btn-md`
+     is the page-level CTA and this would sit a step under it for no reason.
+
+     `font-semibold` is the one place in the button scale that leaves
+     `.btn`'s `font-medium`, and it is deliberate: this is the only tier whose
+     press is irreversible.
+
+     THE TRANSPARENT BORDER IS LOAD-BEARING, for the reason `.btn-drawer`
+     spells out one tier up: `.btn-outline` and `.btn-danger` carry a 1px
+     edge and `.btn-brand` does not, so without a border reserved here the
+     filled commit button measured 40px in a row of 42px outlined ones. Two
+     pixels, side by side, reads as the primary action sitting slightly sunk
+     into the bar. The colour variants are declared BELOW this rule and so
+     win on source order, painting the edge they want over a reserved one. */
+  .btn-action {
+    @apply border border-transparent px-6 py-2.5 text-sm font-semibold;
+  }
+
   .btn-icon-md {
     @apply h-11 w-11 px-0;
   }

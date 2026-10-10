@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import {
   Battery,
   BatteryCharging,
@@ -7,14 +6,13 @@ import {
   BatteryMedium,
   BatteryWarning,
   Check,
-  CircleAlert,
   LocateFixed,
   LocateOff,
 } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { categoryColor, categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
 import { DISPATCH_STAGES, STAGE_LABELS, stageIndex } from '@shared/lib/dispatchStage'
-import { formatAgo, formatStopwatch } from '@/lib/dispatch'
+import { formatAgo } from '@/lib/dispatch'
 import { categoryIcon } from '@shared/theme/categoryIcons'
 
 /**
@@ -73,24 +71,6 @@ export function Section({ icon: Icon, title, meta, children, tone = '' }) {
       </header>
       <div className="p-3.5">{children}</div>
     </section>
-  )
-}
-
-/**
- * A clock that moves every second. Frozen at `until` once the call closes, so
- * a resolved report shows how long it took rather than how long ago it was.
- */
-export function ElapsedClock({ since, until = null, className = '' }) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!since || until) return undefined
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [since, until])
-  if (!since) return <span className={className}>—</span>
-  const end = until ? new Date(until).getTime() : now
-  return (
-    <span className={`font-mono tabular-nums ${className}`}>{formatStopwatch(end - new Date(since).getTime())}</span>
   )
 }
 
