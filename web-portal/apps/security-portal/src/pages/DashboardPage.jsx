@@ -173,6 +173,21 @@ export default function DashboardPage() {
     profile,
     offRoute: offRouteRef.current,
   })
+
+  /**
+   * The unit this route starts from, or null.
+   *
+   * Declared HERE, directly under the route it reads, and not beside the
+   * follow-mode effect that was its only consumer when it was written.
+   * Three things now depend on it — the camera, the marker state machine and
+   * the compass — and the compass hook runs well above that effect, so a
+   * `const` further down is a temporal-dead-zone throw rather than a lint
+   * warning. The whole page renders as "Cannot access 'followUid' before
+   * initialization" and the build says nothing, which is the second time
+   * this exact shape has bitten this file (see `routeKey` below).
+   */
+  const followUid = route.unit?.uid ?? null
+
   /**
    * The demonstration simulator (see useRouteSimulation for the rules).
    *
@@ -391,7 +406,6 @@ export default function DashboardPage() {
   const speaking = (navigating || voice) && voiceSupported
   const { repeat } = useVoiceGuidance(progress, { enabled: speaking, routeKey })
 
-  const followUid = route.unit?.uid ?? null
   useEffect(() => {
     if (!followUid) {
       setFollowing(false)
