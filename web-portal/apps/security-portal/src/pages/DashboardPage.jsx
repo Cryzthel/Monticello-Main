@@ -695,7 +695,6 @@ export default function DashboardPage() {
       <DispatchDetailDrawer
         report={selectedReport}
         units={units}
-        route={route}
         previewUid={previewUid}
         onPreviewUnit={setPreviewUid}
         onClose={closeDetail}

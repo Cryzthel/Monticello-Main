@@ -268,68 +268,28 @@ export async function autoArrival(incident, check, { role }) {
   return true
 }
 
-function currentInvestigation(incident) {
-  return {
-    tags: incident.investigation?.tags ?? [],
-    photoUrls: incident.investigation?.photoUrls ?? [],
-  }
-}
-
-/** Toggle one quick tag. Logged like a stage change: it is part of the record of the scene. */
-export async function toggleInvestigationTag(incident, tag, { role }) {
-  const investigation = currentInvestigation(incident)
-  const on = !investigation.tags.includes(tag)
-  const tags = on ? [...investigation.tags, tag] : investigation.tags.filter((t) => t !== tag)
-  const forensics = await captureForensics()
-  return commitStage({
-    incident,
-    action: on ? 'tag_added' : 'tag_removed',
-    toStage: 'responding',
-    role,
-    forensics,
-    fields: { investigation: { ...investigation, tags } },
-    detail: { tag },
-  })
-}
-
-/** Append uploaded scene photos. */
-export async function addInvestigationPhotos(incident, urls, { role }) {
-  const investigation = currentInvestigation(incident)
-  const forensics = await captureForensics()
-  return commitStage({
-    incident,
-    action: 'photos_added',
-    toStage: 'responding',
-    role,
-    forensics,
-    fields: { investigation: { ...investigation, photoUrls: [...investigation.photoUrls, ...urls] } },
-    detail: { count: urls.length },
-  })
-}
-
 /**
- * Emergency escalation, once per call. Every console's watchdog raises a
- * critical alert for it (see DispatchWatchdog).
+ * ── WHAT USED TO BE HERE ────────────────────────────────────────────────
+ * `currentInvestigation`, `toggleInvestigationTag`, `addInvestigationPhotos`
+ * and `escalateIncident`.
+ *
+ * The first three wrote an `investigation` field an officer edited live,
+ * mid-response, each press its own logged write. The quick tags moved into
+ * the resolution, where they are stated once alongside the outcome and notes
+ * they belong with; the scene photos went with them, because resolving
+ * already requires at least one photo and two trays on one call is a
+ * question about which to use rather than extra evidence.
+ *
+ * `escalateIncident` raised a critical alert on every console. It was removed
+ * on the understanding that backup is called by radio. Worth recording what
+ * that gave up, because the premise offered for it was not quite right: the
+ * scheduled sweep escalates unattended SOS ALERTS and has never escalated an
+ * incident, so nothing automatic inherited this. An officer who needs a
+ * second unit has no in-console way to say so.
+ *
+ * Reinstating any of them means restoring its rule too — `isSceneWork` and
+ * `validEscalation` went with them.
  */
-export async function escalateIncident(incident, reason, { role }) {
-  const forensics = await captureForensics({ fresh: true, timeout: 4000 })
-  return commitStage({
-    incident,
-    action: 'escalate',
-    toStage: 'responding',
-    role,
-    forensics,
-    fields: {
-      escalation: {
-        at: serverTimestamp(),
-        byUid: auth.currentUser?.uid ?? '',
-        byName: actorName(),
-        reason: reason.trim().slice(0, 280),
-      },
-    },
-    detail: { reason: reason.trim().slice(0, 280) },
-  })
-}
 
 /**
  * Stage 3. Closes the call. The outcome, notes and at least one photo are
@@ -339,7 +299,7 @@ export async function escalateIncident(incident, reason, { role }) {
  * The officer's device drops back to idle telemetry when it sees the stage
  * change.
  */
-export async function resolveIncident(incident, { outcome, notes, photoUrls }, { role }) {
+export async function resolveIncident(incident, { outcome, notes, photoUrls, tags = [] }, { role }) {
   const forensics = await captureForensics()
   return commitStage({
     incident,
@@ -353,9 +313,13 @@ export async function resolveIncident(incident, { outcome, notes, photoUrls }, {
       resolvedAt: serverTimestamp(),
       resolvedBy: auth.currentUser?.uid ?? '',
       resolvedByName: actorName(),
-      resolution: { outcome, notes: notes.trim(), photoUrls },
+      // `tags` rides INSIDE the resolution rather than beside it: one
+      // object, written in one batch, that reads back as the account of how
+      // this call ended. They used to be a separate `investigation` field
+      // toggled live during the response — see ResolveIncidentModal.
+      resolution: { outcome, notes: notes.trim(), photoUrls, tags },
       ratingRequestedAt: serverTimestamp(),
     },
-    detail: { outcome, photoCount: photoUrls.length },
+    detail: { outcome, photoCount: photoUrls.length, tagCount: tags.length },
   })
 }

@@ -233,46 +233,29 @@ service cloud.firestore {
           && changedKeys().hasOnly(['status', 'stageUpdatedAt', 'lastLogId', 'onSceneAt', 'arrival']);
       }
 
-      function validInvestigation(inv) {
-        return inv.keys().hasOnly(['tags', 'photoUrls'])
-          && inv.get('tags', []) is list
-          && inv.get('tags', []).hasOnly([
+      // `validEscalation` and `isSceneWork` were here. They guarded a manual
+      // escalation and the live `investigation` field, and the console no
+      // longer writes either — the quick tags moved into the resolution and
+      // the escalate control was removed. A rule with no caller is a door
+      // nobody uses that still has to be checked on every request, and this
+      // ruleset is already close to the evaluation cap.
+      //
+      // Note what it closes off: there is now NO path by which a client can
+      // set `escalation` or `investigation`. Restoring either feature means
+      // restoring its rule.
+
+      function validResolution(r) {
+        // `tags` is where the investigation quick tags live now: stated once
+        // with the outcome they belong to, rather than toggled live during
+        // the response. Optional — a call can end with none of them true —
+        // but held to the same vocabulary the old field used, so the history
+        // reads consistently either side of the change.
+        return r.keys().hasOnly(['outcome', 'notes', 'photoUrls', 'tags'])
+          && r.get('tags', []) is list
+          && r.get('tags', []).hasOnly([
             'area_secured', 'medical_requested', 'police_requested',
             'fire_requested', 'suspect_detained', 'property_damage'
           ])
-          && inv.get('photoUrls', []) is list
-          && inv.get('photoUrls', []).size() <= 12;
-      }
-
-      function validEscalation(e) {
-        return e.keys().hasOnly(['at', 'byUid', 'byName', 'reason'])
-          && e.at == request.time
-          && e.byUid == request.auth.uid
-          && e.byName is string
-          && e.reason is string && e.reason.size() >= 3 && e.reason.size() <= 280;
-      }
-
-      // Quick tags, scene photos and a one-time escalation — the work of
-      // being at a scene. The stage does not move, but each write is logged.
-      //
-      // It used to require the INVESTIGATING stage, which a guard reached by
-      // pressing two buttons after arriving. Both stages are gone and this
-      // is simply part of RESPONDING now. `on_site` and `investigating` are
-      // still accepted so a call that was mid-flight when the machine was
-      // shortened can still be worked and closed.
-      function isSceneWork(cur) {
-        let d = request.resource.data;
-        return cur in ['responding', 'on_site', 'investigating']
-          && d.dispatchStage == cur
-          && validInvestigation(d.get('investigation', {}))
-          && (!changedKeys().hasAny(['escalation'])
-            || (!('escalation' in resource.data) && validEscalation(d.escalation)))
-          && isAssignedOrSupervisor()
-          && changedKeys().hasOnly(['stageUpdatedAt', 'lastLogId', 'investigation', 'escalation']);
-      }
-
-      function validResolution(r) {
-        return r.keys().hasOnly(['outcome', 'notes', 'photoUrls'])
           && r.outcome in [
             'resolved_on_site', 'referred_authorities', 'medical_handover',
             'false_alarm', 'no_issue_found', 'resident_unreachable'
@@ -317,7 +300,7 @@ service cloud.firestore {
       function validTransition() {
         let cur = currentStage();
         return logged()
-          && (isDispatch(cur) || isRespond(cur) || isArrive(cur) || isSceneWork(cur) || isResolve(cur));
+          && (isDispatch(cur) || isRespond(cur) || isArrive(cur) || isResolve(cur));
       }
 
       // The reporting resident's rating of a closed call: once, 1 to 5 stars.

@@ -1,20 +1,23 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Camera, CheckCircle2, Loader2, TriangleAlert, X } from '@shared/icons'
+import { CheckCircle2, Loader2, TriangleAlert, X } from '@shared/icons'
 import {
   RESOLUTION_NOTES_MAX,
   RESOLUTION_NOTES_MIN,
+  INVESTIGATION_TAGS,
   RESOLUTION_OUTCOMES,
   RESOLUTION_PHOTOS_MAX,
 } from '@shared/lib/dispatchStage'
 import { incidentReference } from '@/lib/dispatch'
 import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
+import MediaAttachmentField from '@shared/components/MediaAttachmentField'
 
 /**
  * Resolve Incident: the three things the rules will not close a call without.
  *
  *   Outcome category       one of RESOLUTION_OUTCOMES
+ *   What was done          none or more of INVESTIGATION_TAGS
  *   Brief resolution notes 10–1000 characters
  *   Photo evidence         1–6 photos of the scene as it was left
  *
@@ -28,6 +31,26 @@ import { useDialogFocus } from '@shared/hooks/useDialogFocus'
  */
 export default function ResolveIncidentModal({ open, report, busy, onSubmit, onCancel }) {
   const [outcome, setOutcome] = useState('')
+  /**
+   * ── THE QUICK TAGS MOVED HERE FROM THE INVESTIGATION PANEL ─────────────
+   * They were toggled live on the open call, each press its own logged
+   * write, while an officer was still at the scene. That made them a
+   * running commentary — and a half-finished one, because the set an
+   * officer happened to have tapped before they got busy was the set that
+   * stayed on the record.
+   *
+   * As part of the resolution they are a statement made once, deliberately,
+   * alongside the outcome and the notes they belong with: what was actually
+   * done about it. They ride in the `resolution` map for the same reason —
+   * one object, written in one batch, that reads back as the account of how
+   * this call ended rather than as scattered fields.
+   *
+   * OPTIONAL, unlike the outcome and the notes. A call can genuinely end
+   * with none of these applying, and a required field that sometimes has no
+   * true answer is how you train people to tick the nearest box.
+   */
+  const [tags, setTags] = useState([])
+  const [dragging, setDragging] = useState(false)
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
   const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX })
@@ -42,6 +65,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
   useEffect(() => {
     if (!open) return undefined
     setOutcome('')
+    setTags([])
     setNotes('')
     setTouched(false)
     reset()
@@ -59,6 +83,24 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
 
   const trimmed = notes.trim()
   const notesOk = trimmed.length >= RESOLUTION_NOTES_MIN && trimmed.length <= RESOLUTION_NOTES_MAX
+  /**
+   * Two vocabularies, bridged here rather than in either of them.
+   *
+   * `usePhotoUploads` tracks an upload as "has a url yet, has an error yet".
+   * `MediaAttachmentField` renders a status string. Translating at the call
+   * site keeps the hook free of presentation and the field free of this
+   * screen's upload mechanics.
+   */
+  const tiles = photos.items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    type: 'image',
+    src: item.previewUrl,
+    status: item.error ? 'error' : item.url ? 'done' : 'uploading',
+    progress: item.progress,
+    error: item.error,
+  }))
+
   const photosOk = photos.urls.length >= 1 && !photos.uploading && !photos.failed
   const ready = Boolean(outcome) && notesOk && photosOk
 
@@ -72,7 +114,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
     event.preventDefault()
     setTouched(true)
     if (!ready || busy) return
-    onSubmit({ outcome, notes: trimmed, photoUrls: photos.urls })
+    onSubmit({ outcome, notes: trimmed, photoUrls: photos.urls, tags })
   }
 
   return createPortal(
@@ -129,6 +171,43 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
             </div>
           </fieldset>
 
+          {/* ── WHAT WAS DONE ──────────────────────────────────────────────
+              The outcome above says how the call ENDED — resolved on site,
+              referred, false alarm. These say what was done about it, and
+              the two are genuinely different axes: a call can be "resolved
+              on site" with the area secured and police requested, or with
+              neither.
+
+              Multi-select and optional, where the outcome is single and
+              required. A call can end with none of these applying, and a
+              required field that sometimes has no true answer is how you
+              train people to tick the nearest box. */}
+          <fieldset>
+            <legend className="text-xs font-semibold text-text-secondary">
+              What was done <span className="font-normal text-text-muted">· optional</span>
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {INVESTIGATION_TAGS.map((option) => {
+                const on = tags.includes(option.value)
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      setTags((current) =>
+                        on ? current.filter((t) => t !== option.value) : [...current, option.value],
+                      )
+                    }
+                    className={`chip ${on ? 'chip-active' : 'chip-idle'}`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          </fieldset>
+
           <div>
             <div className="flex items-baseline justify-between gap-3">
               <label htmlFor={notesId} className="text-xs font-semibold text-text-secondary">
@@ -154,52 +233,42 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
           </div>
 
           <div>
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-xs font-semibold text-text-secondary">Photo evidence</p>
-              <span className="font-mono text-2xs tabular-nums text-text-muted">
-                {photos.items.length}/{RESOLUTION_PHOTOS_MAX}
-              </span>
-            </div>
-            <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {photos.items.map((item) => (
-                <li key={item.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-200">
-                  <img src={item.previewUrl} alt="" className="h-full w-full object-cover" />
-                  {!item.url && !item.error ? (
-                    <span className="absolute inset-x-0 bottom-0 h-1 bg-black/40">
-                      <span className="block h-full bg-brand-500" style={{ width: `${item.progress}%` }} />
-                    </span>
-                  ) : null}
-                  {item.error ? (
-                    <span
-                      className="absolute inset-0 flex items-center justify-center bg-black/60 p-1 text-center text-2xs font-semibold text-white"
-                      title={item.error}
-                    >
-                      Upload failed
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => photos.remove(item.id)}
-                    aria-label={`Remove ${item.name}`}
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
-                  >
-                    <X size="sm" />
-                  </button>
-                </li>
-              ))}
-              {!photos.full ? (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-300 text-text-secondary transition-colors hover:border-brand-500 hover:text-text-primary"
-                  >
-                    <Camera size="md" aria-hidden="true" />
-                    <span className="text-2xs font-semibold">Add photo</span>
-                  </button>
-                </li>
-              ) : null}
-            </ul>
+            {/* THE SAME FIELD THE ANNOUNCEMENT COMPOSER USES.
+                This was a bespoke grid of square tiles with a small "Add
+                photo" cell wedged in among them — a different upload affordance
+                from the one the rest of the product teaches, and the only one
+                with no drop target, on the surface most likely to be used from
+                a laptop at the gate.
+
+                `MediaAttachmentField` is the shared component behind the
+                announcement composer and the report attacher. Adopting it is
+                what the brief is really asking for: not a dropzone styled to
+                LOOK like that one, which is how two things drift apart, but
+                that one. Drag-and-drop, the progress bar, the failed-upload
+                state and the per-item remove all come with it.
+
+                The capacity counter and the heading move inside it too, which
+                is why the header row above is gone rather than kept. */}
+            <MediaAttachmentField
+              items={tiles}
+              capacity={RESOLUTION_PHOTOS_MAX}
+              heading="Photo evidence"
+              hint="PNG or JPG. Compressed on this device before upload, so uploading needs a connection."
+              disabled={busy}
+              onPick={() => fileRef.current?.click()}
+              onRemove={photos.remove}
+              dragging={dragging}
+              onDragOver={(event) => {
+                event.preventDefault()
+                if (!busy) setDragging(true)
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(event) => {
+                event.preventDefault()
+                setDragging(false)
+                if (!busy) photos.add(event.dataTransfer?.files)
+              }}
+            />
             <input
               ref={fileRef}
               type="file"
@@ -213,9 +282,6 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
                 event.target.value = ''
               }}
             />
-            <p className="mt-1.5 text-caption text-text-muted">
-              Compressed on this device before upload. Uploading needs a connection.
-            </p>
           </div>
         </div>
 

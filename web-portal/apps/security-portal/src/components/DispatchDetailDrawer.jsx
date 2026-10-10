@@ -2,20 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertOctagon,
-  Camera,
   CheckCircle2,
   ClipboardList,
   FileText,
   History,
   Loader2,
-  LocateOff,
   MapPin,
-  Navigation,
   Phone,
   Radio,
-  Search,
   ShieldAlert,
-  Tags,
   Timer,
   UserRoundCheck,
   UserRoundCog,
@@ -30,43 +25,31 @@ import { buildMediaItems } from '@shared/lib/incidents'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import {
   ACK_TIMEOUT_MS,
-  INVESTIGATION_PHOTOS_MAX,
-  INVESTIGATION_TAGS,
   RESOLUTION_OUTCOMES,
   STAGE_LABELS,
 } from '@shared/lib/dispatchStage'
 import {
   acknowledgeAndRespond,
-  addInvestigationPhotos,
   canActOn,
   dispatchUnit,
-  escalateIncident,
   resolveIncident,
-  toggleInvestigationTag,
 } from '@/lib/dispatchWorkflow'
 import {
-  dispatchEta,
-  formatAgo,
   formatStopwatch,
   incidentReference,
   residentMessageForStage,
 } from '@/lib/dispatch'
-import { formatDistance, formatDuration } from '@/lib/directions'
 import { ROUTES } from '@/config/portal'
-import { UNIT_STATE_LABELS } from '@/hooks/useGuardUnits'
 import { useStageAction } from '@/hooks/useStageAction'
 import {
   CategoryIconBadge,
   Section,
-  StageBadge,
   StageStepper,
 } from '@/components/dispatch/parts'
-import { initials, unitLabel } from '@/lib/unitIdentity'
+import { unitLabel } from '@/lib/unitIdentity'
 import EvidenceGrid, { forensicCoordinates, forensicTimestamp } from '@/components/dispatch/EvidenceGrid'
 import UnitPicker from '@/components/dispatch/UnitPicker'
-import ReasonDialog from '@/components/dispatch/ReasonDialog'
 import ResolveIncidentModal from '@/components/dispatch/ResolveIncidentModal'
-import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 
 /**
@@ -87,7 +70,6 @@ const SEVERITY_LABELS = {
 const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
 const clock = (at) => (at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—')
 
-const ESCALATION_PRESETS = ['Armed or violent suspect', 'Medical emergency', 'Fire or smoke', 'Officer needs backup']
 
 /** The receipt for the last action. See useStageAction. */
 const RECEIPT_TONES = {
@@ -145,273 +127,6 @@ function useAckClock(report) {
 }
 
 /**
- * The unit booked to the call: who it is, and how far away they are.
- *
- * ── WHAT THIS DELIBERATELY NO LONGER SHOWS ─────────────────────────────────
- * It used to carry a battery percentage, a GPS-quality capsule ("GPS live
- * ±8 m · just now" / "Approx"), a "High-precision GPS" badge and a running
- * response-target figure. Four readouts about the officer's HARDWARE and one
- * about their SLA, in the card an officer opens to find out where the unit is.
- *
- * Every one of them was true, and none of them changed what anybody does
- * next. That is the test this card is now held to: a dispatcher reading it is
- * deciding whether to wait or to send a second unit, and the only inputs to
- * that decision are who is going and how far away they are.
- *
- * ── EXCEPT WHEN THE FEED IS BROKEN, WHICH IS A DIFFERENT THING ─────────────
- * A HEALTHY position feed is not worth a line. A missing or stale one is the
- * whole story, because it is why there is no ETA and why the marker on the
- * map is somewhere the unit no longer is. So the capsule did not simply go:
- * it was reduced to the case that is actionable. Silence here now means the
- * feed is fine, which is a stronger signal than a green badge that was there
- * whatever happened.
- *
- * `unit` is the live unit from useGuardUnits, or null if the officer has since
- * clocked out.
- */
-function AssignedUnit({ report, unit, route }) {
-  // Never the raw stored name: accounts here are provisioned by email and
-  // `staff_accounts.name` often holds the address. See `unitLabel`.
-  const { label } = unitLabel({
-    name: report.assignedGuardName,
-    badgeNumber: report.assignedGuardBadge || unit?.badgeNumber,
-  })
-  const badgeText = report.assignedGuardBadge || unit?.badgeNumber || '—'
-  const roadEta =
-    route?.phase === 'ready' && route.route
-      ? `${formatDuration(route.route.duration)} · ${formatDistance(route.route.distance)} by road`
-      : null
-  const distance =
-    unit?.distanceM != null ? `${formatDistance(unit.distanceM)} away` : route?.straightM != null ? `${formatDistance(route.straightM)} away` : null
-
-  // The ONE telemetry state worth a line. Everything else the feed reports is
-  // either normal or a number nobody acts on.
-  let feedFault = null
-  if (!unit) feedFault = 'Clocked out — this unit is no longer reporting.'
-  else if (!unit.position) feedFault = 'No position from this unit, so no route or ETA can be worked out.'
-  else if (unit.stale) feedFault = `Position last updated ${formatAgo(unit.positionAgeMs)} — the marker may be behind.`
-
-  return (
-    <div>
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden="true"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-400 ring-1 ring-inset ring-brand-500/30"
-        >
-          {initials(report.assignedGuardName)}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-text-primary">{label}</p>
-          <p className="truncate text-caption text-text-muted">
-            Badge <span className="font-mono">{badgeText}</span>
-            {' · '}
-            {unit ? UNIT_STATE_LABELS[unit.state] : 'Not on duty'}
-          </p>
-        </div>
-        {/* Distance rides on the responder row rather than waiting in a
-            definition list below it. It is the second thing read after the
-            name — "who, and how far" is one question — and at this width the
-            pair fits on one line. */}
-        {distance && report.dispatchStage !== 'resolved' ? (
-          <span className="shrink-0 text-label font-semibold tabular-nums text-text-primary">{distance}</span>
-        ) : null}
-      </div>
-
-      {feedFault ? (
-        <p className="mt-2.5 flex items-start gap-2 rounded-lg border border-warning/25 bg-warning/10 px-2.5 py-1.5 text-caption leading-snug text-warning">
-          <LocateOff size="sm" aria-hidden="true" className="mt-px shrink-0" />
-          <span className="min-w-0 flex-1">{feedFault}</span>
-        </p>
-      ) : null}
-
-      <dl className="mt-3 border-t border-hairline pt-2">
-        {/* The READY figure is in the header chip, so this row carries only
-            what the chip cannot: why there is no ETA yet. A card that
-            repeated "4 min · 1.2 km" eight lines under the header would be
-            spending a row to say it twice. */}
-        {(report.dispatchStage === 'dispatched' || report.dispatchStage === 'responding') && !roadEta ? (
-          <Row label="Road ETA">
-            {route?.phase === 'routing'
-              ? 'Plotting…'
-              : route?.phase === 'no-origin'
-                ? 'No position to route from'
-                : route?.error ?? distance}
-          </Row>
-        ) : null}
-        {/* Kept, where the response-target row above it was removed: an
-            arrival confirmed WITHOUT a GPS match is a judgement call an
-            officer made and put their name to, and it stays on the card for
-            the same reason the override reason is written down at all. */}
-        {report.arrival ? (
-          <Row label="Arrival">
-            {report.arrival.withinRadius
-              ? `GPS match, ${Math.round(report.arrival.distanceM ?? 0)} m from pin`
-              : `Override: ${report.arrival.overrideReason}`}
-          </Row>
-        ) : null}
-      </dl>
-    </div>
-  )
-}
-
-/**
- * Tags, scene photos and the escalation, while INVESTIGATING. Read-only for
- * anyone who cannot act on the call, and once the call is resolved.
- */
-function InvestigationPanel({ report, editable, busy, run, role }) {
-  const tags = report.investigation?.tags ?? []
-  const photoUrls = report.investigation?.photoUrls ?? []
-  const room = INVESTIGATION_PHOTOS_MAX - photoUrls.length
-  const uploads = usePhotoUploads({ max: Math.max(0, room) })
-  const fileRef = useRef(null)
-  const [lightbox, setLightbox] = useState(null)
-
-  // Scene photos go on the record as soon as their uploads finish: an officer
-  // at a scene should not have to find a second Save button.
-  const committingRef = useRef(false)
-  // Set when a commit did not land — refused, or blocked because an earlier
-  // action on this call is still queued. The uploads stay in the tray and the
-  // panel offers to try again.
-  const [unsaved, setUnsaved] = useState(false)
-  const { urls, uploading, failed, reset } = uploads
-
-  const commitPhotos = useCallback(() => {
-    if (committingRef.current || !urls.length) return
-    committingRef.current = true
-    setUnsaved(false)
-    run('photos', 'Scene photos added', () => addInvestigationPhotos(report, urls, { role }))
-      .then((landed) => {
-        // Clear the tray ONLY once the record holds them. Clearing regardless
-        // threw away uploaded evidence whenever the write was refused.
-        if (landed) reset()
-        else setUnsaved(true)
-      })
-      .finally(() => {
-        committingRef.current = false
-      })
-  }, [urls, run, report, role, reset])
-
-  useEffect(() => {
-    if (!editable || uploading || failed || unsaved) return
-    commitPhotos()
-  }, [editable, uploading, failed, unsaved, commitPhotos])
-
-  const media = photoUrls.map((url) => ({ url, type: 'image' }))
-  const stamp = {
-    at: report.investigatingAt,
-    lat: report.arrival?.lat ?? report.lat,
-    lng: report.arrival?.lng ?? report.lng,
-    reference: incidentReference(report.id),
-  }
-
-  return (
-    <Section icon={Search} title="Investigation" meta={report.investigatingAt ? `since ${clock(report.investigatingAt)}` : null}>
-      {report.escalation ? (
-        <div className="mb-3 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 p-2.5 text-danger">
-          <AlertOctagon size="sm" className="mt-px shrink-0" aria-hidden="true" />
-          <p className="text-xs font-medium leading-snug">
-            Escalated by {report.escalation.byName} at {clock(report.escalatedAt)}: {report.escalation.reason}
-          </p>
-        </div>
-      ) : null}
-
-      <p className="flex items-center gap-1.5 text-caption font-semibold text-text-muted">
-        <Tags size="sm" aria-hidden="true" />
-        Quick tags
-      </p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {INVESTIGATION_TAGS.map((tag) => {
-          const on = tags.includes(tag.value)
-          if (!editable && !on) return null
-          return (
-            <button
-              key={tag.value}
-              type="button"
-              aria-pressed={on}
-              disabled={!editable || Boolean(busy)}
-              onClick={() =>
-                run(`tag:${tag.value}`, on ? `${tag.label} removed` : `${tag.label} tagged`, () =>
-                  toggleInvestigationTag(report, tag.value, { role }),
-                )
-              }
-              className={`chip px-3 ${on ? 'chip-active' : 'chip-idle'} disabled:opacity-100`}
-            >
-              {busy === `tag:${tag.value}` ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : null}
-              {tag.label}
-            </button>
-          )
-        })}
-        {!editable && !tags.length ? <span className="text-caption text-text-muted">None recorded</span> : null}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-caption font-semibold text-text-muted">
-          <Camera size="sm" aria-hidden="true" />
-          Scene photos · {photoUrls.length}
-        </p>
-        {editable && room > 0 ? (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            disabled={uploads.uploading || Boolean(busy)}
-            className="btn btn-drawer btn-outline"
-          >
-            {uploads.uploading ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <Camera size="sm" aria-hidden="true" />}
-            {uploads.uploading ? 'Uploading…' : 'Add photos'}
-          </button>
-        ) : null}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          multiple
-          className="sr-only"
-          tabIndex={-1}
-          onChange={(event) => {
-            uploads.add(event.target.files)
-            event.target.value = ''
-          }}
-        />
-      </div>
-      {uploads.failed ? (
-        <p className="mt-1.5 flex items-center justify-between gap-2 text-caption text-danger">
-          A photo failed to upload.
-          <button type="button" onClick={uploads.reset} className="font-semibold underline">
-            Clear and retry
-          </button>
-        </p>
-      ) : null}
-      {unsaved ? (
-        <p className="mt-1.5 flex items-center justify-between gap-2 text-caption text-warning">
-          {uploads.urls.length} photo{uploads.urls.length === 1 ? '' : 's'} uploaded but not yet on the record.
-          <button type="button" onClick={commitPhotos} disabled={Boolean(busy)} className="font-semibold underline">
-            Try again
-          </button>
-        </p>
-      ) : null}
-      {media.length ? (
-        <div className="mt-2">
-          <EvidenceGrid media={media} stamp={stamp} onOpen={setLightbox} emptyText="" />
-        </div>
-      ) : null}
-      {lightbox !== null ? (
-        <Lightbox
-          media={media}
-          startIndex={lightbox}
-          watermark={{
-            name: `${stamp.reference} · scene photo`,
-            address: forensicCoordinates(stamp.lat, stamp.lng),
-            timestamp: forensicTimestamp(stamp.at),
-          }}
-          onClose={() => setLightbox(null)}
-        />
-      ) : null}
-    </Section>
-  )
-}
-
-/**
  * The Incident Details panel for the Live Dispatch map.
  *
  *   ┌ [icon] Security · High                       12:43  [×] ┐
@@ -444,28 +159,16 @@ function InvestigationPanel({ report, editable, busy, run, role }) {
  * it is a bottom sheet with a scrim, because there is no "beside" at that
  * width.
  */
-export default function DispatchDetailDrawer({ report, units = [], route = null, previewUid, onPreviewUnit, onClose }) {
+export default function DispatchDetailDrawer({ report, units = [], previewUid, onPreviewUnit, onClose }) {
   const navigate = useNavigate()
   const { user, role } = useAuth()
   const uid = user?.uid
   const { contact, loading: contactLoading } = useReporterContact(report?.reporterUid)
   const action = useStageAction(report?.id)
 
-  // ── THE LIVE ETA ────────────────────────────────────────────────────────
-  // The road figure the responding officer is actually driving to, promoted
-  // into the header. It was only ever in "Assigned unit & telemetry", five
-  // sections down a scrolling panel — which is the one place it is no use: an
-  // officer glancing at a call to decide whether to take it, and a dispatcher
-  // watching one in flight, are both asking "how far out are they" before they
-  // are asking anything else.
-  //
-  // Guarded on the route belonging to THIS call. The hook plots preview routes
-  // for other calls too, and an ETA from someone else's route is worse than no
-  // ETA at all.
-  const liveRoute = route?.incidentId === report?.id && route?.phase === 'ready' ? route.route : null
-  const etaChip = liveRoute
-    ? `ETA ${formatDuration(liveRoute.duration)} · ${formatDistance(liveRoute.distance)}`
-    : null
+  // The ETA chip that lived here is gone: the route panel over the map
+  // carries the same figure, live and counting down, and a static copy of it
+  // in a drawer header was the second place to read one number.
   const { busy, feedback, run, dismiss } = action
 
   // Focus moves into the panel, stays inside it, and returns to whatever
@@ -477,13 +180,11 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
 
   const [lightboxIndex, setLightboxIndex] = useState(null)
   const [reassigning, setReassigning] = useState(false)
-  const [escalating, setEscalating] = useState(false)
   const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
     setLightboxIndex(null)
     setReassigning(false)
-    setEscalating(false)
     setResolving(false)
   }, [report?.id])
 
@@ -492,16 +193,12 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   // answers, and leaving the dialog open invited a second press that the
   // rules would refuse when it arrived.
   const stage = report?.dispatchStage
-  const escalated = Boolean(report?.escalation)
   useEffect(() => {
     if (stage !== 'dispatched') setReassigning(false)
     if (stage !== 'responding') setResolving(false)
   }, [stage])
-  useEffect(() => {
-    if (escalated) setEscalating(false)
-  }, [escalated])
 
-  const anyDialog = lightboxIndex !== null || escalating || resolving
+  const anyDialog = lightboxIndex !== null || resolving
   useEffect(() => {
     if (!report || anyDialog || busy) return undefined
     const onKeyDown = (event) => {
@@ -531,7 +228,6 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   const canAct = canActOn(report, actor)
   const isMine = report.assignedGuardUid === uid
   const assignedUnit = report.assignedGuardUid ? units.find((u) => u.uid === report.assignedGuardUid) ?? null : null
-  const eta = dispatchEta(report)
   const address = [
     report.phase && `Phase ${report.phase}`,
     report.block && `Block ${report.block}`,
@@ -555,7 +251,6 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   const stamp = { at: report.reportedAt, lat: report.lat, lng: report.lng, reference }
   const resolutionMedia = (report.resolution?.photoUrls ?? []).map((url) => ({ url, type: 'image' }))
   const outcomeLabel = RESOLUTION_OUTCOMES.find((o) => o.value === report.resolution?.outcome)?.label
-  const residentName = report.reportedByName || 'the resident'
   const nextMessage = residentMessageForStage(
     report,
     { dispatched: 'responding', responding: 'resolved' }[stage],
@@ -668,28 +363,19 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
      * left here is the two things that are genuinely decisions: escalate, and
      * close.
      */
+    /* One action. Escalate sat beside this and is gone — backup is called
+       by radio. See the note in lib/dispatchWorkflow.js for what that gave
+       up, because nothing automatic inherited it. */
     footer = canAct ? (
-      <>
-        <button
-          type="button"
-          onClick={() => setEscalating(true)}
-          disabled={Boolean(busy) || Boolean(report.escalation)}
-          className="btn btn-action btn-danger"
-          title={report.escalation ? 'Already escalated' : undefined}
-        >
-          <AlertOctagon size="sm" aria-hidden="true" />
-          {report.escalation ? 'Escalated' : 'Escalate'}
-        </button>
-        <button
-          type="button"
-          onClick={() => setResolving(true)}
-          disabled={Boolean(busy)}
-          className="btn btn-action btn-brand flex-1"
-        >
-          <CheckCircle2 size="sm" aria-hidden="true" />
-          Resolve incident
-        </button>
-      </>
+      <button
+        type="button"
+        onClick={() => setResolving(true)}
+        disabled={Boolean(busy)}
+        className="btn btn-action btn-brand"
+      >
+        <CheckCircle2 size="sm" aria-hidden="true" />
+        Resolve incident
+      </button>
     ) : null
     hint = canAct
       ? report.onSceneAt
@@ -781,31 +467,25 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
 
           {/* Stage, then what kind of call and how urgent: the category and
               priority ride here as pills rather than as a label over the title. */}
+          {/* ── THE PILL ROW, DOWN FROM SIX TO TWO ─────────────────────
+              Gone: the stage badge, which the pipeline directly below spells
+              out in three labelled steps; the ETA chip, which the route
+              panel over the map carries live and counting down; and the
+              overdue / target-missed pill, which measured a response target
+              against an arrival the console now stamps silently.
+
+              What is left answers the two questions a badge is good at and a
+              stepper is not: what KIND of call, and how urgent. The
+              escalation badge stays as a historic fact — calls escalated
+              before that control was removed still carry one, and nothing
+              can set it now. */}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            <StageBadge stage={stage} />
             <StatusBadge tone={categoryTone(report.category)} size="sm">
               {categoryLabel(report.category)}
             </StatusBadge>
             <StatusBadge severity={report.severity} size="sm">
               {SEVERITY_LABELS[report.severity] ?? 'Medium'} priority
             </StatusBadge>
-            {/* Only while someone is actually travelling to it. On a resolved
-                call or one nobody has taken, an ETA is a number with nothing
-                behind it. */}
-            {etaChip && (stage === 'dispatched' || stage === 'responding') ? (
-              <StatusBadge tone="info" size="sm" icon={Navigation}>
-                {etaChip}
-              </StatusBadge>
-            ) : null}
-            {/* The response target, as a state rather than a countdown. No
-                figure on it on purpose: "Overdue" is the thing that changes a
-                decision, and "Overdue by 32m 04s" is the same thing plus a
-                number that has to be re-read every second to stay true. */}
-            {eta.state === 'overdue' || eta.state === 'missed' ? (
-              <StatusBadge tone="danger" size="sm" icon={Timer}>
-                {eta.state === 'missed' ? 'Target missed' : 'Overdue'}
-              </StatusBadge>
-            ) : null}
             {ack?.expired ? (
               <StatusBadge tone="danger" size="sm" icon={Timer}>
                 No acknowledgement
@@ -932,22 +612,21 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
             </Section>
           ) : null}
 
-          {stage !== 'none' ? (
-            <Section icon={UserRoundCheck} title="Assigned unit & telemetry" meta={report.dispatchedAt ? `dispatched ${clock(report.dispatchedAt)}` : null}>
-              <AssignedUnit report={report} unit={assignedUnit} route={route?.incidentId === report.id ? route : null} />
-            </Section>
-          ) : null}
+          {/* ── WHAT CAME OUT OF HERE ─────────────────────────────────
+              "Assigned unit & telemetry", and the investigation panel.
 
-          {stage === 'responding' || report.investigation ? (
-            <InvestigationPanel
-              report={report}
-              editable={stage === 'responding' && canAct}
-              busy={busy}
-              run={run}
-              role={role}
-            />
-          ) : null}
+              The unit card named the responder, their badge and their
+              distance. All three are already on screen: the route panel over
+              the map carries distance and ETA, and the footer hint below
+              names the officer in a sentence ("Officer Dela Cruz is en
+              route", "On scene since 14:12"). A card restating them spent a
+              fifth of the drawer on what two other surfaces already said.
 
+              The investigation panel's quick tags moved into the resolution,
+              stated once with the outcome they belong to rather than toggled
+              live mid-response. Its scene photos went with them: resolving
+              already demands a photo, and two trays on one call is a
+              question about which to use rather than extra evidence. */}
           {stage === 'resolved' && report.resolution ? (
             <Section icon={ClipboardList} title="Resolution" meta={outcomeLabel}>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">{report.resolution.notes}</p>
@@ -974,7 +653,6 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
                   ? 'Call closed'
                   : `Next: ${STAGE_LABELS[{ dispatched: 'responding', responding: 'resolved' }[stage]]}`}
             </h3>
-            <StageBadge stage={stage} />
           </div>
           {/* ── CLOSE SITS WITH THE OTHER ACTIONS ──────────────────────
               `flex-wrap`, and Close LAST, which together are the whole of why
@@ -1027,24 +705,6 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
           onClose={() => setLightboxIndex(null)}
         />
       ) : null}
-
-      <ReasonDialog
-        open={escalating}
-        icon={AlertOctagon}
-        tone="danger"
-        title="Escalate this incident?"
-        message={`Raises a critical alert on every Guardhouse console for ${reference}. Use it when the scene needs more than one officer.`}
-        presets={ESCALATION_PRESETS}
-        placeholder="What is happening that needs escalation?"
-        confirmLabel="Escalate"
-        busy={busy === 'escalate'}
-        onCancel={() => setEscalating(false)}
-        onConfirm={(reason) =>
-          run('escalate', 'Incident escalated', () => escalateIncident(report, reason, { role })).then(
-            (ok) => ok && setEscalating(false),
-          )
-        }
-      />
 
       <ResolveIncidentModal
         open={resolving}
