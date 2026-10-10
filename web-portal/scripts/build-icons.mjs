@@ -10,13 +10,27 @@
  * version of the same set, so a glyph means the same thing and looks the same
  * on a resident's phone and on an administrator's screen.
  *
- * Mobile leans on the FILL weight (356 of its 427 icon uses, with Bold at 61).
- * The portals use `regular`, deliberately. A filled glyph at 16px in a dense
- * table loses its counters and reads as a blob, and three successive briefs
- * have asked this codebase for outlined icons with zero filled variants. So
- * the LIBRARY is shared with mobile and the WEIGHT is chosen for the medium.
- * Changing that is one line — SVG_DIR below points at a weight directory, and
- * `bold`, `light`, `thin`, `fill` and `duotone` sit beside `regular`.
+ * ── THE WEIGHT IS `bold`, AND THAT IS A CORRECTION ───────────────────────
+ *
+ * It was `regular`, on the reasoning that mobile leans on FILL (356 of its
+ * 427 icon uses) and a filled glyph at 16px in a dense table loses its
+ * counters and reads as a blob — with three successive briefs asking this
+ * codebase for outlined icons and zero filled variants.
+ *
+ * All of that is true and none of it argued for `regular`. The choice was
+ * never regular-versus-fill; it was regular-versus-BOLD, and bold is a
+ * STROKED weight. It satisfies the no-fill briefs completely, and it is what
+ * the mobile app's own shared registry uses — `AppIcons` in
+ * lib/core/theme/app_icons.dart is 23 of 26 PhosphorIconsBold, chosen there,
+ * in its own words, as "the closest match to the Lucide/Heroicons line-art
+ * the design system asks for". That is the same line-art the portals were
+ * asked for.
+ *
+ * So the two registries now agree on family AND weight, and the lighter
+ * `regular` stroke — which read as thin beside the app on the same glyph —
+ * is gone. `light`, `thin`, `fill` and `duotone` sit beside `bold` if this
+ * is ever revisited; see WEIGHT below, which is now the only place it is
+ * named.
  *
  * ── WHY GENERATE, RATHER THAN IMPORT ──────────────────────────────────────
  *
@@ -72,7 +86,25 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const SVG_DIR = join(here, '..', 'node_modules', '@phosphor-icons', 'core', 'assets', 'regular')
+/**
+ * The weight, in ONE place — and the two things that follow from it.
+ *
+ * Phosphor separates weights by directory AND by filename suffix: `pulse.svg`
+ * in `regular`, `pulse-bold.svg` in `bold`. Pointing SVG_DIR at another
+ * weight is therefore not sufficient on its own; every mapping value also
+ * has to pick up the suffix, which is what `svgFile` below does.
+ *
+ * The first attempt at this changed the directory and nothing else, and the
+ * generator reported all 190-odd icons as missing and refused to write —
+ * which is the behaviour you want from a build step that would otherwise
+ * have emitted an empty registry, but it does mean the weight is two lines
+ * rather than the one the note below used to promise.
+ */
+const WEIGHT = 'bold'
+const SVG_DIR = join(here, '..', 'node_modules', '@phosphor-icons', 'core', 'assets', WEIGHT)
+
+/** `pulse` -> `pulse-bold.svg`, or `pulse.svg` at the unsuffixed regular weight. */
+const svgFile = (file) => (WEIGHT === 'regular' ? `${file}.svg` : `${file}-${WEIGHT}.svg`)
 const OUT = join(here, '..', 'packages', 'shared', 'src', 'icons', 'glyphs.js')
 
 /** The codebase's name -> the Phosphor file name (regular weight). */
@@ -226,7 +258,7 @@ const MAPPING = {
   Zap: "lightning",
 }
 
-const missing = Object.entries(MAPPING).filter(([, file]) => !existsSync(join(SVG_DIR, `${file}.svg`)))
+const missing = Object.entries(MAPPING).filter(([, file]) => !existsSync(join(SVG_DIR, svgFile(file))))
 if (missing.length) {
   console.error('Missing Phosphor icons:')
   missing.forEach(([name, file]) => console.error(`  ${name} -> ${file}.svg`))
@@ -266,7 +298,7 @@ if (weighted.length) {
  */
 const VIEW_BOX = '0 0 256 256'
 const entries = Object.entries(MAPPING).map(([name, file]) => {
-  const svg = readFileSync(join(SVG_DIR, `${file}.svg`), 'utf8')
+  const svg = readFileSync(join(SVG_DIR, svgFile(file)), 'utf8')
 
   const viewBox = svg.match(/viewBox="([^"]+)"/)?.[1]
   if (viewBox !== VIEW_BOX) throw new Error(`${name} (${file}): viewBox "${viewBox}" is not "${VIEW_BOX}"`)

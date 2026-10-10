@@ -898,7 +898,10 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
           {pickerOpen ? (
             <Section
               icon={Radio}
-              title={stage === 'dispatched' ? `Reassign from ${report.assignedGuardName}` : 'Dispatch a unit'}
+              /* Only the reassignment names itself, because "reassign FROM
+                 Officer Reyes" carries a fact the buttons below do not. The
+                 plain dispatch case has no heading at all — see Section. */
+              title={stage === 'dispatched' ? `Reassign from ${report.assignedGuardName}` : null}
               meta={`${units.filter((u) => u.state === 'available').length} available`}
             >
               <UnitPicker
@@ -972,9 +975,20 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
               thumb lands for the thing you meant to do. `ml-auto` holds it
               clear of the stage buttons while they share a line. */}
           {status ? <div className="mt-2">{status}</div> : null}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+          {/* ── CENTRED, AND CLOSE NO LONGER PUSHED TO THE EDGE ──────────
+              `ml-auto` held Close against the right rail, which on a
+              416px drawer put a dead strip between it and the commit
+              action that was neither a gap nor a button. Centring the row
+              makes the group read as one set of controls, which is what
+              they are, and the wrap still drops Close to its own line when
+              two stage actions already fill the width.
+
+              Close stays LAST for the reason the X is top-right: the
+              control that takes your place away should never be where the
+              thumb lands for the thing you meant to do. */}
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
             {footer}
-            <button type="button" onClick={onClose} className="btn btn-action btn-outline ml-auto">
+            <button type="button" onClick={onClose} className="btn btn-action btn-outline">
               <X size="sm" aria-hidden="true" />
               Close
             </button>

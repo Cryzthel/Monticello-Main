@@ -11,7 +11,7 @@ import {
 } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { categoryColor, categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
-import { DISPATCH_STAGES, STAGE_LABELS, stageIndex } from '@shared/lib/dispatchStage'
+import { DISPATCH_STAGES, STAGE_LABELS, deriveDispatchStage, stageIndex } from '@shared/lib/dispatchStage'
 import { formatAgo } from '@/lib/dispatch'
 import { categoryIcon } from '@shared/theme/categoryIcons'
 
@@ -75,17 +75,27 @@ export function CategoryIconBadge({ category, className = '' }) {
   )
 }
 
-/** One bordered block of the drawer. */
+/**
+ * One bordered block of the drawer.
+ *
+ * A null `title` drops the header row entirely rather than rendering an
+ * empty one. Most blocks need naming; the unit picker does not — it sits
+ * directly above a footer that says "Dispatch" and a button that says
+ * "Dispatch Officer Reyes", so a third heading saying "Dispatch a unit" was
+ * the same word three times in 120px of rail.
+ */
 export function Section({ icon: Icon, title, meta, children, tone = '' }) {
   return (
     <section className={`rounded-xl border border-hairline bg-slate-50 ${tone}`}>
-      <header className="flex items-center justify-between gap-3 border-b border-hairline px-3.5 py-2">
-        <h3 className="flex min-w-0 items-center gap-2 text-xs font-semibold text-text-secondary">
-          <Icon size="sm" className="shrink-0 text-brand-400" aria-hidden="true" />
-          <span className="truncate">{title}</span>
-        </h3>
-        {meta ? <span className="shrink-0 text-2xs text-text-muted">{meta}</span> : null}
-      </header>
+      {title ? (
+        <header className="flex items-center justify-between gap-3 border-b border-hairline px-3.5 py-2">
+          <h3 className="flex min-w-0 items-center gap-2 text-xs font-semibold text-text-secondary">
+            <Icon size="sm" className="shrink-0 text-brand-400" aria-hidden="true" />
+            <span className="truncate">{title}</span>
+          </h3>
+          {meta ? <span className="shrink-0 text-2xs text-text-muted">{meta}</span> : null}
+        </header>
+      ) : null}
       <div className="p-3.5">{children}</div>
     </section>
   )
@@ -107,9 +117,27 @@ const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
  * the rest are muted. An ordered list, so a screen reader reads it as steps.
  */
 export function StageStepper({ report }) {
-  const current = stageIndex(report.dispatchStage)
+  // `deriveDispatchStage`, not the raw field. A call stored at the retired
+  // `on_site` stage is not in DISPATCH_STAGES, so `stageIndex` answers 0 for
+  // it and the stepper would render a live call with nothing lit at all.
+  const current = stageIndex(deriveDispatchStage(report))
   return (
-    <ol className="grid grid-cols-5" aria-label="Dispatch stage">
+    /* ── CENTRED, AND NOT A FIVE-COLUMN GRID ─────────────────────────────
+       It was `grid grid-cols-5`, one column per stage, stretched across the
+       full width of the drawer. Two of those stages have gone, which left
+       three labels strung out over five columns' worth of rail with the
+       connectors reaching across the gaps — the layout was describing a
+       machine that no longer exists.
+
+       A centred flex row instead: the three nodes size to their content and
+       sit in the middle of the card, with the connectors taking only the
+       space between them. `max-w-sm` stops the row spreading to the full
+       416px of the rail, where three items read as three unrelated columns
+       rather than one pipeline. */
+    <ol
+      className="mx-auto flex w-full max-w-sm items-start justify-center"
+      aria-label="Dispatch stage"
+    >
       {DISPATCH_STAGES.map((stage, i) => {
         const step = i + 1
         const done = step < current || (step === current && stage === 'resolved')
@@ -119,7 +147,7 @@ export function StageStepper({ report }) {
           <li
             key={stage}
             aria-current={active ? 'step' : undefined}
-            className="relative flex min-w-0 flex-col items-center text-center"
+            className="relative flex min-w-0 flex-1 flex-col items-center text-center"
           >
             {i > 0 ? (
               <span
@@ -141,7 +169,7 @@ export function StageStepper({ report }) {
               {done ? <Check size="sm" strokeWidth={3} aria-hidden="true" /> : step}
             </span>
             <span
-              className={`mt-1 w-full truncate px-0.5 text-2xs font-semibold ${
+              className={`mt-1.5 w-full truncate px-1 text-2xs font-semibold ${
                 active ? 'text-text-primary' : done ? 'text-text-secondary' : 'text-text-muted'
               }`}
             >
