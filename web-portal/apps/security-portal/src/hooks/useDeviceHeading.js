@@ -40,12 +40,26 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  *                         is therefore refused: an arbitrary offset is worse
  *                         than no cone, because a cone asserts a direction.
  *
- * ── iOS NEEDS A GESTURE, AND THAT IS WHY `request` IS EXPORTED ─────────────
+ * ── iOS NEEDS A GESTURE, AND THE CONE IS NEEDED BEFORE THERE IS ONE ───────
  * Safari gates the orientation events behind `requestPermission()`, which
- * throws unless it is called from a user gesture. There is no way to ask on
- * mount. `request` is called from the Start Navigation press — a real gesture,
- * at the exact moment the cone becomes useful — and a refusal simply leaves
- * `heading` null, which every consumer already handles.
+ * throws unless it is called from a user gesture. That was fine while the
+ * cone only appeared during navigation, because Start Navigation IS a
+ * gesture and it happened at the exact moment the cone became useful.
+ *
+ * The cone is now wanted in STANDBY — an officer looking at an alert,
+ * deciding which way to walk, before they have pressed anything. There is no
+ * press to hang the request on, and asking on mount throws.
+ *
+ * So the hook arms a ONE-SHOT listener for the next real interaction with the
+ * page, whatever it is, and spends it on the permission request. That is the
+ * standard way out of this and it is worth being plain about what it costs:
+ * on iOS the officer's first tap anywhere raises a permission sheet they did
+ * not explicitly ask for. It is their own console, the sheet names the
+ * sensor, a refusal is remembered and simply leaves the cone off, and the
+ * alternative is a feature that silently never works on half the handsets a
+ * guard might carry. `request` is still exported and still called from Start
+ * Navigation, so on the path where there IS a deliberate gesture the sheet
+ * arrives attached to it.
  */
 
 /**
@@ -99,6 +113,27 @@ export function useDeviceHeading({ enabled = true } = {}) {
       return false
     }
   }, [])
+
+  /**
+   * Spend the next interaction on the permission sheet, once.
+   *
+   * Only where a sheet actually exists — `requestPermission` is absent on
+   * Android and desktop, where `request` resolves immediately and this never
+   * arms. `once: true` on every listener, and the effect tears them all down
+   * as soon as any of them fires, so a declined sheet is not re-raised on the
+   * next tap.
+   */
+  useEffect(() => {
+    if (!enabled || permission !== 'unknown') return undefined
+    if (typeof globalThis.DeviceOrientationEvent?.requestPermission !== 'function') return undefined
+
+    const ask = () => {
+      request()
+    }
+    const events = ['pointerdown', 'touchend', 'keydown']
+    events.forEach((type) => globalThis.addEventListener(type, ask, { once: true, passive: true }))
+    return () => events.forEach((type) => globalThis.removeEventListener(type, ask))
+  }, [enabled, permission, request])
 
   useEffect(() => {
     if (!enabled || permission === 'denied') return undefined

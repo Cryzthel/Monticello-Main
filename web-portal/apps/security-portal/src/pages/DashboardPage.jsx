@@ -8,6 +8,7 @@ import GuardHeaderActions from '@/components/GuardHeaderActions'
 import PanicAlertModal from '@/components/PanicAlertModal'
 import DispatchDetailDrawer, { DRAWER_WIDTH_PX } from '@/components/DispatchDetailDrawer'
 import RouteSummaryBadge from '@/components/RouteSummaryBadge'
+import GuidanceBanner from '@/components/GuidanceBanner'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
@@ -23,6 +24,7 @@ import { routeProfile, routeToGeojson } from '@/lib/directions'
 import { isOffRoute, routeProgress } from '@/lib/routeProgress'
 import { useRouteSimulation } from '@/hooks/useRouteSimulation'
 import { useDeviceHeading } from '@/hooks/useDeviceHeading'
+import { useOffRoute } from '@/hooks/useOffRoute'
 import SimulationControl from '@/components/SimulationControl'
 import FollowControl from '@/components/FollowControl'
 import VoiceControl from '@/components/VoiceControl'
@@ -212,15 +214,27 @@ export default function DashboardPage() {
   const [navigating, setNavigating] = useState(false)
 
   /**
-   * This device's compass, listened to only while a session is running.
+   * This device's compass — live from the moment there is a route, not just
+   * once a session starts.
    *
-   * Not always-on, for two reasons that point the same way: the orientation
-   * sensor costs power on the phone an officer is about to drive with, and a
-   * cone on a dispatcher's desktop map would be pointing wherever that
-   * monitor happens to face. The cone answers "which way am I pointed", and
-   * nobody asks that until they are getting out of a vehicle.
+   * ── STANDBY IS WHERE IT EARNS ITS KEEP ──────────────────────────────────
+   * It was gated on `navigating`, on the reasoning that nobody asks "which
+   * way am I pointed" until they are getting out of a vehicle. That is
+   * exactly backwards for the moment it matters most. An officer who has
+   * just been handed an alert is standing still, looking at a map, working
+   * out which way to set off — and standing still is precisely when the
+   * route bearing says nothing, because there is no motion to derive it
+   * from. The cone is the only thing on the console that can answer them,
+   * and it was switched off until after they had already chosen a direction.
+   *
+   * Still not always-on. The orientation sensor costs power, and a cone on a
+   * dispatcher's desktop would point wherever that monitor happens to face —
+   * so it runs when this console has a route to its name, which is the same
+   * condition that puts a standby ring on the officer's own marker.
    */
-  const { heading: deviceHeading, request: requestCompass } = useDeviceHeading({ enabled: navigating })
+  const { heading: deviceHeading, request: requestCompass } = useDeviceHeading({
+    enabled: Boolean(followUid),
+  })
 
 
   const routeCoordinates = route.route?.geometry?.coordinates ?? null
@@ -363,6 +377,17 @@ export default function DashboardPage() {
    * session. See VoiceControl, which reports the override rather than
    * pretending to control it.
    */
+  /**
+   * Off-route, but only once it has HELD for five seconds.
+   *
+   * `offRouteRef` above still carries the instantaneous reading, and the two
+   * are used for different things on purpose: re-plotting a route is cheap,
+   * reversible and invisible, so it can act on the first stray fix, while
+   * TELLING an officer they have left the route is a claim about them and
+   * has to be true. See useOffRoute.
+   */
+  const offRoute = useOffRoute(progress)
+
   const speaking = (navigating || voice) && voiceSupported
   const { repeat } = useVoiceGuidance(progress, { enabled: speaking, routeKey })
 
@@ -582,7 +607,20 @@ export default function DashboardPage() {
               />
             </div>
           }
+          /* THE TURN BANNER, top-centre on every screen. Only while a
+             session is running and there is a maneuver to show: a near-black
+             plate over the map for a call nobody is driving to is a mode
+             indicator asserting a mode that is off. An off-route unit gets
+             no banner either, because an instruction computed from a
+             position that is not on the line is a confident wrong turn. */
           overlay={
+            navigating && progress?.step && !offRoute ? (
+              <GuidanceBanner maneuver={progress.step} waypointM={progress.waypointM ?? null} />
+            ) : null
+          }
+          /* THE ROUTE PANEL: a bottom sheet on a phone, a card up here on a
+             console. */
+          sheet={
             route.phase === 'idle' ? null : (
               <RouteSummaryBadge
                 navigating={navigating}
@@ -600,10 +638,7 @@ export default function DashboardPage() {
                    audio control — see the note on the Repeat button for why
                    this is what replaced Mute. */
                 onRepeat={repeat}
-                /* Straight-line metres to the corner the current step ends
-                   at, so the banner can explain itself on the one occasion
-                   the gate is visibly holding a step back. */
-                waypointM={progress?.waypointM ?? null}
+                offRoute={offRoute}
               />
             )
           }

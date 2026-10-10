@@ -61,7 +61,23 @@ export default function LocationAccessNotice({ mode, sharing, locationError }) {
     }
   }, [onDuty])
 
-  const denied = locationError === 'location-denied' || permission === 'denied'
+  /**
+   * ── THE PERMISSIONS API IS THE AUTHORITY, THE ERROR CODE IS NOT ──────────
+   *
+   * This used to read `locationError === 'location-denied' || permission ===
+   * 'denied'`, and the first half of that OR is why officers saw "Location is
+   * blocked" on consoles where they had allowed it. A geolocation error code
+   * describes ONE failed reading; `navigator.permissions` describes the
+   * standing grant. When they disagree the standing grant is the one that is
+   * true, and the error is a reading that happened to fail.
+   *
+   * So a known-granted permission suppresses the denial outright, for the
+   * whole session, whatever errors arrive afterwards. The error code only
+   * gets to speak where the Permissions API cannot — older Safari, which has
+   * no geolocation entry — and `useGuardTelemetry` has already stopped
+   * reporting a denial there once a fix has been seen.
+   */
+  const denied = permission === 'denied' || (permission !== 'granted' && locationError === 'location-denied')
   const missing = locationError === 'no-fix'
 
   // Nothing to say while a position is flowing.

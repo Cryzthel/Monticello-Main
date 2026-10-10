@@ -28,6 +28,16 @@ export function activeCallsQuery() {
 const HIGH_PRECISION_STAGES = new Set(['responding', 'on_site', 'investigating'])
 
 /**
+ * Consecutive geolocation failures before the officer is told there is no fix.
+ *
+ * Two, not one. The watch carries a 30-second timeout, so this is a full
+ * minute of trying — long enough that the condition is real, short enough to
+ * reach somebody who has walked indoors and needs to know they have gone
+ * invisible to dispatch.
+ */
+const ERROR_GRACE = 2
+
+/**
  * Publishes this officer's position and battery while they are on duty.
  * Mounted once, above the routes, so it keeps running whichever page is open.
  *
@@ -88,6 +98,17 @@ export function useGuardTelemetry() {
   )
 
   const lastSentRef = useRef({ at: 0, fix: null })
+  /**
+   * Has this device ever produced a fix in this session?
+   *
+   * Session-scoped on purpose, and never reset by an error. It is the answer
+   * to "did the officer allow this", and that question has been settled the
+   * moment one position arrives — a reload asks it again, which is right,
+   * because a reload is also when the permission could genuinely have changed.
+   */
+  const grantedRef = useRef(false)
+  /** Consecutive geolocation failures with no fix in between. */
+  const errorsRef = useRef(0)
   const batteryRef = useRef(null)
   const stateRef = useRef({})
   stateRef.current = { uid, mode, sharing, activeIncidentId, identity, locationError }
@@ -181,15 +202,48 @@ export function useGuardTelemetry() {
 
     const onPosition = (position) => {
       setLocationError(null)
+      // A fix proves the permission was granted. Latched for the session so a
+      // later error can never be reported as a denial — see `onError`.
+      grantedRef.current = true
+      errorsRef.current = 0
       const fix = rememberFix(position)
       const last = lastSentRef.current
       const elapsed = Date.now() - last.at
       const moved = last.fix ? distanceMeters([last.fix.lng, last.fix.lat], [fix.lng, fix.lat]) : Infinity
       if (elapsed >= cadence.heartbeatMs || (elapsed >= cadence.minMs && moved >= cadence.moveM)) send(fix)
     }
+    /**
+     * ── A SINGLE ERROR IS NOT A VERDICT ──────────────────────────────────
+     *
+     * This used to set `locationError` on the first callback and publish it,
+     * which put two false statements on screen.
+     *
+     * "LOCATION IS BLOCKED" AFTER THE OFFICER ALLOWED IT. `watchPosition`
+     * reports PERMISSION_DENIED (code 1) in more situations than the name
+     * suggests — iOS raises it when the device's system Location Services
+     * switch is off even though the SITE is allowed, and both Chrome and
+     * Safari can emit one during the prompt race on a reload. Once a fix has
+     * arrived, this browser has granted the permission, and no later error
+     * can retract that. So after the first successful position a code 1 is
+     * reported as "no fix", which is what it actually is.
+     *
+     * "NO GPS FIX" FOR A SINGLE TIMEOUT. The watch is armed with a 30-second
+     * timeout and a phone that walks under a carport trips it routinely. One
+     * timeout is weather; the banner it raised cleared itself on the next
+     * reading, having told an officer mid-shift that dispatch could not see
+     * them. Two consecutive failures with no fix in between is a condition.
+     *
+     * The device document still carries whatever is being reported, so a
+     * dispatcher's unit list and the officer's own banner never disagree.
+     */
     const onError = (err) => {
-      const code = err?.code === 1 ? 'location-denied' : 'no-fix'
-      setLocationError(code)
+      errorsRef.current += 1
+      const denied = err?.code === 1 && !grantedRef.current
+      if (denied) {
+        setLocationError('location-denied')
+      } else if (errorsRef.current >= ERROR_GRACE) {
+        setLocationError('no-fix')
+      }
       if (Date.now() - lastSentRef.current.at >= cadence.minMs) send(null)
     }
 

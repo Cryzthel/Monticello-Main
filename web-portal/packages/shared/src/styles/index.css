@@ -3117,6 +3117,40 @@
    (base-850 fill, slate-200 hairline), so the popup flips with the theme like
    the toolbar beside it. The tip takes the fill on whichever side Mapbox
    anchors it. */
+/* ══ THE MAP'S BOTTOM CONTROLS, ABOVE A BOTTOM SHEET ═══════════════════════
+   Mapbox's attribution and wordmark sit bottom-left and bottom-right, and the
+   dispatch route sheet is flush to the bottom edge of the map on a phone — so
+   by default the sheet covers them completely.
+
+   THIS IS A LICENCE TERM, NOT A LAYOUT PREFERENCE. Mapbox's terms require the
+   attribution and the wordmark to stay visible on every map; a panel drawn
+   over them is not a design choice this project gets to make. It is also the
+   link an operator uses to report a wrong road, which inside a subdivision
+   whose streets are community-mapped does get used.
+
+   ── UNLAYERED, FOR THE REASON THE BLOCK BELOW IS ───────────────────────────
+   This first went in `@layer components` and did nothing at all. Specificity
+   was never the problem: Mapbox's stylesheet is UNLAYERED, and an unlayered
+   rule beats a layered one outright, however many classes the layered
+   selector carries. Out here it is competing on even terms and the attribute
+   selector settles it. Caught by reading `getComputedStyle(...).bottom` back
+   as `0px` with the media query confirmed matching — from a screenshot it
+   just looks like the rule was never written.
+
+   148px is the sheet's resting height plus a little: measured at 133px for
+   the peek detent at 390x844, the narrowest handset this console is built
+   for. An EXPANDED sheet does cover them again, and that is accepted — it is
+   a state the operator entered deliberately and leaves with one gesture.
+
+   Scoped to `[data-has-sheet]`, which IncidentMap sets only when a sheet is
+   passed, so the Admin Hazard Map keeps its controls where they belong. */
+@media (max-width: 639px) {
+  [data-has-sheet] .mapboxgl-ctrl-bottom-right,
+  [data-has-sheet] .mapboxgl-ctrl-bottom-left {
+    bottom: 148px;
+  }
+}
+
 .map-popup {
   /* Above the map's floating furniture — the controls panel, route badge and
      toolbar are all z-10 inside IncidentMap's isolated stacking context — and

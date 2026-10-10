@@ -1692,11 +1692,30 @@ export default function IncidentMap({
   /** Identifies whose route this is. The camera re-frames only when it changes. */
   routeKey = null,
   /**
-   * A node floated top-centre over the map — the Guardhouse's route badge.
-   * Rendered inside the map's own frame so it follows the map into its
-   * maximised state, where a sibling elsewhere in the page would be covered.
+   * A node floated top-centre over the map — the Guardhouse's turn-guidance
+   * banner. Rendered inside the map's own frame so it follows the map into
+   * its maximised state, where a sibling elsewhere in the page would be
+   * covered.
    */
   overlay = null,
+  /**
+   * A node anchored to the BOTTOM of the map on a phone, and stacked under
+   * `overlay` on anything wider — the route details panel.
+   *
+   * ── WHY THE TWO SLOTS ARE SEPARATE ───────────────────────────────────────
+   * They were one. That worked while both lived at the top of the map on
+   * every screen, and stopped working the moment the details panel became a
+   * bottom sheet: a turn banner is the one thing that must not follow it
+   * down there. A driver's eyes go up; the bottom of a phone is where a thumb
+   * rests and where a sheet gets dragged over.
+   *
+   * One CONTAINER, two slots, is what keeps that from needing two sets of
+   * positioning maths. The container spans the map, the banner sits at its
+   * start, and `mt-auto` pushes the sheet to the far end on a phone and is
+   * switched off above `sm`, where the two simply stack. Nothing measures
+   * anything.
+   */
+  sheet = null,
   /**
    * An extra section at the BOTTOM of the controls drawer.
    *
@@ -2778,6 +2797,7 @@ export default function IncidentMap({
       // and with h-full also dropped it collapses to zero height. A map with
       // no height has nothing to hit-test, which reads as "fullscreen killed
       // the pins" when the pins were never the problem.
+      data-has-sheet={sheet ? '' : undefined}
       className={`isolate overflow-hidden ${
         maximized ? 'fixed inset-0 z-40 rounded-none' : 'relative h-full w-full rounded-none lg:rounded-lg'
       }`}
@@ -3037,15 +3057,35 @@ export default function IncidentMap({
         </>
       ) : null}
 
-      {overlay ? (
+      {overlay || sheet ? (
         <div
           style={{
             '--overlay-left': `${!isCompact && controlsOpen ? CONTROL_PANEL_CLEARANCE : 12}px`,
             '--overlay-right': `${12 + panelRight}px`,
           }}
-          className="pointer-events-none absolute inset-x-3 top-3 z-10 flex justify-center lg:[left:var(--overlay-left)] lg:[right:var(--overlay-right)]"
+          /* Spans the map so `mt-auto` has somewhere to push to, and stays
+             `pointer-events-none` throughout — every child opts back in. A
+             full-bleed transparent layer over a Mapbox canvas that swallowed
+             drags would break panning on the whole console.
+
+             `bottom-0` and `inset-x-0` below `sm`: the sheet is flush to the
+             screen edges, which is what makes `rounded-t-3xl` read as a sheet
+             rather than as a card that happens to be low. Above `sm` the
+             12px gutter comes back and the stack returns to the top. */
+          className="pointer-events-none absolute inset-x-0 bottom-0 top-3 z-10 flex flex-col gap-2 sm:inset-x-3 sm:bottom-3 lg:[left:var(--overlay-left)] lg:[right:var(--overlay-right)]"
         >
-          {overlay}
+          {/* `pr-14` below `lg`: Mapbox's own zoom / locate / maximise column
+              runs down the right edge at every width, and the custom
+              `--overlay-right` inset only applies from `lg` up. Without the
+              clearance the banner's right corner sits under the zoom buttons
+              on a phone — measured at 390px, where a 342px banner and a 44px
+              control column cannot both have the full width. */}
+          {overlay ? (
+            <div className="flex shrink-0 justify-center pl-3 pr-14 sm:pl-0 lg:pr-0">{overlay}</div>
+          ) : null}
+          {sheet ? (
+            <div className="mt-auto flex min-h-0 justify-center sm:mt-0">{sheet}</div>
+          ) : null}
         </div>
       ) : null}
 
