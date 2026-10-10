@@ -1,3 +1,4 @@
+import { staffLabel } from '@shared/lib/identity'
 import { formatMinutes, incidentDurations } from '@shared/lib/incidents'
 import { minutesWaiting } from '@shared/lib/wpda'
 
@@ -155,7 +156,11 @@ export function dispatchEta(report) {
  * been marked as resolved").
  */
 export function residentMessageForStage(report, stage, guardName) {
-  const guard = guardName || report?.assignedGuardName || 'Security'
+  // `staffLabel`, not the raw stored name. This sentence is quoted to the
+  // dispatcher as "Sends: …" and is the wording a resident is told to
+  // expect, so an email-provisioned account must not put an address in it.
+  // Callers already pass a cleaned label; this is the floor under them.
+  const guard = staffLabel(guardName, '') || staffLabel(report?.assignedGuardName, 'Security')
   switch (stage) {
     case 'responding':
       return `Guard ${guard} is en route to your location.`

@@ -2,7 +2,7 @@ import { UserX } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { UNIT_STATE_LABELS, rankUnits } from '@/hooks/useGuardUnits'
 import { formatDistance } from '@/lib/directions'
-import { BatteryIndicator, TelemetryBadge, initials } from '@/components/dispatch/parts'
+import { initials, unitLabel } from '@/lib/unitIdentity'
 
 const STATE_TONES = {
   available: 'success',
@@ -45,6 +45,7 @@ export default function UnitPicker({ units, value, onChange, excludeUid = null, 
       {ranked.map((unit) => {
         const selectable = unit.state === 'available'
         const selected = value === unit.uid
+        const { label, badge } = unitLabel(unit)
         return (
           <button
             key={unit.uid}
@@ -69,25 +70,37 @@ export default function UnitPicker({ units, value, onChange, excludeUid = null, 
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-1.5">
-                <span className="truncate text-label font-semibold text-text-primary">{unit.name}</span>
-                {unit.badgeNumber ? (
-                  <span className="shrink-0 font-mono text-2xs text-text-muted">{unit.badgeNumber}</span>
+                <span className="truncate text-label font-semibold text-text-primary">{label}</span>
+                {badge ? (
+                  <span className="shrink-0 font-mono text-2xs text-text-muted">{badge}</span>
                 ) : null}
               </span>
-              <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                {selectable ? <TelemetryBadge unit={unit} /> : (
-                  <StatusBadge tone={STATE_TONES[unit.state]} size="sm" dot>
-                    {UNIT_STATE_LABELS[unit.state]}
-                  </StatusBadge>
-                )}
-                <BatteryIndicator battery={unit.battery} compact />
+              {/* ── ONE PILL, AND IT ALWAYS SAYS THE SAME KIND OF THING ──
+                  An available unit used to get a TelemetryBadge here —
+                  "GPS live ±8 m · just now", or "Approx" — while a busy one
+                  got its state. Two different questions answered in the same
+                  slot, so the column read as a state for half the rows and a
+                  sensor reading for the other half, and the dispatcher had to
+                  work out which they were looking at.
+
+                  The state is the one that decides anything: a dispatcher
+                  scanning this list is asking who is free. Fix quality only
+                  mattered as a proxy for "can I route to them", and the
+                  distance on the right already answers that — it is null, and
+                  shows an em dash, precisely when there is no usable fix. */}
+              <span className="mt-1 flex">
+                <StatusBadge tone={STATE_TONES[unit.state]} size="sm" dot>
+                  {UNIT_STATE_LABELS[unit.state]}
+                </StatusBadge>
               </span>
             </span>
-            <span className="shrink-0 text-right">
-              <span className="block text-label font-semibold tabular-nums text-text-primary">
-                {unit.distanceM != null ? formatDistance(unit.distanceM) : '—'}
-              </span>
-              <span className="block text-2xs text-text-muted">straight line</span>
+            {/* The "straight line" caption is gone. It qualified the figure
+                honestly — this is crow-flies, not road distance — and it cost
+                a second line on every row to say something that is the same
+                on every row, next to a number nobody mistakes for a route:
+                the road ETA appears on the panel once a unit is picked. */}
+            <span className="shrink-0 text-label font-semibold tabular-nums text-text-primary">
+              {unit.distanceM != null ? formatDistance(unit.distanceM) : '—'}
             </span>
           </button>
         )

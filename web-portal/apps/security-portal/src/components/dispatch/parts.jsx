@@ -1,18 +1,7 @@
-import {
-  Battery,
-  BatteryCharging,
-  BatteryFull,
-  BatteryLow,
-  BatteryMedium,
-  BatteryWarning,
-  Check,
-  LocateFixed,
-  LocateOff,
-} from '@shared/icons'
+import { Check } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { categoryColor, categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
 import { DISPATCH_STAGES, STAGE_LABELS, deriveDispatchStage, stageIndex } from '@shared/lib/dispatchStage'
-import { formatAgo } from '@/lib/dispatch'
 import { categoryIcon } from '@shared/theme/categoryIcons'
 
 /**
@@ -183,83 +172,4 @@ export function StageStepper({ report }) {
       })}
     </ol>
   )
-}
-
-/** Battery as an icon, a percentage and a tone. Unknown is said, not guessed. */
-export function BatteryIndicator({ battery, compact = false }) {
-  if (!battery || !Number.isFinite(battery.level)) {
-    return (
-      <span className="inline-flex items-center gap-1 text-2xs text-text-muted" title="This browser does not report battery">
-        <Battery size="sm" aria-hidden="true" />
-        {compact ? '—' : 'Battery n/a'}
-      </span>
-    )
-  }
-  const pct = Math.round(battery.level * 100)
-  let Icon = BatteryFull
-  let tone = 'text-success'
-  if (battery.charging) Icon = BatteryCharging
-  else if (pct <= 15) {
-    Icon = BatteryWarning
-    tone = 'text-danger'
-  } else if (pct <= 30) {
-    Icon = BatteryLow
-    tone = 'text-warning'
-  } else if (pct <= 60) Icon = BatteryMedium
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-2xs font-semibold tabular-nums ${tone}`}
-      title={`Battery ${pct}%${battery.charging ? ', charging' : ''}`}
-    >
-      <Icon size="sm" aria-hidden="true" />
-      {pct}%
-    </span>
-  )
-}
-
-const LOCATION_ERRORS = {
-  'location-denied': 'Location blocked',
-  'no-geolocation': 'No GPS on device',
-  'no-fix': 'No GPS fix',
-}
-
-/**
- * The state of a unit's position feed, as one capsule:
- *   live         a recent fix  — "GPS live ±8 m · 3 s ago"
- *   approximate  a fix too coarse to route on precisely
- *   stale        the device has gone quiet
- *   none         no position, with the reason when the device gave one
- */
-export function TelemetryBadge({ unit }) {
-  if (!unit?.position) {
-    const reason = !unit?.reporting
-      ? 'Not reporting'
-      : LOCATION_ERRORS[unit.locationError] ?? (unit.mode === 'idle' ? 'Location sharing off' : 'No location')
-    return (
-      <StatusBadge tone="neutral" size="sm" icon={LocateOff}>
-        {reason}
-      </StatusBadge>
-    )
-  }
-  const accuracy = Number.isFinite(unit.position.accuracy) ? ` ±${Math.round(unit.position.accuracy)} m` : ''
-  const age = formatAgo(unit.positionAgeMs)
-  if (unit.stale) {
-    return (
-      <StatusBadge tone="warning" size="sm" icon={LocateFixed}>
-        Last fix {age}
-      </StatusBadge>
-    )
-  }
-  return (
-    <StatusBadge tone={unit.approximate ? 'warning' : 'success'} size="sm" icon={LocateFixed}>
-      {unit.approximate ? 'Approx' : 'GPS live'}
-      {accuracy} · {age}
-    </StatusBadge>
-  )
-}
-
-/** Two-letter initials for a unit's avatar. */
-export function initials(name = '') {
-  const parts = name.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean)
-  return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase()
 }

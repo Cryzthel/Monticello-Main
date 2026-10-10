@@ -60,8 +60,8 @@ import {
   Section,
   StageBadge,
   StageStepper,
-  initials,
 } from '@/components/dispatch/parts'
+import { initials, unitLabel } from '@/lib/unitIdentity'
 import EvidenceGrid, { forensicCoordinates, forensicTimestamp } from '@/components/dispatch/EvidenceGrid'
 import UnitPicker from '@/components/dispatch/UnitPicker'
 import ReasonDialog from '@/components/dispatch/ReasonDialog'
@@ -170,6 +170,13 @@ function useAckClock(report) {
  * clocked out.
  */
 function AssignedUnit({ report, unit, route }) {
+  // Never the raw stored name: accounts here are provisioned by email and
+  // `staff_accounts.name` often holds the address. See `unitLabel`.
+  const { label } = unitLabel({
+    name: report.assignedGuardName,
+    badgeNumber: report.assignedGuardBadge || unit?.badgeNumber,
+  })
+  const badgeText = report.assignedGuardBadge || unit?.badgeNumber || '—'
   const roadEta =
     route?.phase === 'ready' && route.route
       ? `${formatDuration(route.route.duration)} · ${formatDistance(route.route.distance)} by road`
@@ -194,9 +201,9 @@ function AssignedUnit({ report, unit, route }) {
           {initials(report.assignedGuardName)}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-text-primary">{report.assignedGuardName}</p>
+          <p className="truncate text-sm font-semibold text-text-primary">{label}</p>
           <p className="truncate text-caption text-text-muted">
-            Badge <span className="font-mono">{report.assignedGuardBadge || unit?.badgeNumber || '—'}</span>
+            Badge <span className="font-mono">{badgeText}</span>
             {' · '}
             {unit ? UNIT_STATE_LABELS[unit.state] : 'Not on duty'}
           </p>
@@ -533,6 +540,17 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
     .filter(Boolean)
     .join(' · ')
   const reference = incidentReference(report.id)
+  /**
+   * The assigned officer, as the hints below are allowed to name them.
+   *
+   * Nine strings in this file interpolated `report.assignedGuardName`
+   * directly, which on an email-provisioned account prints the address into
+   * sentences a dispatcher reads aloud. One derivation, used by all of them.
+   */
+  const guardLabel = unitLabel({
+    name: report.assignedGuardName,
+    badgeNumber: report.assignedGuardBadge || assignedUnit?.badgeNumber,
+  }).label
   const media = buildMediaItems(report)
   const stamp = { at: report.reportedAt, lat: report.lat, lng: report.lng, reference }
   const resolutionMedia = (report.resolution?.photoUrls ?? []).map((url) => ({ url, type: 'image' }))
@@ -541,7 +559,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   const nextMessage = residentMessageForStage(
     report,
     { dispatched: 'responding', responding: 'resolved' }[stage],
-    report.assignedGuardName,
+    guardLabel,
   )
 
 
@@ -631,10 +649,10 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
       </>
     )
     hint = canAct
-      ? `${isMine ? 'Switches this device to high-precision GPS until the call is resolved' : `Acknowledges on behalf of ${report.assignedGuardName}`}. Sends: “${nextMessage}”`
+      ? `${isMine ? 'Switches this device to high-precision GPS until the call is resolved' : `Acknowledges on behalf of ${guardLabel}`}. Sends: “${nextMessage}”`
       : ack?.expired
-        ? `${report.assignedGuardName} has not acknowledged within ${ACK_TIMEOUT_MS / 1000} s, and every console has been alerted. Reassign the call to another unit.`
-        : `${report.assignedGuardName} has ${ACK_TIMEOUT_MS / 1000} s to acknowledge before every console is alerted.`
+        ? `${guardLabel} has not acknowledged within ${ACK_TIMEOUT_MS / 1000} s, and every console has been alerted. Reassign the call to another unit.`
+        : `${guardLabel} has ${ACK_TIMEOUT_MS / 1000} s to acknowledge before every console is alerted.`
   } else if (stage === 'responding') {
     /**
      * ── ONE STAGE WHERE THERE WERE THREE ───────────────────────────────
@@ -678,8 +696,8 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
         ? `On scene since ${clock(report.onSceneAt)}. Resolving needs an outcome, notes and at least one photo.`
         : 'Arrival is stamped automatically when your position reaches the pin. Resolving needs an outcome, notes and at least one photo.'
       : report.onSceneAt
-        ? `${report.assignedGuardName} arrived at ${clock(report.onSceneAt)}.`
-        : `${report.assignedGuardName} is en route.`
+        ? `${guardLabel} arrived at ${clock(report.onSceneAt)}.`
+        : `${guardLabel} is en route.`
   } else if (stage === 'resolved') {
     footer = (
       <button
@@ -695,7 +713,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   }
 
   if (!canAct && stage !== 'none' && stage !== 'resolved' && !pickerOpen) {
-    hint = `${hint} Only ${report.assignedGuardName || 'the assigned officer'} or a supervisor can advance this call.`
+    hint = `${hint} Only ${guardLabel} or a supervisor can advance this call.`
   }
 
   return (
@@ -901,7 +919,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
               /* Only the reassignment names itself, because "reassign FROM
                  Officer Reyes" carries a fact the buttons below do not. The
                  plain dispatch case has no heading at all — see Section. */
-              title={stage === 'dispatched' ? `Reassign from ${report.assignedGuardName}` : null}
+              title={stage === 'dispatched' ? `Reassign from ${guardLabel}` : null}
               meta={`${units.filter((u) => u.state === 'available').length} available`}
             >
               <UnitPicker
