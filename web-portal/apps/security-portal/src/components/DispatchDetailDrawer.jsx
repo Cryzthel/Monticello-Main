@@ -25,8 +25,8 @@ import { buildMediaItems } from '@shared/lib/incidents'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import {
   ACK_TIMEOUT_MS,
+  deriveDispatchStage,
   RESOLUTION_OUTCOMES,
-  STAGE_LABELS,
 } from '@shared/lib/dispatchStage'
 import {
   acknowledgeAndRespond,
@@ -192,7 +192,21 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
   // already happened. Offline, the stage moves locally before the server
   // answers, and leaving the dialog open invited a second press that the
   // rules would refuse when it arrived.
-  const stage = report?.dispatchStage
+  /**
+   * ── ONE STAGE, DERIVED, FOR EVERY PART OF THIS PANEL ───────────────────
+   *
+   * This was `report?.dispatchStage` — the RAW stored value — while the
+   * progress bar beside it went through `deriveDispatchStage`. Two sources
+   * of truth for one fact, and they disagreed on exactly the documents that
+   * matter: a call still stored at the retired `on_site` or `investigating`
+   * derives to `responding`, so the bar lit Responding while NOTHING here
+   * matched a branch. No action button, no hint, and a heading that computed
+   * `STAGE_LABELS[undefined]` and rendered the words "Next: undefined".
+   *
+   * That is the mismatch this panel was reported for. It is not a labelling
+   * problem; it is the bar and the controls reading different fields.
+   */
+  const stage = deriveDispatchStage(report)
   useEffect(() => {
     if (stage !== 'dispatched') setReassigning(false)
     if (stage !== 'responding') setResolving(false)
@@ -213,7 +227,10 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
 
   const dispatchSelected = useCallback(() => {
     if (!selectedUnit) return
-    const label = stage === 'dispatched' ? `Reassigned to ${selectedUnit.name}` : `${selectedUnit.name} dispatched`
+    // `unitLabel`, not the raw name: this string is shown as a receipt and
+    // an email-provisioned account would put an address in it.
+    const picked = unitLabel(selectedUnit).label
+    const label = stage === 'dispatched' ? `Reassigned to ${picked}` : `${picked} dispatched`
     run('dispatch', label, () => dispatchUnit(report, selectedUnit, { role })).then((ok) => {
       if (ok) {
         setReassigning(false)
@@ -374,7 +391,12 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         className="btn btn-action btn-brand"
       >
         <CheckCircle2 size="sm" aria-hidden="true" />
-        Resolve incident
+        {/* "Proceed to resolve", not "Resolve incident". The press does not
+            resolve anything — it opens a modal that then demands an outcome,
+            notes and a photo. A button whose label claims to finish the call
+            is a button people expect to be the last one, and they press it
+            to find out what it wants. */}
+        Proceed to resolve
       </button>
     ) : null
     hint = canAct
@@ -480,6 +502,22 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               before that control was removed still carry one, and nothing
               can set it now. */}
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {/* ── NOBODY IS ON THIS CALL ──────────────────────────────────
+                The one stage the progress bar understates. Steps 2 and 3
+                are plainly ahead of you, but step 1 not having happened
+                looks the same as step 1 being in progress at a glance —
+                both are "the first node is not filled in".
+
+                So the header says it in words. The trigger it implies is
+                already on screen rather than in this badge: at this stage
+                the unit picker is open in the body and the footer button
+                reads "Dispatch <name>", so a second Assign control would be
+                a third way to start one action. */}
+            {stage === 'none' ? (
+              <StatusBadge tone="warning" size="sm" icon={Radio}>
+                Unassigned — awaiting dispatch
+              </StatusBadge>
+            ) : null}
             <StatusBadge tone={categoryTone(report.category)} size="sm">
               {categoryLabel(report.category)}
             </StatusBadge>
@@ -499,7 +537,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
           </div>
 
           <div className="mt-3">
-            <StageStepper report={report} />
+            <StageStepper report={report} stage={stage} />
           </div>
         </header>
 
@@ -645,15 +683,15 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         {/* ══ THE NEXT ACTION — PINNED ══ */}
         <footer className="relative shrink-0 border-t border-hairline bg-base-900 px-3.5 pb-3.5 pt-3">
           {feedback ? <Receipt feedback={feedback} onDismiss={dismiss} /> : null}
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-xs font-semibold text-text-secondary">
-              {pickerOpen
-                ? 'Dispatch'
-                : stage === 'resolved'
-                  ? 'Call closed'
-                  : `Next: ${STAGE_LABELS[{ dispatched: 'responding', responding: 'resolved' }[stage]]}`}
-            </h3>
-          </div>
+          {/* ── NO "NEXT: RESOLVED" HEADING ───────────────────────────────
+              It sat directly under a progress bar reading "Responding" and
+              said the word "Resolved" in the same glance, which reads as the
+              two disagreeing even when they are both right. A heading naming
+              a STAGE, above controls naming an ACTION, inches from a bar
+              that also names stages, is three vocabularies for one thing.
+
+              The button says what pressing it does and the bar says where
+              the call is. Nothing in between needs to speak. */}
           {/* ── CLOSE SITS WITH THE OTHER ACTIONS ──────────────────────
               `flex-wrap`, and Close LAST, which together are the whole of why
               a third control is safe to put in this row.

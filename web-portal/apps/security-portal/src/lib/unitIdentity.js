@@ -37,7 +37,21 @@ export function unitLabel({ name, badgeNumber } = {}) {
   const badge = String(badgeNumber ?? '').trim()
   if (real) return { label: real, badge }
   if (badge) return { label: `Unit ${badge}`, badge: '' }
-  return { label: 'Unnamed unit', badge: '' }
+  /**
+   * The last resort is the project's OWN role word, not an invented one.
+   *
+   * This read "Unnamed unit", which described the record accurately and
+   * read as a defect on screen — an officer is not a nameless thing, their
+   * account is simply incomplete. `staffLabel`'s default has been the
+   * answer to "we cannot name this person" everywhere else in the codebase
+   * since it was written, and a second phrase for the same situation is how
+   * two surfaces end up disagreeing about what an empty account is called.
+   *
+   * It is deliberately NOT "Unassigned": these are on-duty officers who
+   * exist and can be dispatched. A call with nobody on it is a different
+   * state, and the drawer says so with its own badge.
+   */
+  return { label: 'Security personnel', badge: '' }
 }
 
 /**

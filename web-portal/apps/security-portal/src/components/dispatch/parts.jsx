@@ -105,11 +105,17 @@ const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
  * each step was reached. Done steps are filled, the current one is ringed,
  * the rest are muted. An ordered list, so a screen reader reads it as steps.
  */
-export function StageStepper({ report }) {
-  // `deriveDispatchStage`, not the raw field. A call stored at the retired
-  // `on_site` stage is not in DISPATCH_STAGES, so `stageIndex` answers 0 for
-  // it and the stepper would render a live call with nothing lit at all.
-  const current = stageIndex(deriveDispatchStage(report))
+export function StageStepper({ report, stage }) {
+  /**
+   * The stage is PASSED IN, with a derivation only as a fallback.
+   *
+   * It derived its own, which was correct and was half of a bug: the drawer
+   * around it read the raw `dispatchStage` field, so on a call stored at a
+   * retired stage the bar lit Responding while the controls below matched
+   * nothing. Two readers of one fact will eventually disagree; the caller
+   * owns it now and this renders what it is given.
+   */
+  const current = stageIndex(stage ?? deriveDispatchStage(report))
   return (
     /* ── CENTRED, AND NOT A FIVE-COLUMN GRID ─────────────────────────────
        It was `grid grid-cols-5`, one column per stage, stretched across the
