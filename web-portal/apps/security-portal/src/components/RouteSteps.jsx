@@ -70,8 +70,18 @@ export function ManeuverGlyph({ icon, size = 'sm', className = '' }) {
   return <Glyph size={size} className={className} />
 }
 
-export default function RouteSteps({ steps, activeIndex = -1 }) {
-  const [open, setOpen] = useState(false)
+export default function RouteSteps({ steps, activeIndex = -1, defaultOpen = false }) {
+  /**
+   * `defaultOpen` sets where this STARTS, and nothing more.
+   *
+   * It is initial state rather than a controlled `open` prop on purpose: the
+   * panel decides a sensible default for the situation the route appeared in
+   * (see RouteSummaryBadge), and from then on the only thing that moves this
+   * is the operator pressing the header. A controlled prop would have let a
+   * navigation session starting slam the list shut under somebody who had just
+   * opened it to check the back gate.
+   */
+  const [open, setOpen] = useState(defaultOpen)
   const listId = useId()
 
   if (!Array.isArray(steps) || steps.length === 0) return null
@@ -115,22 +125,73 @@ export default function RouteSteps({ steps, activeIndex = -1 }) {
           {steps.map((step, index) => {
             const done = activeIndex >= 0 && index < activeIndex
             const current = index === activeIndex
+            const last = index === steps.length - 1
             return (
               <li
                 key={`${index}-${step.instruction}`}
                 aria-current={current ? 'step' : undefined}
-                className={`flex items-start gap-2.5 px-3 py-2 [&+li]:border-t [&+li]:border-divider ${
+                className={`relative flex items-start gap-2.5 px-3 py-2 ${
                   current ? 'bg-brand-500/8' : ''
                 }`}
               >
-                {/* Completed steps keep their row but lose their emphasis, and
+                {/* ── THE NODE, AND THE VECTOR TO THE NEXT ONE ───────────
+                    The row borders are gone: a connecting line down the node
+                    column already says these are one ordered sequence, and a
+                    full-width rule across every row said it a second time
+                    while chopping the list into unrelated cells. One channel
+                    for one fact — the same rule the route layers follow about
+                    dashes.
+
+                    Completed steps keep their row but lose their emphasis, and
                     swap the turn arrow for a tick. Removing them outright would
                     be worse: a dispatcher checking whether a unit went the way
                     they expected needs the part already driven to still be
                     there. */}
+                {/* ── THE VECTOR TO THE NEXT NODE ────────────────────────
+                    ABSOLUTE, not a flex child of the node column, and that is
+                    the whole trick. The obvious build is a `flex-1` segment
+                    stacked under the glyph in a stretched column — it renders
+                    nothing. The column's height is the ROW's height, the row's
+                    height is the 20px glyph (an instruction is one 16px line),
+                    so the segment is handed zero and the list comes back
+                    looking exactly as it did before, which is how this cost a
+                    cycle to find rather than being obvious in the diff.
+
+                    Taken out of flow it can be measured against the row
+                    instead of against the leftovers: from just under the glyph
+                    to 8px PAST the row's bottom edge, which is the next row's
+                    top padding — so consecutive segments meet and the line is
+                    continuous rather than a stack of dashes. Dashed already
+                    means "not a road" on this console (see route-connector),
+                    and a broken connector here would borrow that meaning.
+
+                    `left`: the row's `px-3` plus half the 20px node = 22px, so
+                    the line runs down the glyph's own centre. Those three
+                    numbers have to move together.
+
+                    The opacities are measured against the LIGHT panel, which
+                    is the harder of the two — a 1px line on white at /35 came
+                    back at 2.4:1 and all but vanished, where /50 reads 4.0:1.
+                    Dark was never the problem and both tones are comfortable
+                    there. Travelled segments stay deliberately recessive, on
+                    the same terms as the travelled part of the route on the
+                    map, so the list and the map recede together.
+
+                    A wrapped instruction makes the row taller and the segment
+                    grows with it, which is the other thing the flex build got
+                    wrong in the opposite direction. */}
+                {!last ? (
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute left-[1.375rem] top-7 -bottom-2 w-px -translate-x-1/2 ${
+                      done ? 'bg-text-muted/30' : current ? 'bg-brand-500/50' : 'bg-text-muted/50'
+                    }`}
+                  />
+                ) : null}
+
                 <span
                   aria-hidden="true"
-                  className={`mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                  className={`relative mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
                     current
                       ? 'bg-brand-500 text-white'
                       : done

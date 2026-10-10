@@ -373,3 +373,47 @@ export function formatDuration(seconds) {
   const rest = minutes % 60
   return rest ? `${hours} h ${rest} min` : `${hours} h`
 }
+
+/**
+ * ── WHAT TIME THE UNIT GETS THERE ──────────────────────────────────────────
+ *
+ * "6 min" and "2:44 PM" are the same fact and they are not interchangeable.
+ * A duration answers "how long until this is handled", which is the
+ * dispatcher's question; a clock time answers "when can I tell the resident
+ * somebody will be at the gate", which is the question they are asked on the
+ * phone while they watch the map. Doing that arithmetic in your head, under
+ * load, against a number that keeps changing, is exactly the sort of thing a
+ * console should have already done.
+ *
+ * ── IT TAKES `now` RATHER THAN READING THE CLOCK ───────────────────────────
+ * Two reasons, and the second is the one that matters. The obvious one is that
+ * a function reading `Date.now()` cannot be tested. The real one is that React
+ * will not recompute a memo because time passed — so a component rendering
+ * `arrivalAt(duration)` would print the arrival time computed at the instant
+ * the last Firestore write happened to land, and keep printing it. Taking
+ * `now` forces the caller to own a ticking clock (see useMetricsClock), which
+ * is the only way this number stays true.
+ */
+export function arrivalAt(remainingDurationS, now = Date.now()) {
+  if (!Number.isFinite(remainingDurationS) || remainingDurationS < 0) return null
+  if (!Number.isFinite(now)) return null
+  return new Date(now + remainingDurationS * 1000)
+}
+
+/**
+ * "2:44 PM" — a wall-clock time, in the operator's own locale.
+ *
+ * ── THE LOCALE IS THE BROWSER'S, DELIBERATELY ──────────────────────────────
+ * `undefined` as the locale means "whatever this machine is set to", so a
+ * guardhouse console set to en-PH shows a 12-hour clock and one set to a
+ * 24-hour locale shows 14:44. Hardcoding `en-US` would have made the format
+ * match the brief's example everywhere and been wrong on the actual hardware;
+ * hardcoding `h12` would have been the same mistake one layer down.
+ *
+ * `locale` is a parameter only so the test can pin one. Nothing in the app
+ * passes it.
+ */
+export function formatClockTime(date, locale = undefined) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
+}

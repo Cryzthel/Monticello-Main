@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import {
@@ -17,7 +17,7 @@ import MapControls from '@shared/components/MapControls'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import { Skeleton } from '@shared/components/Skeleton'
 import { useTheme } from '@shared/theme/ThemeProvider'
-import { ROUTE_TONE_COLORS, UNIT_COLORS } from '@shared/theme/dispatchColors'
+import { NAV_MARKER_COLORS, ROUTE_TONE_COLORS, UNIT_COLORS } from '@shared/theme/dispatchColors'
 import {
   BOUNDARY_GEOJSON,
   BOUNDARY_STYLE,
@@ -1051,6 +1051,103 @@ function unitHeadingImage(color) {
   return { image: ctx.getImageData(0, 0, size, size), ratio }
 }
 
+/**
+ * ── THE NAVIGATION ARROW ───────────────────────────────────────────────────
+ *
+ * The marker a unit becomes once a navigation session is running: a white
+ * chevron inside a blue emblem, ringed in white, turning with the heading.
+ *
+ * WHY THE DOT IS NOT ENOUGH, HAVING ARGUED THAT IT WAS. The note above this
+ * block settles on one silhouette for every unit, with state in the colour,
+ * and that is still right for a dispatcher reading a map with four units on
+ * it. It is the wrong marker for the officer DRIVING, because a dot with a
+ * translucent wedge under it answers "which way is this unit pointing" and the
+ * driver's question is "which way am I going" — the same fact, but one needs
+ * to survive a glance at a laptop on a passenger seat in daylight.
+ *
+ * So the shape does change here, and it is the ONE exception, earned by being
+ * a MODE rather than a state: it appears when a session starts, it goes when
+ * the session ends, and exactly one unit on the map can have it. The dot's
+ * three state colours still mean what they meant — they are simply not what a
+ * driver is reading. Every other unit on the console is untouched.
+ *
+ * Drawn pointing UP, like `unitHeadingImage`, so `icon-rotate` takes a compass
+ * bearing unmodified under `icon-rotation-alignment: 'map'`.
+ *
+ * HARD-EDGED, where the heading beam is deliberately soft. The beam fades
+ * because a bearing derived from a route is a direction of travel and not a
+ * precise claim; this arrow asserts the same thing just as loosely, but it is
+ * read while moving, and a gradient-edged arrow at 36px over satellite tiles
+ * reads as a smudge. The honesty is carried by WHEN it is drawn — only for a
+ * unit with a known bearing on a plotted route — not by its opacity.
+ */
+const NAV_ARROW_IMAGE = 'unit-nav-arrow'
+
+function navigationArrowImage() {
+  const ratio = 2
+  const size = 36 * ratio
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  const c = size / 2
+
+  // Same shadow as the unit dot, for the same reason: this has to separate
+  // from satellite imagery without a coloured halo, which on this map means
+  // "emergency" and not "marker".
+  ctx.shadowColor = 'rgba(15, 23, 42, 0.45)'
+  ctx.shadowBlur = 4 * ratio
+  ctx.shadowOffsetY = 1.5 * ratio
+  ctx.beginPath()
+  ctx.arc(c, c, c - 4 * ratio, 0, Math.PI * 2)
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fill()
+
+  ctx.shadowColor = 'transparent'
+  const r = c - 6 * ratio
+  ctx.beginPath()
+  ctx.arc(c, c, r, 0, Math.PI * 2)
+  ctx.fillStyle = NAV_MARKER_COLORS.arrow
+  ctx.fill()
+
+  // The chevron: a triangle with its base notched, which is what makes it read
+  // as pointing rather than as a wedge. Every coordinate is a fraction of the
+  // emblem's radius, so changing `size` above rescales the whole marker instead
+  // of leaving the arrow sitting at the wrong size inside a resized disc.
+  ctx.beginPath()
+  ctx.moveTo(c, c - r * 0.6)
+  ctx.lineTo(c + r * 0.44, c + r * 0.52)
+  ctx.lineTo(c, c + r * 0.18)
+  ctx.lineTo(c - r * 0.44, c + r * 0.52)
+  ctx.closePath()
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fill()
+
+  return { image: ctx.getImageData(0, 0, size, size), ratio }
+}
+
+/**
+ * The two marker MODES a routed unit moves between, carried on the feature as
+ * `navState` so one source feeds every layer below and the filters decide
+ * which silhouette is drawn.
+ *
+ *   standby     a route is plotted from this unit and nobody has pressed Start
+ *               Navigation. A radiating ring around the dot: the console is
+ *               tracking this position and waiting.
+ *   navigating  a session is running. The dot, its heading beam and its
+ *               responding flash all give way to the arrow above.
+ *
+ * Empty string, not null, for "neither". A Mapbox `['get']` on an absent
+ * property answers null, and `['==', null, 'standby']` is false, so null would
+ * work — but `['!=', ['get','navState'], 'navigating']` is the filter that
+ * hides the dot, and relying on a null comparison for the layer that draws
+ * EVERY OTHER UNIT is a bet not worth taking for one saved character.
+ */
+const NAV_STATE = { none: '', standby: 'standby', navigating: 'navigating' }
+
+/** Layers a unit can be clicked or hovered on — the dot, and the arrow it becomes. */
+const UNIT_HIT_LAYERS = ['unit-icons', 'unit-nav-arrow']
+
 const UNIT_STATE_TEXT = {
   available: 'Available',
   assigned: 'Dispatched — awaiting acknowledgement',
@@ -1059,10 +1156,34 @@ const UNIT_STATE_TEXT = {
 }
 
 function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
-  const images = { 'unit-available': UNIT_COLORS.available, 'unit-responding': UNIT_COLORS.responding, 'unit-on-scene': UNIT_COLORS.on_scene }
-  Object.entries(images).forEach(([id, color]) => {
+  /**
+   * ── THE IMAGE IDS COME FROM `UNIT_IMAGE`, NOT FROM A SECOND LIST ─────────
+   *
+   * They used to be written out here as 'unit-available' / 'unit-responding' /
+   * 'unit-on-scene' while `UNIT_IMAGE` above — the map the FEATURES are built
+   * from — named them 'unit-dot-available' and so on. The two lists disagreed,
+   * so `['get', 'image']` resolved to an image that had never been registered
+   * and `unit-icons` silently drew NOTHING, on both portals, for every unit.
+   *
+   * It did not look like a blank layer, which is why it survived: the pulse
+   * ring, the heading beam and the self-halo are separate layers and they all
+   * kept drawing, so each unit still appeared as a coloured smudge with a
+   * wedge under it. The thing that was missing was the white-ringed dot those
+   * three are meant to decorate — the marker itself.
+   *
+   * Mapbox does not complain about an unknown `icon-image` resolved through an
+   * expression; it just places nothing. So this is derived from one map now,
+   * and `UNIT_IMAGE.assigned` aliasing `available` is why `new Set` is doing
+   * the de-duplication rather than a plain list.
+   */
+  const paletteFor = {
+    [UNIT_IMAGE.available]: UNIT_COLORS.available,
+    [UNIT_IMAGE.responding]: UNIT_COLORS.responding,
+    [UNIT_IMAGE.on_scene]: UNIT_COLORS.on_scene,
+  }
+  new Set(Object.values(UNIT_IMAGE)).forEach((id) => {
     if (map.hasImage(id)) return
-    const { image, ratio } = unitImage(color)
+    const { image, ratio } = unitImage(paletteFor[id] ?? UNIT_COLORS.available)
     map.addImage(id, image, { pixelRatio: ratio })
   })
 
@@ -1071,6 +1192,14 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     map.addImage(UNIT_HEADING_IMAGE, image, { pixelRatio: ratio })
   }
 
+  if (!map.hasImage(NAV_ARROW_IMAGE)) {
+    const { image, ratio } = navigationArrowImage()
+    map.addImage(NAV_ARROW_IMAGE, image, { pixelRatio: ratio })
+  }
+
+  const inNavState = (state) => ['==', ['get', 'navState'], state]
+  const notNavigating = ['!=', ['get', 'navState'], NAV_STATE.navigating]
+
   map.addSource(UNITS_SOURCE_ID, { type: 'geojson', data: initialData })
   // The responding unit's flash: an orange ring pulsed by the same timer as
   // the incident rings, but faster, so a moving unit draws the eye.
@@ -1078,11 +1207,97 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     id: 'unit-pulse',
     type: 'circle',
     source: UNITS_SOURCE_ID,
-    filter: ['==', ['get', 'state'], 'responding'],
+    // Not under the navigation arrow. An orange ring radiating out from a blue
+    // emblem is two markers' worth of signal on one unit, and the colours
+    // fight: the flash says "responding" to a dispatcher reading the map,
+    // which the arrow has already said louder to the officer reading the road.
+    filter: ['all', ['==', ['get', 'state'], 'responding'], notNavigating],
     paint: {
       'circle-radius': 13,
       'circle-color': UNIT_COLORS.responding,
       'circle-opacity': 0.5,
+    },
+  })
+
+  /**
+   * ── STANDBY: THE ROUTE IS PLOTTED AND NOBODY HAS PRESSED GO ──────────────
+   *
+   * Two layers for one cue, which is the same dual-layer radar the incident
+   * pins use (see `setupLayers`) and for the same reason. The RING is steady
+   * and always drawn; the PULSE radiates out of it on the shared animation
+   * clock. Together they read as a tracked position waiting to move.
+   *
+   * Splitting them is what makes reduced motion work without losing anything:
+   * the pulse parks at half extent, and the steady ring is still there saying
+   * the console has this unit. A single animated ring would have had to choose
+   * between vanishing and sitting still mid-sweep.
+   *
+   * It sits UNDER the dot, so the dot is still the position and this is the
+   * ground it stands on — the rule `unit-self-halo` already follows.
+   */
+  map.addLayer({
+    id: 'unit-standby-pulse',
+    type: 'circle',
+    source: UNITS_SOURCE_ID,
+    filter: inNavState(NAV_STATE.standby),
+    paint: {
+      'circle-radius': 13,
+      'circle-color': NAV_MARKER_COLORS.standby,
+      'circle-opacity': 0.3,
+    },
+  })
+  map.addLayer({
+    id: 'unit-standby-ring',
+    type: 'circle',
+    source: UNITS_SOURCE_ID,
+    filter: inNavState(NAV_STATE.standby),
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 15, 18, 24],
+      'circle-color': NAV_MARKER_COLORS.standby,
+      'circle-opacity': 0.18,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': NAV_MARKER_COLORS.standby,
+      'circle-stroke-opacity': 0.65,
+    },
+  })
+  /**
+   * "You are here", for the officer looking at their own console.
+   *
+   * Every unit is the same white-ringed dot and state lives in the COLOUR, so
+   * a guard glancing at a map with three units on it cannot tell which one is
+   * them — the one thing they most need to know while driving to a call.
+   *
+   * A soft ring rather than a different icon, for the reason the dot is a dot:
+   * changing the SHAPE for one unit would make self-ness look like a state,
+   * and state is already spoken for. The halo sits beneath everything else, so
+   * it reads as ground the marker stands on rather than as another marker.
+   *
+   * It is not an accuracy circle. `watchPosition` reports an accuracy radius
+   * and this does not use it — a fixed ring that happened to look like one
+   * would be asserting a precision nobody measured.
+   */
+  map.addLayer({
+    id: 'unit-self-halo',
+    type: 'circle',
+    source: UNITS_SOURCE_ID,
+    /**
+     * Only while no navigation state owns this marker.
+     *
+     * The standby ring above is the same colour at nearly the same radius, and
+     * the arrow replaces the dot this halo sits under. Drawing both gave the
+     * routed unit two concentric blue rings a pixel or two apart, which reads
+     * as a rendering fault rather than as either cue. Standby is the MORE
+     * specific statement — "this unit, this call, waiting" against "this one
+     * is you" — so it is the one that stays.
+     */
+    filter: ['all', ['==', ['get', 'isSelf'], true], ['==', ['get', 'navState'], NAV_STATE.none]],
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 14, 18, 26],
+      'circle-color': '#4285F4',
+      'circle-opacity': 0.16,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': '#4285F4',
+      'circle-stroke-opacity': 0.5,
     },
   })
   // Under the dot, and only for a unit whose heading is known.
@@ -1090,7 +1305,10 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     id: 'unit-heading',
     type: 'symbol',
     source: UNITS_SOURCE_ID,
-    filter: ['==', ['get', 'hasHeading'], true],
+    // The arrow states its own direction, so the beam is redundant beneath it
+    // — and a wedge spreading out of a chevron that already points the same way
+    // just blurs the one edge a driver is reading.
+    filter: ['all', ['==', ['get', 'hasHeading'], true], notNavigating],
     layout: {
       'icon-image': UNIT_HEADING_IMAGE,
       'icon-allow-overlap': true,
@@ -1106,6 +1324,10 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     id: 'unit-icons',
     type: 'symbol',
     source: UNITS_SOURCE_ID,
+    // ONE SILHOUETTE PER UNIT. The dot stands down for the unit that has
+    // become an arrow; leaving it drawn would put a coloured disc under a blue
+    // emblem and the marker would read as two overlapping units.
+    filter: notNavigating,
     layout: {
       'icon-image': ['get', 'image'],
       'icon-allow-overlap': true,
@@ -1119,6 +1341,39 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     },
   })
 
+  /**
+   * The arrow, on top of everything else this layer group draws.
+   *
+   * `icon-rotate` reads the SAME `bearing` property the heading beam does, and
+   * it is tweened by the same animation as the position (see `unitTweenRef`) —
+   * so the arrow turns through a bend instead of snapping at each new fix, and
+   * it cannot disagree with the beam it replaced about which way the unit is
+   * facing.
+   *
+   * `icon-rotation-alignment: 'map'` is what makes the bearing a compass
+   * bearing: the icon turns with the world, not with the screen, so rotating
+   * the map does not send the unit the wrong way.
+   */
+  map.addLayer({
+    id: 'unit-nav-arrow',
+    type: 'symbol',
+    source: UNITS_SOURCE_ID,
+    filter: inNavState(NAV_STATE.navigating),
+    layout: {
+      'icon-image': NAV_ARROW_IMAGE,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-rotate': ['coalesce', ['get', 'bearing'], 0],
+      'icon-rotation-alignment': 'map',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.75, 18, 1],
+    },
+    // Stale is the one thing that still fades the arrow. A navigation session
+    // running on a position that stopped updating is the case an officer most
+    // needs to notice, and it is the only reason this marker is ever less than
+    // fully opaque.
+    paint: { 'icon-opacity': ['case', ['get', 'stale'], 0.5, 1] },
+  })
+
   // Hover names the unit. Built with textContent, not HTML: the name comes
   // from a Firestore document.
   const hover = new mapboxgl.Popup({
@@ -1128,30 +1383,42 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
     offset: 16,
     className: 'map-popup',
   })
-  map.on('mousemove', 'unit-icons', (event) => {
-    map.getCanvas().style.cursor = 'pointer'
-    const feature = event.features?.[0]
-    const unit = unitsRef.current.find((u) => u.uid === feature?.properties?.id)
-    if (!unit) return
-    const card = document.createElement('div')
-    card.style.padding = '8px 10px'
-    const name = document.createElement('p')
-    name.style.cssText = 'margin:0;font-size:12px;font-weight:600;color:var(--color-text-primary)'
-    name.textContent = unit.badgeNumber ? `${unit.name} · ${unit.badgeNumber}` : unit.name
-    const state = document.createElement('p')
-    state.style.cssText = 'margin:2px 0 0;font-size:11px;color:var(--color-text-secondary)'
-    state.textContent = `${UNIT_STATE_TEXT[unit.state] ?? ''}${unit.stale ? ' · position stale' : ''}`
-    card.append(name, state)
-    hover.setLngLat(feature.geometry.coordinates).setDOMContent(card).addTo(map)
-  })
-  map.on('mouseleave', 'unit-icons', () => {
-    map.getCanvas().style.cursor = ''
-    hover.remove()
-  })
-  map.on('click', 'unit-icons', (event) => {
-    const feature = event.features?.[0]
-    const unit = unitsRef.current.find((u) => u.uid === feature?.properties?.id)
-    if (unit) onSelectUnitRef.current?.(unit)
+  /**
+   * Bound over EVERY layer a unit can be drawn on, not just the dot.
+   *
+   * The dot used to be the only one, and the arrow would have inherited
+   * nothing: the moment a session started, the responding unit — the one a
+   * dispatcher is most likely to click — became the single marker on the map
+   * with no hover card and no click. The filters above decide which silhouette
+   * is drawn; this decides what is clickable, and the two have to cover the
+   * same set or a marker goes quietly inert.
+   */
+  UNIT_HIT_LAYERS.forEach((layer) => {
+    map.on('mousemove', layer, (event) => {
+      map.getCanvas().style.cursor = 'pointer'
+      const feature = event.features?.[0]
+      const unit = unitsRef.current.find((u) => u.uid === feature?.properties?.id)
+      if (!unit) return
+      const card = document.createElement('div')
+      card.style.padding = '8px 10px'
+      const name = document.createElement('p')
+      name.style.cssText = 'margin:0;font-size:12px;font-weight:600;color:var(--color-text-primary)'
+      name.textContent = unit.badgeNumber ? `${unit.name} · ${unit.badgeNumber}` : unit.name
+      const state = document.createElement('p')
+      state.style.cssText = 'margin:2px 0 0;font-size:11px;color:var(--color-text-secondary)'
+      state.textContent = `${UNIT_STATE_TEXT[unit.state] ?? ''}${unit.stale ? ' · position stale' : ''}`
+      card.append(name, state)
+      hover.setLngLat(feature.geometry.coordinates).setDOMContent(card).addTo(map)
+    })
+    map.on('mouseleave', layer, () => {
+      map.getCanvas().style.cursor = ''
+      hover.remove()
+    })
+    map.on('click', layer, (event) => {
+      const feature = event.features?.[0]
+      const unit = unitsRef.current.find((u) => u.uid === feature?.properties?.id)
+      if (unit) onSelectUnitRef.current?.(unit)
+    })
   })
 }
 
@@ -1244,6 +1511,43 @@ export default function IncidentMap({
    * position are skipped. `onSelectUnit` is called with the unit on a click.
    */
   units,
+  /**
+   * Keep the camera on this unit as it moves, the way a phone does while
+   * navigating. Pass the uid to follow, or null for a free camera.
+   */
+  /**
+   * The uid of the unit that is THIS viewer, if they are one. Draws a halo
+   * under their own marker so an officer can find themselves on a map where
+   * every unit is the same shape.
+   */
+  selfUnitId = null,
+  followUnitId = null,
+  /**
+   * The uid of the unit the current route STARTS FROM, or null.
+   *
+   * ── WHY THE MAP IS TOLD THIS SEPARATELY FROM `followUnitId` ──────────────
+   * They are usually the same uid and they answer different questions.
+   * `followUnitId` is a camera instruction. This one, with `navigating` below,
+   * drives the marker's state machine: which unit gets the standby ring, and
+   * which one becomes the arrow. A dispatcher can follow a unit without
+   * navigating, and a navigation session survives a pan that clears follow
+   * mode (see DashboardPage) — so one prop could not have served both without
+   * the marker changing shape every time somebody dragged the map.
+   */
+  routeUnitId = null,
+  /**
+   * Is a navigation session running for `routeUnitId`?
+   *
+   * false with a `routeUnitId` set means STANDBY — a route is plotted and
+   * nobody has pressed Start Navigation. See NAV_STATE.
+   */
+  navigating = false,
+  /**
+   * Called the moment the operator takes the camera back — a drag, a scroll, a
+   * pinch. The parent owns the follow state, so it decides what that means;
+   * this component only reports the gesture.
+   */
+  onFollowBreak,
   onSelectUnit,
   /**
    * The response route as a GeoJSON FeatureCollection, or null. Features are
@@ -1255,6 +1559,25 @@ export default function IncidentMap({
   route = null,
   /** Identifies whose route this is. The camera re-frames only when it changes. */
   routeKey = null,
+  /**
+   * A nonce. Every time it CHANGES, the camera re-frames the whole route — the
+   * navigation panel's Overview action.
+   *
+   * ── WHY A NONCE AND NOT A `ref` HANDLE ───────────────────────────────────
+   * The alternative is `useImperativeHandle` and a `mapRef.current.frameRoute()`
+   * call from the page, which is the shape this would take in most codebases
+   * and would be the only imperative handle on a component whose entire
+   * interface is otherwise props in, callbacks out. A counter keeps the data
+   * flow one-directional: the page says "frame it, this is the 4th time I have
+   * asked", and the map's existing effects are still the only thing that
+   * touches the camera.
+   *
+   * It also gets the semantics right for free. Overview is a thing a
+   * dispatcher presses REPEATEDLY — look at the route, pan to the gate, look
+   * again — and a counter fires every press where a boolean would fire once
+   * and then need clearing.
+   */
+  frameRouteSignal = 0,
   /**
    * A node floated top-centre over the map — the Guardhouse's route badge.
    * Rendered inside the map's own frame so it follows the map into its
@@ -1483,11 +1806,28 @@ export default function IncidentMap({
             hasHeading: Number.isFinite(unit.bearing),
             bearing: Number.isFinite(unit.bearing) ? unit.bearing : 0,
             stale: Boolean(unit.stale),
+            isSelf: Boolean(selfUnitId) && unit.uid === selfUnitId,
+            /**
+             * Which marker mode this unit is in — '', 'standby' or
+             * 'navigating' (see NAV_STATE).
+             *
+             * Derived on the FEATURE rather than passed to the layers as a
+             * paint expression over two uid props, because the tween rewrites
+             * these features sixty times a second and a filter reading a
+             * property is free where a filter comparing against a closure
+             * would have to be re-set on every prop change.
+             */
+            navState:
+              routeUnitId && unit.uid === routeUnitId
+                ? navigating
+                  ? NAV_STATE.navigating
+                  : NAV_STATE.standby
+                : NAV_STATE.none,
           },
           geometry: { type: 'Point', coordinates: [unit.position.lng, unit.position.lat] },
         })),
     }),
-    [units],
+    [units, selfUnitId, routeUnitId, navigating],
   )
   const unitsGeojsonRef = useRef(unitsGeojson)
   unitsGeojsonRef.current = unitsGeojson
@@ -1852,20 +2192,24 @@ export default function IncidentMap({
     return () => cancelAnimationFrame(tween.frame)
   }, [unitsGeojson, ready, hasUnitLayer])
 
-  const fittedRouteRef = useRef(null)
-  useEffect(() => {
+  /**
+   * Put the whole route on screen, clear of the map's own furniture.
+   *
+   * Pulled out of the effect below because TWO things now ask for it: a new
+   * route arriving (once), and the navigation panel's Overview button (every
+   * press). It is a callback rather than duplicated padding maths for the
+   * usual reason — the padding has four terms that each track a different
+   * piece of chrome, and a second copy of it would be correct on the day it
+   * was written and wrong by the next time the coverage bar changed height.
+   */
+  const frameRoute = useCallback(() => {
     const map = mapRef.current
-    if (!map || !ready) return
-    const source = map.getSource(ROUTE_SOURCE_ID)
-    if (source) source.setData(route ?? EMPTY_COLLECTION)
-
-    // Once per call and unit, not once per collection: a responding unit's
-    // route is re-plotted every few seconds, and re-framing each time would
-    // yank the camera away from whatever the dispatcher panned to.
-    const frameKey = routeKey ?? route
-    if (!route || fittedRouteRef.current === frameKey) return
-    fittedRouteRef.current = frameKey
-    const bounds = collectionBounds(route)
+    // `routeRef`, declared with the rest of the prop mirrors above: the
+    // callback must not take `route` as a dependency or Overview would be a
+    // new function on every refresh of a moving unit's route.
+    const collection = routeRef.current
+    if (!map || !collection) return
+    const bounds = collectionBounds(collection)
     if (!bounds) return
 
     const { clientWidth, clientHeight } = map.getContainer()
@@ -1882,8 +2226,38 @@ export default function IncidentMap({
       padding = 32
     }
     map.fitBounds(bounds, { padding, maxZoom: 18, duration: 700 })
+  }, [barClearance, controlsOpen, isCompact])
+
+  const fittedRouteRef = useRef(null)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return
+    const source = map.getSource(ROUTE_SOURCE_ID)
+    if (source) source.setData(route ?? EMPTY_COLLECTION)
+
+    // Once per call and unit, not once per collection: a responding unit's
+    // route is re-plotted every few seconds, and re-framing each time would
+    // yank the camera away from whatever the dispatcher panned to.
+    const frameKey = routeKey ?? route
+    if (!route || fittedRouteRef.current === frameKey) return
+    fittedRouteRef.current = frameKey
+    frameRoute()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, routeKey, ready, barClearance, controlsOpen, isCompact])
+
+  /**
+   * Overview, on demand.
+   *
+   * Skips the first run — `frameRouteSignal` starts at 0 and mounting is not a
+   * press. Without that, every console would fit the route's bounds on load,
+   * overriding the camera the page had just set.
+   */
+  const framedSignalRef = useRef(frameRouteSignal)
+  useEffect(() => {
+    if (!ready || framedSignalRef.current === frameRouteSignal) return
+    framedSignalRef.current = frameRouteSignal
+    frameRoute()
+  }, [frameRouteSignal, ready, frameRoute])
 
   // ── LOCATE: FLY TO A POINT THE OPERATOR CANNOT SEE ───────────────────────
   //
@@ -1916,6 +2290,55 @@ export default function IncidentMap({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.id, ready])
+
+  /**
+   * FOLLOW MODE: the camera rides along with one unit.
+   *
+   * ── IT FOLLOWS THE FIX, NOT THE TWEEN ───────────────────────────────────
+   * The marker glides between fixes (see the unit tween below). The camera
+   * does not read that glide — it eases to the newest REPORTED position over
+   * roughly the same duration, so the two arrive together and the dot stays
+   * put in the middle of the screen. Chasing the tweened coordinate instead
+   * would mean a camera animating toward a target that is itself animating,
+   * which reads as drift and costs a frame of work to produce it.
+   *
+   * ── THE OPERATOR ALWAYS WINS ────────────────────────────────────────────
+   * A camera that keeps yanking back to the unit while a dispatcher is trying
+   * to look at the gate is worse than no follow at all, so any real gesture
+   * ends it. `originalEvent` is what separates a human drag from this effect's
+   * own `easeTo`: Mapbox fires `movestart` for both, and only the human one
+   * carries the DOM event that caused it.
+   *
+   * Breaking is reported upward rather than handled here. The parent holds
+   * the state, which is what lets a "Resume" control know it has something to
+   * resume — and keeps this component from owning a mode it cannot show.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready || !followUnitId) return undefined
+
+    const unit = (unitsRef.current ?? []).find((u) => u.uid === followUnitId)
+    const lng = unit?.position?.lng
+    const lat = unit?.position?.lat
+    if (typeof lng === 'number' && typeof lat === 'number') {
+      map.easeTo({ center: [lng, lat], duration: 900, essential: true })
+    }
+
+    const release = (event) => {
+      if (event?.originalEvent) onFollowBreak?.()
+    }
+    map.on('dragstart', release)
+    map.on('zoomstart', release)
+    map.on('rotatestart', release)
+    return () => {
+      map.off('dragstart', release)
+      map.off('zoomstart', release)
+      map.off('rotatestart', release)
+    }
+    // `unitsGeojson` rather than `units`: it is the memo that actually changes
+    // when a position does, so this re-runs per fix and not per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followUnitId, unitsGeojson, ready])
 
   /**
    * Keep the preview pinned to its marker, without re-rendering React.
@@ -2053,6 +2476,11 @@ export default function IncidentMap({
       // and local to the marker. Same constants `panic-hit` is sized from.
       pulse('panic-pulse', 900, PANIC_BASE_RADIUS, PANIC_PULSE_REACH, 0.6, now)
       pulse('unit-pulse', 1100, 13, 14, 0.5, now)
+      // 1800ms, the slowest ring on the map, against the responding flash's
+      // 1100 and the SOS ring's 900. Standby is the one cue here that is NOT
+      // urgent — it says a position is being tracked while everyone waits —
+      // and the speed is what says so without needing a second colour.
+      pulse('unit-standby-pulse', 1800, 13, 20, 0.3, now)
 
       if (map.getLayer('unit-icons')) {
         // A responding unit flashes: the marker itself dips, which reads as

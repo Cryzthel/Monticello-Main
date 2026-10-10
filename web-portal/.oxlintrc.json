@@ -16,7 +16,7 @@
   },
   "overrides": [
     {
-      "files": ["**/vite.config.js", "**/postcss.config.js", "**/*.config.js", "scripts/**"],
+      "files": ["**/vite.config.js", "**/postcss.config.js", "**/*.config.js", "**/scripts/**"],
       "env": { "node": true }
     }
   ]

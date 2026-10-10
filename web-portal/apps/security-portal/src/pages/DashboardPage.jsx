@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useVoiceGuidance } from '@/hooks/useVoiceGuidance'
 import { useSearchParams } from 'react-router-dom'
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
 import IncidentMap from '@shared/components/IncidentMap'
@@ -11,7 +12,7 @@ import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
 import { db } from '@shared/lib/firebase'
-import { mapIncidentDoc, isResolvedExpired } from '@shared/lib/incidents'
+import { describeIncidentLocation, mapIncidentDoc, isResolvedExpired } from '@shared/lib/incidents'
 import { isActiveStage } from '@shared/lib/dispatchStage'
 import { formatCategory } from '@shared/lib/wpda'
 import { useLivePanicAlerts } from '@/components/PanicAlertProvider'
@@ -22,6 +23,8 @@ import { routeProfile, routeToGeojson } from '@/lib/directions'
 import { isOffRoute, routeProgress } from '@/lib/routeProgress'
 import { useRouteSimulation } from '@/hooks/useRouteSimulation'
 import SimulationControl from '@/components/SimulationControl'
+import FollowControl from '@/components/FollowControl'
+import VoiceControl from '@/components/VoiceControl'
 import { loadGuardPrefs, saveGuardPrefs } from '@/lib/guardPrefs'
 
 /**
@@ -110,6 +113,49 @@ export default function DashboardPage() {
    * around a map with nothing to drive along.
    */
   const [simulating, setSimulating] = useState(false)
+
+  /**
+   * Camera follow, off by default.
+   *
+   * OFF is the right default on a DISPATCH console, which is the thing that
+   * makes this different from a phone. The officer in the vehicle wants the
+   * camera glued to themselves; the dispatcher watching them is usually
+   * looking at something else — the gate the unit is heading for, a second
+   * call across the subdivision — and a camera that keeps snapping back would
+   * fight them for the whole response.
+   *
+   * `onFollowBreak` clears THIS and nothing else: a drag, scroll or pinch means
+   * the dispatcher wants the camera, not that the officer has finished. See
+   * `navigating` below for the distinction that used to be missing.
+   */
+  const [following, setFollowing] = useState(false)
+
+  // Off until asked, which is also what gives speechSynthesis the user gesture
+  // it requires before it will utter anything.
+  const [voice, setVoice] = useState(false)
+  const voiceSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
+
+  /**
+   * The navigation SESSION, as its own state.
+   *
+   * Declared here beside the two things it switches, and deliberately above
+   * the effect that clears it when the route ends — a `useState` read from an
+   * effect further up happens to work, because effects run after render, but
+   * it reads like a mistake and the next edit would make it one.
+   */
+  const [navigating, setNavigating] = useState(false)
+
+  /**
+   * Overview: a counter the map watches, bumped on every press.
+   *
+   * See `frameRouteSignal` in IncidentMap for why this is a nonce rather than
+   * an imperative handle. The short version is that the map's entire interface
+   * is props in and callbacks out, and one `ref.frameRoute()` would be the
+   * only exception to that.
+   */
+  const [overviewSignal, setOverviewSignal] = useState(0)
+  const showOverview = useCallback(() => setOverviewSignal((n) => n + 1), [])
+
   const routeCoordinates = route.route?.geometry?.coordinates ?? null
 
   useEffect(() => {
@@ -193,10 +239,82 @@ export default function DashboardPage() {
         : null,
     [route.route, route.tone, route.originSource, progress],
   )
+  // A route that ends, or hands off to a different unit, leaves follow mode
+  // pointing at nobody. Clearing it here rather than leaving a toggle that
+  // looks armed and does nothing.
+  const followUid = route.unit?.uid ?? null
+  useEffect(() => {
+    if (!followUid) {
+      setFollowing(false)
+      setNavigating(false)
+    }
+  }, [followUid])
+
   const routeKey = route.route ? `${route.incidentId}|${route.unit?.uid ?? 'guardhouse'}|${route.route.profile}` : null
+
+  useVoiceGuidance(progress, { enabled: voice && voiceSupported, routeKey })
+
+  /**
+   * NAVIGATING IS ITS OWN STATE, and the previous version got this wrong.
+   *
+   * It used to be derived — `following && voice` — which read neatly and was a
+   * bug: panning the map fires `onFollowBreak`, that cleared `following`, and
+   * navigation therefore ENDED ITSELF the first time a dispatcher looked at
+   * the gate. The session appeared to time out on its own. Nothing timed out;
+   * the derivation simply could not tell "the camera was taken back" apart
+   * from "the officer is finished".
+   *
+   * They are different events and now have different owners. Following is the
+   * camera. Navigating is the session, and only the explicit control ends it —
+   * which is also what keeps the voice prompts running while a dispatcher
+   * scrolls across the map, the thing an officer driving actually relies on.
+   */
+  const toggleNavigation = useCallback(() => {
+    setNavigating((current) => {
+      const next = !current
+      setFollowing(next)
+      setVoice(next)
+      return next
+    })
+  }, [])
+
+  /**
+   * WHILE NAVIGATING, THE CAMERA ALWAYS FOLLOWS — there is no Re-centre button
+   * because there is nothing to recover from.
+   *
+   * It briefly had one. A pan cleared follow mode and a control appeared to
+   * put it back, which is how a phone behaves and is wrong here: the camera
+   * re-centres on the next real fix anyway, seconds later, so the button was
+   * offering to do a thing that was about to happen by itself.
+   *
+   * A pan is therefore a look, not a decision. The dispatcher gets the map for
+   * as long as it takes the next GPS update to arrive, and an officer driving
+   * never has to find a control to get their own position back.
+   *
+   * `following` survives as the standalone toggle in the controls drawer, for
+   * watching a unit WITHOUT running a navigation session.
+   */
+  const cameraUnit = navigating || following ? followUid : null
+
+  /**
+   * WHERE the unit is going, and WHAT it is going to — two labels, not one.
+   *
+   * This used to be a single string that fell back through block/lot, then the
+   * stored location, then the category, so a call with no block recorded put
+   * "Medical" in the slot reserved for an address and the panel lost the
+   * category line entirely. They are different facts and the panel has a row
+   * for each.
+   *
+   * `describeIncidentLocation` rather than `blockLotLabel`, because it carries
+   * the PHASE as well — and inside a gated subdivision the phase is the part
+   * that tells an officer which gate to come in by. It also prefers a stored
+   * `propertyLabel` when the resident's property has one, which block and lot
+   * alone would have thrown away.
+   */
   const routeTargetLabel = routeIncident
-    ? blockLotLabel(routeIncident) || routeIncident.location || formatCategory(routeIncident.category)
+    ? describeIncidentLocation(routeIncident) || blockLotLabel(routeIncident) || 'Location not recorded'
     : ''
+  const routeTargetDetail = routeIncident ? formatCategory(routeIncident.category) : ''
 
   const changeProfile = useCallback((key) => {
     const next = routeProfile(key).key
@@ -282,25 +400,67 @@ export default function DashboardPage() {
           focusInset={DETAIL_PANEL_INSET}
           panelInset={selectedReport ? DETAIL_PANEL_INSET : null}
           centerOnSelect
+          selfUnitId={user?.uid ?? null}
+          followUnitId={cameraUnit}
+          /* The marker state machine. `followUid` is the unit the route starts
+             from, which is the one that carries the standby ring and becomes
+             the arrow; `navigating` says which of the two it is right now.
+             Deliberately NOT `cameraUnit` — that one is cleared by a pan, and
+             a dispatcher looking at the gate must not change what shape the
+             officer's own marker is. */
+          routeUnitId={followUid}
+          navigating={navigating}
+          frameRouteSignal={overviewSignal}
+          onFollowBreak={() => {
+            // Only the standalone watch. Navigation keeps its camera, and gets
+            // it back on the next fix.
+            if (!navigating) setFollowing(false)
+          }}
           route={routeGeojson}
           routeKey={routeKey}
           controlsSlot={
-            <SimulationControl
-              running={simulating}
-              disabled={!routeCoordinates}
-              profileLabel={routeProfile(profile).label}
-              onToggle={() => setSimulating((current) => !current)}
-            />
+            <div className="flex flex-col gap-3">
+              <FollowControl
+                following={following}
+                disabled={!followUid}
+                onToggle={() => setFollowing((current) => !current)}
+              />
+              <VoiceControl
+                enabled={voice}
+                supported={voiceSupported}
+                disabled={!routeCoordinates}
+                onToggle={() => setVoice((current) => !current)}
+              />
+              <SimulationControl
+                running={simulating}
+                disabled={!routeCoordinates}
+                profileLabel={routeProfile(profile).label}
+                onToggle={() => setSimulating((current) => !current)}
+              />
+            </div>
           }
           overlay={
             route.phase === 'idle' ? null : (
               <RouteSummaryBadge
+                navigating={navigating}
+                onToggleNavigation={toggleNavigation}
                 route={route}
                 progress={progress}
                 simulated={simulating}
                 profile={profile}
                 targetLabel={routeTargetLabel}
+                targetDetail={routeTargetDetail}
+                stage={routeIncident?.dispatchStage}
                 onChangeProfile={changeProfile}
+                /* The SAME voice state the controls drawer toggles, not a
+                   second one. Mute on the navigation bar and "Voice on" in the
+                   drawer are one setting reached two ways — an officer who
+                   mutes mid-drive and then opens the controls must not find a
+                   switch claiming the voice is still on. */
+                voice={voice}
+                voiceSupported={voiceSupported}
+                onToggleVoice={() => setVoice((current) => !current)}
+                onOverview={showOverview}
               />
             )
           }
