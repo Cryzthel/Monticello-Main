@@ -20,6 +20,7 @@ const GuardTelemetryContext = createContext({
   sharing: false,
   locationError: null,
   activeIncidentId: null,
+  fix: null,
 })
 
 export function GuardTelemetryProvider({ children }) {
@@ -29,7 +30,14 @@ export function GuardTelemetryProvider({ children }) {
   )
 }
 
-/** `{ mode, sharing, locationError, activeIncidentId }` for this officer. */
+/**
+ * `{ mode, sharing, locationError, activeIncidentId, fix }` for this officer.
+ *
+ * `fix` is this device's own last position, `{ lat, lng, accuracy, ... }` or
+ * null. It is the same value the telemetry document carries, offered locally
+ * so the dispatch route can start from it without a round trip through
+ * Firestore — see the note on it in useGuardTelemetry.
+ */
 export function useGuardTelemetryState() {
   return useContext(GuardTelemetryContext)
 }

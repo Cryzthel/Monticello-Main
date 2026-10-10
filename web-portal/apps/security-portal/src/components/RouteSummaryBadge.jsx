@@ -288,9 +288,39 @@ export default function RouteSummaryBadge({
   const durationS = progress ? progress.remainingDurationS : result?.duration
   const arrival = arrivalAt(durationS, now)
 
+  /**
+   * ── FOUR DIFFERENT FAULTS, FOUR DIFFERENT SENTENCES ────────────────────
+   *
+   * This was one string for all of them: "not sharing a position — no GPS
+   * fix, or location sharing is off". It was reported as a bug by an officer
+   * whose location WAS granted and working, and they were right to report
+   * it — the console was blaming the one thing that was fine. A call booked
+   * to a colleague who has clocked out, and a deployment with no guardhouse
+   * coordinate configured, both produced that same sentence about GPS.
+   *
+   * Each cause has a different person who can act on it, so each says who.
+   * The `:no-guardhouse` suffix is additive because it is never the whole
+   * story on its own — it is the reason there was no fallback once the first
+   * thing failed, and it is the one an administrator fixes rather than
+   * anybody at the gate.
+   */
+  const [reason, missingGuardhouse] = String(route.noOriginReason ?? '').split(':')
+  const NO_ORIGIN_TEXT = {
+    'self-no-fix':
+      'This device has not produced a GPS fix yet. Allow location for this site, check location is switched on for the whole machine, and the route plots itself as soon as a position arrives.',
+    'unit-off-duty': `${unitName} is not clocked in, so the console has no position to route from. Reassign the call, or route from the guardhouse.`,
+    'unit-no-fix': `${unitName} is clocked in but not reporting a position — no GPS fix on their device, or location sharing is off.`,
+  }
   const problem =
     route.phase === 'no-origin'
-      ? `${unitName} is not sharing a position — no GPS fix, or location sharing is off.`
+      ? [
+          NO_ORIGIN_TEXT[reason] ?? `No position to route from for ${unitName}.`,
+          missingGuardhouse
+            ? 'No guardhouse coordinate is configured either (VITE_GUARDHOUSE_LNGLAT), so there is no fallback to fall back to.'
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' ')
       : route.phase === 'error'
         ? route.error
         : null
@@ -463,7 +493,9 @@ export default function RouteSummaryBadge({
             <div className="min-w-0 flex-1" aria-live="polite">
               <p className="truncate text-label font-semibold leading-tight text-text-primary">
                 {route.phase === 'no-origin'
-                  ? 'No position'
+                  ? reason === 'unit-off-duty'
+                    ? 'Unit off duty'
+                    : 'No position'
                   : route.phase === 'error'
                     ? 'No route'
                     : 'Plotting the route…'}

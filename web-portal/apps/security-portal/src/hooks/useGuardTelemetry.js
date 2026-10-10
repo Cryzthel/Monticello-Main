@@ -56,6 +56,31 @@ export function useGuardTelemetry() {
   const [shareIdle, setShareIdle] = useState(() => loadGuardPrefs().shareIdleLocation)
   const [locationError, setLocationError] = useState(null)
   const [badgeNumber, setBadgeNumber] = useState('')
+  /**
+   * The last position THIS DEVICE saw, published to the rest of the console.
+   *
+   * ── WHY THE OFFICER'S OWN CONSOLE SHOULD NOT ASK FIRESTORE WHERE IT IS ──
+   * The dispatch route used to take its origin only from `guard_telemetry`,
+   * which meant the officer's own browser — which has the fix in hand —
+   * learned its position by writing it to a server and reading it back. That
+   * round trip has a lot of ways to not complete, and every one of them
+   * surfaced to the officer as the same sentence about GPS being off: the
+   * write is throttled, it needs an open shift document, it needs `onDuty`
+   * true on the telemetry doc, the reader drops a fix older than fifteen
+   * minutes, and the whole path needs rules to allow both ends. None of that
+   * is wrong for a DISPATCHER watching somebody else. All of it is pointless
+   * latency and failure surface for the officer who is standing there.
+   *
+   * So the fix is now also handed straight out. It never leaves the device by
+   * this path — it is the same value already being published, offered locally
+   * so the console can route from itself the moment it has a position.
+   *
+   * Updated on the SEND cadence rather than on every callback: an active
+   * watch fires several times a second, and this provider sits above the
+   * router, so setting state per callback would re-render the whole console
+   * to move a number nothing reads that often.
+   */
+  const [fix, setFix] = useState(null)
 
   useEffect(() => subscribeGuardPrefs((prefs) => setShareIdle(prefs.shareIdleLocation)), [])
 
@@ -174,6 +199,8 @@ export function useGuardTelemetry() {
     const send = (fix) => {
       const state = stateRef.current
       lastSentRef.current = { at: Date.now(), fix }
+      // Local first, and regardless of whether the write below lands.
+      if (fix) setFix(fix)
       publishTelemetry(state.uid, {
         ...state.identity,
         onDuty: true,
@@ -267,5 +294,5 @@ export function useGuardTelemetry() {
     }
   }, [uid, mode, sharing])
 
-  return { mode, sharing, locationError, activeIncidentId }
+  return { mode, sharing, locationError, activeIncidentId, fix }
 }

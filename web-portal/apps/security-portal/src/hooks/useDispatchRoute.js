@@ -60,7 +60,7 @@ const IDLE = { phase: 'idle', route: null, error: null, originSource: null, tone
  * `tone` is 'live' once the officer has acknowledged and is moving, and
  * 'preview' before that. The map draws them emerald and blue.
  */
-export function useDispatchRoute({ incident, units, previewUid, profile, offRoute = false }) {
+export function useDispatchRoute({ incident, units, previewUid, profile, offRoute = false, selfFix = null }) {
   const [state, setState] = useState(IDLE)
   const lastRef = useRef({ key: null, origin: null, at: 0 })
   const controllerRef = useRef(null)
@@ -98,14 +98,58 @@ export function useDispatchRoute({ incident, units, previewUid, profile, offRout
   const unit = unitUid ? units.find((u) => u.uid === unitUid) ?? null : null
   const hasPin = typeof incident?.lng === 'number' && typeof incident?.lat === 'number'
 
+  /**
+   * ── WHERE THE ROUTE STARTS, IN ORDER OF HOW DIRECTLY WE KNOW IT ─────────
+   *
+   *   unit        the assigned officer's published telemetry. Correct for a
+   *               DISPATCHER, who has no other way to know where they are.
+   *   self        THIS DEVICE's own fix, when this device is the assigned
+   *               officer. Preferred over the first for exactly that case,
+   *               because the telemetry path is a write and a read away from
+   *               a value already sitting in this browser — see the note on
+   *               `fix` in useGuardTelemetry for the five separate ways that
+   *               round trip can fail to come back.
+   *   guardhouse  the configured fallback, flagged on the panel.
+   *
+   * The self case was the whole of a reported bug: an officer with location
+   * granted and a fix on screen was told "no GPS fix, or location sharing is
+   * off", because the only origin the route would consider was one that had
+   * to survive a Firestore round trip to get back to them.
+   */
+  const viewerUid = auth.currentUser?.uid ?? null
+  const routingSelf = Boolean(unitUid && viewerUid && unitUid === viewerUid)
+  const usableSelfFix =
+    routingSelf && Number.isFinite(selfFix?.lat) && Number.isFinite(selfFix?.lng) ? selfFix : null
+
   let origin = null
   let originSource = null
-  if (unit?.position) {
+  if (usableSelfFix) {
+    origin = [usableSelfFix.lng, usableSelfFix.lat]
+    originSource = 'self'
+  } else if (unit?.position) {
     origin = [unit.position.lng, unit.position.lat]
     originSource = 'unit'
   } else if (unitUid && GUARDHOUSE_LNGLAT) {
     origin = GUARDHOUSE_LNGLAT
     originSource = 'guardhouse'
+  }
+
+  /**
+   * WHICH of the ways to have no origin this is.
+   *
+   * One sentence used to cover all of them — "no GPS fix, or location sharing
+   * is off" — and it was wrong more often than right. An officer whose call
+   * is booked to a colleague who has gone home, or a deployment with no
+   * guardhouse coordinate configured, both read a message telling them to
+   * check a GPS permission that was never the problem. Each cause has a
+   * different person who can fix it, so each gets its own sentence.
+   */
+  let noOriginReason = null
+  if (!origin && unitUid) {
+    if (routingSelf) noOriginReason = 'self-no-fix'
+    else if (!unit) noOriginReason = 'unit-off-duty'
+    else if (!unit.position) noOriginReason = 'unit-no-fix'
+    if (!GUARDHOUSE_LNGLAT) noOriginReason = `${noOriginReason}:no-guardhouse`
   }
 
   const key = unitUid && hasPin ? `${incident.id}|${unitUid}|${profile}` : null
@@ -230,5 +274,5 @@ export function useDispatchRoute({ incident, units, previewUid, profile, offRout
   // route is plotting or when routing failed.
   const straightM =
     origin && hasPin ? Math.round(distanceMeters(origin, [incident.lng, incident.lat])) : null
-  return { ...state, tone, unit, originSource, straightM, incidentId: incident.id }
+  return { ...state, tone, unit, originSource, straightM, noOriginReason, incidentId: incident.id }
 }

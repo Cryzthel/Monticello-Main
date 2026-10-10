@@ -17,6 +17,7 @@ import { describeIncidentLocation, mapIncidentDoc, isResolvedExpired } from '@sh
 import { isActiveStage } from '@shared/lib/dispatchStage'
 import { formatCategory } from '@shared/lib/wpda'
 import { useLivePanicAlerts } from '@/components/PanicAlertProvider'
+import { useGuardTelemetryState } from '@/components/GuardTelemetryProvider'
 import { useGuardUnits } from '@/hooks/useGuardUnits'
 import { useDispatchRoute } from '@/hooks/useDispatchRoute'
 import { blockLotLabel } from '@/lib/dispatch'
@@ -166,12 +167,24 @@ export default function DashboardPage() {
    * against, is not available at any price.
    */
   const offRouteRef = useRef(false)
+  /**
+   * This device's own position, straight from the telemetry stream rather
+   * than back out of Firestore.
+   *
+   * Used only when the signed-in officer IS the unit being routed (see
+   * `useDispatchRoute`), which is the case where the round trip buys nothing
+   * and can fail in five separate ways — all of which used to reach the
+   * officer as one sentence telling them to check a GPS permission that was
+   * already granted.
+   */
+  const { fix: selfFix } = useGuardTelemetryState()
   const route = useDispatchRoute({
     incident: routeIncident,
     units,
     previewUid: routeIncident?.id === selectedId ? previewUid : null,
     profile,
     offRoute: offRouteRef.current,
+    selfFix,
   })
 
   /**
@@ -272,8 +285,21 @@ export default function DashboardPage() {
    * merely preferred but is the only thing present. Downstream nothing knows
    * the difference, which is the point — the demonstration exercises the same
    * code path a real response does.
+   *
+   * ── AND THIS DEVICE'S OWN FIX, WHEN THIS DEVICE IS THE UNIT ────────────
+   * The same gap the route origin had, one layer up. Every live figure on
+   * the panel — distance left, ETA, which turn is next, where the marker
+   * sits on the line — hung off `route.unit.position`, which is the officer
+   * learning their own position by reading back what they published. An
+   * officer whose telemetry document had not landed got a plotted route with
+   * no progress on it: static figures, a marker that never moved, and no
+   * turn-by-turn.
+   *
+   * `originSource === 'self'` is the hook saying it already made this
+   * judgement, so the two cannot disagree about whose position is in play.
    */
-  const fix = simulatedPosition ?? route.unit?.position ?? null
+  const fix =
+    simulatedPosition ?? route.unit?.position ?? (route.originSource === 'self' ? selfFix : null)
 
   /**
    * Where the responding unit actually is along the plotted route.
