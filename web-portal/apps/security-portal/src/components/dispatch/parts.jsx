@@ -20,14 +20,31 @@ import { categoryIcon } from '@shared/theme/categoryIcons'
  * reads as layout and the unit picker can reuse the telemetry badges.
  */
 
-/** Stage → badge tone. Responding and on-site match the unit colours on the map. */
+/**
+ * Stage → badge tone, now that there are three of them.
+ *
+ *   dispatched  amber   — assigned, nobody has answered yet
+ *   responding  blue    — a guard owns it and is working it
+ *   resolved    emerald — closed
+ *
+ * ── RESPONDING TOOK ON-SITE'S BLUE, AND THAT IS THE POINT ────────────────
+ * It was `high` (orange) while on-site held blue and investigating held
+ * violet — four warm-to-cool steps for a reader to learn, when the only
+ * question a dispatcher scanning a list asks is "has anyone got this". Three
+ * stages make that a three-colour answer: amber is waiting, blue is handled,
+ * green is done. Blue also matches the responding unit's own marker on the
+ * map, so a row in the queue and a dot on the canvas finally agree.
+ *
+ * The legacy pair map onto responding's blue for the same reason their
+ * labels do — see STAGE_LABELS.
+ */
 export const STAGE_TONES = {
   none: 'neutral',
   dispatched: 'warning',
-  responding: 'high',
-  on_site: 'info',
-  investigating: 'violet',
+  responding: 'info',
   resolved: 'success',
+  on_site: 'info',
+  investigating: 'info',
 }
 
 export function StageBadge({ stage, size = 'sm' }) {

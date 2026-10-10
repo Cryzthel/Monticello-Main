@@ -26,6 +26,7 @@ import { isOffRoute, routeProgress } from '@/lib/routeProgress'
 import { useRouteSimulation } from '@/hooks/useRouteSimulation'
 import { useDeviceHeading } from '@/hooks/useDeviceHeading'
 import { useOffRoute } from '@/hooks/useOffRoute'
+import { useAutoArrival } from '@/hooks/useAutoArrival'
 import SimulationControl from '@/components/SimulationControl'
 import RouteProfileControl from '@/components/RouteProfileControl'
 import FollowControl from '@/components/FollowControl'
@@ -42,7 +43,7 @@ import { loadGuardPrefs, saveGuardPrefs } from '@/lib/guardPrefs'
 const DETAIL_PANEL_INSET = { right: DRAWER_WIDTH_PX }
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const [selectedId, setSelectedId] = useState(null)
   const [selectedPanicId, setSelectedPanicId] = useState(null)
   const [previewUid, setPreviewUid] = useState(null)
@@ -243,31 +244,15 @@ export default function DashboardPage() {
   const [navigating, setNavigating] = useState(false)
 
   /**
-   * Recentre: a counter the map watches, bumped on every press.
-   *
-   * It also turns follow mode back ON, which is the half a one-shot camera
-   * move would miss — an operator asking to be put back on the unit almost
-   * never means "once, and then let it walk off screen again".
-   */
-  const [recenterSignal, setRecenterSignal] = useState(0)
-  const recenter = useCallback(() => {
-    setFollowing(true)
-    setRecenterSignal((n) => n + 1)
-  }, [])
-
-  /**
    * This device's compass — live from the moment there is a route, not just
    * once a session starts.
    *
    * ── STANDBY IS WHERE IT EARNS ITS KEEP ──────────────────────────────────
-   * It was gated on `navigating`, on the reasoning that nobody asks "which
-   * way am I pointed" until they are getting out of a vehicle. That is
-   * exactly backwards for the moment it matters most. An officer who has
-   * just been handed an alert is standing still, looking at a map, working
-   * out which way to set off — and standing still is precisely when the
-   * route bearing says nothing, because there is no motion to derive it
-   * from. The cone is the only thing on the console that can answer them,
-   * and it was switched off until after they had already chosen a direction.
+   * An officer who has just been handed an alert is standing still, looking
+   * at a map, working out which way to set off — and standing still is
+   * precisely when the route bearing says nothing, because there is no
+   * motion to derive it from. The cone is the only thing on the console that
+   * can answer them.
    *
    * Still not always-on. The orientation sensor costs power, and a cone on a
    * dispatcher's desktop would point wherever that monitor happens to face —
@@ -277,7 +262,6 @@ export default function DashboardPage() {
   const { heading: deviceHeading, request: requestCompass } = useDeviceHeading({
     enabled: Boolean(followUid),
   })
-
 
   const routeCoordinates = route.route?.geometry?.coordinates ?? null
 
@@ -442,6 +426,16 @@ export default function DashboardPage() {
    * has to be true. See useOffRoute.
    */
   const offRoute = useOffRoute(progress)
+
+  /**
+   * The arrival stamp that replaced the "I have arrived" button.
+   *
+   * Mounted on the dispatch page rather than inside the drawer, because the
+   * drawer only exists while somebody has a call OPEN — and an officer
+   * driving with the panel closed is exactly who this is for. `myActive` is
+   * their own call whether or not they are looking at it.
+   */
+  useAutoArrival({ report: myActive, fix: selfFix, uid: user?.uid ?? null, role })
 
   const speaking = (navigating || voice) && voiceSupported
   useVoiceGuidance(progress, { enabled: speaking, routeKey })
@@ -629,7 +623,6 @@ export default function DashboardPage() {
           /* This device's own compass, for the orientation cone. Null unless
              a session is running and the hardware is reporting. */
           selfHeading={deviceHeading}
-          recenterSignal={recenterSignal}
           onFollowBreak={() => {
             // Only the standalone watch. Navigation keeps its camera, and gets
             // it back on the next fix.
@@ -692,7 +685,6 @@ export default function DashboardPage() {
                 targetLabel={routeTargetLabel}
                 targetDetail={routeTargetDetail}
                 stage={routeIncident?.dispatchStage}
-                onRecenter={followUid ? recenter : undefined}
                 offRoute={offRoute}
               />
             )

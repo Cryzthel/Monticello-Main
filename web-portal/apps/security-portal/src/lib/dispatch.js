@@ -159,6 +159,10 @@ export function residentMessageForStage(report, stage, guardName) {
   switch (stage) {
     case 'responding':
       return `Guard ${guard} is en route to your location.`
+    // Sent by the automatic arrival stamp, which passes this stage name
+    // explicitly even though the dispatch stage no longer moves — the
+    // resident's "a guard is here now" message is the whole reason the
+    // arrival event outlived its stage. See `autoArrival`.
     case 'on_site':
       return `Guard ${guard} has arrived and is handling your report.`
     case 'resolved':

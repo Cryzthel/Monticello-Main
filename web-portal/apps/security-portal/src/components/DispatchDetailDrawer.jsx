@@ -9,7 +9,6 @@ import {
   History,
   Loader2,
   LocateOff,
-  MapPinCheck,
   MapPin,
   Navigation,
   Phone,
@@ -31,7 +30,6 @@ import { buildMediaItems } from '@shared/lib/incidents'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import {
   ACK_TIMEOUT_MS,
-  ARRIVAL_RADIUS_M,
   INVESTIGATION_PHOTOS_MAX,
   INVESTIGATION_TAGS,
   RESOLUTION_OUTCOMES,
@@ -40,10 +38,7 @@ import {
 import {
   acknowledgeAndRespond,
   addInvestigationPhotos,
-  beginInvestigation,
   canActOn,
-  checkArrival,
-  confirmArrival,
   dispatchUnit,
   escalateIncident,
   resolveIncident,
@@ -92,7 +87,6 @@ const SEVERITY_LABELS = {
 const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
 const clock = (at) => (at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—')
 
-const ARRIVAL_PRESETS = ['Pin is misplaced', 'GPS unavailable indoors', 'Met resident at the gate', 'Resident moved location']
 const ESCALATION_PRESETS = ['Armed or violent suspect', 'Medical emergency', 'Fire or smoke', 'Officer needs backup']
 
 /** The receipt for the last action. See useStageAction. */
@@ -476,15 +470,12 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
 
   const [lightboxIndex, setLightboxIndex] = useState(null)
   const [reassigning, setReassigning] = useState(false)
-  const [arrivalCheck, setArrivalCheck] = useState(null)
-  const [checkingArrival, setCheckingArrival] = useState(false)
   const [escalating, setEscalating] = useState(false)
   const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
     setLightboxIndex(null)
     setReassigning(false)
-    setArrivalCheck(null)
     setEscalating(false)
     setResolving(false)
   }, [report?.id])
@@ -497,14 +488,13 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   const escalated = Boolean(report?.escalation)
   useEffect(() => {
     if (stage !== 'dispatched') setReassigning(false)
-    if (stage !== 'responding') setArrivalCheck(null)
-    if (stage !== 'investigating') setResolving(false)
+    if (stage !== 'responding') setResolving(false)
   }, [stage])
   useEffect(() => {
     if (escalated) setEscalating(false)
   }, [escalated])
 
-  const anyDialog = lightboxIndex !== null || arrivalCheck || escalating || resolving
+  const anyDialog = lightboxIndex !== null || escalating || resolving
   useEffect(() => {
     if (!report || anyDialog || busy) return undefined
     const onKeyDown = (event) => {
@@ -528,21 +518,6 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
     })
   }, [selectedUnit, stage, run, report, role, onPreviewUnit])
 
-  const startArrival = useCallback(async () => {
-    setCheckingArrival(true)
-    let check
-    try {
-      check = await checkArrival(report)
-    } finally {
-      setCheckingArrival(false)
-    }
-    if (check.verdict === 'within') {
-      run('arrive', 'Arrival confirmed', () => confirmArrival(report, check, { role }))
-    } else {
-      setArrivalCheck(check)
-    }
-  }, [report, run, role])
-
   if (!report) return null
 
   const actor = { uid, role }
@@ -565,25 +540,10 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
   const residentName = report.reportedByName || 'the resident'
   const nextMessage = residentMessageForStage(
     report,
-    { dispatched: 'responding', responding: 'on_site', investigating: 'resolved' }[stage],
+    { dispatched: 'responding', responding: 'resolved' }[stage],
     report.assignedGuardName,
   )
 
-  const arrivalMessage = (() => {
-    if (!arrivalCheck) return ''
-    switch (arrivalCheck.verdict) {
-      case 'far':
-        return `Your GPS puts you ${formatDistance(arrivalCheck.distanceM)} from the pin, outside the ${ARRIVAL_RADIUS_M} m arrival radius.`
-      case 'imprecise':
-        return `Your GPS fix is only accurate to ±${Math.round(arrivalCheck.accuracyM ?? 0)} m, too coarse to confirm you are within ${ARRIVAL_RADIUS_M} m of the pin.`
-      case 'no-pin':
-        return 'This report has no map coordinates to measure your position against.'
-      default:
-        return arrivalCheck.error === 'location-denied'
-          ? 'Location access is blocked for this site, so your arrival cannot be checked by GPS.'
-          : 'This device could not get a GPS fix to check your arrival.'
-    }
-  })()
 
   // ── THE FOOTER: THE ONE NEXT ACTION ──────────────────────────────────────
   let footer = null
@@ -676,36 +636,20 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
         ? `${report.assignedGuardName} has not acknowledged within ${ACK_TIMEOUT_MS / 1000} s, and every console has been alerted. Reassign the call to another unit.`
         : `${report.assignedGuardName} has ${ACK_TIMEOUT_MS / 1000} s to acknowledge before every console is alerted.`
   } else if (stage === 'responding') {
-    footer = canAct ? (
-      <button
-        type="button"
-        onClick={startArrival}
-        disabled={Boolean(busy) || checkingArrival}
-        className="btn btn-action btn-brand flex-1"
-      >
-        {busy === 'arrive' || checkingArrival ? spinner : <MapPinCheck size="sm" aria-hidden="true" />}
-        {checkingArrival ? 'Checking your position…' : 'I have arrived'}
-      </button>
-    ) : null
-    hint = canAct
-      ? `Checks your GPS is within ${ARRIVAL_RADIUS_M} m of the pin. Sends: “${nextMessage}”`
-      : `${report.assignedGuardName} is en route.`
-  } else if (stage === 'on_site') {
-    footer = canAct ? (
-      <button
-        type="button"
-        onClick={() => run('investigate', 'Investigation started', () => beginInvestigation(report, { role }))}
-        disabled={Boolean(busy)}
-        className="btn btn-action btn-brand flex-1"
-      >
-        {busy === 'investigate' ? spinner : <Search size="sm" aria-hidden="true" />}
-        Begin investigation
-      </button>
-    ) : null
-    hint = canAct
-      ? 'Opens scene photos, quick tags and emergency escalation.'
-      : `${report.assignedGuardName} arrived at ${clock(report.onSceneAt)}.`
-  } else if (stage === 'investigating') {
+    /**
+     * ── ONE STAGE WHERE THERE WERE THREE ───────────────────────────────
+     * Responding used to end at "I have arrived", which opened ON-SITE,
+     * whose only control was "Begin investigation", which opened
+     * INVESTIGATING, where the real work finally lived. Three stages and two
+     * button presses between a guard reaching a scene and being able to
+     * photograph it.
+     *
+     * Both presses are gone. The arrival is stamped from the unit's own
+     * telemetry the moment it comes inside the radius (see `autoArrival`),
+     * and the scene tools are available for the whole of responding. What is
+     * left here is the two things that are genuinely decisions: escalate, and
+     * close.
+     */
     footer = canAct ? (
       <>
         <button
@@ -730,8 +674,12 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
       </>
     ) : null
     hint = canAct
-      ? 'Resolving needs an outcome, notes and at least one photo.'
-      : `${report.assignedGuardName} is investigating.`
+      ? report.onSceneAt
+        ? `On scene since ${clock(report.onSceneAt)}. Resolving needs an outcome, notes and at least one photo.`
+        : 'Arrival is stamped automatically when your position reaches the pin. Resolving needs an outcome, notes and at least one photo.'
+      : report.onSceneAt
+        ? `${report.assignedGuardName} arrived at ${clock(report.onSceneAt)}.`
+        : `${report.assignedGuardName} is en route.`
   } else if (stage === 'resolved') {
     footer = (
       <button
@@ -969,10 +917,10 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
             </Section>
           ) : null}
 
-          {stage === 'investigating' || report.investigation ? (
+          {stage === 'responding' || report.investigation ? (
             <InvestigationPanel
               report={report}
-              editable={stage === 'investigating' && canAct}
+              editable={stage === 'responding' && canAct}
               busy={busy}
               run={run}
               role={role}
@@ -1003,7 +951,7 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
                 ? 'Dispatch'
                 : stage === 'resolved'
                   ? 'Call closed'
-                  : `Next: ${STAGE_LABELS[{ dispatched: 'responding', responding: 'on_site', on_site: 'investigating', investigating: 'resolved' }[stage]]}`}
+                  : `Next: ${STAGE_LABELS[{ dispatched: 'responding', responding: 'resolved' }[stage]]}`}
             </h3>
             <StageBadge stage={stage} />
           </div>
@@ -1047,23 +995,6 @@ export default function DispatchDetailDrawer({ report, units = [], route = null,
           onClose={() => setLightboxIndex(null)}
         />
       ) : null}
-
-      <ReasonDialog
-        open={Boolean(arrivalCheck)}
-        icon={MapPinCheck}
-        title="Confirm arrival without a GPS match?"
-        message={`${arrivalMessage} Say why you are confirming anyway. This goes on the call's record.`}
-        presets={ARRIVAL_PRESETS}
-        placeholder="e.g. The pin is on the road; the house is 60 m in."
-        confirmLabel="Confirm arrival"
-        busy={busy === 'arrive'}
-        onCancel={() => setArrivalCheck(null)}
-        onConfirm={(reason) =>
-          run('arrive', 'Arrival confirmed by override', () =>
-            confirmArrival(report, arrivalCheck, { role, overrideReason: reason }),
-          ).then((ok) => ok && setArrivalCheck(null))
-        }
-      />
 
       <ReasonDialog
         open={escalating}

@@ -160,9 +160,9 @@ service cloud.firestore {
       // reassignment, usually after the 90-second acknowledgement window runs
       // out. Any security officer may dispatch, and the guard picked must be
       // an approved security account.
-      function isDispatch() {
+      function isDispatch(cur) {
         let d = request.resource.data;
-        return currentStage() in ['none', 'dispatched']
+        return cur in ['none', 'dispatched']
           && d.dispatchStage == 'dispatched'
           && d.status == 'dispatched'
           && d.assignedGuardUid is string
@@ -180,9 +180,9 @@ service cloud.firestore {
       }
 
       // dispatched → responding: the guard's Acknowledge & Respond.
-      function isRespond() {
+      function isRespond(cur) {
         let d = request.resource.data;
-        return currentStage() == 'dispatched'
+        return cur == 'dispatched'
           && d.dispatchStage == 'responding'
           && d.status == 'dispatched'
           && d.respondingAt == request.time
@@ -206,16 +206,31 @@ service cloud.firestore {
               && a.overrideReason.size() <= 280));
       }
 
-      // responding → on_site: "I have arrived".
-      function isArrive() {
+      // The arrival stamp. The stage does NOT move — see the note on
+      // `autoArrival` in lib/dispatchWorkflow.js for why the on-site stage
+      // was removed and the event kept.
+      //
+      // ONCE ONLY, enforced here rather than trusted from the client: a
+      // document that already carries `onSceneAt` cannot be stamped again,
+      // so a console that re-fires its geofence (a reload mid-call, two
+      // tabs open) cannot rewrite the arrival time to something later.
+      //
+      // `withinRadius` must be true and the rules re-measure it. The
+      // override branch of `validArrival` is now unreachable from this
+      // path and is kept only for the legacy `on_site` documents below:
+      // nothing is asserting an arrival any more, so nothing needs to
+      // account for a GPS that disagrees.
+      function isArrive(cur) {
         let d = request.resource.data;
-        return currentStage() == 'responding'
-          && d.dispatchStage == 'on_site'
+        return cur == 'responding'
+          && d.dispatchStage == 'responding'
           && d.status == 'in_progress'
           && d.onSceneAt == request.time
+          && !('onSceneAt' in resource.data)
+          && d.arrival.withinRadius == true
           && validArrival(d.arrival)
           && isAssignedOrSupervisor()
-          && changedKeys().hasOnly(['status', 'dispatchStage', 'stageUpdatedAt', 'lastLogId', 'onSceneAt', 'arrival']);
+          && changedKeys().hasOnly(['status', 'stageUpdatedAt', 'lastLogId', 'onSceneAt', 'arrival']);
       }
 
       function validInvestigation(inv) {
@@ -229,18 +244,6 @@ service cloud.firestore {
           && inv.get('photoUrls', []).size() <= 12;
       }
 
-      // on_site → investigating.
-      function isInvestigate() {
-        let d = request.resource.data;
-        return currentStage() == 'on_site'
-          && d.dispatchStage == 'investigating'
-          && d.status == 'in_progress'
-          && d.investigatingAt == request.time
-          && validInvestigation(d.get('investigation', {}))
-          && isAssignedOrSupervisor()
-          && changedKeys().hasOnly(['dispatchStage', 'stageUpdatedAt', 'lastLogId', 'investigatingAt', 'investigation']);
-      }
-
       function validEscalation(e) {
         return e.keys().hasOnly(['at', 'byUid', 'byName', 'reason'])
           && e.at == request.time
@@ -249,12 +252,18 @@ service cloud.firestore {
           && e.reason is string && e.reason.size() >= 3 && e.reason.size() <= 280;
       }
 
-      // Inside INVESTIGATING: quick tags, scene photos, and a one-time
-      // escalation. The stage does not move, but each write is still logged.
-      function isInvestigationUpdate() {
+      // Quick tags, scene photos and a one-time escalation — the work of
+      // being at a scene. The stage does not move, but each write is logged.
+      //
+      // It used to require the INVESTIGATING stage, which a guard reached by
+      // pressing two buttons after arriving. Both stages are gone and this
+      // is simply part of RESPONDING now. `on_site` and `investigating` are
+      // still accepted so a call that was mid-flight when the machine was
+      // shortened can still be worked and closed.
+      function isSceneWork(cur) {
         let d = request.resource.data;
-        return currentStage() == 'investigating'
-          && d.dispatchStage == 'investigating'
+        return cur in ['responding', 'on_site', 'investigating']
+          && d.dispatchStage == cur
           && validInvestigation(d.get('investigation', {}))
           && (!changedKeys().hasAny(['escalation'])
             || (!('escalation' in resource.data) && validEscalation(d.escalation)))
@@ -272,11 +281,17 @@ service cloud.firestore {
           && r.photoUrls is list && r.photoUrls.size() >= 1 && r.photoUrls.size() <= 6;
       }
 
-      // investigating → resolved. The outcome, notes and at least one photo
-      // are required. Stamps the time the resident app asks for a rating.
-      function isResolve() {
+      // responding → resolved. The outcome, notes and at least one photo are
+      // required. Stamps the time the resident app asks for a rating.
+      //
+      // `on_site` and `investigating` remain valid starting points. Not for
+      // tidiness: a call sitting at either of them when this shipped would
+      // otherwise have had NO legal path to resolved and would have been
+      // stuck open forever, with the rules refusing every attempt to close
+      // it. Both are unreachable going forward.
+      function isResolve(cur) {
         let d = request.resource.data;
-        return currentStage() == 'investigating'
+        return cur in ['responding', 'on_site', 'investigating']
           && d.dispatchStage == 'resolved'
           && d.status == 'resolved'
           && d.resolvedAt == request.time
@@ -291,10 +306,18 @@ service cloud.firestore {
           ]);
       }
 
+      // ── THE STAGE IS DERIVED ONCE, NOT ONCE PER CANDIDATE ────────────
+      // Each of the five checks below opened with its own `currentStage()`,
+      // which reads the stored field and falls back to deriving it from the
+      // legacy status. Five derivations to answer one question, on a request
+      // that is already close to the evaluation cap (see the note in
+      // status_log). The OR short-circuits, so the cost varied by which
+      // transition it happened to be — the resolve, last in the list, paid
+      // for all five.
       function validTransition() {
+        let cur = currentStage();
         return logged()
-          && (isDispatch() || isRespond() || isArrive() || isInvestigate()
-            || isInvestigationUpdate() || isResolve());
+          && (isDispatch(cur) || isRespond(cur) || isArrive(cur) || isSceneWork(cur) || isResolve(cur));
       }
 
       // The reporting resident's rating of a closed call: once, 1 to 5 stars.
@@ -360,11 +383,29 @@ service cloud.firestore {
       // device they used, its battery and where it was. Append-only: nobody
       // may edit or delete an entry, administrators included.
       match /status_log/{logId} {
+        // The incident, AFTER this batch: this log must be the one the
+        // incident now points at, and must agree with the stage it landed on.
+        function isLogFor(after, logId) {
+          return after.lastLogId == logId && request.resource.data.toStage == after.dispatchStage;
+        }
+
         allow read: if isStaff();
+        // ── ONE `getAfter`, NOT TWO ────────────────────────────────────
+        // This reached back into the incident twice, and each reach is not a
+        // field read: it forces the incident's own `allow update` rule to be
+        // evaluated again, which calls `logged()`, which calls `existsAfter`
+        // on THIS document, which evaluates this rule again. The two
+        // documents in a dispatch batch validate each other, so every
+        // avoidable reach doubles a recursion rather than adding to it.
+        //
+        // Firestore caps a request at 1000 expression evaluations and this
+        // pair was reaching it: in the emulator, a plain
+        // dispatched -> responding batch was refused with "maximum of 1000
+        // expressions" before any of the stage logic was even consulted.
+        // Binding it once is not a tidy-up, it is the difference between the
+        // machine working and every transition being refused.
         allow create: if isSecurityStaff()
-          && getAfter(/databases/$(database)/documents/incidents/$(incidentId)).data.lastLogId == logId
-          && request.resource.data.toStage
-            == getAfter(/databases/$(database)/documents/incidents/$(incidentId)).data.dispatchStage
+          && isLogFor(getAfter(/databases/$(database)/documents/incidents/$(incidentId)).data, logId)
           && request.resource.data.keys().hasOnly([
             'action', 'fromStage', 'toStage', 'status',
             'userId', 'userName', 'userRole', 'assignedGuardUid',
@@ -464,7 +505,8 @@ service cloud.firestore {
         && resource.data.guardUid == request.auth.uid
         && resource.data.timeOut == null
         && request.resource.data.keys().hasOnly([
-          'guardUid', 'name', 'email', 'role', 'timeIn', 'timeOut', 'createdAt', 'handover'
+          'guardUid', 'name', 'email', 'role', 'shift', 'timeIn', 'timeOut', 'createdAt',
+          'handover', 'clockInLocation', 'clockOutLocation'
         ])
         // The identity of a shift is fixed once it is open. Without this an
         // officer could close someone else's shift by rewriting guardUid, or
@@ -584,13 +626,20 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.resource.data.keys().hasOnly([
           'uid', 'name', 'badgeNumber', 'onDuty', 'mode', 'activeIncidentId',
-          'position', 'battery', 'device', 'updatedAt'
+          'position', 'battery', 'device', 'route', 'updatedAt'
         ])
         && request.resource.data.uid == uid
         && request.resource.data.onDuty is bool
         && request.resource.data.mode in ['idle', 'active', 'off']
         && (request.resource.data.position == null || request.resource.data.position is map)
         && (request.resource.data.battery == null || request.resource.data.battery is map)
+        // The plotted line to the active call, published so the Hazard Map can
+        // draw the same route the responding officer is driving. A map or
+        // null; its contents are the officer's own telemetry, which this rule
+        // already restricts to that officer.
+        && (!('route' in request.resource.data.keys())
+            || request.resource.data.route == null
+            || request.resource.data.route is map)
         && request.resource.data.updatedAt == request.time;
       allow delete: if isSecurityStaff() && request.auth.uid == uid;
     }

@@ -1,7 +1,30 @@
 /**
  * The dispatch state machine — the vocabulary, and nothing that does I/O.
  *
- *   DISPATCHED ──► RESPONDING ──► ON-SITE ──► INVESTIGATING ──► RESOLVED
+ *   DISPATCHED ──► RESPONDING ──► RESOLVED
+ *
+ * ── IT WAS FIVE STAGES, AND THE TWO IN THE MIDDLE WERE FRICTION ───────────
+ * ON-SITE and INVESTIGATING came out. They described real things — the guard
+ * arriving, and then starting to work — and the cost of recording them was a
+ * guard taking their phone out twice, at a scene, to tell a console something
+ * it could have worked out. That is the wrong trade in the middle of an
+ * emergency, and the stages after the first one were routinely pressed late
+ * or in a batch at the end, which made the timestamps worse than no
+ * timestamps.
+ *
+ * RESPONDING now covers en route, on scene and handling. What is NOT lost is
+ * the arrival itself: `onSceneAt` is still stamped, automatically, when the
+ * assigned unit's own telemetry comes within ARRIVAL_RADIUS_M of the pin (see
+ * `autoArrival` in lib/dispatchWorkflow.js). The response-target metric still
+ * has its endpoint and the resident still gets the On-Site notification; the
+ * only thing that went is the button.
+ *
+ * ── LEGACY DOCUMENTS STILL READ ──────────────────────────────────────────
+ * Calls already stored at `on_site` or `investigating` are mapped to
+ * `responding` on read (see `deriveDispatchStage`), so nothing in flight when
+ * this shipped becomes unrepresentable and no migration was needed. The rules
+ * still accept those two as a starting point for a resolve, for the same
+ * reason.
  *
  * ── A SECOND FIELD, NOT NEW STATUSES ───────────────────────────────────────
  * The stage lives in `dispatchStage`. `status` keeps the five wire values the
@@ -22,7 +45,17 @@
  * both portals without initialising anything.
  */
 
-export const DISPATCH_STAGES = ['dispatched', 'responding', 'on_site', 'investigating', 'resolved']
+export const DISPATCH_STAGES = ['dispatched', 'responding', 'resolved']
+
+/**
+ * Stages this console no longer writes, but may still READ off a document
+ * that was mid-flight when the machine was shortened.
+ *
+ * Deliberately not in `DISPATCH_STAGES`: the stepper, `nextStage` and
+ * `stageIndex` must all behave as though there are three, or a legacy call
+ * would render a two-step gap nobody can cross.
+ */
+export const LEGACY_STAGES = ['on_site', 'investigating']
 
 /** Before the first dispatch. Not a stored value: an absent field reads as this. */
 export const UNASSIGNED_STAGE = 'none'
@@ -31,9 +64,10 @@ export const STAGE_LABELS = {
   none: 'Awaiting dispatch',
   dispatched: 'Dispatched',
   responding: 'Responding',
-  on_site: 'On-site',
-  investigating: 'Investigating',
   resolved: 'Resolved',
+  // Read-only, for a document stored before the machine was shortened.
+  on_site: 'Responding',
+  investigating: 'Responding',
 }
 
 /**
@@ -41,12 +75,21 @@ export const STAGE_LABELS = {
  * a resident sees "Dispatched" from the moment a guard is picked until they
  * arrive, and "On-Site" for as long as the guard is with them.
  */
+/**
+ * ── THE RESIDENT'S VIEW DID NOT COLLAPSE WITH THE STAGES ──────────────────
+ * `responding` maps to `dispatched` here and the resident is moved on to
+ * `in_progress` by the ARRIVAL stamp instead — which still happens, now
+ * automatically (see `autoArrival`). Collapsing the wire status along with
+ * the stage would have taken the "a guard is here now" signal off the
+ * resident's phone, which is the one update in this whole machine they
+ * actually feel, and nobody asked for that.
+ */
 export const STAGE_TO_WIRE_STATUS = {
   dispatched: 'dispatched',
   responding: 'dispatched',
+  resolved: 'resolved',
   on_site: 'in_progress',
   investigating: 'in_progress',
-  resolved: 'resolved',
 }
 
 /** The display status each stage maps to, for the resident notification call. */
@@ -58,9 +101,19 @@ export const STAGE_TO_DISPLAY_STATUS = {
   resolved: 'Resolved',
 }
 
+/**
+ * For a document old enough to have no `dispatchStage` at all — only the wire
+ * status the resident app has always read.
+ *
+ * `in_progress` maps to RESPONDING, not to the on-site stage it used to:
+ * the value has to be one `DISPATCH_STAGES` contains, or the stepper renders
+ * a stage that is not on it and `stageIndex` answers 0 for a call that is
+ * plainly under way. The two legacy stage VALUES are handled a step earlier
+ * in `deriveDispatchStage`; this is the older fallback beneath them.
+ */
 const LEGACY_WIRE_TO_STAGE = {
   dispatched: 'responding',
-  in_progress: 'on_site',
+  in_progress: 'responding',
   resolved: 'resolved',
   closed: 'resolved',
   false_alarm: 'resolved',
@@ -83,6 +136,12 @@ const LEGACY_WIRE_TO_STAGE = {
 export function deriveDispatchStage(raw) {
   const stored = raw?.dispatchStage
   if (DISPATCH_STAGES.includes(stored)) return stored
+  // A call that was on scene or being investigated when the machine was
+  // shortened is, in the new vocabulary, exactly "responding". Mapping it on
+  // READ rather than migrating the documents means nothing had to be
+  // rewritten under a live shift, and an old console still showing the
+  // granular stage stays correct about the same call.
+  if (LEGACY_STAGES.includes(stored)) return 'responding'
   return LEGACY_WIRE_TO_STAGE[raw?.status] ?? UNASSIGNED_STAGE
 }
 
@@ -93,14 +152,26 @@ export function nextStage(stage) {
   return index >= 0 && index < DISPATCH_STAGES.length - 1 ? DISPATCH_STAGES[index + 1] : null
 }
 
-/** 0 before dispatch, 1…5 through the machine. For steppers and sorting. */
+/** 0 before dispatch, 1…3 through the machine. For steppers and sorting. */
 export function stageIndex(stage) {
   return DISPATCH_STAGES.indexOf(stage) + 1
 }
 
-/** A call a guard is committed to: picked, and not yet closed. */
+/**
+ * A call a guard is committed to: picked, and not yet closed.
+ *
+ * The two legacy stages are still named here. This is asked about raw stored
+ * values in places that have not been through `deriveDispatchStage` — the
+ * telemetry hook's open-call query among them — and a document left at
+ * `on_site` is every bit as active as one at `responding`.
+ */
 export function isActiveStage(stage) {
-  return stage === 'dispatched' || stage === 'responding' || stage === 'on_site' || stage === 'investigating'
+  return (
+    stage === 'dispatched' ||
+    stage === 'responding' ||
+    stage === 'on_site' ||
+    stage === 'investigating'
+  )
 }
 
 /**

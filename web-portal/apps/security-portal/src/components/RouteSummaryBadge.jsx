@@ -1,8 +1,5 @@
 import {
-  Bike,
-  Crosshair,
   FlaskConical,
-  Footprints,
   Loader2,
   MoveRight,
   Navigation,
@@ -14,29 +11,7 @@ import { staffLabel } from '@shared/lib/identity'
 import { ROUTE_TONE_COLORS } from '@shared/theme/dispatchColors'
 import { StageBadge } from '@/components/dispatch/parts'
 import { useMetricsClock } from '@/hooks/useMetricsClock'
-import {
-  arrivalAt,
-  formatClockTime,
-  formatDistance,
-  formatDuration,
-  routeProfile,
-} from '@/lib/directions'
-
-/**
- * The icon for how the unit is travelling.
- *
- * Keyed on the profile's `transport`, not its routing graph, so the glyph can
- * say "two wheels" while the route still follows `mapbox/driving` — the road
- * network a patrol actually uses. See the note on ROUTE_PROFILES.
- *
- * ── IT IS NOW THE WHOLE OF WHAT SAYS "RIDE" OR "WALK" ──────────────────────
- * The panel used to carry a Ride / Walk segmented control beside it, which
- * read as a caption for this glyph and was in fact the routing-profile
- * switch. The switch moved to the map controls drawer (see
- * RouteProfileControl); the glyph stayed, and grew, because a 32px vector is
- * a faster read of "two wheels" than the word was.
- */
-const TRANSPORT_ICONS = { bike: Bike, foot: Footprints }
+import { arrivalAt, formatClockTime, formatDistance, formatDuration } from '@/lib/directions'
 
 /**
  * One figure in the telemetry row: the number, then what it is.
@@ -122,14 +97,12 @@ function Telemetry({ label, value, strong = false }) {
 export default function RouteSummaryBadge({
   route,
   progress,
-  profile,
   targetLabel,
   targetDetail,
   stage,
   simulated = false,
   navigating = false,
   onToggleNavigation,
-  onRecenter,
   offRoute = false,
 }) {
   /**
@@ -152,8 +125,7 @@ export default function RouteSummaryBadge({
   const result = route.phase === 'ready' ? route.route : null
   const live = route.tone === 'live'
 
-  const TransportIcon = TRANSPORT_ICONS[routeProfile(profile).transport] ?? Navigation
-  let StateIcon = TransportIcon
+  let StateIcon = Navigation
   if (pending) StateIcon = Loader2
   else if (failed) StateIcon = ShieldAlert
 
@@ -283,13 +255,26 @@ export default function RouteSummaryBadge({
             different type sizes on one baseline grid is the whole reason this
             row reads as a single statement rather than three cells. */}
         {result ? (
-          <div className="flex shrink-0 items-center gap-4 px-4 py-3" aria-live="polite">
-            <span
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full"
-              style={{ backgroundColor: `${color}26`, color }}
-            >
-              <TransportIcon size="lg" aria-hidden="true" />
-            </span>
+          /* ── THREE FIGURES, AND NOTHING ELSE ───────────────────────────
+             The row led with a 32px transport glyph — a bicycle or a pair of
+             feet — which has gone. It was saying which routing profile is in
+             use, and WHO the route belongs to is already unmistakable on the
+             canvas: the officer's own marker is the only thing on the map
+             carrying a standby pulse ring, and it becomes a navigation
+             emblem the moment a session starts. A second, smaller statement
+             of the same thing inside the card was costing 64px of a sheet
+             whose whole budget is a third of a phone screen.
+
+             The profile itself is still switchable, in the map controls
+             drawer where the other mode toggles live (RouteProfileControl).
+
+             `justify-between` rather than the old `gap-4`: with the glyph
+             gone the three figures own the full width, and even spacing
+             reads as a row of equals, which is what they are. */
+          <div
+            className="flex shrink-0 items-center justify-between gap-3 px-4 py-3.5"
+            aria-live="polite"
+          >
             <Telemetry label={live ? 'ETA' : 'Est. time'} value={formatDuration(durationS)} strong />
             <Telemetry label="Remaining" value={formatDistance(distanceM)} />
             <Telemetry label="Arrival" value={formatClockTime(arrival)} />
@@ -374,29 +359,15 @@ export default function RouteSummaryBadge({
       {/* ── 3. THE ACTION BAR ────────────────────────────────────────────
           OUTSIDE the scroller and `shrink-0`, so the controls stay on screen
           at every sheet height. */}
+      {/* ── ONE ACTION ───────────────────────────────────────────────────
+          Recentre was here and has gone. It was defensible — during a
+          session the camera recovers only on the next fix, which at a
+          fifteen-second cadence is a wait — and it was still a second
+          button competing with the one that matters, on a bar an officer
+          reaches for while driving. The camera does come back on its own,
+          and the map's own locate control is a tap away for anyone who
+          cannot wait; neither of those was true of Start navigation. */}
       <div className="flex shrink-0 items-center gap-2 border-t border-hairline p-4">
-        {/* ── RECENTRE, WHICH IS NOT THE OVERVIEW BUTTON COMING BACK ──────
-            Overview framed the WHOLE route and was removed for cluttering a
-            screen during a live response. This does the opposite thing: it
-            puts the camera back on the unit.
-
-            It earns its place where Overview did not because the camera can
-            genuinely be somewhere else. A dispatcher panning to check a gate
-            clears follow mode outright; during a session the camera recovers
-            by itself, but only on the NEXT FIX, and at this console's
-            fifteen-second telemetry cadence that is long enough to want a
-            button rather than a wait. */}
-        {onRecenter ? (
-          <button
-            type="button"
-            onClick={onRecenter}
-            className="btn btn-action btn-outline flex-1 sm:flex-none"
-          >
-            <Crosshair size="sm" aria-hidden="true" />
-            Recentre
-          </button>
-        ) : null}
-
         {navigating ? (
           /* ── A WASH, NOT A SOLID RED ─────────────────────────────────
              The shared stylesheet defines `.btn-danger` as a danger-tinted
@@ -408,7 +379,7 @@ export default function RouteSummaryBadge({
             type="button"
             onClick={onToggleNavigation}
             aria-pressed
-            className="btn btn-action btn-danger flex-1 sm:ml-auto sm:flex-none"
+            className="btn btn-action btn-danger w-full"
           >
             <X size="sm" aria-hidden="true" />
             Exit navigation
@@ -422,7 +393,7 @@ export default function RouteSummaryBadge({
           <button
             type="button"
             onClick={onToggleNavigation}
-            className="btn btn-action btn-brand flex-1 sm:ml-auto sm:flex-none"
+            className="btn btn-action btn-brand w-full"
           >
             <Navigation size="sm" aria-hidden="true" />
             Start navigation

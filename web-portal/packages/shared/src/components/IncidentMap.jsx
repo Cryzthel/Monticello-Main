@@ -1692,24 +1692,6 @@ export default function IncidentMap({
   /** Identifies whose route this is. The camera re-frames only when it changes. */
   routeKey = null,
   /**
-   * A nonce. Every time it CHANGES, the camera flies back to `followUnitId`
-   * — the route panel's Recentre action.
-   *
-   * ── A COUNTER, NOT A ref HANDLE ─────────────────────────────────────────
-   * The alternative is `useImperativeHandle` and a `mapRef.current.recentre()`
-   * from the page, which would be the only imperative handle on a component
-   * whose interface is otherwise props in and callbacks out. A counter keeps
-   * the data flow one-directional, and it gets the semantics right for free:
-   * recentring is something a dispatcher does REPEATEDLY, and a counter fires
-   * on every press where a boolean would fire once and then need clearing.
-   *
-   * This is NOT the Overview button returning. That one framed the whole
-   * route and was removed for cluttering a live response; this puts the
-   * camera back on the unit, which is a thing the camera can genuinely have
-   * stopped doing.
-   */
-  recenterSignal = 0,
-  /**
    * A node floated top-centre over the map — the Guardhouse's turn-guidance
    * banner. Rendered inside the map's own frame so it follows the map into
    * its maximised state, where a sibling elsewhere in the page would be
@@ -2381,29 +2363,6 @@ export default function IncidentMap({
     }
     map.fitBounds(bounds, { padding, maxZoom: 18, duration: 700 })
   }, [barClearance, controlsOpen, isCompact])
-
-  /**
-   * Recentre, on demand.
-   *
-   * Skips the first run — the signal starts at 0 and mounting is not a press.
-   * Without that, every console would fly to its own unit on load, overriding
-   * whatever camera the page had just set.
-   *
-   * `easeTo` at the current zoom rather than `flyTo` at a chosen one: the
-   * operator has usually zoomed deliberately, and a recentre that also
-   * re-zooms takes away a decision they made on purpose. It only moves the
-   * camera to the unit, which is the whole of what the button offers.
-   */
-  const recenteredRef = useRef(recenterSignal)
-  useEffect(() => {
-    if (!ready || recenteredRef.current === recenterSignal) return
-    recenteredRef.current = recenterSignal
-    const map = mapRef.current
-    if (!map || !followUnitId) return
-    const unit = unitsRef.current.find((u) => u.uid === followUnitId)
-    if (!unit?.position) return
-    map.easeTo({ center: [unit.position.lng, unit.position.lat], duration: 600 })
-  }, [recenterSignal, ready, followUnitId])
 
   const fittedRouteRef = useRef(null)
   useEffect(() => {

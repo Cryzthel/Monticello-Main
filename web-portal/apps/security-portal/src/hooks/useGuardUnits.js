@@ -18,12 +18,42 @@ const STALE_AFTER_MS = { idle: 180_000, active: 60_000 }
 /** Past this, the position is not drawn at all. It says where a guard was, not where they are. */
 const HIDE_AFTER_MS = 15 * 60_000
 
-/** Unit state by the stage of the call it is booked to. */
+/**
+ * Unit state by the stage of the call it is booked to.
+ *
+ * The two legacy stages are kept: a document stored before the machine was
+ * shortened still reads `on_site`, and that unit is still on scene.
+ */
 const STAGE_TO_UNIT_STATE = {
   dispatched: 'assigned',
   responding: 'responding',
   on_site: 'on_scene',
   investigating: 'on_scene',
+}
+
+/**
+ * Which of the three marker colours this unit gets.
+ *
+ * ── ON-SCENE SURVIVED THE STAGE THAT CARRIED IT ─────────────────────────
+ * The map paints a unit orange while responding and blue once on scene, and
+ * that blue used to come from the `on_site` STAGE. That stage is gone — a
+ * guard who arrives now stays at `responding` — so keying the colour off
+ * the stage alone would have left every arrived unit orange, and a
+ * dispatcher scanning the canvas could no longer tell who was still driving
+ * from who was at the door.
+ *
+ * `onSceneAt` is the fact underneath, and it is still stamped (now
+ * automatically, from the unit's own telemetry — see `autoArrival`). So the
+ * colour reads the timestamp instead of the stage, which is the more direct
+ * question anyway: not "what stage is the paperwork at" but "has this unit
+ * got there".
+ */
+function unitStateFor(assignment) {
+  if (!assignment) return 'available'
+  const base = STAGE_TO_UNIT_STATE[assignment.dispatchStage]
+  if (!base) return 'available'
+  if (base === 'responding' && assignment.onSceneAt) return 'on_scene'
+  return base
 }
 
 export const UNIT_STATE_LABELS = {
@@ -81,7 +111,7 @@ export function useGuardUnits(incidents, target = null) {
     return [...byUid.values()].map((shift) => {
       const t = telemetryByUid.get(shift.guardUid)
       const assignment = assignmentByUid.get(shift.guardUid) ?? null
-      const state = assignment ? STAGE_TO_UNIT_STATE[assignment.dispatchStage] : 'available'
+      const state = unitStateFor(assignment)
 
       const raw = t?.onDuty ? t.position : null
       const fixAt = toMillis(raw?.capturedAt) ?? toMillis(t?.updatedAt)

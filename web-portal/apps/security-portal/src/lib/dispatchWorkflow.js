@@ -14,8 +14,7 @@ import { distanceMeters } from '@/lib/directions'
  *
  *   dispatchUnit          POST /incidents/dispatch   none → DISPATCHED
  *   acknowledgeAndRespond POST /incidents/respond    DISPATCHED → RESPONDING
- *   confirmArrival        POST /incidents/arrive     RESPONDING → ON-SITE
- *   beginInvestigation                               ON-SITE → INVESTIGATING
+ *   autoArrival           stamps onSceneAt           (stage unchanged)
  *   updateInvestigation / escalateIncident           within INVESTIGATING
  *   resolveIncident       POST /incidents/resolve    INVESTIGATING → RESOLVED
  *
@@ -60,7 +59,25 @@ function actorName() {
 /** Stages that push the resident, and why. See residentMessageForStage in lib/dispatch.js. */
 const NOTIFY_STAGES = new Set(['responding', 'on_site', 'resolved'])
 
-async function commitStage({ incident, action, toStage, fields, role, forensics, detail }) {
+/**
+ * @param {object} args
+ * @param {string} [args.notifyStatus] Push this display status to the
+ *   resident instead of the one the stage implies.
+ *
+ *   ── WHY AN OVERRIDE EXISTS AT ALL ────────────────────────────────────
+ *   The resident's push is normally derived: a stage change implies a
+ *   status, and a write that does not move the stage is not news. The
+ *   arrival stamp broke both halves of that. It deliberately does NOT move
+ *   the stage — the on-site stage was removed — so the derivation would
+ *   have sent nothing; and the stage it sits in maps to "Dispatched", so
+ *   had it sent anything it would have told a resident with a guard on
+ *   their doorstep that one had been assigned.
+ *
+ *   "A guard is here now" is the one update in this machine a resident
+ *   actually feels, and it was the thing most at risk from shortening the
+ *   stages. This is what keeps it.
+ */
+async function commitStage({ incident, action, toStage, fields, role, forensics, detail, notifyStatus }) {
   const user = auth.currentUser
   if (!user) throw new Error('Not signed in.')
 
@@ -92,8 +109,10 @@ async function commitStage({ incident, action, toStage, fields, role, forensics,
   })
 
   const committed = batch.commit()
-  const notify = NOTIFY_STAGES.has(toStage) && toStage !== incident.dispatchStage
-    ? () => notifyResident(incident.id, { status: STAGE_TO_DISPLAY_STATUS[toStage], stage: toStage })
+  const derived = NOTIFY_STAGES.has(toStage) && toStage !== incident.dispatchStage
+  const status = notifyStatus ?? (derived ? STAGE_TO_DISPLAY_STATUS[toStage] : null)
+  const notify = status
+    ? () => notifyResident(incident.id, { status, stage: toStage })
     : null
   return { committed, notify }
 }
@@ -189,55 +208,64 @@ export async function checkArrival(incident) {
 }
 
 /**
- * Stage 2a. Pass the result of `checkArrival`. Anything but `within` needs
- * `overrideReason`. The rules demand one, and they re-measure a `within`
- * claim against the pin themselves.
+ * The unit has reached the pin. Stamp it — and do NOT move the stage.
+ *
+ * ── THE BUTTON THIS REPLACED, AND WHY IT HAD TO GO ───────────────────────
+ * "I have arrived" was a stage of its own, pressed by a guard standing at a
+ * scene with their phone out. It was friction at the worst possible moment,
+ * and the timestamps it produced were worse than useless: routinely pressed
+ * late, sometimes in a batch at the end of a call, which is a measurement of
+ * when somebody remembered rather than when they arrived.
+ *
+ * So the EVENT survived and the STAGE did not. The console already knows
+ * where the unit is — it is drawing the marker — so it stamps `onSceneAt`
+ * the first time the assigned officer's own telemetry comes inside the
+ * radius. That keeps the response-target metric's endpoint, keeps the
+ * resident's On-Site notification, and asks the guard for nothing.
+ *
+ * ── NO OVERRIDE PATH, DELIBERATELY ───────────────────────────────────────
+ * `confirmArrival` took an override reason, because a human was ASSERTING
+ * they had arrived and the rules wanted them to account for a GPS that
+ * disagreed. Nobody is asserting anything now. If the fix never comes inside
+ * the radius the stamp simply does not happen, the call goes from Dispatched
+ * to Resolved, and no record claims an arrival that was not observed. A
+ * silent gap is the honest outcome; an automatic override would be the
+ * console inventing one.
+ *
+ * Idempotent at two levels: the caller only fires it once per call (see
+ * `useAutoArrival`), and the rules refuse a second stamp because
+ * `onSceneAt` is already set.
  */
-export async function confirmArrival(incident, check, { role, overrideReason = '' }) {
-  const within = check.verdict === 'within'
-  const reason = overrideReason.trim()
-  if (!within && reason.length < 3) throw new Error('Give a reason for confirming arrival without a GPS match.')
-
+export async function autoArrival(incident, check, { role }) {
+  if (check?.verdict !== 'within') return false
   const forensics = await captureForensics({ fix: check.fix ?? null })
-  return commitStage({
+  await commitStage({
     incident,
     action: 'arrive',
-    toStage: 'on_site',
+    // The stage does not move; the log entry still records that it happened,
+    // which is what `status_log` is for.
+    toStage: 'responding',
     role,
     forensics,
     fields: {
       status: 'in_progress',
-      dispatchStage: 'on_site',
       onSceneAt: serverTimestamp(),
       arrival: {
         lat: check.fix?.lat ?? null,
         lng: check.fix?.lng ?? null,
         accuracyM: check.accuracyM ?? null,
         distanceM: check.distanceM ?? null,
-        withinRadius: within,
-        override: !within,
-        overrideReason: within ? '' : reason.slice(0, 280),
+        withinRadius: true,
+        override: false,
+        overrideReason: '',
       },
     },
-    detail: { verdict: check.verdict },
+    detail: { verdict: check.verdict, automatic: true },
+    // The whole point of keeping the arrival event — see the note on
+    // `notifyStatus`.
+    notifyStatus: 'On-Site',
   })
-}
-
-/** Stage 2b. Opens scene photos, quick tags and escalation. */
-export async function beginInvestigation(incident, { role }) {
-  const forensics = await captureForensics()
-  return commitStage({
-    incident,
-    action: 'investigate',
-    toStage: 'investigating',
-    role,
-    forensics,
-    fields: {
-      dispatchStage: 'investigating',
-      investigatingAt: serverTimestamp(),
-      investigation: { tags: [], photoUrls: [] },
-    },
-  })
+  return true
 }
 
 function currentInvestigation(incident) {
@@ -256,7 +284,7 @@ export async function toggleInvestigationTag(incident, tag, { role }) {
   return commitStage({
     incident,
     action: on ? 'tag_added' : 'tag_removed',
-    toStage: 'investigating',
+    toStage: 'responding',
     role,
     forensics,
     fields: { investigation: { ...investigation, tags } },
@@ -271,7 +299,7 @@ export async function addInvestigationPhotos(incident, urls, { role }) {
   return commitStage({
     incident,
     action: 'photos_added',
-    toStage: 'investigating',
+    toStage: 'responding',
     role,
     forensics,
     fields: { investigation: { ...investigation, photoUrls: [...investigation.photoUrls, ...urls] } },
@@ -288,7 +316,7 @@ export async function escalateIncident(incident, reason, { role }) {
   return commitStage({
     incident,
     action: 'escalate',
-    toStage: 'investigating',
+    toStage: 'responding',
     role,
     forensics,
     fields: {
