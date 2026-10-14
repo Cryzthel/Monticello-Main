@@ -75,10 +75,41 @@ export async function acknowledgePanicAlert(alertId, staffName) {
   })
 }
 
-export async function resolvePanicAlert(alertId) {
+/**
+ * Close an alert out, optionally with the account of what was done.
+ *
+ * ── THE RECORD IS OPTIONAL HERE, AND THAT IS DELIBERATE ────────────────────
+ * The rail resolves with nothing: an officer clearing a false alarm from a
+ * list of fourteen should not be made to write an essay, and a console that
+ * demanded one would be a console where alerts stay open because closing them
+ * is work. The modal resolves WITH notes and photo proof, because somebody who
+ * has opened a single alert and is closing it there has the time and is
+ * usually the person who attended.
+ *
+ * `resolution` is written only when something was actually supplied, so an
+ * empty object never lands on the document and "was anything recorded" stays
+ * answerable by the field's presence.
+ *
+ * No rules change was needed: `panic_alerts` allows `update: if
+ * isSecurityStaff()` with no field validation, so the whole status surface —
+ * including this — moves together. See the note in firestore.rules.
+ */
+export async function resolvePanicAlert(alertId, { notes = '', photoUrls = [] } = {}) {
+  const trimmed = String(notes ?? '').trim()
+  const photos = Array.isArray(photoUrls) ? photoUrls.filter(Boolean) : []
+
   await updateDoc(doc(db, 'panic_alerts', alertId), {
     status: 'resolved',
     resolvedAt: serverTimestamp(),
+    // Who closed it. The uid is the audit trail and the label is what a
+    // console prints — the same split `acknowledgePanicAlert` makes, and for
+    // the same reason: an email must not reach a document the whole
+    // guardhouse can read.
+    resolvedBy: auth.currentUser?.uid ?? null,
+    resolvedByName: acknowledgedByLabel(auth.currentUser?.displayName ?? ''),
+    ...(trimmed || photos.length
+      ? { resolution: { ...(trimmed ? { notes: trimmed } : {}), ...(photos.length ? { photoUrls: photos } : {}) } }
+      : {}),
     updatedAt: serverTimestamp(),
   })
 }

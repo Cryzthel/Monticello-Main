@@ -1,8 +1,5 @@
-import { Check } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
-import { categoryColor, categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
-import { DISPATCH_STAGES, STAGE_LABELS, deriveDispatchStage, stageIndex } from '@shared/lib/dispatchStage'
-import { categoryIcon } from '@shared/theme/categoryIcons'
+import { STAGE_LABELS } from '@shared/lib/dispatchStage'
 
 /**
  * Small pieces of the dispatch drawer, kept apart from it so the drawer file
@@ -45,24 +42,12 @@ export function StageBadge({ stage, size = 'sm' }) {
 }
 
 /**
- * The category as an icon tile, in the category's own colour — the same
- * colour the category charts use, so a medical call reads rose in both
- * places.
+ * ── THE STEPPER AND THE CATEGORY TILE LEFT THIS FILE ───────────────────────
+ * Both are now drawn from `@shared/components/dispatch` — see
+ * StageStepper.jsx there for why a second copy of the pipeline in the Admin
+ * console was worth deleting rather than keeping in step by hand. Import them
+ * from shared; `CategoryIconBadge` is a default export there.
  */
-export function CategoryIconBadge({ category, className = '' }) {
-  const key = normalizeCategory(category)
-  const Icon = categoryIcon(key)
-  const color = categoryColor(key)
-  return (
-    <span
-      title={categoryLabel(key)}
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset ${className}`}
-      style={{ backgroundColor: `${color}1f`, color, '--tw-ring-color': `${color}55` }}
-    >
-      <Icon size="md" aria-hidden="true" />
-    </span>
-  )
-}
 
 /**
  * One bordered block of the drawer.
@@ -90,92 +75,3 @@ export function Section({ icon: Icon, title, meta, children, tone = '' }) {
   )
 }
 
-const STAGE_STAMPS = {
-  dispatched: 'dispatchedAt',
-  responding: 'respondingAt',
-  on_site: 'onSceneAt',
-  investigating: 'investigatingAt',
-  resolved: 'resolvedAt',
-}
-
-const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
-
-/**
- * DISPATCHED → RESPONDING → ON-SITE → INVESTIGATING → RESOLVED, with the time
- * each step was reached. Done steps are filled, the current one is ringed,
- * the rest are muted. An ordered list, so a screen reader reads it as steps.
- */
-export function StageStepper({ report, stage }) {
-  /**
-   * The stage is PASSED IN, with a derivation only as a fallback.
-   *
-   * It derived its own, which was correct and was half of a bug: the drawer
-   * around it read the raw `dispatchStage` field, so on a call stored at a
-   * retired stage the bar lit Responding while the controls below matched
-   * nothing. Two readers of one fact will eventually disagree; the caller
-   * owns it now and this renders what it is given.
-   */
-  const current = stageIndex(stage ?? deriveDispatchStage(report))
-  return (
-    /* ── CENTRED, AND NOT A FIVE-COLUMN GRID ─────────────────────────────
-       It was `grid grid-cols-5`, one column per stage, stretched across the
-       full width of the drawer. Two of those stages have gone, which left
-       three labels strung out over five columns' worth of rail with the
-       connectors reaching across the gaps — the layout was describing a
-       machine that no longer exists.
-
-       A centred flex row instead: the three nodes size to their content and
-       sit in the middle of the card, with the connectors taking only the
-       space between them. `max-w-sm` stops the row spreading to the full
-       416px of the rail, where three items read as three unrelated columns
-       rather than one pipeline. */
-    <ol
-      className="mx-auto flex w-full max-w-sm items-start justify-center"
-      aria-label="Dispatch stage"
-    >
-      {DISPATCH_STAGES.map((stage, i) => {
-        const step = i + 1
-        const done = step < current || (step === current && stage === 'resolved')
-        const active = step === current && !done
-        const at = report[STAGE_STAMPS[stage]]
-        return (
-          <li
-            key={stage}
-            aria-current={active ? 'step' : undefined}
-            className="relative flex min-w-0 flex-1 flex-col items-center text-center"
-          >
-            {i > 0 ? (
-              <span
-                aria-hidden="true"
-                className={`absolute right-1/2 top-2.5 h-0.5 w-full -translate-y-1/2 ${
-                  step <= current ? 'bg-brand-500' : 'bg-tint/10'
-                }`}
-              />
-            ) : null}
-            <span
-              className={`relative z-[1] flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold ${
-                done
-                  ? 'bg-brand-500 text-base-900'
-                  : active
-                    ? 'bg-base-800 text-brand-400 ring-2 ring-brand-500'
-                    : 'bg-base-800 text-text-muted ring-1 ring-tint/15'
-              }`}
-            >
-              {done ? <Check size="sm" strokeWidth={3} aria-hidden="true" /> : step}
-            </span>
-            <span
-              className={`mt-1.5 w-full truncate px-1 text-2xs font-semibold ${
-                active ? 'text-text-primary' : done ? 'text-text-secondary' : 'text-text-muted'
-              }`}
-            >
-              {STAGE_LABELS[stage]}
-            </span>
-            <span className="font-mono text-2xs tabular-nums text-text-muted">
-              {at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—'}
-            </span>
-          </li>
-        )
-      })}
-    </ol>
-  )
-}

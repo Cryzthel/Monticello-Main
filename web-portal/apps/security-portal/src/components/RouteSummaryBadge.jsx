@@ -1,12 +1,4 @@
-import {
-  FlaskConical,
-  Loader2,
-  MoveRight,
-  Navigation,
-  ShieldAlert,
-  TriangleAlert,
-  X,
-} from '@shared/icons'
+import { Loader2, MoveRight, Navigation, ShieldAlert, TriangleAlert, X } from '@shared/icons'
 import { staffLabel } from '@shared/lib/identity'
 import { ROUTE_TONE_COLORS } from '@shared/theme/dispatchColors'
 import { StageBadge } from '@/components/dispatch/parts'
@@ -100,7 +92,6 @@ export default function RouteSummaryBadge({
   targetLabel,
   targetDetail,
   stage,
-  simulated = false,
   navigating = false,
   onToggleNavigation,
   offRoute = false,
@@ -144,9 +135,23 @@ export default function RouteSummaryBadge({
    * it — the console was blaming the one thing that was fine.
    */
   const [reason, missingGuardhouse] = String(route.noOriginReason ?? '').split(':')
+  /**
+   * ── SHORTER, AND IT NO LONGER RECITES THE FIX ───────────────────────────
+   * The self case used to spell out the whole remedy here — allow location for
+   * this site, check it is on for the machine, and the route plots itself. All
+   * true, and all of it in the wrong place: this is a paragraph inside a route
+   * panel on a 375px phone, with no button on it, while the thing that can
+   * actually grant the permission is one press on the banner and the toast
+   * (see LocationAccessToast). Instructions with no control beside them read
+   * as the console explaining why it cannot help.
+   *
+   * So it states the fact and points at the control. The toast is raised by
+   * the same condition, so by the time an officer reads this line the button
+   * it refers to is on screen.
+   */
   const NO_ORIGIN_TEXT = {
     'self-no-fix':
-      'This device has not produced a GPS fix yet. Allow location for this site, check location is switched on for the whole machine, and the route plots itself as soon as a position arrives.',
+      'This device has no GPS position yet, so there is nothing to measure a route from. Use Allow location above — the route plots itself the moment a position arrives.',
     'unit-off-duty': `${unitName} is not clocked in, so the console has no position to route from. Reassign the call, or route from the guardhouse.`,
     'unit-no-fix': `${unitName} is clocked in but not reporting a position — no GPS fix on their device, or location sharing is off.`,
   }
@@ -154,8 +159,22 @@ export default function RouteSummaryBadge({
     route.phase === 'no-origin'
       ? [
           NO_ORIGIN_TEXT[reason] ?? `No position to route from for ${unitName}.`,
+          /**
+           * ── AN ENV VAR NAME IS NOT A SENTENCE FOR A GUARD ─────────────
+           * This read "No guardhouse coordinate is configured either
+           * (VITE_GUARDHOUSE_LNGLAT), so there is no fallback to fall back
+           * to." Every word of that is for whoever deploys this console, and
+           * the person reading it is a security officer at a gate who cannot
+           * set an environment variable and should not be shown one. The
+           * console already warns the operator who CAN fix it, on the
+           * console, through `readGuardhouse`.
+           *
+           * What the officer needs from this clause is the consequence: there
+           * is no second-best origin, so this will not resolve itself without
+           * their position.
+           */
           missingGuardhouse
-            ? 'No guardhouse coordinate is configured either (VITE_GUARDHOUSE_LNGLAT), so there is no fallback to fall back to.'
+            ? 'There is no guardhouse fallback set up on this console either, so a position from your device is the only way to plot this route.'
             : null,
         ]
           .filter(Boolean)
@@ -215,18 +234,10 @@ export default function RouteSummaryBadge({
       ].join(' ')}
     >
       <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-        {/* A second, unmissable statement on the panel itself. The pill in the
-            destination row is the one that must be right; this is the one
-            that explains it. */}
-        {simulated ? (
-          <p className="flex shrink-0 items-center gap-2 border-b border-hairline bg-warning/15 px-4 py-2 text-caption font-medium text-warning">
-            <FlaskConical size="sm" aria-hidden="true" className="shrink-0" />
-            <span className="min-w-0 flex-1">
-              Simulated movement — this unit is not really here. Nothing is being recorded.
-            </span>
-          </p>
-        ) : null}
-
+        {/* The simulation banner that led this scroller is gone with the
+            simulator itself. Nothing on this console can now make the map
+            show a position that is not real, so there is no longer a state
+            for a banner to warn about. */}
         {/* ── OFF ROUTE, AND ONLY WHEN IT IS TRUE ──────────────────────────
             `offRoute` arrives from `useOffRoute`, which requires the
             condition to HOLD for five seconds. It used to be the raw per-fix
@@ -343,16 +354,9 @@ export default function RouteSummaryBadge({
               They are the same fact twice: `tone === 'live'` IS
               `dispatchStage === 'responding'`, which the stage badge already
               names — the capsule was the route layer's word for it leaking
-              into a row that had the dispatch word. Simulated is different
-              and genuinely overrides, so it keeps the slot when it applies. */}
-          {simulated ? (
-            <span className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full bg-pill-warning px-3 text-2xs font-semibold text-pill-warning-fg">
-              <FlaskConical size="sm" aria-hidden="true" />
-              Simulated
-            </span>
-          ) : stage ? (
-            <StageBadge stage={stage} />
-          ) : null}
+              into a row that had the dispatch word. A "Simulated" pill used
+              to override this slot; it went with the simulator. */}
+          {stage ? <StageBadge stage={stage} /> : null}
         </div>
       </div>
 

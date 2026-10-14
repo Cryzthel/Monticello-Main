@@ -1,4 +1,6 @@
 import { Info, Plus, Trash2 } from '@shared/icons'
+import Card from '@shared/components/Card'
+import CardHeader from '@shared/components/CardHeader'
 import Select from '@shared/components/Select'
 import Switch from '@shared/components/Switch'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -37,13 +39,40 @@ export function PendingNote({ children }) {
   )
 }
 
-/** The shared row. `control` sits on the first line, right-aligned. */
+/**
+ * The shared row. `control` sits on the first line, right-aligned.
+ *
+ * ── THE SAME ROW THE GUARDHOUSE SETTINGS PAGE DRAWS ───────────────────
+ * `px-4 py-3.5`, a 14px MEDIUM label over a 12px secondary line. Three details
+ * moved to get there, and each was a real difference rather than a rounding:
+ *
+ *   • The label was `font-semibold`, the same weight as the card header above
+ *     it. Two semibold 14px lines in one panel, one of them naming the panel
+ *     and the other naming a row inside it, is a hierarchy with no step in it.
+ *     The header keeps semibold; rows take medium.
+ *
+ *   • The rule between rows was `border-b` on each row. It is now `divide-y`
+ *     on the group, which is what stops a doubled rule where a group's last
+ *     row meets the next thing — the old version needed `last:border-0` to
+ *     paper over exactly that.
+ *
+ *   • The row had no horizontal padding of its own; the group supplied it with
+ *     `px-5`. That is why the rules ran edge to edge inside the card while the
+ *     guardhouse's stop short of it. Padding belongs to the row, so the rule
+ *     can be the full width of the surface and the content inset from it.
+ *
+ * `items-start` is NOT aligned to the guardhouse's `items-center`, and that is
+ * the one deliberate difference. Its rows are a label and a switch; these carry
+ * a two-line description and sometimes a pending note under it, and centring a
+ * switch against a three-line block floats it in the middle of nothing. The
+ * control lines up with the title it belongs to.
+ */
 export function SettingRow({ id, title, description, control, children, pending = null }) {
   return (
-    <div className="border-b border-divider py-4 last:border-0">
+    <div className="px-4 py-3.5">
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0">
-          <label htmlFor={id} className="text-sm font-semibold leading-snug text-text-primary">
+          <label htmlFor={id} className="text-sm font-medium leading-snug text-text-primary">
             {title}
           </label>
           {description ? (
@@ -230,10 +259,10 @@ export function HotlineEditor({ value, disabled, onChange }) {
   }
 
   return (
-    <div className="border-b border-divider py-4 last:border-0">
+    <div className="px-4 py-3.5">
       <div className="flex items-start justify-between gap-6">
         <div className="min-w-0">
-          <p className="text-sm font-semibold leading-snug text-text-primary">Emergency contacts</p>
+          <p className="text-sm font-medium leading-snug text-text-primary">Emergency contacts</p>
           <p className="mt-1 max-w-prose text-xs leading-relaxed text-text-secondary">
             Sent to the resident app during an active SOS. Shown in this order.
           </p>
@@ -298,24 +327,34 @@ export function HotlineEditor({ value, disabled, onChange }) {
   )
 }
 
-/** A titled group of rows. */
-export function SettingsGroup({ title, description, icon: Icon, children }) {
+/**
+ * A titled group of rows — `Card` + `CardHeader`, the pair the guardhouse
+ * settings page is built from.
+ *
+ * ── IT USED TO HAND-ROLL THIS HEADER, AND THE RANK WAS WRONG ──────────
+ * `text-base` (16px) semibold over a 12px line. CardHeader's docstring sets
+ * out why that is a level too loud: 16px-over-14px is SectionHeading's rank,
+ * for a heading that sits ABOVE a panel and names it, and a header INSIDE a
+ * card is one step down because the card is already the named thing. Reaching
+ * for the bigger rank made every group on this page shout one notch louder
+ * than the identical groups next door.
+ *
+ * The icon tile survived the move: it is genuinely useful on a page of six
+ * near-identical panels, so rather than keep a private header to hold it, the
+ * tile became an optional `icon` prop on CardHeader. Nothing else had to
+ * change to adopt it, and the guardhouse page can take one whenever it wants.
+ *
+ * `divide-y divide-divider` on the body, not a border per row: `--color-divider`
+ * is documented as the token "for the rules between table rows, which should
+ * separate without striping", and a settings list is that. (The guardhouse page
+ * reached for `divide-slate-100` — the CARD edge token, one step darker — and
+ * was the only use of it in either console. It has been moved onto this one.)
+ */
+export function SettingsGroup({ title, description, icon, children }) {
   return (
-    <section className="card p-0">
-      <header className="flex items-start gap-3 border-b border-hairline px-5 py-4">
-        {Icon ? (
-          <span className="icon-tile icon-tile-sm shrink-0" aria-hidden="true">
-            <Icon size="sm" />
-          </span>
-        ) : null}
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold leading-tight text-text-primary">{title}</h2>
-          {description ? (
-            <p className="mt-1 max-w-prose text-xs leading-relaxed text-text-muted">{description}</p>
-          ) : null}
-        </div>
-      </header>
-      <div className="px-5">{children}</div>
-    </section>
+    <Card as="section" className="overflow-hidden p-0">
+      <CardHeader icon={icon} title={title} description={description} />
+      <div className="divide-y divide-divider">{children}</div>
+    </Card>
   )
 }

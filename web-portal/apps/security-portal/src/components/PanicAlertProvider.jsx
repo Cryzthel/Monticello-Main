@@ -1,16 +1,15 @@
-import { createContext, useContext, useMemo } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { collection, query, where } from 'firebase/firestore'
-import { Siren, ChevronRight } from '@shared/icons'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
 import { mapPanicAlertDoc } from '@shared/lib/panicAlerts'
-import { ROUTES } from '@/config/portal'
 import { usePanicSiren } from '@/hooks/usePanicSiren'
+import { isMuted, setMuted as setDeviceMuted_, subscribeAlertSound } from '@shared/lib/alertSound'
+import PanicAlertBeacon from '@/components/PanicAlertBeacon'
 
 /**
- * The portal-wide panic alert channel: one subscription, one siren, one banner.
+ * The portal-wide panic alert channel: one subscription, one siren.
  *
  * ── THE GAP THIS CLOSES ────────────────────────────────────────────────────
  * Both halves of the SOS signal used to live on the Dispatch Map and nowhere
@@ -26,7 +25,9 @@ import { usePanicSiren } from '@/hooks/usePanicSiren'
  * and nothing whatsoever would happen on their screen.
  *
  * So this does not reverse the map's decision; it covers the case that
- * decision left open. The banner is deliberately NOT drawn on the map surface.
+ * decision left open. The visual half now lives in `PanicAlertRail`, a column
+ * beside the dispatch map; the floating banner that used to sit over every
+ * page is gone.
  *
  * ── IT MOVES A LISTENER RATHER THAN ADDING ONE ─────────────────────────────
  * DashboardPage used to open this exact query itself. Mounting a second
@@ -34,7 +35,7 @@ import { usePanicSiren } from '@/hooks/usePanicSiren'
  * warns against: a duplicate listener, a duplicate read bill, and a second
  * source of truth that can disagree with the map about which alerts exist.
  * The subscription therefore LIVES here and the page consumes it through
- * `useLivePanicAlerts`, so the banner, the siren and the map nodes are all
+ * `useLivePanicAlerts`, so the rail, the siren and the map nodes are all
  * reading one array by construction.
  *
  * ── WHY THE LIVE FILTER, NOT `usePanicAlerts` ──────────────────────────────
@@ -99,109 +100,80 @@ export default function PanicAlertProvider({ children }) {
   // map. `ready` is still load-bearing: without it the hook primes from the
   // empty array `useLiveCollection` starts with and then hears the first real
   // snapshot as a burst of new alerts — see panicSirenStep.
-  usePanicSiren(alerts, { ready: !loading })
+  /**
+   * The operator's own silence, held HERE rather than on the dispatch page.
+   *
+   * The siren is mounted portal-wide, so a mute owned by the page rendering
+   * the button would silence nothing the moment the guard navigated away — and
+   * would switch itself back on when that page unmounted. One piece of state,
+   * beside the one alarm it governs.
+   *
+   * Deliberately NOT persisted. A mute is for the thirty seconds of a radio
+   * call, not for a shift; an alarm still silenced after a reload because
+   * somebody muted it yesterday is the failure this subsystem exists to
+   * prevent. Every reload starts audible, and the reset below means every
+   * empty queue does too.
+   */
+  const [sessionMuted, setSessionMuted] = useState(false)
+  useEffect(() => {
+    if (!alerts.length) setSessionMuted(false)
+  }, [alerts.length])
 
-  const value = useMemo(() => ({ alerts, loading }), [alerts, loading])
+  /**
+   * ── THERE ARE TWO MUTES, AND THE CONSOLE WAS ONLY SHOWING ONE ───────────
+   *
+   * `alertSound` carries a DEVICE-WIDE mute, set from the Settings page and
+   * persisted to localStorage; `playAlert` returns early when it is on. The
+   * rail's own mute is the one above — per session, cleared when the queue
+   * empties, deliberately not persisted so no shift ever starts silent.
+   *
+   * They were independent, and the gap between them was visible: a guard who
+   * had muted the device in Settings got a rail button reading "Mute",
+   * implying sound was playing, while the loop spun on a timer producing
+   * nothing. The control described a state the hardware was not in.
+   *
+   * So the badge reports EITHER — if anything is silencing the siren, the
+   * console says it is silenced — and unmuting clears both. A press labelled
+   * "Unmute" that leaves the device muted is a dead control, and a dead
+   * control on an alarm is worse than no control.
+   */
+  const [deviceMuted, setDeviceMuted] = useState(() => isMuted())
+  useEffect(() => subscribeAlertSound(({ muted: next }) => setDeviceMuted(next)), [])
 
+  const muted = sessionMuted || deviceMuted
+  const setMuted = useCallback((next) => {
+    setSessionMuted(next)
+    // Unmuting has to reach the device mute too, or the press does nothing.
+    // Muting deliberately does NOT: silencing one emergency must not quietly
+    // persist across reloads and shifts.
+    if (!next && isMuted()) setDeviceMuted_(false)
+  }, [])
+
+  usePanicSiren(alerts, { ready: !loading, muted })
+
+  const value = useMemo(
+    () => ({ alerts, loading, muted, setMuted }),
+    [alerts, loading, muted, setMuted],
+  )
+
+  /**
+   * NO FLOATING BANNER ANY MORE. `GlobalPanicBanner` was a pulsing red capsule
+   * pinned over the top of the viewport; it is replaced by `PanicAlertRail`, a
+   * column beside the map — see that file for why a list beats a count, and
+   * why taking space from the map beats covering it.
+   *
+   * Those four surfaces with no map — tickets, file a report, history,
+   * metrics — keep an on-screen alarm through `PanicAlertBeacon`, a compact
+   * badge in the BOTTOM corner. Same information, a tenth of the footprint,
+   * and nowhere near the header controls the old banner sat on top of.
+   */
   return (
     <PanicAlertContext.Provider value={value}>
       {children}
-      <GlobalPanicBanner alerts={alerts} />
+      {/* The on-screen half for the surfaces with no map. It renders nothing
+          on the dispatch map (the rail is there) and nothing on the SOS page
+          (that page IS the list) — see PanicAlertBeacon. */}
+      <PanicAlertBeacon />
     </PanicAlertContext.Provider>
-  )
-}
-
-/**
- * The always-on-top SOS indicator.
- *
- * ── FIXED, NOT MOUNTED IN THE SHELL ────────────────────────────────────────
- * DashboardLayout renders page content inside a scrolling `<main>`. Anything
- * mounted through AppShell therefore scrolls away with the page, which is the
- * one thing an alert described as "persistent regardless of tab" must not do.
- * `fixed` takes it out of that column entirely.
- *
- * ── A CAPSULE, NOT A FULL-WIDTH BAR ────────────────────────────────────────
- * A bar across the top would cover the sidebar's brand row and the header's
- * search and notification controls — during the exact minutes a guard most
- * needs them. Centred with a bounded width, the alarm is unmissable and every
- * control around it stays reachable.
- *
- * ── EXPORTED ON PURPOSE ────────────────────────────────────────────────────
- * Nothing imports this today; the provider renders it directly. It is exported
- * because it is the seam that makes the banner verifiable — it takes `alerts`
- * and nothing else, so a throwaway harness can mount it with fixtures and
- * check every state without Firebase, auth or a signed-in session. That is how
- * the states below were confirmed. Please do not make it private again to
- * silence an "unused export"; that trades a testable component for a tidier
- * lint run.
- */
-export function GlobalPanicBanner({ alerts }) {
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
-
-  if (!alerts.length) return null
-
-  // Suppressed on the SOS page itself, on the same principle the map applies:
-  // a surface whose entire content is the list of live alerts does not need a
-  // floating badge telling it they exist.
-  if (pathname === ROUTES.sos) return null
-
-  const newest = alerts[0]
-  const count = alerts.length
-
-  return (
-    <div
-      className="pointer-events-none fixed left-1/2 top-3 z-[var(--z-sos)] w-[min(92vw,34rem)] -translate-x-1/2"
-      role="alert"
-      aria-live="assertive"
-    >
-      <button
-        type="button"
-        onClick={() => navigate(ROUTES.sos)}
-        className="sos-banner pointer-events-auto flex w-full items-center gap-3 rounded-full py-2.5 pl-3 pr-4 text-left ring-1 ring-inset ring-white/25"
-      >
-        {/* The ring is the only animated part, and `animate-ping` is covered by
-            the global prefers-reduced-motion rule. Everything that carries
-            MEANING — the plate, the siren glyph, the count, the name — is
-            static, so a reduced-motion guard loses the pulse and no
-            information. */}
-        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/20">
-          <span className="absolute inline-flex h-full w-full rounded-full bg-white/30 animate-ping" />
-          <Siren size="sm" className="relative" />
-        </span>
-
-        {/* ── THE OPACITY FLOOR, MEASURED ────────────────────────────────
-            White on this plate is 6.47:1 at full strength, and every step of
-            opacity composites the label toward the red underneath it. Against
-            the 4.5:1 that small text owes:
-
-              opacity-100  6.47:1   the headline
-              opacity-90   5.45:1   the resident line
-              opacity-80   4.59:1   the chevron
-
-            opacity-80 is the FLOOR, not a safe default — it clears AA by 0.09.
-            Anything dimmer fails, so do not reach for opacity-70 here to calm
-            the hierarchy down; change the weight or the size instead. */}
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
-            {/* Sentence case, and no second label. This read
-                `PANIC ALERT` in uppercase tracked bold with `SOS` set beside
-                it — a kicker carrying no information next to a synonym of
-                itself, on the one surface that has to be read in under a
-                second. index.css states that an `uppercase` utility in this
-                codebase is a regression. */}
-            <span className="text-label font-semibold">
-              {count > 1 ? `${count} panic alerts` : 'Panic alert'}
-            </span>
-          </span>
-          <span className="mt-0.5 block truncate text-caption opacity-90">
-            {newest?.residentName ? `${newest.residentName} — ` : ''}
-            tap to open dispatch
-          </span>
-        </span>
-
-        <ChevronRight size="sm" className="shrink-0 opacity-80" />
-      </button>
-    </div>
   )
 }

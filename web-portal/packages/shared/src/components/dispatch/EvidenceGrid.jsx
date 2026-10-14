@@ -40,6 +40,15 @@ export function forensicCoordinates(lat, lng) {
  * report's for resident evidence, and the stage's for the guard's own scene
  * photos. Nothing records when each photo was taken.
  *
+ * ── ONE GRID, BOTH CONSOLES ────────────────────────────────────────────────
+ * Shared after the Admin inspection rail was found drawing its own: a
+ * `grid-cols-3` of square tiles with no stamp on them at all. The same photo
+ * therefore carried its time, position and incident reference when an officer
+ * opened it and carried none of them when an administrator did — and the
+ * administrator is the one who exports the record. Two up with the stamp, in
+ * both, or the stamp is not a forensic property of the evidence but a
+ * property of which console you happened to open it in.
+ *
  * Thumbnails load lazily and decode off the main thread. The resident app
  * already compresses uploads to 1920 px, so there is no separate thumbnail
  * file to fetch. The grid shows the compressed original, scaled down.

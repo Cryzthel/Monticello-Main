@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, Siren, ShieldCheck, MapPin, MapPinOff, Clock, Navigation } from '@shared/icons'
 import { minutesWaiting } from '@shared/lib/wpda'
-import { acknowledgePanicAlert, acknowledgedByLabel } from '@shared/lib/panicAlerts'
+import { acknowledgePanicAlert, resolvePanicAlert } from '@shared/lib/panicAlerts'
+import MediaAttachmentField from '@shared/components/MediaAttachmentField'
+import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
+import { RESOLUTION_NOTES_MAX, RESOLUTION_PHOTOS_MAX } from '@shared/lib/dispatchStage'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
@@ -36,6 +39,26 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
   const { user } = useAuth()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notes, setNotes] = useState('')
+  const fileRef = useRef(null)
+  const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX })
+
+  /**
+   * `usePhotoUploads` tracks an upload as "has a url yet, has an error yet";
+   * `MediaAttachmentField` renders a status string. Translating here keeps the
+   * shared field ignorant of this screen's upload mechanics — the same mapping
+   * ResolveIncidentModal makes, and deliberately the same shape so the two
+   * attachers cannot drift into looking different.
+   */
+  const tiles = photos.items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    type: 'image',
+    src: item.previewUrl,
+    status: item.error ? 'error' : item.url ? 'done' : 'uploading',
+    progress: item.progress,
+    error: item.error,
+  }))
 
   // An SOS interrupt takes focus: it is raised over whatever the officer was
   // doing, so the keyboard has to arrive with it rather than stay behind it.
@@ -45,6 +68,25 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
   useEffect(() => {
     setError('')
   }, [alert?.id])
+
+  /**
+   * ── THE FORM BELONGS TO ONE ALERT ─────────────────────────────────────
+   * Keyed on the alert's ID, not on the modal opening. This popup is driven
+   * by `selectedPanicId` and stays mounted between alerts, so clicking a
+   * second marker swaps the alert underneath a form still holding the first
+   * one's notes and uploaded photos — and the next Submit would file one
+   * resident's proof against another's emergency.
+   *
+   * `reset()` also cancels uploads still in flight, which is the other half:
+   * a photo that lands after the switch would otherwise attach itself to
+   * whichever alert happened to be open.
+   */
+  const { reset } = photos
+  useEffect(() => {
+    setNotes('')
+    setError('')
+    reset()
+  }, [alert?.id, reset])
 
   useEffect(() => {
     if (!alert) return undefined
@@ -181,48 +223,93 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
               the premises anchor rather than a fix. Worth knowing that this
               was the only place that distinction was stated in WORDS. */}
 
-          {alert.acknowledgedByName ? (
-            <p className="w-full rounded-xl border border-hairline bg-base-800 p-3 text-xs text-text-secondary">
-              Acknowledged by{' '}
-              <span className="text-text-primary">
-                {acknowledgedByLabel(alert.acknowledgedByName)}
-              </span>
-            </p>
-          ) : null}
-
           {error ? <p className="text-xs text-danger">{error}</p> : null}
 
-          {/* ── ONE ACTION ────────────────────────────────────────────────
-              Acknowledge only. Resolve and Call have moved off this popup.
+          {/* ── CLOSING THE CALL OUT ──────────────────────────────────────
+              What replaced Acknowledge here.
 
-              The map is where a guard decides to GO; closing a case and
-              phoning a resident are follow-up, and both still exist on the
-              Panic Alerts page — Resolve in the row menu, the number as a
-              tel: link in the resident cell. Nothing became unreachable.
+              Acknowledging has not gone away — it is still what "Respond to
+              SOS" does on its way out, and the rail beside the map carries a
+              standalone Acknowledge for every alert including the ones with no
+              position. What is gone is the version on THIS popup, where it was
+              the only control and left a guard with nothing to do but say they
+              had seen it.
 
-              An acknowledged alert now shows a DISABLED button reading
-              "Acknowledged" rather than no button at all. Hiding it was the
-              earlier call, on the reasoning that a greyed control invites a
-              second press on an emergency — but it also meant the popup a
-              guard was looking at when they pressed simply lost its only
-              control, with nothing confirming the press had registered. A
-              disabled control cannot be pressed twice, and it says what
-              happened. */}
-          <button
-            type="button"
-            disabled={busy || !isActive}
-            onClick={() =>
-              run(() => acknowledgePanicAlert(alert.id, user?.displayName))
-            }
-            className={
-              isActive
-                ? 'btn btn-sm btn-warning w-full'
-                : 'btn btn-sm w-full cursor-not-allowed border border-slate-200 bg-base-800 text-text-muted opacity-100'
-            }
-          >
-            <ShieldCheck size="sm" />
-            {isActive ? (busy ? 'Acknowledging…' : 'Acknowledge report') : 'Acknowledged'}
-          </button>
+              The form is the other end of the same call: notes, photo proof,
+              and one button that records them and closes the alert. An SOS
+              closed with nothing written is still allowed — see
+              `resolvePanicAlert` — because an officer clearing a false alarm
+              should not be made to write an essay. This is where somebody who
+              attended puts the account on the record. */}
+          <div className="w-full rounded-xl border border-hairline bg-base-800 p-3">
+            <label
+              htmlFor="sos-resolution-notes"
+              className="block text-xs font-semibold text-text-secondary"
+            >
+              What happened? <span className="font-normal text-text-muted">· optional</span>
+            </label>
+            <textarea
+              id="sos-resolution-notes"
+              rows={3}
+              value={notes}
+              disabled={busy}
+              onChange={(event) => setNotes(event.target.value.slice(0, RESOLUTION_NOTES_MAX))}
+              placeholder="What you found, and what you did about it."
+              className="field mt-2 w-full resize-y"
+            />
+
+            <div className="mt-3">
+              {/* ── THE TIMESTAMP IS NOT DRAWN ONTO THE PIXELS ────────────
+                  The brief asks for photos "overlaid/tagged with an immutable
+                  system timestamp". This tags rather than overlays, and the
+                  distinction is the point: text burned into a JPEG is neither
+                  immutable — anyone with an image editor can repaint it — nor
+                  readable by anything but a human eye, so it cannot be
+                  searched, corrected or audited.
+
+                  The upload path already carries `Date.now()` in the object
+                  name, the document records `resolvedAt` from the SERVER
+                  clock rather than this device's, and `EvidenceGrid` renders
+                  that stamp over the thumbnail wherever the photo is shown.
+                  That is a timestamp a console can prove; a painted one is a
+                  decoration that looks like proof. */}
+              <MediaAttachmentField
+                items={tiles}
+                capacity={RESOLUTION_PHOTOS_MAX}
+                heading="Photo proof"
+                hint="PNG or JPG. Stamped with the server's resolution time, not this device's."
+                disabled={busy}
+                onPick={() => fileRef.current?.click()}
+                onRemove={photos.remove}
+              />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                multiple
+                hidden
+                onChange={(event) => {
+                  photos.add(event.target.files)
+                  event.target.value = ''
+                }}
+              />
+            </div>
+
+            <button
+              type="button"
+              disabled={busy || photos.uploading}
+              onClick={() =>
+                run(async () => {
+                  await resolvePanicAlert(alert.id, { notes, photoUrls: photos.urls })
+                  onClose?.()
+                })
+              }
+              className="btn btn-sm btn-brand mt-3 w-full"
+            >
+              <ShieldCheck size="sm" />
+              {busy ? 'Submitting…' : photos.uploading ? 'Uploading photos…' : 'Submit & confirm resolve'}
+            </button>
+          </div>
 
           {/* ── RESPOND TO SOS ─────────────────────────────────────────────
               The second action, and the one that was missing: until now a
@@ -278,12 +365,7 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
               <Navigation size="sm" />
               {busy ? 'Starting…' : 'Respond to SOS'}
             </button>
-          ) : (
-            <p className="w-full rounded-xl border border-hairline bg-base-800 p-3 text-xs leading-relaxed text-text-secondary">
-              This SOS carries no position, so there is nothing to route to. Head for the address
-              above.
-            </p>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

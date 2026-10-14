@@ -77,6 +77,65 @@ const PATTERNS = {
 let ctx = null
 let muted = readMuted()
 let blocked = true // assume blocked until a successful unlock proves otherwise
+
+/**
+ * Every oscillator currently scheduled, so a stop can silence SOUND and not
+ * merely cancel a timer.
+ *
+ * ── THE DOUBLE-RINGTONE BUG LIVED IN THIS GAP ──────────────────────────────
+ * `loopAlert`'s stop used to clear its `setTimeout` and nothing else. The
+ * timer is the schedule; it is not the noise. A panic wail is 2.6 seconds of
+ * already-scheduled oscillator, so stopping the loop left that wail sounding
+ * to its natural end — and anything that restarted the loop inside those 2.6
+ * seconds laid a second wail directly on top of the first.
+ *
+ * Which is exactly what happened on every new alert: the siren effect
+ * restarted whenever the SET of alerts changed, so two alerts arriving in
+ * quick succession (one Firestore snapshot each) produced two overlapping
+ * sirens, at double gain, slightly out of phase. That is the "double
+ * ringtone".
+ *
+ * Both halves are fixed. The caller no longer restarts on set changes (see
+ * usePanicSiren), and a stop now actually stops, so even a restart cannot
+ * stack.
+ */
+const voices = new Set()
+
+/**
+ * Silence everything currently sounding.
+ *
+ * ── A SHORT RELEASE, NOT AN IMMEDIATE STOP ─────────────────────────────────
+ * `osc.stop()` on a running oscillator truncates the waveform mid-cycle, which
+ * is audible as a click — the same reason the chime and siren builders ramp
+ * their gain in rather than switching it on. 40ms is below the threshold where
+ * a listener hears it as a fade and above the one where it clicks.
+ */
+export function stopAlerts() {
+  if (!ctx) return
+  const now = ctx.currentTime
+  voices.forEach(({ osc, gain }) => {
+    try {
+      gain.gain.cancelScheduledValues(now)
+      // `setValueAtTime` at the CURRENT value first: cancelling leaves the
+      // param wherever the last ramp put it, and ramping from an unset value
+      // jumps before it fades.
+      gain.gain.setValueAtTime(gain.gain.value, now)
+      gain.gain.linearRampToValueAtTime(0.0001, now + 0.04)
+      osc.stop(now + 0.05)
+    } catch {
+      // Already stopped, or the context went away underneath us. Either way
+      // there is nothing left to silence.
+    }
+  })
+  voices.clear()
+}
+
+/** Registers a voice and forgets it once it has finished on its own. */
+function trackVoice(osc, gain) {
+  const voice = { osc, gain }
+  voices.add(voice)
+  osc.onended = () => voices.delete(voice)
+}
 const listeners = new Set()
 
 function readMuted() {
@@ -196,8 +255,39 @@ export async function unlockAlertSound() {
  *   guardhouse hands it the configured level, the Settings page hands it the
  *   level being previewed.
  */
-export function playAlert(kind = 'report', { volume = 1 } = {}) {
+export function playAlert(kind = 'report', { volume = 1, fromLoop = false } = {}) {
   if (muted) return
+
+  /**
+   * ── AN EMERGENCY OUTRANKS EVERY OTHER SOUND ON THE CONSOLE ───────────────
+   *
+   * This is the other half of the double-ringtone report, and it is not the
+   * loop stacking on itself — that was fixed by making `loopAlert` a
+   * singleton. It is two DIFFERENT sounds arriving together.
+   *
+   * `useIncidentAlerts` is mounted in DashboardLayout, which means every page
+   * of both portals plays a chime when an incident appears or changes; and
+   * `DispatchWatchdog` plays its own 'critical' chime on a new assignment and
+   * on the acknowledgement timeout. A resident pressing SOS commonly produces
+   * an incident write as well as a panic alert, and dispatching that alert
+   * fires the watchdog — so a single emergency could put a looping siren, a
+   * report chime and a dispatch chime on one AudioContext within a second of
+   * each other. Three overlapping tones is heard as one broken noise, and the
+   * one carrying "somebody has pressed a panic button" is the one that gets
+   * lost in it.
+   *
+   * So while the siren is looping, every other sound is dropped. Not queued —
+   * dropped: a chime replayed after an emergency ends is an announcement about
+   * something that happened minutes ago, and the console has a notification
+   * bell and a toast for that. Sound is reserved for the loudest thing that is
+   * true right now.
+   *
+   * `fromLoop` is how the loop plays its own wail through this guard. A flag
+   * rather than a separate code path, so the siren still honours mute, volume
+   * and the suspended-context recovery below exactly as every other sound
+   * does.
+   */
+  if (!fromLoop && isLooping()) return
   const level = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1
   if (level === 0) return
   const base = PATTERNS[kind] ?? PATTERNS.report
@@ -220,6 +310,99 @@ export function playAlert(kind = 'report', { volume = 1 } = {}) {
   }
 }
 
+/**
+ * How long one `kind` takes to sound, in milliseconds.
+ *
+ * Derived from the pattern rather than written down beside it, so a wail that
+ * is re-tuned cannot leave a repeat interval behind describing the old one.
+ */
+export function alertDurationMs(kind = 'report') {
+  const p = PATTERNS[kind] ?? PATTERNS.report
+  if (p.kind === 'siren') return Math.round(p.cycles * p.sweep * 2 * 1000)
+  return Math.round(p.freqs.length * (p.pulse + p.gap) * 1000)
+}
+
+/**
+ * Sound `kind` over and over until the returned function is called.
+ *
+ * ── A REPEATED WAIL, NOT AN ENDLESSLY-RUNNING OSCILLATOR ───────────────────
+ * The obvious reading of "loop the ringtone" is one oscillator that never
+ * stops. It is the wrong shape here for two reasons.
+ *
+ * The first is safety. An oscillator with no scheduled `stop` outlives every
+ * bug in the code that was supposed to end it — a component that unmounts
+ * oddly, a thrown error between `start` and the cleanup — and what it leaves
+ * behind is a guardhouse console screaming with no UI attached to it. A wail
+ * that stops on its own every few seconds cannot do that: the worst failure is
+ * one extra sweep.
+ *
+ * The second is that a real alarm is not a continuous tone. The gap is what
+ * makes it possible to talk over — a guard answering the radio call the alarm
+ * just caused needs to be heard, and a siren that never pauses competes with
+ * the response it exists to trigger.
+ *
+ * So this re-triggers the finite, already-tested wail on a timer. It also
+ * sounds the FIRST one immediately rather than after a gap: an alarm whose
+ * first audible moment is one interval late is an alarm that was late.
+ *
+ * @returns {() => void} Stops the loop. Safe to call more than once.
+ */
+export function loopAlert(kind = 'panic', { volume = 1, gapMs = 900 } = {}) {
+  /**
+   * ── ONE LOOP, MODULE-WIDE ─────────────────────────────────────────────
+   * Starting a loop stops whatever was already looping, so the invariant is
+   * structural rather than a rule every caller has to remember. React alone
+   * breaks that rule twice without trying: StrictMode mounts effects, tears
+   * them down and mounts them again in development, and any second component
+   * that ever calls this would be a second alarm with no way to find the
+   * first.
+   *
+   * The guard is the module's, not the caller's, because the thing being
+   * protected is the single AudioContext every voice is scheduled on.
+   */
+  stopLoop()
+
+  let stopped = false
+  let timer = null
+
+  const beat = () => {
+    if (stopped) return
+    playAlert(kind, { volume, fromLoop: true })
+    // Scheduled from the END of the wail, so the gap is a gap rather than an
+    // overlap — `setInterval` at a shorter period than the sound would stack
+    // wails on top of each other and climb in volume.
+    timer = setTimeout(beat, alertDurationMs(kind) + Math.max(0, gapMs))
+  }
+
+  const stop = () => {
+    if (stopped) return
+    stopped = true
+    if (timer) clearTimeout(timer)
+    timer = null
+    // The schedule AND the sound. Clearing only the timer is what let a
+    // restart stack a second wail on one still sounding — see `voices`.
+    stopAlerts()
+    if (activeLoop === stop) activeLoop = null
+  }
+
+  activeLoop = stop
+  beat()
+  return stop
+}
+
+/** The stop function of the loop currently running, or null. */
+let activeLoop = null
+
+/** Ends the running loop, if any. Safe to call when nothing is playing. */
+export function stopLoop() {
+  if (activeLoop) activeLoop()
+}
+
+/** Is a loop sounding right now? Exposed for tests and for a mute indicator. */
+export function isLooping() {
+  return activeLoop !== null
+}
+
 /** Discrete notes — the notification signatures. */
 function playChime(pattern, now) {
   pattern.freqs.forEach((freq, i) => {
@@ -239,6 +422,7 @@ function playChime(pattern, now) {
     gain.gain.exponentialRampToValueAtTime(0.0001, start + pattern.pulse)
 
     osc.connect(gain).connect(ctx.destination)
+    trackVoice(osc, gain)
     osc.start(start)
     osc.stop(start + pattern.pulse + 0.02)
   })
@@ -282,6 +466,7 @@ function playSiren(pattern, now) {
   gain.gain.exponentialRampToValueAtTime(0.0001, end)
 
   osc.connect(filter).connect(gain).connect(ctx.destination)
+  trackVoice(osc, gain)
   osc.start(now)
   osc.stop(end + 0.03)
 }

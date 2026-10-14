@@ -27,13 +27,15 @@ const KEY = portalKey('guard-prefs')
 export const GUARD_PREF_DEFAULTS = {
   /** Rows per screen in the ticket table — `compact` trades air for count. */
   density: 'comfortable',
-  /**
-   * Routing graph for Acknowledge & Respond on the dispatch map — `driving` or
-   * `walking` (see lib/directions.js). Set from the route badge's Drive/Walk
-   * toggle rather than this page, so the next route starts on the graph this
-   * terminal's unit actually uses.
+  /*
+   * `routeProfile` stood here and is gone — the same way `windowHours` went,
+   * and for the same reason stated above. Its Ride / Walk control was deleted
+   * from the map, so the stored value became a setting that silently decided
+   * which road graph every route used with nothing on screen able to show or
+   * change it. The dispatch map now pins the patrol default outright (see
+   * DEFAULT_ROUTE_PROFILE). A stored value from before this is harmless: the
+   * spread below carries an unknown key nothing reads.
    */
-  routeProfile: 'driving',
   /**
    * Whether this device shares its position while its officer is on duty
    * with no active call, which is what draws them as an Available unit on

@@ -45,6 +45,14 @@ export const TELEMETRY_INTERVALS = Object.freeze([5, 10, 30])
 export const UPLOAD_LIMITS_MB = Object.freeze([5, 10, 25])
 /** 0 means "keep indefinitely". */
 export const AUDIT_RETENTION_DAYS = Object.freeze([30, 60, 90, 0])
+/**
+ * Idle minutes before an ADMIN console signs itself out. 0 means never.
+ *
+ * Deliberately coarse. A timeout is a policy an officer of the HOA sets once,
+ * not a figure to tune, and an open list invites "7 minutes" — which reads as
+ * precision about something nobody measured.
+ */
+export const SESSION_TIMEOUTS_MINUTES = Object.freeze([15, 30, 60, 120, 0])
 
 export const DEFAULTS = Object.freeze({
   /** Resident push, read by the Cloud Functions before they send. */
@@ -130,6 +138,30 @@ export const DEFAULTS = Object.freeze({
     officeHours: '',
     logoUrl: '',
     auditRetentionDays: 90,
+  }),
+
+  /**
+   * sessionTimeoutMinutes  ENFORCED — `IdleSignOut` watches for activity in
+   *                        the ADMIN console and signs the session out after
+   *                        this long without any. 0 disables it.
+   *
+   * ── WHY THE DEFAULT IS 0 AND NOT A NUMBER ─────────────────────────
+   * Every other default in this file is "what the system already did", so
+   * saving nothing changes nothing (see the note at the top). Nothing signed
+   * anyone out before this existed, so the honest default is off. An
+   * administrator turns it on; it does not arrive switched on and log somebody
+   * out of a console they left open on purpose.
+   *
+   * ── AND WHY IT IS ADMIN-ONLY ─────────────────────────────────
+   * The guardhouse console is a shared terminal that is meant to be staring at
+   * a map all night with nobody touching it. Signing it out for being idle is
+   * the definition of idle for that room, and it would take the SOS siren off
+   * the air. The risk this setting answers — an unattended session with write
+   * access to policy, accounts and resident records — is the admin console's
+   * risk, so the control is the admin console's too.
+   */
+  security: Object.freeze({
+    sessionTimeoutMinutes: 0,
   }),
 })
 
@@ -224,6 +256,14 @@ export function sanitizeSettings(raw = {}) {
         raw.organisation?.auditRetentionDays,
         d.organisation.auditRetentionDays,
         AUDIT_RETENTION_DAYS,
+      ),
+    },
+
+    security: {
+      sessionTimeoutMinutes: oneOf(
+        raw.security?.sessionTimeoutMinutes,
+        d.security.sessionTimeoutMinutes,
+        SESSION_TIMEOUTS_MINUTES,
       ),
     },
   }

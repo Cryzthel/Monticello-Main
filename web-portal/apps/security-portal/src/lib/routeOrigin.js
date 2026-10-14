@@ -17,12 +17,13 @@ import { RouteError } from '@/lib/directions'
  */
 
 /**
- * Metres. A phone outdoors reports 5-20 m and indoors up to ~65 m; Wi-Fi and
- * IP positioning report 100 m and far worse. 100 m keeps every real GPS fix
- * and rejects the inferred ones — at subdivision scale, 100 m is already a
- * block away.
+ * Both re-exported, not redefined. The same judgement is made by the shared map's
+ * locate button, so the number lives in `@shared/lib/geolocation` where both
+ * consoles reach it — see the long note there for why it is 1000 and not the
+ * 100 above. Kept on this module's surface because every caller that already
+ * imports `GPS_ACCURACY_LIMIT_M` wants the pair.
  */
-export const GPS_ACCURACY_LIMIT_M = 100
+export { GPS_ACCURACY_LIMIT_M, GPS_REJECT_ACCURACY_M } from '@shared/lib/geolocation'
 
 /**
  * `"lng,lat"` → `[lng, lat]`, or null.

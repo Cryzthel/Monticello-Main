@@ -12,14 +12,15 @@ import { incidentReference } from '@/lib/dispatch'
 import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import MediaAttachmentField from '@shared/components/MediaAttachmentField'
+import Select from '@shared/components/Select'
 
 /**
  * Resolve Incident: the three things the rules will not close a call without.
  *
  *   Outcome category       one of RESOLUTION_OUTCOMES
  *   What was done          none or more of INVESTIGATION_TAGS
- *   Brief resolution notes 10–1000 characters
- *   Photo evidence         1–6 photos of the scene as it was left
+ *   Notes                  10–1000 characters
+ *   Photos                 1–6 photos of the scene as it was left
  *
  * The submit button stays disabled until all three are present and every
  * photo has finished uploading. The rules check the same three on the server,
@@ -154,22 +155,51 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
         </header>
 
         <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
-          <fieldset>
-            <legend className="text-xs font-semibold text-text-secondary">Outcome category</legend>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {RESOLUTION_OUTCOMES.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={outcome === option.value}
-                  onClick={() => setOutcome(option.value)}
-                  className={`chip ${outcome === option.value ? 'chip-active' : 'chip-idle'}`}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          {/* ── CLOSING A CALL NOBODY ARRIVED AT ──────────────────────────
+              Arrival is stamped automatically when the officer's own
+              position reaches the pin, so an absent `onSceneAt` means the
+              console never saw them get there — they resolved from the road,
+              or their GPS never came good.
+
+              It does NOT block the resolve. An officer standing at a scene
+              with a bad fix must still be able to close the call, and a
+              console that refuses would be choosing a tidy record over a
+              finished job. But the record should not imply an arrival that
+              was never observed, so it says so here, where the person
+              writing the record can see it. */}
+          {report && !report.onSceneAt ? (
+            <p className="flex items-start gap-2 rounded-xl border border-warning/25 bg-warning/10 p-3 text-caption leading-snug text-warning">
+              <TriangleAlert size="sm" aria-hidden="true" className="mt-px shrink-0" />
+              <span>
+                No arrival was recorded for this call — your position never reached the pin. You can
+                still resolve it; the record will show that nobody was logged on scene.
+              </span>
+            </p>
+          ) : null}
+          {/* ── SIX OPTIONS, NOT SIX BUTTONS ──────────────────────────────
+              Both of these were wrapped chip rows. Six chips wrap to three
+              lines in a 480px modal, and two stacked wrapped rows read as a
+              wall of similar pills where the only thing distinguishing the
+              two questions is a small legend above each — so an officer
+              closing a call under pressure picks from the wrong row.
+
+              A closed dropdown is one line that states the current answer.
+              The options are a list when you want them and absent when you
+              do not, which is the right shape for a question asked once at
+              the end of a call. */}
+          <div>
+            <p className="text-xs font-semibold text-text-secondary">What happened?</p>
+            <Select
+              className="mt-2 w-full"
+              size="touch"
+              variant="field"
+              ariaLabel="What happened?"
+              placeholder="Pick what happened"
+              options={RESOLUTION_OUTCOMES}
+              value={outcome}
+              onChange={setOutcome}
+            />
+          </div>
 
           {/* ── WHAT WAS DONE ──────────────────────────────────────────────
               The outcome above says how the call ENDED — resolved on site,
@@ -182,36 +212,31 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
               required. A call can end with none of these applying, and a
               required field that sometimes has no true answer is how you
               train people to tick the nearest box. */}
-          <fieldset>
-            <legend className="text-xs font-semibold text-text-secondary">
-              What was done <span className="font-normal text-text-muted">· optional</span>
-            </legend>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {INVESTIGATION_TAGS.map((option) => {
-                const on = tags.includes(option.value)
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() =>
-                      setTags((current) =>
-                        on ? current.filter((t) => t !== option.value) : [...current, option.value],
-                      )
-                    }
-                    className={`chip ${on ? 'chip-active' : 'chip-idle'}`}
-                  >
-                    {option.label}
-                  </button>
-                )
-              })}
-            </div>
-          </fieldset>
+          <div>
+            <p className="text-xs font-semibold text-text-secondary">
+              What was done? <span className="font-normal text-text-muted">· optional</span>
+            </p>
+            {/* MULTI-select, where the outcome is single. A call can end with
+                the area secured AND police requested; collapsing that to one
+                choice would have made the field cheaper to render and a worse
+                record. The menu stays open between picks for the same reason. */}
+            <Select
+              className="mt-2 w-full"
+              size="touch"
+              variant="field"
+              multiple
+              ariaLabel="What was done?"
+              placeholder="Nothing recorded"
+              options={INVESTIGATION_TAGS}
+              value={tags}
+              onChange={setTags}
+            />
+          </div>
 
           <div>
             <div className="flex items-baseline justify-between gap-3">
               <label htmlFor={notesId} className="text-xs font-semibold text-text-secondary">
-                Brief resolution notes
+                Notes
               </label>
               <span
                 className={`font-mono text-2xs tabular-nums ${
@@ -252,7 +277,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
             <MediaAttachmentField
               items={tiles}
               capacity={RESOLUTION_PHOTOS_MAX}
-              heading="Photo evidence"
+              heading="Photos"
               hint="PNG or JPG. Compressed on this device before upload, so uploading needs a connection."
               disabled={busy}
               onPick={() => fileRef.current?.click()}
@@ -308,7 +333,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
               className="btn btn-sm btn-brand flex-1 sm:flex-none"
             >
               {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size="sm" aria-hidden="true" />}
-              Resolve incident
+              Submit & complete
             </button>
           </div>
         </footer>

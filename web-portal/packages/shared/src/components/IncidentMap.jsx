@@ -14,7 +14,6 @@ import { responsePhase, RESPONSE_PHASE_COLORS, emergencyWaveColor, EMERGENCY_COL
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import { relativeTime } from '@shared/lib/notifications'
 import MapControls from '@shared/components/MapControls'
-import SegmentedControl from '@shared/components/SegmentedControl'
 import { Skeleton } from '@shared/components/Skeleton'
 import { useTheme } from '@shared/theme/ThemeProvider'
 import { NAV_MARKER_COLORS, ROUTE_TONE_COLORS, UNIT_COLORS } from '@shared/theme/dispatchColors'
@@ -153,11 +152,20 @@ function resolveMapStyle(key, theme) {
   return MAP_STYLES[key] ?? MAP_STYLES[DEFAULT_STYLE_KEY]
 }
 
-// The basemap toggle, in SegmentedControl's option shape. `title` keeps the
-// long name on hover; the segment itself stays short enough for the panel.
+/**
+ * The two basemaps: what each is called, and the glyph that stands for it.
+ *
+ * ── THE LABEL IS NOW TOOLTIP COPY, NOT A VISIBLE CAPTION ───────────────────
+ * This briefly carried a `shortLabel` as well, for a labelled capsule that had
+ * to shrink its own words on a phone to avoid colliding with the controls
+ * drawer in the opposite corner. The control is icon-only now, so there is no
+ * caption to shrink: `label` is read out by the toggle's tooltip and its
+ * accessible name ("Switch to satellite"), and the glyph does the work on
+ * screen. One label per style, used in one place.
+ */
 const BASEMAP_OPTIONS = [
-  { value: 'streets', label: 'Streets', title: 'Standard streets', icon: MapIcon },
-  { value: 'satellite', label: 'Satellite', title: 'Satellite', icon: Satellite },
+  { value: 'streets', label: 'Streets', icon: MapIcon },
+  { value: 'satellite', label: 'Satellite', icon: Satellite },
 ]
 
 // Colour-coded so the selected filter states WHAT it selected, not merely
@@ -1226,6 +1234,36 @@ function unitConeImage(color) {
  */
 const NAV_STATE = { none: '', standby: 'standby', navigating: 'navigating' }
 
+/**
+ * The turn-by-turn camera.
+ *
+ * ── WHY A TILTED, ROTATED CAMERA IS SAFE HERE AND NOWHERE ELSE ─────────────
+ * This map is built north-up on purpose: `dragRotate`, `pitchWithRotate` and
+ * `touchPitch` are all off, and the Reset bearing button was deleted on the
+ * grounds that nothing could rotate the map so nothing needed un-rotating
+ * (see the mount options and MapControls).
+ *
+ * None of that changes. Those flags disable GESTURES, not `easeTo`, so pitch
+ * and bearing become something the console enters and leaves deliberately
+ * rather than a state a stray two-finger drag can strand an operator in. The
+ * part that would strand them is leaving it applied, so `exitNavigationCamera`
+ * below is not a nicety — it is the only way back, and an officer who ended a
+ * session on a tilted, rotated map would have no gesture to fix it.
+ *
+ * ZOOM 17.5, measured rather than picked: at 17 the next turn is often past
+ * the top edge on a phone, and at 18 a single intersection fills the viewport
+ * and the officer loses the block they are driving into. PITCH 50 sits in the
+ * brief's 45–60 band and is where the horizon lands far enough up the frame to
+ * show the road ahead without the sky taking a third of a bottom-sheet-reduced
+ * canvas.
+ */
+const NAV_CAMERA = { zoom: 17.5, pitch: 50 }
+
+/** The sweep INTO a session. Long enough to read as a move, not a cut. */
+const NAV_ENTER_MS = 1200
+/** Per-fix follow, matched to the marker tween so the two arrive together. */
+const NAV_FOLLOW_MS = 900
+
 /** Layers a unit can be clicked or hovered on — the dot, and the arrow it becomes. */
 const UNIT_HIT_LAYERS = ['unit-icons', 'unit-nav-arrow']
 
@@ -1675,6 +1713,19 @@ export default function IncidentMap({
    */
   navigating = false,
   /**
+   * `{ lat, lng }` to centre the opening navigation flight on, or null.
+   *
+   * The caller's best answer to "where is this officer RIGHT NOW", for the one
+   * frame where that question is worth asking directly: the press of Start
+   * Navigation. Read once, at the transition — the per-fix follow takes over
+   * immediately afterwards — so a value that goes stale a second later costs
+   * nothing.
+   *
+   * Null is the normal case and not a failure: a dispatcher following somebody
+   * else's unit has no better source than the marker, and the camera uses it.
+   */
+  navAnchor = null,
+  /**
    * Called the moment the operator takes the camera back — a drag, a scroll, a
    * pinch. The parent owns the follow state, so it decides what that means;
    * this component only reports the gesture.
@@ -1716,16 +1767,6 @@ export default function IncidentMap({
    * anything.
    */
   sheet = null,
-  /**
-   * An extra section at the BOTTOM of the controls drawer.
-   *
-   * The drawer is where this map keeps things that are occasionally set and
-   * usually ignored — basemap, layers, legends — and it is collapsed by
-   * default, so anything mounted here takes two deliberate actions to reach.
-   * That is the right depth for a page-specific switch that must not be easy
-   * to hit by accident. Pages that pass nothing get no section.
-   */
-  controlsSlot = null,
   variant = 'full',
   zoom = 15,
 }) {
@@ -1750,10 +1791,16 @@ export default function IncidentMap({
   /**
    * Closed by default, on both portals.
    *
-   * This panel is a settings drawer — basemap, layers, filters — and it was
-   * open on every load, taking a 264px column out of the canvas before anyone
-   * asked for it. The map is the instrument; the controls are occasional. The
+   * This panel is a settings drawer — filters and legends — and it was open on
+   * every load, taking a 264px column out of the canvas before anyone asked
+   * for it. The map is the instrument; the controls are occasional. The
    * floating trigger stays visible so nothing is hidden, only folded.
+   *
+   * It is now legends and one filter row. The basemap toggle moved to the
+   * top-right corner (reading the map, not configuring it) and the
+   * page-specific `controlsSlot` was deleted with the simulation and follow
+   * controls that were its only tenant, so this no longer holds anything a
+   * page passes in.
    */
   const [controlsOpen, setControlsOpen] = useState(false)
   const [ready, setReady] = useState(false)
@@ -1767,6 +1814,11 @@ export default function IncidentMap({
    * actually asking — what IS this — without committing to anything.
    */
   const [hovered, setHovered] = useState(null)
+
+  // Read by the navigation transition effect, which must NOT re-run when a
+  // fresher fix arrives — that is the follow effect's job.
+  const navAnchorRef = useRef(navAnchor)
+  navAnchorRef.current = navAnchor
 
   const incidentsRef = useRef(incidents)
   incidentsRef.current = incidents
@@ -2436,15 +2488,87 @@ export default function IncidentMap({
    * the state, which is what lets a "Resume" control know it has something to
    * resume — and keeps this component from owning a mode it cannot show.
    */
+  const wasNavigatingRef = useRef(navigating)
   useEffect(() => {
     const map = mapRef.current
+
+    /**
+     * ── THE TRANSITION BELONGS TO THE OTHER EFFECT, NOT THIS ONE ──────────
+     * `navigating` is a dependency here because the ease has to RESTATE the
+     * navigation camera on every fix (see below). The side effect is that
+     * flipping the session also re-runs this — so on that one render both this
+     * `easeTo` and the transition effect's `flyTo` are issued against the same
+     * map, and whichever runs last wins.
+     *
+     * It happened to be the right one, because effects run in declaration
+     * order and the transition is declared after this. That is not a property
+     * worth depending on: reordering two effects would silently swap a 1200ms
+     * arc centred on the officer's live GPS reading for a 900ms ease centred on
+     * their marker, and nothing would fail — the camera would simply land in a
+     * slightly wrong place, which is the symptom this whole pass set out to
+     * remove.
+     *
+     * So the transition render is skipped here explicitly. One owner per
+     * camera move, stated rather than inferred.
+     */
+    const justToggled = wasNavigatingRef.current !== navigating
+    wasNavigatingRef.current = navigating
+
+    /**
+     * ── THE LATCH IS SYNCED BEFORE THIS GUARD, DELIBERATELY ───────────────
+     * It was after, and that was wrong in a way that only showed on the SECOND
+     * session of a shift. Ending one clears `followUnitId` as well as
+     * `navigating` (see `cameraUnit` in DashboardPage), so this effect bailed
+     * out here and never recorded that navigation had stopped. The latch stayed
+     * true, the next Start Navigation therefore did not look like a toggle, and
+     * the follow ease raced the opening flight again — the exact race the
+     * paragraph above exists to prevent, reappearing one session later.
+     *
+     * Reading a prop into a ref is bookkeeping about renders, not about the
+     * map, so it has no business sitting behind a check on whether there is a
+     * map to drive.
+     */
     if (!map || !ready || !followUnitId) return undefined
 
     const unit = (unitsRef.current ?? []).find((u) => u.uid === followUnitId)
     const lng = unit?.position?.lng
     const lat = unit?.position?.lat
-    if (typeof lng === 'number' && typeof lat === 'number') {
-      map.easeTo({ center: [lng, lat], duration: 900, essential: true })
+    if (!justToggled && typeof lng === 'number' && typeof lat === 'number') {
+      /**
+       * ── THE FOLLOW EASE MUST RESTATE THE NAVIGATION CAMERA ──────────────
+       * This was `easeTo({ center })` alone, which is correct for watching a
+       * unit from a desk and wrong during a session: `easeTo` leaves every
+       * option you omit at its current value, so the pitch and bearing set on
+       * entry survive — until anything else moves the camera. A pan ends at
+       * pitch 50 but at whatever bearing the gesture left, the locate button
+       * eases to its own zoom, and the next fix would then quietly adopt
+       * those as the session's camera. Restating them per fix means the
+       * session has one camera and recovers it on the next position, which is
+       * also the behaviour the "a pan is a look, not a decision" note in
+       * DashboardPage promises.
+       *
+       * The bearing is the ROUTE's direction at the unit's position, not the
+       * device compass. The compass is what the officer's body is facing and
+       * it jitters by a few degrees at rest; a camera that tracked it would
+       * swing the whole map while somebody sat at a junction. The route
+       * bearing points down the road they are driving, changes only when the
+       * road does, and is the same value that aims the navigation arrow — so
+       * marker and camera cannot disagree about which way is forward. The
+       * compass still drives the cone on the marker, which is where "where am
+       * I facing" is the actual question.
+       */
+      map.easeTo({
+        center: [lng, lat],
+        duration: NAV_FOLLOW_MS,
+        essential: true,
+        ...(navigating
+          ? {
+              zoom: NAV_CAMERA.zoom,
+              pitch: NAV_CAMERA.pitch,
+              ...(Number.isFinite(unit?.bearing) ? { bearing: unit.bearing } : null),
+            }
+          : null),
+      })
     }
 
     const release = (event) => {
@@ -2461,7 +2585,71 @@ export default function IncidentMap({
     // `unitsGeojson` rather than `units`: it is the memo that actually changes
     // when a position does, so this re-runs per fix and not per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [followUnitId, unitsGeojson, ready])
+  }, [followUnitId, unitsGeojson, ready, navigating])
+
+  /**
+   * ENTERING AND LEAVING A NAVIGATION SESSION — the one-shot camera moves.
+   *
+   * Separate from the per-fix follow above because they are different events:
+   * this runs twice per session, on the press and on the exit, and the follow
+   * runs every time a position arrives. Folding them together would re-fly the
+   * 1.2s sweep on each fix.
+   *
+   * ── WHERE "ACCURATELY ON THE OFFICER'S LIVE POSITION" COMES FROM ─────────
+   * `navAnchor`, when the caller has something better than the map's own copy
+   * of the unit. On the officer's own console that is their live GPS fix read
+   * straight from the device at the moment of the press — which is a different
+   * and fresher thing than the marker, because the marker's position has been
+   * through a telemetry write and a snapshot read (see the note on `fix` in
+   * DashboardPage). A dispatcher watching somebody else passes nothing and
+   * gets the followed unit, which is the best either of them can know.
+   *
+   * `flyTo` rather than `easeTo` on the way in: the camera is changing zoom,
+   * pitch and bearing at once and the arc is what makes that read as one move
+   * into a different mode rather than three simultaneous twitches.
+   */
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return undefined
+
+    if (!navigating) {
+      // ── THE ONLY WAY BACK TO NORTH-UP AND FLAT ────────────────────────────
+      // Not conditional on having entered: this also runs on mount, where it
+      // is a no-op against a camera already at 0/0, and that is cheaper than
+      // tracking whether we are the ones who tilted it. What it must NOT do is
+      // touch zoom or centre — an officer who has just exited is looking at
+      // the place they exited, and resetting their scale would be the console
+      // taking the map away as a parting gesture.
+      if (map.getPitch() !== 0 || map.getBearing() !== 0) {
+        map.easeTo({ pitch: 0, bearing: 0, duration: 600, essential: true })
+      }
+      return undefined
+    }
+
+    const unit = (unitsRef.current ?? []).find((u) => u.uid === followUnitId)
+    const center =
+      Number.isFinite(navAnchorRef.current?.lng) && Number.isFinite(navAnchorRef.current?.lat)
+        ? [navAnchorRef.current.lng, navAnchorRef.current.lat]
+        : Number.isFinite(unit?.position?.lng) && Number.isFinite(unit?.position?.lat)
+          ? [unit.position.lng, unit.position.lat]
+          : null
+    // No position at all: tilt and zoom where the operator is already looking
+    // rather than refusing. The route is drawn, the session is on, and the
+    // first fix will centre it.
+    map.flyTo({
+      ...(center ? { center } : null),
+      zoom: NAV_CAMERA.zoom,
+      pitch: NAV_CAMERA.pitch,
+      ...(Number.isFinite(unit?.bearing) ? { bearing: unit.bearing } : null),
+      duration: NAV_ENTER_MS,
+      essential: true,
+    })
+    return undefined
+    // Deliberately NOT keyed on the anchor or the unit: this is the transition
+    // into and out of a session, and re-running it when a position arrives is
+    // what the follow effect above is for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigating, ready, followUnitId])
 
   /**
    * Keep the preview pinned to its marker, without re-rendering React.
@@ -2834,8 +3022,8 @@ export default function IncidentMap({
           the circle opens the controls. */}
       {!isCompact ? (
         <>
-          {/* ONE control container, three labelled sections: style, filters,
-              legend. Previously these were three separate floating overlays
+          {/* ONE control container for the filter row and the legends.
+              Previously these were three separate floating overlays
               (left column + top-right chips) that each had to be positioned
               and kept clear of one another by hand; consolidating them means
               the layout can't collide as any section's content grows, and both
@@ -2883,20 +3071,10 @@ export default function IncidentMap({
                   controlsOpen ? 'flex-1 opacity-100' : 'hidden opacity-0'
                 }`}
               >
-                <ControlSection label="Map style">
-                  {/* Segmented toggle: exactly two basemaps, so a segmented
-                      control reads faster than a dropdown that would hide one
-                      of the only two choices behind a click. */}
-                  <SegmentedControl
-                    fullWidth
-                    ariaLabel="Map style"
-                    segmentClassName="px-2.5"
-                    options={BASEMAP_OPTIONS}
-                    value={mapStyleKey}
-                    onChange={toggleStyle}
-                  />
-                </ControlSection>
-
+                {/* Map style used to open this drawer. It is now a floating
+                    capsule in the top-right corner of the canvas — see
+                    `basemapControl` below for why it was promoted out of a
+                    collapsed panel. */}
                 <ControlSection label="Response status">
                   {/* One line, always. `flex-wrap` let All / Active /
                       Resolved break to a second row inside the control panel
@@ -3013,12 +3191,6 @@ export default function IncidentMap({
                   </ControlSection>
                 ) : null}
 
-                {controlsSlot ? (
-                  <ControlSection label="Demonstration" last>
-                    {controlsSlot}
-                  </ControlSection>
-                ) : null}
-
                 <ControlSection label="Pulse ring — emergency type" last>
                   <div className="flex flex-col gap-1.5">
                     {EMERGENCY_LEGEND.map((item) => (
@@ -3128,6 +3300,30 @@ export default function IncidentMap({
         compact={isCompact}
         maximized={maximized}
         onToggleMaximized={toggleMaximized}
+        /**
+         * ── THE BASEMAP TOGGLE IS NOT A SETTING ────────────────────────────
+         * It spent its life in the collapsed controls drawer on the left,
+         * beside the legends and the status filter, which put it two
+         * deliberate actions away. That is right for a legend and wrong for
+         * this: switching to satellite is how an operator answers "is that pin
+         * on the driveway or the roof", and that is part of READING the map,
+         * not configuring it.
+         *
+         * Top-right, in the same cluster as zoom and locate — the corner that
+         * already means "what I can see", which is what a basemap changes.
+         * MapControls renders the button; this passes it the two styles and
+         * which one is on. See `basemap` there for why the data crosses the
+         * boundary and the markup does not.
+         *
+         * Nothing on the compact variant, along with the rest of that column:
+         * the analytics thumbnail is 180px tall and is glanced at rather than
+         * read, so it has no camera controls to put this beside.
+         */
+        basemap={
+          isCompact
+            ? null
+            : { key: mapStyleKey, options: BASEMAP_OPTIONS, onChange: toggleStyle }
+        }
       />
 
       <div ref={containerRef} className="h-full w-full" />

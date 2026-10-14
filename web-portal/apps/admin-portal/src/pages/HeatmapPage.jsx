@@ -162,7 +162,15 @@ export default function HeatmapPage() {
         />
       </div>
 
-      <IncidentInspectorDrawer report={selected} onClose={() => setSelectedId(null)} />
+      {/* `units` is the live fleet, read-only: the panel needs it to name the
+          assigned officer by badge rather than by whatever is in
+          `staff_accounts.name` — frequently the address the account was
+          provisioned with. Same derivation the Guardhouse uses. */}
+      <IncidentInspectorDrawer
+        report={selected}
+        units={guardUnits}
+        onClose={() => setSelectedId(null)}
+      />
       <PanicAlertDetailModal alert={selectedPanic} onClose={() => setSelectedPanicId(null)} />
     </AppShell>
   )

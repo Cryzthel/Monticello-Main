@@ -9,6 +9,8 @@ import PanicAlertModal from '@/components/PanicAlertModal'
 import DispatchDetailDrawer, { DRAWER_WIDTH_PX } from '@/components/DispatchDetailDrawer'
 import RouteSummaryBadge from '@/components/RouteSummaryBadge'
 import GuidanceBanner from '@/components/GuidanceBanner'
+import GpsLockBadge from '@/components/GpsLockBadge'
+import PanicAlertRail from '@/components/PanicAlertRail'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
@@ -18,20 +20,17 @@ import { isActiveStage } from '@shared/lib/dispatchStage'
 import { formatCategory } from '@shared/lib/wpda'
 import { useLivePanicAlerts } from '@/components/PanicAlertProvider'
 import { useGuardTelemetryState } from '@/components/GuardTelemetryProvider'
+import { getLastFix } from '@/lib/guardTelemetry'
 import { useGuardUnits } from '@/hooks/useGuardUnits'
 import { useDispatchRoute } from '@/hooks/useDispatchRoute'
 import { blockLotLabel } from '@/lib/dispatch'
-import { routeProfile, routeToGeojson } from '@/lib/directions'
+import { withLiveSelfUnit } from '@/lib/liveSelfUnit'
+import { pickBestFix } from '@/lib/bestFix'
+import { DEFAULT_ROUTE_PROFILE, routeToGeojson } from '@/lib/directions'
 import { isOffRoute, routeProgress } from '@/lib/routeProgress'
-import { useRouteSimulation } from '@/hooks/useRouteSimulation'
 import { useDeviceHeading } from '@/hooks/useDeviceHeading'
 import { useOffRoute } from '@/hooks/useOffRoute'
 import { useAutoArrival } from '@/hooks/useAutoArrival'
-import SimulationControl from '@/components/SimulationControl'
-import RouteProfileControl from '@/components/RouteProfileControl'
-import FollowControl from '@/components/FollowControl'
-import VoiceControl from '@/components/VoiceControl'
-import { loadGuardPrefs, saveGuardPrefs } from '@/lib/guardPrefs'
 
 /**
  * How much of the map the details panel covers, handed to IncidentMap so a
@@ -47,7 +46,21 @@ export default function DashboardPage() {
   const [selectedId, setSelectedId] = useState(null)
   const [selectedPanicId, setSelectedPanicId] = useState(null)
   const [previewUid, setPreviewUid] = useState(null)
-  const [profile, setProfile] = useState(() => routeProfile(loadGuardPrefs().routeProfile).key)
+  /**
+   * ── THE ROUTING PROFILE IS FIXED, BECAUSE ITS CONTROL IS GONE ───────────
+   *
+   * This was state, restored from `guardPrefs.routeProfile` and driven by a
+   * Ride / Walk segmented control in the map's controls drawer. The brief
+   * deletes that control, and a PERSISTED setting with nothing left to set it
+   * is worse than no setting: an officer who happened to leave it on Walk
+   * would get walking routes for every call from then on, with no way to see
+   * why or change it back.
+   *
+   * So it is a constant at the patrol default. The stored preference is
+   * deliberately not read — see the note in the commit for the one case this
+   * gives up, a road the driving graph refuses that walking would have found.
+   */
+  const profile = DEFAULT_ROUTE_PROFILE
   const [searchParams, setSearchParams] = useSearchParams()
 
   /**
@@ -68,7 +81,7 @@ export default function DashboardPage() {
   )
   useEvidencePrefetch(reports)
 
-  const { alerts: panicAlerts } = useLivePanicAlerts()
+  const { alerts: panicAlerts, muted: sirenMuted, setMuted: setSirenMuted } = useLivePanicAlerts()
   const selectedPanic = panicAlerts.find((a) => a.id === selectedPanicId) ?? null
 
   /**
@@ -179,10 +192,71 @@ export default function DashboardPage() {
    * officer as one sentence telling them to check a GPS permission that was
    * already granted.
    */
-  const { fix: selfFix } = useGuardTelemetryState()
+  const { fix: deviceFix, mode: telemetryMode, locationError } = useGuardTelemetryState()
+
+  /**
+   * ── ONE DECISION ABOUT WHERE THIS OFFICER IS ────────────────────────────
+   *
+   * A guard on shift often has the console open on a laptop AND the mobile app
+   * in their pocket, both signed in as them, both publishing to the same
+   * telemetry document. The laptop knows its position from visible Wi-Fi; the
+   * phone knows it from a GPS chip. Preferring the local reading
+   * unconditionally — which is what this did — made the laptop trust its own
+   * ±600 m guess over the ±8 m fix the officer's own phone had just published.
+   *
+   * `pickBestFix` resolves that once, here, and the answer feeds everything:
+   * the marker, the route origin, the progress figures and the camera. Doing
+   * it per-consumer is how two surfaces end up drawing the same officer in two
+   * places.
+   */
+  const publishedSelf = units.find((unit) => unit.uid === (user?.uid ?? null))?.position ?? null
+  const selfFix = useMemo(
+    () => pickBestFix(deviceFix, publishedSelf),
+    [deviceFix, publishedSelf],
+  )
+
+  /**
+   * This officer's own marker, driven by this device rather than by the
+   * server's echo of it. See `withLiveSelfUnit` for why that round trip made
+   * the dot late, and what it deliberately does not do for other units.
+   */
+  const selfUid = user?.uid ?? null
+  const liveUnits = useMemo(
+    () =>
+      withLiveSelfUnit(units, {
+        uid: selfUid,
+        fix: selfFix,
+        mode: telemetryMode,
+        name: user?.displayName || user?.email,
+      }),
+    [units, selfUid, selfFix, telemetryMode, user?.displayName, user?.email],
+  )
+
   const route = useDispatchRoute({
     incident: routeIncident,
-    units,
+    /**
+     * ── `liveUnits`, NOT `units` — AND THIS IS WHY THE DOT SAT OFF THE ROAD ─
+     *
+     * The route hook finds its origin unit with `units.find(u => u.uid ===
+     * unitUid)`, and `units` is built purely from the `guard_telemetry`
+     * documents. An officer whose document has not landed — the first minutes
+     * of a shift, a throttled write, a refused rule — is therefore NOT FOUND,
+     * so `route.unit` is null.
+     *
+     * The route itself still plotted, because the hook prefers this device's
+     * own fix for the origin regardless. But everything keyed on
+     * `route.unit?.uid` quietly stopped applying, and the one that shows is
+     * the snap: `mapUnits` only moves a marker onto the route line for the
+     * unit the route belongs to, so the officer's dot was drawn at its raw
+     * GPS coordinate while the line ran along the carriageway beside it.
+     *
+     * That is exactly the mismatch in the screenshots — mobile puts the dot
+     * ON the road, the console put it in the gardens a few metres off, and
+     * both were "correct" readings of the same ±14 m fix. Snapping is what
+     * every navigation app does with a raw fix, and the console was skipping
+     * it for the one unit that always has a live position.
+     */
+    units: liveUnits,
     previewUid: routeIncident?.id === selectedId ? previewUid : null,
     profile,
     offRoute: offRouteRef.current,
@@ -204,33 +278,27 @@ export default function DashboardPage() {
   const followUid = route.unit?.uid ?? null
 
   /**
-   * The demonstration simulator (see useRouteSimulation for the rules).
+   * ── WHAT THE CONTROL CANVAS NO LONGER CARRIES ───────────────────────────
    *
-   * Off by default, and switched off again the moment the route it was walking
-   * goes away — a call being resolved must not leave a pretend unit driving
-   * around a map with nothing to drive along.
+   * Three pieces of state and a hook stood here and are gone with the four
+   * controls that drove them:
+   *
+   *   `simulating`  the demonstration simulator, which moved a pretend unit
+   *                 along the plotted route. It was the only control in either
+   *                 console that made the map show something that was not
+   *                 happening, and it is now the only one that cannot.
+   *   `following`   standalone camera follow, for watching a unit without
+   *                 running a session. Folded into `navigating` below — the
+   *                 camera follows during a session and is free otherwise,
+   *                 which is the only arrangement either role actually used.
+   *   `voice`       a dispatcher's own mute. Spoken guidance is mandatory
+   *                 during a session by protocol, so the toggle could only
+   *                 ever be overruled; `speaking` is now just the session.
+   *
+   * `useRouteSimulation`, `SimulationControl`, `FollowControl`, `VoiceControl`
+   * and `RouteProfileControl` were deleted outright rather than hidden behind
+   * a flag. A control nobody can reach is a control nobody can test.
    */
-  const [simulating, setSimulating] = useState(false)
-
-  /**
-   * Camera follow, off by default.
-   *
-   * OFF is the right default on a DISPATCH console, which is the thing that
-   * makes this different from a phone. The officer in the vehicle wants the
-   * camera glued to themselves; the dispatcher watching them is usually
-   * looking at something else — the gate the unit is heading for, a second
-   * call across the subdivision — and a camera that keeps snapping back would
-   * fight them for the whole response.
-   *
-   * `onFollowBreak` clears THIS and nothing else: a drag, scroll or pinch means
-   * the dispatcher wants the camera, not that the officer has finished. See
-   * `navigating` below for the distinction that used to be missing.
-   */
-  const [following, setFollowing] = useState(false)
-
-  // Off until asked, which is also what gives speechSynthesis the user gesture
-  // it requires before it will utter anything.
-  const [voice, setVoice] = useState(false)
   const voiceSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
 
   /**
@@ -263,41 +331,35 @@ export default function DashboardPage() {
     enabled: Boolean(followUid),
   })
 
-  const routeCoordinates = route.route?.geometry?.coordinates ?? null
-
-  useEffect(() => {
-    if (!routeCoordinates) setSimulating(false)
-  }, [routeCoordinates])
-
-  const simulatedPosition = useRouteSimulation({
-    coordinates: routeCoordinates,
-    speedKmh: routeProfile(profile).simKmh,
-    running: simulating,
-  })
-
   /**
    * The fix every live figure is derived from.
    *
-   * The simulated position stands in for the unit's own ONLY while the
-   * simulator is running; it is null otherwise, so the real telemetry is not
-   * merely preferred but is the only thing present. Downstream nothing knows
-   * the difference, which is the point — the demonstration exercises the same
-   * code path a real response does.
+   * ── THIS DEVICE'S OWN FIX COMES FIRST, AND THAT IS THE WHOLE FIX ────────
+   * The order here was `route.unit?.position ?? (originSource === 'self' ?
+   * selfFix : null)`, which put the Firestore echo AHEAD of the device's own
+   * reading — so on the officer's own console every live figure, the marker,
+   * and therefore the camera, were derived from a position that had been
+   * written to a server and read back, while the route it was being measured
+   * against started from the live fix. The two were allowed to disagree about
+   * where the same officer was.
    *
-   * ── AND THIS DEVICE'S OWN FIX, WHEN THIS DEVICE IS THE UNIT ────────────
-   * The same gap the route origin had, one layer up. Every live figure on
-   * the panel — distance left, ETA, which turn is next, where the marker
-   * sits on the line — hung off `route.unit.position`, which is the officer
-   * learning their own position by reading back what they published. An
-   * officer whose telemetry document had not landed got a plotted route with
-   * no progress on it: static figures, a marker that never moved, and no
-   * turn-by-turn.
+   * That is not a small gap. `publishTelemetry` is throttled, the reader drops
+   * anything older than fifteen minutes but is perfectly happy with fourteen,
+   * and a stale-but-present document therefore WON over a fresh local fix
+   * rather than being ignored. Pressing Start Navigation centred the camera on
+   * wherever that document said the officer was.
    *
-   * `originSource === 'self'` is the hook saying it already made this
-   * judgement, so the two cannot disagree about whose position is in play.
+   * `originSource === 'self'` is `useDispatchRoute` stating that it already
+   * made this judgement for the route's origin. Honouring the same judgement
+   * here is what keeps the marker, the progress and the camera on the one
+   * position the route was actually plotted from.
+   *
+   * A dispatcher watching somebody else is unaffected: `originSource` is
+   * 'unit' for them and the published telemetry is the only thing either end
+   * could know.
    */
   const fix =
-    simulatedPosition ?? route.unit?.position ?? (route.originSource === 'self' ? selfFix : null)
+    (route.originSource === 'self' ? selfFix : null) ?? route.unit?.position ?? null
 
   /**
    * Where the responding unit actually is along the plotted route.
@@ -373,9 +435,9 @@ export default function DashboardPage() {
    */
   const mapUnits = useMemo(() => {
     const uid = route.unit?.uid
-    if (!progress || !uid) return units
+    if (!progress || !uid) return liveUnits
     const stray = isOffRoute(progress)
-    return units.map((unit) =>
+    return liveUnits.map((unit) =>
       unit.uid !== uid
         ? unit
         : {
@@ -386,36 +448,42 @@ export default function DashboardPage() {
               : { ...unit.position, lng: progress.snapped[0], lat: progress.snapped[1] },
           },
     )
-  }, [units, progress, route.unit?.uid])
+  }, [liveUnits, progress, route.unit?.uid])
 
   const routeGeojson = useMemo(
     () =>
       route.route
         ? routeToGeojson(route.route, {
             tone: route.tone,
-            withOrigin: route.originSource !== 'unit',
+            /**
+             * ── THE DUPLICATE TRANSPORT ICON, AND WHERE IT CAME FROM ──────
+             *
+             * `route-origin` draws a tinted disc with a bike or a pair of
+             * walking feet on it at the start of the line, and the layer's own
+             * comment says it is "drawn only when the route does NOT start at
+             * a live unit (the guardhouse fallback)". The condition did not
+             * say that. `!== 'unit'` is true for 'self' as well, and 'self' IS
+             * a live unit — it is the officer reading the screen, who already
+             * has a marker on the units layer carrying the standby pulse ring
+             * and becoming the navigation arrow.
+             *
+             * So the officer's own position was drawn twice, and the second
+             * drawing was a pedestrian glyph sitting on top of the emblem that
+             * is supposed to be the only thing representing them. The disc is
+             * 11px with a 2.5px white stroke, so on a phone it did not read as
+             * two markers — it read as the arrow having a walking icon stuck
+             * to it.
+             *
+             * `=== 'guardhouse'` is the condition the comment always described:
+             * the one origin that has nothing else to mark it, because no unit
+             * is standing there.
+             */
+            withOrigin: route.originSource === 'guardhouse',
             progress,
           })
         : null,
     [route.route, route.tone, route.originSource, progress],
   )
-  // A route that ends, or hands off to a different unit, leaves follow mode
-  // pointing at nobody. Clearing it here rather than leaving a toggle that
-  // looks armed and does nothing.
-  /**
-   * ── SPOKEN GUIDANCE IS NOT OPTIONAL DURING A SESSION ────────────────────
-   * Protocol: once an officer is navigating to a call, the turns are spoken,
-   * full stop. The Mute control is gone from the panel and this is what makes
-   * that more than a hidden button — `voice` alone can be switched off from
-   * the controls drawer, and `navigating` overrides it rather than merely
-   * setting it, so the two can never disagree about whether the console is
-   * speaking.
-   *
-   * The drawer's own toggle still serves the case it was built for: a
-   * DISPATCHER at the desk who wants to hear a unit's turns without running a
-   * session. See VoiceControl, which reports the override rather than
-   * pretending to control it.
-   */
   /**
    * Off-route, but only once it has HELD for five seconds.
    *
@@ -437,14 +505,16 @@ export default function DashboardPage() {
    */
   useAutoArrival({ report: myActive, fix: selfFix, uid: user?.uid ?? null, role })
 
-  const speaking = (navigating || voice) && voiceSupported
+  // Spoken guidance IS the session now. The dispatcher's mute went with the
+  // control that offered it (see above), so there is no second input that
+  // could disagree with this.
+  const speaking = navigating && voiceSupported
   useVoiceGuidance(progress, { enabled: speaking, routeKey })
 
+  // A route that ends, or hands off to a different unit, leaves a session
+  // pointing at nobody.
   useEffect(() => {
-    if (!followUid) {
-      setFollowing(false)
-      setNavigating(false)
-    }
+    if (!followUid) setNavigating(false)
   }, [followUid])
 
 
@@ -458,16 +528,48 @@ export default function DashboardPage() {
    * the derivation simply could not tell "the camera was taken back" apart
    * from "the officer is finished".
    *
-   * They are different events and now have different owners. Following is the
-   * camera. Navigating is the session, and only the explicit control ends it —
-   * which is also what keeps the voice prompts running while a dispatcher
-   * scrolls across the map, the thing an officer driving actually relies on.
+   * It is now the only one of the three left: the camera and the spoken turns
+   * are both derived FROM it, rather than being separate states kept in step
+   * beside it. Only the explicit control ends a session, which is what keeps
+   * the voice prompts running while a dispatcher scrolls across the map — the
+   * thing an officer driving actually relies on.
    */
+  /**
+   * Where the opening navigation flight should centre, or null.
+   *
+   * ── READ FROM THE DEVICE, NOT FROM REACT STATE ──────────────────────────
+   * `selfFix` is published on the telemetry SEND cadence — ten seconds by
+   * default, and deliberately so: the provider sits above the router, and
+   * setting state on every `watchPosition` callback would re-render the whole
+   * console several times a second to move a number nothing reads that often.
+   *
+   * `getLastFix()` is the same device's latest raw reading, recorded by
+   * `rememberFix` on every callback before that throttle applies. It is module
+   * state and therefore not reactive, which is exactly why it is read HERE, in
+   * an event handler, rather than during render — and why it is read once. At
+   * 20 km/h ten seconds is about fifty-five metres, which at the navigation
+   * camera's zoom is a fifth of the viewport: enough to open a session looking
+   * at the wrong junction.
+   *
+   * Only for the officer's own console. A dispatcher following somebody else
+   * has no device reading to prefer, so this stays null and the map centres on
+   * the unit's marker (see `navAnchor` in IncidentMap).
+   */
+  const [navAnchor, setNavAnchor] = useState(null)
+
   const toggleNavigation = useCallback(() => {
     setNavigating((current) => {
       const next = !current
-      setFollowing(next)
-      setVoice(next)
+      if (next) {
+        const live = route.originSource === 'self' ? getLastFix() : null
+        setNavAnchor(
+          Number.isFinite(live?.lat) && Number.isFinite(live?.lng)
+            ? { lat: live.lat, lng: live.lng }
+            : null,
+        )
+      } else {
+        setNavAnchor(null)
+      }
       // Safari will not deliver orientation events unless permission was
       // asked for from a user gesture, and there is no second chance — this
       // press is the gesture. Fired without awaiting: a refusal leaves the
@@ -481,7 +583,7 @@ export default function DashboardPage() {
     // `routeIncident`) — without this the line would stay drawn to an
     // emergency the officer has just stepped away from.
     setRespondingAlertId((id) => (navigatingRef.current ? null : id))
-  }, [requestCompass])
+  }, [requestCompass, route.originSource])
 
   // Read inside the callback above without making `navigating` a dependency,
   // which would rebuild the handler on every toggle.
@@ -501,10 +603,13 @@ export default function DashboardPage() {
    * as long as it takes the next GPS update to arrive, and an officer driving
    * never has to find a control to get their own position back.
    *
-   * `following` survives as the standalone toggle in the controls drawer, for
-   * watching a unit WITHOUT running a navigation session.
+   * The standalone `following` toggle that used to survive here is gone with
+   * its control, so the session is now the only thing that claims the camera.
+   * That is a simplification rather than a loss: a dispatcher who wants to
+   * watch a unit clicks its marker, and the camera they are then given is
+   * theirs until they ask for something else.
    */
-  const cameraUnit = navigating || following ? followUid : null
+  const cameraUnit = navigating ? followUid : null
 
   /**
    * WHERE the unit is going, and WHAT it is going to — two labels, not one.
@@ -525,12 +630,6 @@ export default function DashboardPage() {
     ? describeIncidentLocation(routeIncident) || blockLotLabel(routeIncident) || 'Location not recorded'
     : ''
   const routeTargetDetail = routeIncident ? formatCategory(routeIncident.category) : ''
-
-  const changeProfile = useCallback((key) => {
-    const next = routeProfile(key).key
-    setProfile(next)
-    saveGuardPrefs({ ...loadGuardPrefs(), routeProfile: next })
-  }, [])
 
   // ── ONE CLICK, ONE PANEL ─────────────────────────────────────────────────
   // A pin click opens the details drawer directly. The popup card that used
@@ -597,7 +696,23 @@ export default function DashboardPage() {
 
           The floor stays for a very short landscape window, where it is better
           to overflow and scroll than to show a letterbox. */}
-      <div className="h-full min-h-[20rem]">
+      {/* ── THE MAP AND THE SOS RAIL SHARE THE ROW ──────────────────────
+          `lg:flex-row` with the rail `shrink-0` at a fixed width and the map
+          `flex-1 min-w-0`: the map keeps every pixel the rail is not using,
+          and `min-w-0` is what lets it actually shrink — without it a flex
+          item refuses to go below its content's intrinsic width and the rail
+          would be pushed off the edge instead.
+
+          Below `lg` they STACK, map first — a 320px rail beside a 320px map
+          would leave neither usable. The rail lands under the map and collapses
+          itself to a 56px summary bar there, so the map keeps 91% of a 812px
+          screen and the queue is one tap away (measured; see PanicAlertRail).
+
+          The rail renders nothing at all when there are no alerts, so the map
+          is full-bleed in the state the console is in almost all of the
+          time. */}
+      <div className="flex h-full min-h-[20rem] flex-col lg:flex-row">
+        <div className="min-h-0 min-w-0 flex-1">
         <IncidentMap
           variant="full"
           incidents={reports}
@@ -623,43 +738,15 @@ export default function DashboardPage() {
           /* This device's own compass, for the orientation cone. Null unless
              a session is running and the hardware is reporting. */
           selfHeading={deviceHeading}
-          onFollowBreak={() => {
-            // Only the standalone watch. Navigation keeps its camera, and gets
-            // it back on the next fix.
-            if (!navigating) setFollowing(false)
-          }}
+          /* The live position to open the flight on — this device's own GPS
+             when this device is the unit. See `navAnchor` above. */
+          navAnchor={navAnchor}
+          /* No `onFollowBreak`. The only follow state left is the session, and
+             a pan during one is a look rather than a decision: the camera
+             comes back on the next fix, which is what the officer driving
+             relies on and what a dispatcher glancing at the gate wants. */
           route={routeGeojson}
           routeKey={routeKey}
-          controlsSlot={
-            <div className="flex flex-col gap-3">
-              <FollowControl
-                following={following}
-                disabled={!followUid}
-                onToggle={() => setFollowing((current) => !current)}
-              />
-              <VoiceControl
-                enabled={speaking}
-                supported={voiceSupported}
-                disabled={!routeCoordinates}
-                /* While a session is running the toggle cannot switch
-                   anything off — protocol — so it says so rather than
-                   offering a press that would be overruled. */
-                locked={navigating}
-                onToggle={() => setVoice((current) => !current)}
-              />
-              <RouteProfileControl
-                profile={profile}
-                disabled={!routeCoordinates}
-                onChange={changeProfile}
-              />
-              <SimulationControl
-                running={simulating}
-                disabled={!routeCoordinates}
-                profileLabel={routeProfile(profile).label}
-                onToggle={() => setSimulating((current) => !current)}
-              />
-            </div>
-          }
           /* THE TURN BANNER, top-centre on every screen. Only while a
              session is running and there is a maneuver to show: a near-black
              plate over the map for a call nobody is driving to is a mode
@@ -667,9 +754,28 @@ export default function DashboardPage() {
              no banner either, because an instruction computed from a
              position that is not on the line is a confident wrong turn. */
           overlay={
-            navigating && progress?.step && !offRoute ? (
-              <GuidanceBanner maneuver={progress.step} waypointM={progress.waypointM ?? null} />
-            ) : null
+            /* A COLUMN, because the map's overlay slot is a centred ROW — two
+               children handed to it straight would sit side by side and the
+               chip would ride alongside the turn plate instead of above it.
+               Wrapped here rather than changing the slot, which the Admin map
+               also renders into. */
+            <div className="flex w-full flex-col items-center gap-2">
+              {/* ── THE LOCK STATE, ABOVE THE TURN PLATE ──────────────────
+                  In the overlay slot rather than pinned to a corner of the
+                  canvas, because that slot is the one piece of this map that
+                  already solves the two problems a floating chip has: it
+                  keeps clear of the control column on a phone (`pr-14`) and
+                  it is the stacking context the guidance banner lives in, so
+                  the two cannot overlap however either one grows.
+
+                  Above the banner, not below: it is one line and the banner
+                  is the thing being read at speed, so the plate keeps the
+                  position closest to the middle of the screen. */}
+              <GpsLockBadge mode={telemetryMode} locationError={locationError} fix={selfFix} />
+              {navigating && progress?.step && !offRoute ? (
+                <GuidanceBanner maneuver={progress.step} waypointM={progress.waypointM ?? null} />
+              ) : null}
+            </div>
           }
           /* THE ROUTE PANEL: a bottom sheet on a phone, a card up here on a
              console. */
@@ -680,8 +786,6 @@ export default function DashboardPage() {
                 onToggleNavigation={toggleNavigation}
                 route={route}
                 progress={progress}
-                simulated={simulating}
-                profile={profile}
                 targetLabel={routeTargetLabel}
                 targetDetail={routeTargetDetail}
                 stage={routeIncident?.dispatchStage}
@@ -690,11 +794,26 @@ export default function DashboardPage() {
             )
           }
         />
+        </div>
+
+        <PanicAlertRail
+          onOpenAlert={(alert) => setSelectedPanicId(alert.id)}
+          /* The officer's own position, for the distance on each card. The
+             best-of-both fix, so the rail measures from the same place the
+             route starts — see `pickBestFix`. */
+          origin={selfFix}
+          muted={sirenMuted}
+          onToggleMute={() => setSirenMuted(!sirenMuted)}
+        />
       </div>
 
       <DispatchDetailDrawer
         report={selectedReport}
-        units={units}
+        /* `liveUnits` so the picker and the assigned-unit panel measure
+           distance to the call from this officer's real position rather than
+           from the last one Firestore echoed back — the same reason the route
+           takes it. One list, one answer about where everybody is. */
+        units={liveUnits}
         previewUid={previewUid}
         onPreviewUnit={setPreviewUid}
         onClose={closeDetail}
@@ -723,8 +842,9 @@ export default function DashboardPage() {
           setSelectedPanicId(null)
           setSelectedId(null)
           setNavigating(true)
-          setFollowing(true)
-          setVoice(true)
+          // The camera and the spoken turns follow `navigating` now rather
+          // than being set alongside it, so there is nothing else to switch on
+          // here and no way for the three to end up disagreeing.
           requestCompass()
         }}
       />

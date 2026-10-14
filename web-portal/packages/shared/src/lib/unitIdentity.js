@@ -21,6 +21,12 @@ import { staffLabel } from '@shared/lib/identity'
  * operational identifier rather than a contact detail, it is already printed
  * beside the name, and it is what a dispatcher says on the radio.
  *
+ * ── SHARED, BECAUSE THE LEAK WAS IN BOTH CONSOLES ──────────────────────────
+ * This started in the Guardhouse. The Admin console's inspection rail printed
+ * `report.assignedGuardName` raw into an "Assigned to" row, which is the same
+ * address on the same provisioned account, on a screen an administrator shares
+ * in a meeting. One derivation, two portals.
+ *
  * ── WHY THIS IS NOT IN parts.jsx ───────────────────────────────────────────
  * It went there first, beside the components that use it, and that file
  * already carried two `only-export-components` warnings for mixing constants

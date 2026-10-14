@@ -2,7 +2,7 @@ import { UserX } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import { UNIT_STATE_LABELS, rankUnits } from '@/hooks/useGuardUnits'
 import { formatDistance } from '@/lib/directions'
-import { initials, unitLabel } from '@/lib/unitIdentity'
+import { initials, unitLabel } from '@shared/lib/unitIdentity'
 
 const STATE_TONES = {
   available: 'success',

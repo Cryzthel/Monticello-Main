@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
   Building2,
   Check,
+  Home,
   Loader2,
   Lock,
   Plug,
@@ -11,6 +13,8 @@ import {
   Siren,
   Smartphone,
   Ticket,
+  Timer,
+  Users,
   Volume2,
 } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
@@ -20,11 +24,13 @@ import { playAlert, unlockAlertSound } from '@shared/lib/alertSound'
 import { saveSettings } from '@shared/lib/systemSettings'
 import {
   AUDIT_RETENTION_DAYS,
+  SESSION_TIMEOUTS_MINUTES,
   TELEMETRY_INTERVALS,
   UPLOAD_LIMITS_MB,
   sanitizeSettings,
   useSystemSettings,
 } from '@shared/lib/systemSettingsStore'
+import { ROUTES } from '@/config/portal'
 import { useSettingsDraft } from '@/hooks/useSettingsDraft'
 import {
   ChoiceSetting,
@@ -39,23 +45,65 @@ import {
 } from '@/components/settings/SettingsFields'
 
 /**
- * The five configuration domains, and which settings groups live under each.
+ * The four configuration domains, and which settings this page owns under each.
  *
- * `groups` is the list of DOCUMENT keys a tab owns, not a list of components —
- * it is what the dirty dot is computed from, so a tab gaining a section means
- * adding its key here too or the dot silently stops reporting.
+ * ── IT WAS SIX TABS, AND TWO OF THEM WERE NOT DOMAINS ─────────────────
+ * "General", "Emergency", "Operations", "Residents", "Security",
+ * "Integrations". The first was a bin for whatever did not fit the others, and
+ * the last owned no settings at all — it existed to hold one paragraph
+ * explaining why provider credentials are NOT stored in this document. A tab
+ * is a promise that there is a body of configuration behind it; one paragraph
+ * is a row, and it now sits as a row inside Security, where a reader looking
+ * for "where do the API keys live" was going to look anyway.
  *
- * `integrations` owns no keys on purpose: that tab holds the note explaining
- * why provider credentials are NOT stored in this document. It has nothing to
- * save, and so can never be dirty.
+ * The four that remain are the questions an administrator actually arrives
+ * with: how does the estate RESPOND, who may OPERATE it, what is the estate and
+ * who lives in it, and who may hold a SESSION. Nothing was deleted to get here
+ * — every control the six tabs carried is still on this page.
+ *
+ * ── `keys` IS A LIST OF PATHS, NOT OF GROUPS ───────────────────────
+ * It used to be a list of document GROUP keys, which worked only while every
+ * group lived on exactly one tab. Two no longer do: `guardhouse` holds both the
+ * console's alarm volume (a dispatch mechanic) and whether a shift needs a
+ * handover before clock-out (a personnel policy), and `organisation` holds both
+ * the subdivision's contact details and how long provisioning records are kept.
+ *
+ * Splitting the DOCUMENT to match the tabs would have been the wrong half to
+ * move — it is a stored schema that the rules, the sanitizer, the guardhouse
+ * console and the resident app all read, and reshaping it so a form could draw
+ * tabs is the form dictating terms to five consumers. So the paths got finer
+ * instead. A dotted path reads one field; a bare one still reads a whole group.
+ *
+ * This matters because the dirty dot is load-bearing, not decoration: tabs can
+ * hide an edit the old stacked page could not, and a dot on the wrong tab sends
+ * an administrator hunting through a panel where nothing is actually changed.
  */
 const TABS = [
-  { value: 'general', label: 'General', icon: Building2, groups: ['organisation'] },
-  { value: 'safety', label: 'Emergency', icon: Siren, groups: ['sos'] },
-  { value: 'operations', label: 'Operations', icon: Radio, groups: ['incidents', 'guardhouse'] },
-  { value: 'residents', label: 'Residents', icon: Smartphone, groups: ['residentApp', 'push'] },
-  { value: 'integrations', label: 'Integrations', icon: Plug, groups: [] },
+  {
+    value: 'system',
+    label: 'System & dispatch',
+    icon: Radio,
+    keys: ['sos', 'incidents', 'guardhouse.sirenVolume', 'guardhouse.telemetryIntervalSeconds'],
+  },
+  { value: 'personnel', label: 'Personnel', icon: Users, keys: ['guardhouse.requireHandover'] },
+  {
+    value: 'property',
+    label: 'Property & residents',
+    icon: Home,
+    keys: [
+      'organisation.contactEmail',
+      'organisation.officeHours',
+      'organisation.logoUrl',
+      'residentApp',
+      'push',
+    ],
+  },
+  { value: 'security', label: 'Security', icon: Lock, keys: ['security', 'organisation.auditRetentionDays'] },
 ]
+
+/** Reads `'guardhouse.requireHandover'`, or a bare `'sos'`, off a settings object. */
+const at = (settings, path) => path.split('.').reduce((node, key) => node?.[key], settings)
+
 /**
  * Admin settings — the subdivision's operating policy, in one document.
  *
@@ -97,18 +145,20 @@ export default function SettingsPage() {
   const settled = status === 'live' || status === 'default' || status === 'error'
   const disabled = !settled || form.saving
   const [confirmingSilence, setConfirmingSilence] = useState(false)
-  const [tab, setTab] = useState('general')
+  const [tab, setTab] = useState('system')
 
   // Compared as JSON because a settings group is plain Firestore data —
   // primitives and one array of hotlines — so a key-by-key Object.is would
   // report the hotline list as changed on every render.
   const tabOptions = useMemo(
     () =>
-      TABS.map(({ value: id, label, icon, groups }) => ({
+      TABS.map(({ value: id, label, icon, keys }) => ({
         value: id,
         label,
         icon,
-        count: groups.some((g) => JSON.stringify(draft[g]) !== JSON.stringify(value[g])) ? '•' : undefined,
+        count: keys.some((k) => JSON.stringify(at(draft, k)) !== JSON.stringify(at(value, k)))
+          ? '•'
+          : undefined,
       })),
     [draft, value],
   )
@@ -135,7 +185,7 @@ export default function SettingsPage() {
 
   return (
     <AppShell title="Settings" subtitle="How the subdivision is alerted, dispatched and governed.">
-      <form onSubmit={submit} aria-busy={!settled} className="flex w-full max-w-3xl flex-col gap-4">
+      <form onSubmit={submit} aria-busy={!settled} className="flex w-full max-w-3xl flex-col gap-6">
         {status === 'error' ? (
           <p
             role="status"
@@ -174,7 +224,7 @@ export default function SettingsPage() {
         />
 
         {/* ── 1. SOS ───────────────────────────────────────────────────── */}
-        {tab === 'safety' ? (
+        {tab === 'system' ? (
           <SettingsGroup
             icon={Siren}
             title="SOS and panic button"
@@ -220,7 +270,7 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── 2. Incidents ─────────────────────────────────────────────── */}
-        {tab === 'operations' ? (
+        {tab === 'system' ? (
           <SettingsGroup
             icon={Ticket}
             title="Incident and hazard rules"
@@ -278,7 +328,7 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── 3. Guardhouse ────────────────────────────────────────────── */}
-        {tab === 'operations' ? (
+        {tab === 'system' ? (
           <SettingsGroup
             icon={Radio}
             title="Guardhouse console"
@@ -299,15 +349,6 @@ export default function SettingsPage() {
               }
             />
 
-            <SwitchSetting
-              id="guard-handover"
-              title="Shift handover required"
-              description="Officers must file a duty log before they can clock out of a shift. With this off, clocking out is a single confirmation."
-              checked={draft.guardhouse.requireHandover}
-              disabled={disabled}
-              onChange={(requireHandover) => setGroup('guardhouse', { requireHandover })}
-            />
-
             <ChoiceSetting
               id="guard-telemetry"
               title="Location ping interval"
@@ -320,8 +361,59 @@ export default function SettingsPage() {
           </SettingsGroup>
         ) : null}
 
+        {/* ── Personnel and access ───────────────────────────── */}
+        {tab === 'personnel' ? (
+          <SettingsGroup
+            icon={Users}
+            title="Personnel and access"
+            description="Policy that applies to every officer. Individual accounts are managed elsewhere."
+          >
+            {/* ── THIS TAB IS MOSTLY A SIGNPOST, ON PURPOSE ───────────────
+                Role assignment, shift history and authorisation levels were
+                asked for here, and they are already a whole page: Security
+                accounts, with a provisioning flow, a credential handoff, an
+                access-role filter and its own audit log. Rebuilding any of it
+                on this page would make two write surfaces for one set of
+                documents, which is how two screens end up disagreeing about
+                who is suspended.
+
+                What belongs HERE is what a settings page is for: the policy
+                that applies to everyone, rather than the record of one person.
+                Today that is one switch. A tab with one switch and a clear
+                pointer is worth more than a tab that pretends to be the
+                directory and is not. */}
+            <SwitchSetting
+              id="guard-handover"
+              title="Shift handover required"
+              description="Officers must file a duty log before they can clock out of a shift. With this off, clocking out is a single confirmation."
+              checked={draft.guardhouse.requireHandover}
+              disabled={disabled}
+              onChange={(requireHandover) => setGroup('guardhouse', { requireHandover })}
+            />
+
+            <SettingRow
+              id="accounts-link"
+              title="Guard logins, roles and shift history"
+              description="Who holds a credential, which access role it carries, whether it is active or suspended, and every shift that has been worked. Only a super admin may change them."
+              control={
+                <Link to={ROUTES.securityAccounts} className="btn btn-sm btn-outline">
+                  <Users size="sm" aria-hidden="true" />
+                  Security accounts
+                </Link>
+              }
+            />
+
+            <SettingRow
+              id="credentials-link"
+              title="Resetting a password"
+              description="A guard credential is reset from the directory, which issues a one-time handoff. An administrator resets their own password from the sign-in page — neither console can read or set a password directly."
+              control={<Lock size="sm" aria-hidden="true" className="text-text-muted" />}
+            />
+          </SettingsGroup>
+        ) : null}
+
         {/* ── 4. Resident app ──────────────────────────────────────────── */}
-        {tab === 'residents' ? (
+        {tab === 'property' ? (
           <SettingsGroup
             icon={Smartphone}
             title="Resident app"
@@ -366,11 +458,11 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── 5. Organisation ──────────────────────────────────────────── */}
-        {tab === 'general' ? (
+        {tab === 'property' ? (
           <SettingsGroup
             icon={Building2}
             title="Subdivision profile"
-            description="Who residents reach, and how long the record is kept."
+            description="Who residents reach, and what both consoles are branded as."
           >
             <TextSetting
               id="org-email"
@@ -404,10 +496,105 @@ export default function SettingsPage() {
               onChange={(logoUrl) => setGroup('organisation', { logoUrl })}
             />
 
+            {/* ── THE PHASE / BLOCK / LOT DIRECTORY IS NOT CONFIGURATION ────
+                An editor for it was asked for on this page. It cannot be one
+                yet, and the reason is worth stating on screen rather than
+                leaving an administrator to conclude the feature is missing.
+
+                The directory is not in Firestore. It is Dart source —
+                `lib/features/property/data/` — compiled into the resident app,
+                which is what reads it when somebody picks their address. A web
+                form writing a Firestore copy would change what these consoles
+                show and change NOTHING on a single resident's phone until the
+                next app release, so the two would disagree about what Block 7
+                is for however long that took. Moving the directory to Firestore
+                and teaching the app to read it remotely is the real piece of
+                work, and it is a mobile release, not a settings form.
+
+                The BOUNDARY is already shared the right way round, which is
+                what makes the above a choice rather than an oversight: one
+                GeoJSON file at the repository root, read by the Flutter app as
+                a bundled asset and by both consoles through the `@geo` alias.
+                One file, two platforms. */}
+            <SettingRow
+              id="subdivision-directory"
+              title="Phase, block and lot directory"
+              description="Held in the resident app's own source and compiled into each release, not in this document — so it is changed by shipping an app build, not from here. Resident records that reference it are in Residents."
+              control={
+                <Link to={ROUTES.residents} className="btn btn-sm btn-outline">
+                  <Home size="sm" aria-hidden="true" />
+                  Residents
+                </Link>
+              }
+            />
+          </SettingsGroup>
+        ) : null}
+
+        {/* ── Integrations ─────────────────────────────────────────────── */}
+        {/* ── 6. Security and authentication ──────────────────────── */}
+        {tab === 'security' ? (
+          <SettingsGroup
+            icon={Lock}
+            title="Security and authentication"
+            description="Who may hold a session on this console, and for how long."
+          >
+            {/* ── THE ONE CONTROL ON THIS PAGE THAT NEEDS NO BACKEND ────────
+                Almost everything else here wants a Cloud Function and carries a
+                "stored, not yet acted on" note because Functions cannot deploy
+                on the Spark plan. This one guards a BROWSER TAB, the browser is
+                where that has to happen, and `signOut` is a client call — so it
+                takes effect the moment it is saved. See IdleSignOut. */}
+            <ChoiceSetting
+              id="session-timeout"
+              title="Sign out when idle"
+              description="How long this console may sit untouched before it signs itself out. A minute's warning is given first, so an unsaved draft is not lost without being offered back."
+              value={draft.security.sessionTimeoutMinutes}
+              options={SESSION_TIMEOUTS_MINUTES.map((m) => ({
+                value: String(m),
+                label: m === 0 ? 'Never' : `After ${m} minutes`,
+              }))}
+              disabled={disabled}
+              onChange={(next) => setGroup('security', { sessionTimeoutMinutes: Number(next) })}
+            />
+
+            <SettingRow
+              id="session-scope"
+              title="Guardhouse consoles are not signed out"
+              description="A guardhouse terminal is meant to sit watching the map with nobody touching it, so idle is its normal state — and signing it out would take the SOS siren off the air. This policy covers administrator sessions only."
+              control={<Timer size="sm" aria-hidden="true" className="text-text-muted" />}
+            />
+
+            {/* ── MFA IS STATED, NOT TOGGLED ─────────────────────────
+                A "Require MFA" switch was asked for and is not here, because
+                this console cannot enrol a factor: Firebase only adds one
+                through the Admin SDK or the Firebase console, on a project
+                running Identity Platform with the TOTP provider enabled (see
+                shared/lib/twoFactor.js). A switch that cannot enrol, cannot
+                un-enrol and cannot refuse a sign-in would be a claim about
+                enforcement this page does not have — PRODUCT.md's fourth
+                principle, and the reason this page was once cut in half.
+
+                What IS true is worth saying: an account that already has a
+                factor is challenged for its 6-digit code at sign-in on BOTH
+                portals, and that path is built and live. */}
+            <SettingRow
+              id="mfa"
+              title="Two-factor authentication"
+              description="An account with an authenticator app enrolled is asked for its 6-digit code at sign-in, on both portals. Enrolment is done in Firebase, not here — nothing in either console can add or remove a factor."
+              control={<ShieldAlert size="sm" aria-hidden="true" className="text-text-muted" />}
+            />
+
+            {/* ── RETENTION IS A SECURITY CONTROL, NOT A PROFILE FIELD ─────
+                It sat in "Subdivision profile" beside the contact email and the
+                sidebar logo, which are the three things an administrator edits
+                once and never thinks about again. How long a record of who was
+                issued a credential is kept is not that: it is a governance
+                decision with a legal shape, and it belongs beside the other
+                questions about who may hold access to what. */}
             <ChoiceSetting
               id="org-retention"
               title="Audit history retention"
-              description="How far back the audit history goes."
+              description="How long Security Account provisioning records are kept."
               value={draft.organisation.auditRetentionDays}
               options={AUDIT_RETENTION_DAYS.map((d) => ({
                 value: String(d),
@@ -420,8 +607,7 @@ export default function SettingsPage() {
           </SettingsGroup>
         ) : null}
 
-        {/* ── Integrations ─────────────────────────────────────────────── */}
-        {tab === 'integrations' ? (
+        {tab === 'security' ? (
           <SettingsGroup
             icon={Plug}
             title="Notification providers"
@@ -472,7 +658,7 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── Notifications + save ─────────────────────────────────────── */}
-        {tab === 'residents' ? (
+        {tab === 'property' ? (
           <SettingsGroup
             icon={ShieldAlert}
             title="Resident notifications"

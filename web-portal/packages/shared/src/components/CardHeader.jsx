@@ -20,17 +20,31 @@
  * `action` is the right-hand control — a "View all" link, a filter, a count.
  * It is pinned to the header rather than the page so it reads as belonging to
  * the card's content.
+ *
+ * `icon` is an optional leading glyph in the standard 32px tile. It exists
+ * because Admin › Settings was hand-rolling this whole header to get one — a
+ * 16px semibold title over a 12px line, which is SectionHeading's rank applied
+ * INSIDE a card, i.e. precisely the drift the note above describes, reached by
+ * a different route. A page should not have to leave the component to add a
+ * glyph, so the glyph came to the component.
  */
-export default function CardHeader({ title, description, action, className = '' }) {
+export default function CardHeader({ title, description, action, icon: Icon, className = '' }) {
   return (
     <div
       className={`flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-hairline px-4 py-3 ${className}`}
     >
-      <div className="min-w-0">
-        <h3 className="text-sm font-semibold leading-tight text-text-primary">{title}</h3>
-        {description ? (
-          <p className="mt-0.5 text-xs leading-tight text-text-muted">{description}</p>
+      <div className="flex min-w-0 items-start gap-3">
+        {Icon ? (
+          <span className="icon-tile icon-tile-sm" aria-hidden="true">
+            <Icon size="sm" />
+          </span>
         ) : null}
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold leading-tight text-text-primary">{title}</h3>
+          {description ? (
+            <p className="mt-0.5 max-w-prose text-xs leading-relaxed text-text-muted">{description}</p>
+          ) : null}
+        </div>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

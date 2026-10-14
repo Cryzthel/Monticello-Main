@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node scripts/routeProgress.test.mjs && node scripts/arrivalClock.test.mjs && node scripts/stepGate.test.mjs"
+    "test": "node scripts/routeProgress.test.mjs && node scripts/arrivalClock.test.mjs && node scripts/stepGate.test.mjs && node scripts/routeOrigin.test.mjs && node scripts/geolocation.test.mjs && node scripts/liveSelfUnit.test.mjs && node scripts/locationState.test.mjs && node scripts/bestFix.test.mjs"
   },
   "dependencies": {
     "@monticello/shared": "*"

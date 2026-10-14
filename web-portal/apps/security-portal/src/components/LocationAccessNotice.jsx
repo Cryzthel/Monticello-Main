@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
 import { MapPinOff, Navigation } from '@shared/icons'
+import { useLocationAccess } from '@/hooks/useLocationAccess'
 
 /**
  * Tells the officer, on their own device, that dispatch cannot see them.
@@ -11,6 +11,21 @@ import { MapPinOff, Navigation } from '@shared/icons'
  * never reached the phone that was refusing. The officer's console looked
  * completely normal while they were invisible on the map their colleagues use
  * to send help, which is the one failure a guard must not have to infer.
+ *
+ * ── THE DECISION MOVED OUT, AND IT WAS WRONG WHILE IT LIVED HERE ───────────
+ * Which state the device is in is now `useLocationAccess`, shared with the
+ * toast. Two reasons, and the second is the important one.
+ *
+ * The first is that two surfaces reporting the same fact must not be able to
+ * disagree about it.
+ *
+ * The second is that the version that lived here fell silent on
+ * `sharing && !locationError && !denied`, and `sharing` is the officer's
+ * INTENT to share rather than evidence of a position. An officer who had never
+ * granted the permission — so no fix, and no error raised yet either — matched
+ * that condition exactly, and this banner hid itself at the one moment it was
+ * the only thing on screen that could have fixed the problem. See the long
+ * note on `fix` in the hook.
  *
  * ── IT ASKS, IT DOES NOT NAG ────────────────────────────────────────────────
  * The browser only shows its permission sheet in response to a gesture, and
@@ -28,73 +43,15 @@ import { MapPinOff, Navigation } from '@shared/icons'
  * have. That is also why this is a banner on the guard's own screen rather
  * than a blocking dialog: it reports a problem with a shift, not a wall.
  */
-export default function LocationAccessNotice({ mode, sharing, locationError }) {
-  const [permission, setPermission] = useState(null)
-  const [asking, setAsking] = useState(false)
+export default function LocationAccessNotice({ mode, locationError, fix }) {
+  const { state, request, asking } = useLocationAccess({ mode, locationError, fix })
 
-  const onDuty = mode !== 'off'
+  // 'ok' is a position flowing; 'off' is off duty or a browser with no
+  // geolocation at all. Neither is the officer's problem to see.
+  if (state === 'ok' || state === 'off') return null
 
-  // The Permissions API answers without prompting, so the notice can tell
-  // "never asked" from "refused" before spending the one prompt available.
-  useEffect(() => {
-    if (!onDuty || typeof navigator === 'undefined' || !navigator.permissions?.query) return undefined
-    let cancelled = false
-    let status = null
-    const sync = () => !cancelled && setPermission(status?.state ?? null)
-
-    navigator.permissions
-      .query({ name: 'geolocation' })
-      .then((result) => {
-        if (cancelled) return
-        status = result
-        sync()
-        result.addEventListener('change', sync)
-      })
-      .catch(() => {
-        // Safari on older iOS has no Permissions API for geolocation. The
-        // notice still works; it just cannot pre-empt the prompt.
-      })
-
-    return () => {
-      cancelled = true
-      status?.removeEventListener('change', sync)
-    }
-  }, [onDuty])
-
-  /**
-   * ── THE PERMISSIONS API IS THE AUTHORITY, THE ERROR CODE IS NOT ──────────
-   *
-   * This used to read `locationError === 'location-denied' || permission ===
-   * 'denied'`, and the first half of that OR is why officers saw "Location is
-   * blocked" on consoles where they had allowed it. A geolocation error code
-   * describes ONE failed reading; `navigator.permissions` describes the
-   * standing grant. When they disagree the standing grant is the one that is
-   * true, and the error is a reading that happened to fail.
-   *
-   * So a known-granted permission suppresses the denial outright, for the
-   * whole session, whatever errors arrive afterwards. The error code only
-   * gets to speak where the Permissions API cannot — older Safari, which has
-   * no geolocation entry — and `useGuardTelemetry` has already stopped
-   * reporting a denial there once a fix has been seen.
-   */
-  const denied = permission === 'denied' || (permission !== 'granted' && locationError === 'location-denied')
-  const missing = locationError === 'no-fix'
-
-  // Nothing to say while a position is flowing.
-  if (!onDuty || (sharing && !locationError && !denied)) return null
-  if (!denied && !missing && permission === 'granted') return null
-
-  function requestAccess() {
-    if (!navigator.geolocation) return
-    setAsking(true)
-    navigator.geolocation.getCurrentPosition(
-      () => setAsking(false),
-      () => setAsking(false),
-      // The same options the telemetry watch uses while responding, so the
-      // permission this prompt buys is the one the stream actually needs.
-      { enableHighAccuracy: true, timeout: 30_000, maximumAge: 0 },
-    )
-  }
+  const denied = state === 'denied'
+  const waiting = state === 'waiting'
 
   const Icon = denied ? MapPinOff : Navigation
 
@@ -108,23 +65,23 @@ export default function LocationAccessNotice({ mode, sharing, locationError }) {
         <p className="font-medium">
           {denied
             ? 'Location is blocked — dispatch cannot see you'
-            : missing
-              ? 'No GPS fix — dispatch cannot see you'
-              : 'Share your location so dispatch can route to you'}
+            : waiting
+              ? 'No GPS fix yet — dispatch cannot see you'
+              : 'Turn on GPS so dispatch can route to you'}
         </p>
         <p className="mt-0.5 leading-snug text-text-secondary">
           {denied
             ? 'Allow location for this site in your browser settings, then reload. Until then you will not appear on the dispatch map and routes cannot be measured from your position.'
-            : missing
-              ? 'Your device has location switched on but cannot get a fix. Step outside or into the open; the stream resumes on its own.'
-              : 'Your position is only shared while you are clocked in, and it is what lets the guardhouse send the nearest unit to a call.'}
+            : waiting
+              ? 'Location is allowed and your device is still working on a fix. Step outside or into the open; the stream goes live on its own as soon as a position arrives.'
+              : 'Allow location and your position goes live straight away. It is only shared while you are clocked in, and it is what lets the guardhouse send the nearest unit to a call.'}
         </p>
       </div>
 
-      {!denied ? (
+      {!denied && !waiting ? (
         <button
           type="button"
-          onClick={requestAccess}
+          onClick={request}
           disabled={asking}
           className="btn btn-sm btn-outline shrink-0"
         >

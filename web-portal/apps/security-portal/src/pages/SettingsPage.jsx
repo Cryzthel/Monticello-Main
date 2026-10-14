@@ -30,7 +30,12 @@ function Section({ title, description, aside, children }) {
        it takes the surface tier and the panel shadow with it. */
     <Card as="section" className="overflow-hidden p-0">
       <CardHeader title={title} description={description} action={aside} />
-      <div className="divide-y divide-slate-100">{children}</div>
+      {/* `divide-divider`, not `divide-slate-100`. The latter is the CARD
+          EDGE token, a step darker, and this was its only use anywhere in
+          either console — so the rules between these rows were drawn a shade
+          heavier than the rules between rows everywhere else. `--color-divider`
+          is the documented token for exactly this job. */}
+      <div className="divide-y divide-divider">{children}</div>
     </Card>
   )
 }

@@ -1,0 +1,83 @@
+// A RELATIVE path, not the `@shared` alias: this module is a pure rule and is
+// tested under bare node, which resolves neither Vite alias. Keeping the one
+// import resolvable is what lets the rule be tested at all.
+import { GPS_ACCURACY_LIMIT_M } from '../../../../packages/shared/src/lib/geolocation.js'
+
+/**
+ * Of the two positions this console has for its own officer, which one is
+ * actually better.
+ *
+ * ── THE LAPTOP-AND-PHONE CASE, WHICH IS THE WHOLE POINT ────────────────────
+ * A guard on shift often has both: the dispatch console open on a laptop, and
+ * the mobile app in their pocket. Both are signed in as the same officer, so
+ * both publish to the same `guard_telemetry/{uid}` document — and they are not
+ * equally good at knowing where they are. The phone has a GPS chip. The laptop
+ * has a list of visible Wi-Fi access points, and on a desktop with the radio
+ * off it has an IP address.
+ *
+ * Until now the local reading always won when the viewer was the assigned
+ * officer. That was right against the failure it was written for — a browser
+ * learning its own position by writing it to a server and reading it back —
+ * and wrong in this one: it made the laptop prefer its own ±600 m guess over
+ * the ±8 m fix the officer's own phone had just published. Two devices, same
+ * person, and the console picked the worse sensor because it happened to be
+ * the local one.
+ *
+ * So the rule is no longer "local wins"; it is "the better fix wins, and local
+ * breaks the tie". That is what makes a desktop console agree with the phone
+ * in the officer's pocket rather than arguing with it.
+ *
+ * ── WHY NOT JUST ALWAYS TAKE THE PUBLISHED ONE ─────────────────────────────
+ * Because on the phone itself the published position IS the local one, one
+ * Firestore round trip later and up to a telemetry interval staler. Preferring
+ * it unconditionally would reintroduce the exact latency and failure surface
+ * the local path exists to avoid, on the device that needs it most.
+ */
+
+/**
+ * How much better a remote fix has to be before it displaces the local one.
+ *
+ * A margin rather than a straight comparison, because the two readings are
+ * noisy and arrive at different times: ±21 m against ±19 m is the same
+ * position described twice, and a console that switched sources on that
+ * difference would flip back and forth every few seconds, dragging the marker
+ * and re-plotting the route each time. 2x is wide enough that only a genuine
+ * difference in SENSOR crosses it.
+ */
+const BETTER_BY = 2
+
+/**
+ * A remote fix older than this is not preferred however precise it claims to
+ * be. Accuracy describes where the device was when it looked; it says nothing
+ * about whether the officer is still there.
+ */
+const MAX_REMOTE_AGE_MS = 60_000
+
+const radius = (fix) => (Number.isFinite(fix?.accuracy) ? fix.accuracy : Infinity)
+const has = (fix) => Number.isFinite(fix?.lat) && Number.isFinite(fix?.lng)
+
+/**
+ * @param {object} local     This device's own fix, or null.
+ * @param {object} published The officer's telemetry position, or null.
+ * @param {number} [now]
+ * @returns {object|null} Whichever should be treated as this officer's position.
+ */
+export function pickBestFix(local, published, now = Date.now()) {
+  if (!has(local)) return has(published) ? published : null
+  if (!has(published)) return local
+
+  // A remote fix is only worth considering while it is recent. `capturedAt` is
+  // when the DEVICE took the reading, not when the document was written, which
+  // is the honest clock for this.
+  const capturedAt = published.capturedAt
+  const age = Number.isFinite(capturedAt) ? now - capturedAt : Infinity
+  if (age > MAX_REMOTE_AGE_MS) return local
+
+  // The local reading is already good enough to place somebody on a street.
+  // Nothing is gained by reaching across the network for a different one.
+  if (radius(local) <= GPS_ACCURACY_LIMIT_M) return local
+
+  return radius(published) * BETTER_BY <= radius(local) ? published : local
+}
+
+export { BETTER_BY, MAX_REMOTE_AGE_MS }

@@ -27,7 +27,24 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
 
   return (
     <div
-      className="fixed inset-0 z-[var(--z-overlay)] flex flex-col bg-black/95"
+      /**
+       * ── `pointer-events-auto` IS LOAD-BEARING ──────────────────────────────
+       *
+       * Both drawers that open this one nest it inside a
+       * `pointer-events-none fixed inset-0` wrapper — the trick that lets a
+       * right-hand rail sit in a full-screen flex container without its empty
+       * half swallowing clicks on the page behind. A child of that wrapper
+       * gets pointer-events: none too unless it says otherwise, and `fixed`
+       * does not opt back in.
+       *
+       * Without this class the backdrop handler below and the x button are
+       * both dead: the image opens, and the only way back out is Escape. That
+       * is not a nesting quirk to work around in each caller — a full-screen
+       * image overlay should take pointer events wherever it is mounted, so
+       * it declares that here once. Harmless outside such a wrapper, where
+       * auto is already the default.
+       */
+      className="pointer-events-auto fixed inset-0 z-[var(--z-overlay)] flex flex-col bg-black/95"
       onClick={(event) => {
         // Self-contained regardless of what it's nested inside (e.g. the
         // Incident Detail Modal) — a backdrop click here should only close

@@ -203,9 +203,14 @@ export function parseDirectionsResponse(body, { origin, destination, profile }) 
     if (body?.code === 'NoSegment') {
       throw new RouteError('no-segment', 'One end of the route is too far from any mapped road or path.')
     }
+    // "— try Walk" pointed at the Ride / Walk control, which has been deleted
+    // (see the profile note in DashboardPage). Advice naming a control that is
+    // not there teaches an officer the console is hiding something.
     throw new RouteError(
       'no-route',
-      profile === 'walking' ? 'No walking route reaches this pin.' : 'No driving route reaches this pin — try Walk.',
+      profile === 'walking'
+        ? 'No walking route reaches this pin.'
+        : 'No road route reaches this pin. Navigate to the nearest gate and proceed on foot.',
     )
   }
 

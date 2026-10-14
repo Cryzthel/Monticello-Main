@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Crosshair, Loader2, Maximize2, Minimize2, Minus, Plus } from '@shared/icons'
+import { Crosshair, Loader2, Maximize2, Minimize2, Minus, Plus, RotateCcw } from '@shared/icons'
 import Tooltip from '@shared/components/Tooltip'
-import { containsPoint } from '@shared/lib/subdivisionBoundary'
+import { boundaryMaxBounds, containsPoint } from '@shared/lib/subdivisionBoundary'
+import { ONE_SHOT_POSITION_OPTIONS, isUsableFix } from '@shared/lib/geolocation'
 
 /**
  * The map's floating control toolbar.
@@ -66,7 +67,34 @@ function Cluster({ children }) {
   )
 }
 
-export default function MapControls({ map, ready, compact = false, maximized = false, onToggleMaximized }) {
+export default function MapControls({
+  map,
+  ready,
+  compact = false,
+  maximized = false,
+  onToggleMaximized,
+  /**
+   * The basemap, and how to change it: `{ key, options, onChange }` or null.
+   *
+   * ── IT IS PROPS NOW, NOT A RENDERED NODE ────────────────────────────────
+   * It arrived here as a `header` node on the grounds that this component owns
+   * a position and has no business knowing what a basemap is. That held while
+   * the control was a labelled segmented capsule — an opaque box that only
+   * needed somewhere to sit.
+   *
+   * It no longer is. An icon-only toggle has to live in the same cluster as
+   * zoom and locate, share their 36px square, their hairline dividers and
+   * their left-placed tooltips; a node passed in from outside would have to
+   * reproduce all of that and then keep matching it. So the DATA crosses the
+   * boundary and the rendering stays here with the buttons it has to look
+   * like, which is the arrangement the rest of this toolbar already uses.
+   *
+   * `options` is the caller's list of `{ value, label, icon }`. This component
+   * still does not know what the styles ARE — only that there are two of them
+   * and which one is on, which is the minimum a toggle can be built from.
+   */
+  basemap = null,
+}) {
   const [locating, setLocating] = useState(false)
   const [locateError, setLocateError] = useState('')
 
@@ -92,6 +120,24 @@ export default function MapControls({ map, ready, compact = false, maximized = f
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         setLocating(false)
+        /**
+         * ── THE SAME COARSE-FIX CHECK THE TELEMETRY STREAM MAKES ───────────
+         * `enableHighAccuracy` is a request, and a desktop with no Wi-Fi radio
+         * answers it from its IP address: thousands of metres, pointing at an
+         * ISP exchange. Flying the camera there at zoom 18 is a button that
+         * visibly lies, and it lies MORE confidently than doing nothing — the
+         * operator gets a street view of a place they have never been, with no
+         * cue that the fix was a guess.
+         *
+         * So it says so and stays put, using the notice this control already
+         * owns. See `isUsableFix` for why the line is where it is.
+         */
+        if (!isUsableFix(coords)) {
+          setLocateError(
+            'Your device could not pin down a position — it answered to the nearest few kilometres. On a laptop, switch Wi-Fi on; a wired desktop has nothing to locate with.',
+          )
+          return
+        }
         const point = { lat: coords.latitude, lng: coords.longitude }
         // This used to refuse outright, because a fenced camera would silently
         // clamp the flight to the nearest edge and read as a broken button.
@@ -115,13 +161,95 @@ export default function MapControls({ map, ready, compact = false, maximized = f
             : 'Could not get your location.',
         )
       },
-      { enableHighAccuracy: true, timeout: 10000 },
+      ONE_SHOT_POSITION_OPTIONS,
     )
+  }
+
+  /**
+   * Fit the whole estate, flat and north-up.
+   *
+   * ── THIS BUTTON WAS DELETED ONCE, AND IT IS NOT THE SAME BUTTON ──────────
+   * An earlier pass removed a "Reset view" control, and the reasoning was
+   * sound at the time: the map opened fitted to the boundary and flat, nothing
+   * could rotate or tilt it, so on almost every session the button was
+   * offering to restore a state the camera had never left.
+   *
+   * That stopped being true when the dispatch map got a turn-by-turn camera.
+   * A navigation session now moves the camera to zoom 17.5 and pitch 50 and
+   * holds it there, following an officer across the subdivision; ending one
+   * leaves the operator wherever that officer finished, at street zoom. There
+   * is now a state to come back FROM, and the gestures that would otherwise
+   * get you there — rotate and pitch — are deliberately disabled, so for
+   * bearing and pitch this is the only way back.
+   *
+   * ── THE SAME BOUNDS AND PADDING THE MAP OPENS WITH ──────────────────────
+   * `boundaryMaxBounds()` and `padding: 32`, copied from the mount effect
+   * deliberately rather than chosen to look right. "Reset" has to land on the
+   * view the map started at, and a second set of numbers here would be a
+   * reset that goes somewhere the map has never been — close enough that
+   * nobody notices, which is worse than visibly wrong.
+   *
+   * Derived from the boundary file rather than stored, so it also cannot drift
+   * when the perimeter is re-traced.
+   */
+  function resetView() {
+    map.fitBounds(boundaryMaxBounds(), {
+      padding: 32,
+      pitch: 0,
+      bearing: 0,
+      duration: 900,
+      essential: true,
+    })
   }
 
   return (
     <>
       <div className="pointer-events-none absolute right-3 top-3 z-10 flex flex-col gap-2">
+        {/* ── VIEW — what the map is drawn on, and how far back you stand ───
+            Its own cluster above the camera controls, because these two change
+            what you can SEE rather than where you are looking. The basemap
+            toggle is paired with Reset view on purpose: both are the controls
+            an operator reaches for when the map has stopped telling them what
+            they need, and neither is reachable by gesture.
+
+            ── ICON-ONLY, AND WHY THAT IS NOT A LOSS HERE ─────────────────
+            The labelled capsule this replaces measured 181px and had to shrink
+            its own words on a phone to avoid colliding with the controls
+            drawer. The labels were buying very little: with exactly two
+            basemaps the control is a toggle, and the CANVAS is the state
+            readout — satellite imagery and a street map are not something an
+            operator can mistake for one another, so a caption naming the one
+            they are already looking at is 181px spent on confirmation.
+
+            The glyph therefore shows the DESTINATION, not the current state —
+            the satellite dish when you are on streets, the map when you are on
+            satellite — so the button answers "what happens if I press this",
+            which is the only thing a toggle is ever asked. The tooltip says it
+            in words for anyone who wants them. */}
+        {basemap?.options?.length === 2 ? (
+          <Cluster>
+            {(() => {
+              const other =
+                basemap.options.find((option) => option.value !== basemap.key) ?? basemap.options[0]
+              const Icon = other.icon
+              return (
+                <ControlButton
+                  icon={Icon}
+                  label={`Switch to ${String(other.label).toLowerCase()}`}
+                  hint="Basemap"
+                  onClick={() => basemap.onChange?.(other.value)}
+                />
+              )
+            })()}
+            <ControlButton
+              icon={RotateCcw}
+              label="Reset view"
+              hint="Fit Monticello Villas, north up"
+              onClick={resetView}
+            />
+          </Cluster>
+        ) : null}
+
         {/* Navigation — move the camera. Two buttons: the two the scroll
             wheel already does, kept for a trackpad and for touch. */}
         <Cluster>

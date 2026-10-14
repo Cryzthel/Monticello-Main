@@ -330,7 +330,11 @@ export default function LoginForm({
           <button
             type="button"
             onClick={() => setShowPassword((prev) => !prev)}
-            className="shrink-0 rounded-full p-1.5 text-text-muted transition-colors duration-150 hover:bg-tint/10 hover:text-text-primary"
+            /* 44px on touch, back to the dense icon on a pointer. Measured at
+               390px it was 28px square — under the 44px floor, inside a field
+               a guard taps one-handed at a gate in the dark. The icon does not
+               grow; the hit area around it does. */
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-text-muted transition-colors duration-150 hover:bg-tint/10 hover:text-text-primary sm:h-8 sm:w-8"
             aria-label={showPassword ? 'Hide password' : 'Show password'}
             aria-pressed={showPassword}
           >
@@ -340,7 +344,11 @@ export default function LoginForm({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="inline-flex cursor-pointer select-none items-center gap-2.5 text-xs text-text-secondary">
+        {/* `min-h-11` on the LABEL, not on the box. A 16px checkbox is the
+            right size to look at and the wrong size to hit; a label is already
+            a hit area for the input it wraps, so growing it costs nothing
+            visually and gives the whole "Remember me" phrase a 44px row. */}
+        <label className="inline-flex min-h-11 cursor-pointer select-none items-center gap-2.5 text-xs text-text-secondary sm:min-h-0">
           <input
             type="checkbox"
             checked={rememberMe}
@@ -356,7 +364,10 @@ export default function LoginForm({
         <button
           type="button"
           onClick={() => setRecovering(true)}
-          className={`text-xs font-medium transition ${accentLink}`}
+          /* Same floor, same reasoning: 16px of text is a 16px target. The
+             padding is horizontal too, so the tap area does not stop exactly
+             at the glyphs. */
+          className={`inline-flex min-h-11 items-center px-1 text-xs font-medium transition sm:min-h-0 sm:px-0 ${accentLink}`}
         >
           Forgot password?
         </button>

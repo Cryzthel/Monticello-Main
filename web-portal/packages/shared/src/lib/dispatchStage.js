@@ -188,23 +188,62 @@ export const ACK_TIMEOUT_MS = 90_000
 export const ARRIVAL_RADIUS_M = 30
 
 /** Mirrors the list in firestore.rules — the rules refuse any other value. */
+/**
+ * ── THE LABELS ARE PLAIN ENGLISH; THE VALUES ARE NOT TOUCHED ─────────────
+ *
+ * "Referred to authorities", "Medical handover" and "Resolved on site" are
+ * report-writing language. The person choosing from this list is a guard
+ * standing at a gate at two in the morning deciding how a call ended, and
+ * the words should be the ones they would use out loud.
+ *
+ * ONLY the `label` changed. Each `value` is enforced by firestore.rules
+ * (`r.outcome in [...]`) and is already written into every resolved call in
+ * the history, so renaming one would refuse new writes AND orphan the old
+ * records. Labels are display; values are schema. Keeping that split is what
+ * makes this a copy change rather than a migration.
+ */
 export const RESOLUTION_OUTCOMES = [
-  { value: 'resolved_on_site', label: 'Resolved on site' },
-  { value: 'referred_authorities', label: 'Referred to authorities' },
-  { value: 'medical_handover', label: 'Medical handover' },
+  { value: 'resolved_on_site', label: 'Handled on the spot' },
+  // ── TWO ADDED 2026-10-14 ──────────────────────────────────────────────
+  // Both describe calls that were genuinely ENDED by the officer, and both
+  // were previously filed under "Handled on the spot" because there was
+  // nowhere else for them to go — which made that one value mean "resolved,
+  // somehow" and cost the history the distinction between a neighbour
+  // argument talked down and an intruder seen off.
+  //
+  // The labels are the guard's own words, per the note above: a dispute is
+  // SETTLED and a threat is STOPPED. "Mediated" and "neutralised" are the
+  // report-writing register this list was deliberately taken out of.
+  //
+  // `threat_contained`, not `threat_neutralised`: a wire value that forces
+  // a future reader to guess -ise or -ize is a wire value that will
+  // eventually be written both ways.
+  { value: 'dispute_mediated', label: 'Settled a dispute' },
+  { value: 'threat_contained', label: 'Stopped a threat' },
+  { value: 'referred_authorities', label: 'Passed to police / barangay' },
+  { value: 'medical_handover', label: 'Medical assist' },
   { value: 'false_alarm', label: 'False alarm' },
-  { value: 'no_issue_found', label: 'No issue found' },
-  { value: 'resident_unreachable', label: 'Resident unreachable' },
+  { value: 'no_issue_found', label: 'Nothing found' },
+  { value: 'resident_unreachable', label: 'Could not reach resident' },
 ]
 
 /** Mirrors the list in firestore.rules. */
+/** Same rule as the outcomes above: labels are plain English, values are schema. */
 export const INVESTIGATION_TAGS = [
-  { value: 'area_secured', label: 'Area secured' },
-  { value: 'medical_requested', label: 'Medical requested' },
-  { value: 'police_requested', label: 'Police requested' },
-  { value: 'fire_requested', label: 'Fire service requested' },
-  { value: 'suspect_detained', label: 'Suspect detained' },
-  { value: 'property_damage', label: 'Property damage' },
+  { value: 'area_secured', label: 'Checked and secured the area' },
+  // ── TWO ADDED 2026-10-14 ──────────────────────────────────────────────
+  // The two most common things an officer actually does on a call that the
+  // list had no way to record. Speaking to the resident is the single most
+  // frequent action in this whole machine and went unlogged entirely; a
+  // warning is the usual outcome of a noise or parking call and was
+  // previously only recoverable by reading the free-text notes.
+  { value: 'resident_contacted', label: 'Spoke to the resident' },
+  { value: 'medical_requested', label: 'Called an ambulance' },
+  { value: 'police_requested', label: 'Called the police' },
+  { value: 'fire_requested', label: 'Called the fire service' },
+  { value: 'warning_issued', label: 'Gave a warning' },
+  { value: 'suspect_detained', label: 'Detained someone' },
+  { value: 'property_damage', label: 'Found property damage' },
 ]
 
 export const RESOLUTION_NOTES_MIN = 10

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Menu, PanelLeftClose, PanelLeftOpen, Search } from '@shared/icons'
 import NotificationBell from '@shared/components/NotificationBell'
@@ -48,8 +49,44 @@ export default function TopHeader({
   // header, and two identical buttons on one screen is one too many.
   const { pathname } = useLocation()
   const showPrimary = primaryAction && primaryAction.to.split('?')[0] !== pathname
+
+  /**
+   * ── THIS BAR PUBLISHES ITS OWN HEIGHT ───────────────────────────────────
+   *
+   * `--app-header-h`, for the fixed overlays that have to clear it. The SOS
+   * banner is the one that made this necessary: it was pinned at `top-3` and
+   * sat straight over the duty row, so during a panic alert an officer could
+   * not reach Clock out or the notification bell — the two controls the alert
+   * itself makes urgent.
+   *
+   * A constant would not do. This header is `min-h-16` and WRAPS below `sm`
+   * (`flex-wrap`, with `sm:h-16 sm:flex-nowrap` switching it off above), so on
+   * a phone carrying a duty timer and a clock-out button it is routinely
+   * taller than the 64px a hardcoded offset would assume — and it changes
+   * height as its own contents change. Anything pinned under a guessed number
+   * is correct on a desktop and wrong on the device this is read on.
+   *
+   * Written to the document element rather than passed as a prop because the
+   * consumers are `position: fixed` overlays rendered outside this tree, which
+   * is exactly the case a CSS variable on the root is for.
+   */
+  const headerRef = useRef(null)
+  useLayoutEffect(() => {
+    const node = headerRef.current
+    if (!node || typeof ResizeObserver === 'undefined') return undefined
+    const publish = () =>
+      document.documentElement.style.setProperty('--app-header-h', `${node.offsetHeight}px`)
+    publish()
+    const observer = new ResizeObserver(publish)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline bg-base-950 px-4 py-3 sm:h-16 sm:flex-nowrap sm:px-6 sm:py-0">
+    <header
+      ref={headerRef}
+      className="flex min-h-16 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline bg-base-950 px-4 py-3 sm:h-16 sm:flex-nowrap sm:px-6 sm:py-0"
+    >
       <button
         type="button"
         onClick={onOpenDrawer}

@@ -15,6 +15,7 @@ import {
   rememberFix,
 } from '@/lib/guardTelemetry'
 import { getSettings } from '@shared/lib/systemSettingsStore'
+import { isUsableFix } from '@shared/lib/geolocation'
 
 /** Every call a unit is committed to. Shared with DispatchWatchdog. */
 export function activeCallsQuery() {
@@ -228,10 +229,46 @@ export function useGuardTelemetry() {
     }
 
     const onPosition = (position) => {
-      setLocationError(null)
       // A fix proves the permission was granted. Latched for the session so a
       // later error can never be reported as a denial — see `onError`.
       grantedRef.current = true
+
+      /**
+       * ── A READING THAT IS NOT A POSITION IS NOT A POSITION ───────────────
+       *
+       * The browser hands us the accuracy radius it achieved, and nothing used
+       * to read it on this path: whatever arrived was recorded, published, and
+       * drawn on the dispatch map as a dot. A laptop answering from its IP
+       * address reports thousands of metres, so the officer appeared at their
+       * ISP's exchange — confidently, with no mark to say otherwise, because
+       * the `approximate` flag this would have raised is no longer rendered
+       * anywhere.
+       *
+       * Raising `enableHighAccuracy` above stops most of those being produced.
+       * This is the second half, and it is the half that holds when the first
+       * cannot: a laptop with Wi-Fi switched off, a desktop with no radio at
+       * all, a VPN moving the IP to another country. High accuracy is a
+       * REQUEST, and the provider is free to answer it badly.
+       *
+       * Discarded, not downgraded. It does not touch `rememberFix`, so
+       * `getLastFix()` — which the navigation camera centres on — never holds
+       * one of these either. The officer is then in the console's existing
+       * "no GPS fix yet" state, which says what is wrong and what to do about
+       * it, rather than in a wrong place that nothing can detect.
+       *
+       * `errorsRef` is deliberately NOT reset and the error notice is
+       * deliberately NOT cleared before this check: a stream of coarse
+       * readings is the device failing to locate itself, and treating each one
+       * as a success would hold the console at "locating…" forever while
+       * telling the officer everything was fine.
+       */
+      if (!isUsableFix(position.coords)) {
+        if (errorsRef.current < ERROR_GRACE) errorsRef.current += 1
+        else setLocationError('no-fix')
+        return
+      }
+
+      setLocationError(null)
       errorsRef.current = 0
       const fix = rememberFix(position)
       const last = lastSentRef.current
@@ -266,9 +303,35 @@ export function useGuardTelemetry() {
     const onError = (err) => {
       errorsRef.current += 1
       const denied = err?.code === 1 && !grantedRef.current
+      /**
+       * ── A TIMEOUT BEFORE THE FIRST FIX IS NOT A FAILURE ─────────────────
+       *
+       * `TIMEOUT` (code 3) says the browser did not answer within the budget,
+       * which at a 10s budget is the ordinary shape of a COLD high-accuracy
+       * lock: a GPS chip waking with no almanac, or a laptop enumerating
+       * access points, routinely needs longer. `watchPosition` keeps running
+       * after one — the watch is not cancelled — so the honest reading of an
+       * early timeout is "still acquiring", not "no GPS fix".
+       *
+       * Without this, two of them inside twenty seconds would put "no GPS
+       * fix" in front of every officer on every load, on hardware that was
+       * about to succeed. That is the failure mode that made the 30s budget
+       * look necessary; handling the error properly is what lets the budget
+       * be the 10s the brief asks for.
+       *
+       * It is scoped to BEFORE the first fix only. Once `grantedRef` is
+       * latched, this device has proved it can locate itself, and a timeout
+       * then means a stream that was working has stopped — which is exactly
+       * the thing an officer needs telling about.
+       *
+       * Nobody is left in the dark while this stays quiet: `useLocationAccess`
+       * runs its own grace timer and says "no GPS fix yet" once a device has
+       * had long enough, whether or not an error was ever raised.
+       */
+      const acquiring = err?.code === 3 && !grantedRef.current
       if (denied) {
         setLocationError('location-denied')
-      } else if (errorsRef.current >= ERROR_GRACE) {
+      } else if (!acquiring && errorsRef.current >= ERROR_GRACE) {
         setLocationError('no-fix')
       }
       if (Date.now() - lastSentRef.current.at >= cadence.minMs) send(null)
@@ -277,10 +340,57 @@ export function useGuardTelemetry() {
     // The first write of a mode goes out at once, so switching to active is
     // visible on the dispatcher's map within a second, not a heartbeat later.
     lastSentRef.current = { at: 0, fix: lastSentRef.current.fix }
+    /**
+     * ── HIGH ACCURACY ALWAYS, AND THIS IS THE DESKTOP BUG ───────────────────
+     *
+     * These options were `enableHighAccuracy: mode === 'active'` and
+     * `maximumAge: mode === 'active' ? 0 : 30_000` — so an officer on duty
+     * with no committed call was being located in LOW-accuracy mode, and that
+     * flag does not mean "slightly less precise". It changes which provider
+     * the browser asks.
+     *
+     * With it false, Chrome skips the Wi-Fi scan and answers from the network
+     * location service, which on a laptop means the IP address: a position
+     * accurate to the exchange, the city, or the ISP's head office. That is
+     * the reported symptom exactly — a laptop placing an officer streets or
+     * kilometres from where a phone puts them, with both devices convinced
+     * they are right. The phone was in the same low-accuracy mode but has
+     * cell and Wi-Fi triangulation to fall back on, so it landed close enough
+     * to look correct and hid the cause.
+     *
+     * With it true, the same laptop scans visible access points and reports
+     * tens of metres. The two devices stop disagreeing because they are
+     * finally being asked the same question.
+     *
+     * `maximumAge: 0` for the same reason one layer down: a cached fix is
+     * whatever the last caller asked for, and accepting a 30-second-old one
+     * meant inheriting a coarse reading taken before this watch started — or
+     * one taken by another tab entirely.
+     *
+     * ── THE 10s BUDGET, AND WHAT HAD TO CHANGE TO MAKE IT SAFE ─────────────
+     * On a `watchPosition`, `timeout` is the budget for EACH position, and a
+     * cold high-accuracy lock routinely takes 20 seconds or more. This was
+     * 30s for that reason, and the reason was really about the ERROR PATH:
+     * at 10s the budget expires during a normal cold start, `onError` fires
+     * twice, and "no GPS fix" lands on the officer's screen while the
+     * hardware was still working.
+     *
+     * A longer budget papered over that rather than fixing it. The timeout is
+     * now the brief's 10s and `onError` distinguishes an early `TIMEOUT` from
+     * a real failure instead — see the note there. The shorter budget is
+     * genuinely better once the error path is honest: the watch retries
+     * sooner, so a device that is one scan away from a lock gets that scan at
+     * 10s rather than at 30.
+     *
+     * The cost is battery: a continuous high-accuracy watch keeps the radio
+     * warm. That is the correct trade on a console whose job is saying where
+     * its officers are, and the battery level is already published to the
+     * dispatcher, so the price is visible rather than hidden.
+     */
     const watchId = geolocation.watchPosition(onPosition, onError, {
-      enableHighAccuracy: mode === 'active',
-      maximumAge: mode === 'active' ? 0 : 30_000,
-      timeout: 30_000,
+      enableHighAccuracy: true,
+      maximumAge: 0,
+      timeout: 10_000,
     })
     // watchPosition only fires on movement on some devices. The heartbeat
     // keeps a stationary officer (standing at the scene) from reading as stale.

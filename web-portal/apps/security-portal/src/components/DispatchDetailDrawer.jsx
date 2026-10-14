@@ -10,7 +10,6 @@ import {
   MapPin,
   Phone,
   Radio,
-  ShieldAlert,
   Timer,
   UserRoundCheck,
   UserRoundCog,
@@ -25,6 +24,7 @@ import { buildMediaItems } from '@shared/lib/incidents'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import {
   ACK_TIMEOUT_MS,
+  INVESTIGATION_TAGS,
   deriveDispatchStage,
   RESOLUTION_OUTCOMES,
 } from '@shared/lib/dispatchStage'
@@ -41,13 +41,12 @@ import {
 } from '@/lib/dispatch'
 import { ROUTES } from '@/config/portal'
 import { useStageAction } from '@/hooks/useStageAction'
-import {
-  CategoryIconBadge,
-  Section,
-  StageStepper,
-} from '@/components/dispatch/parts'
-import { unitLabel } from '@/lib/unitIdentity'
-import EvidenceGrid, { forensicCoordinates, forensicTimestamp } from '@/components/dispatch/EvidenceGrid'
+import { Section } from '@/components/dispatch/parts'
+import CategoryIconBadge from '@shared/components/dispatch/CategoryIconBadge'
+import StageStepper from '@shared/components/dispatch/StageStepper'
+import Receipt from '@shared/components/dispatch/Receipt'
+import { unitLabel } from '@shared/lib/unitIdentity'
+import EvidenceGrid, { forensicCoordinates, forensicTimestamp } from '@shared/components/dispatch/EvidenceGrid'
 import UnitPicker from '@/components/dispatch/UnitPicker'
 import ResolveIncidentModal from '@/components/dispatch/ResolveIncidentModal'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
@@ -70,34 +69,6 @@ const SEVERITY_LABELS = {
 const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
 const clock = (at) => (at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—')
 
-
-/** The receipt for the last action. See useStageAction. */
-const RECEIPT_TONES = {
-  success: { shell: 'border-success/30 bg-success/10 text-success', Icon: CheckCircle2 },
-  warning: { shell: 'border-warning/30 bg-warning/10 text-warning', Icon: ShieldAlert },
-  danger: { shell: 'border-danger/30 bg-danger/10 text-danger', Icon: ShieldAlert },
-}
-
-function Receipt({ feedback, onDismiss }) {
-  const { shell, Icon } = RECEIPT_TONES[feedback.tone] ?? RECEIPT_TONES.warning
-  return (
-    <div
-      role="status"
-      className={`absolute inset-x-3 bottom-full z-10 mb-2 flex items-start gap-2.5 rounded-xl border p-3 shadow-overlay animate-[riseIn_180ms_var(--ease-spring)] ${shell}`}
-    >
-      <Icon size="sm" className="mt-px shrink-0" aria-hidden="true" />
-      <p className="min-w-0 flex-1 text-xs font-medium leading-snug">{feedback.text}</p>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss"
-        className="-mr-1 -mt-1 shrink-0 rounded-lg p-1 opacity-70 transition-[opacity,background-color] duration-150 hover:bg-tint/10 hover:opacity-100"
-      >
-        <X size="sm" />
-      </button>
-    </div>
-  )
-}
 
 /** A label/value row on a fixed gutter, so every value in the drawer starts on one edge. */
 function Row({ label, mono = false, children }) {
@@ -179,11 +150,14 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
   const ack = useAckClock(report)
 
   const [lightboxIndex, setLightboxIndex] = useState(null)
+  /** The resolution grid has its own, because it shows different media. */
+  const [resolutionLightbox, setResolutionLightbox] = useState(null)
   const [reassigning, setReassigning] = useState(false)
   const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
     setLightboxIndex(null)
+    setResolutionLightbox(null)
     setReassigning(false)
     setResolving(false)
   }, [report?.id])
@@ -212,7 +186,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
     if (stage !== 'responding') setResolving(false)
   }, [stage])
 
-  const anyDialog = lightboxIndex !== null || resolving
+  const anyDialog = lightboxIndex !== null || resolutionLightbox !== null || resolving
   useEffect(() => {
     if (!report || anyDialog || busy) return undefined
     const onKeyDown = (event) => {
@@ -355,7 +329,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
             className="btn btn-action btn-brand"
           >
             {busy === 'respond' ? spinner : <UserRoundCheck size="sm" aria-hidden="true" />}
-            Acknowledge & respond
+            Accept & go
           </button>
         ) : null}
       </>
@@ -383,20 +357,36 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
     /* One action. Escalate sat beside this and is gone — backup is called
        by radio. See the note in lib/dispatchWorkflow.js for what that gave
        up, because nothing automatic inherited it. */
+    /**
+     * ── THE BUTTON CHANGES ON ARRIVAL, BUT IS NEVER TAKEN AWAY ───────────
+     *
+     * The brief asks for the resolve action to appear "once the guard
+     * arrives". It does change on arrival — from an outline button to the
+     * filled primary one — and it is deliberately NOT disabled before then.
+     *
+     * Arrival is stamped from the officer's own GPS reaching the pin. A bad
+     * fix at a real scene is ordinary, and a console that hid or disabled
+     * the only way to close a call until a satellite agreed would strand an
+     * officer who had finished the job. Weight is the honest signal here:
+     * filled says "you are where you said you would be, this is the next
+     * thing"; outline says "you can still do this, but nothing has confirmed
+     * you arrived" — and the form then records that absence in writing.
+     */
     footer = canAct ? (
       <button
         type="button"
         onClick={() => setResolving(true)}
         disabled={Boolean(busy)}
-        className="btn btn-action btn-brand"
+        className={`btn btn-action ${report.onSceneAt ? 'btn-brand' : 'btn-outline'}`}
       >
         <CheckCircle2 size="sm" aria-hidden="true" />
-        {/* "Proceed to resolve", not "Resolve incident". The press does not
-            resolve anything — it opens a modal that then demands an outcome,
-            notes and a photo. A button whose label claims to finish the call
-            is a button people expect to be the last one, and they press it
-            to find out what it wants. */}
-        Proceed to resolve
+        {/* "Resolve incident", in the words a guard would use. It was
+            "Initiate resolution", which is accurate — the press opens a form
+            rather than resolving anything — and is also the kind of phrase
+            nobody says out loud. The form is titled the same thing and
+            opens immediately, so the two read as one action rather than as
+            a promise and a surprise. */}
+        Resolve incident
       </button>
     ) : null
     hint = canAct
@@ -610,7 +600,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               where whitespace at this width reads as the edge of the card. */}
           <Section
             icon={FileText}
-            title="Reported description"
+            title="Photos & details"
             meta={media.length ? `${media.length} file${media.length === 1 ? '' : 's'}` : null}
           >
             {report.description ? (
@@ -665,14 +655,43 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               live mid-response. Its scene photos went with them: resolving
               already demands a photo, and two trays on one call is a
               question about which to use rather than extra evidence. */}
+          {/* ── THE READ-ONLY SUMMARY, WHICH WAS INCOMPLETE ────────────
+              It showed the outcome, the notes and the photos, and left out
+              two things it was collecting: WHAT WAS DONE — the tags, added
+              when they moved here from the investigation panel and never
+              rendered anywhere — and WHEN. A form that asks for something
+              and then never shows it back teaches people the field does
+              not matter.
+
+              The photos were also inert: `onOpen` was a no-op, so the one
+              grid in this drawer carrying proof of how a call was left was
+              the one grid you could not open. They go through the same
+              lightbox as the reported photos now, watermarked with the
+              resolution's own time and place rather than the report's. */}
           {stage === 'resolved' && report.resolution ? (
-            <Section icon={ClipboardList} title="Resolution" meta={outcomeLabel}>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">{report.resolution.notes}</p>
+            <Section
+              icon={ClipboardList}
+              title="Resolution"
+              meta={report.resolvedAt ? clock(report.resolvedAt) : null}
+            >
+              <dl>
+                <Row label="What happened">{outcomeLabel}</Row>
+                {report.resolution.tags?.length ? (
+                  <Row label="What was done">
+                    {report.resolution.tags
+                      .map((t) => INVESTIGATION_TAGS.find((o) => o.value === t)?.label ?? t)
+                      .join(' · ')}
+                  </Row>
+                ) : null}
+              </dl>
+              <p className="mt-2 whitespace-pre-wrap border-t border-hairline pt-2.5 text-sm leading-relaxed text-text-primary">
+                {report.resolution.notes}
+              </p>
               <div className="mt-3">
                 <EvidenceGrid
                   media={resolutionMedia}
                   stamp={{ ...stamp, at: report.resolvedAt, lat: report.arrival?.lat ?? report.lat, lng: report.arrival?.lng ?? report.lng }}
-                  onOpen={() => {}}
+                  onOpen={setResolutionLightbox}
                   emptyText=""
                 />
               </div>
@@ -741,6 +760,23 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
             timestamp: forensicTimestamp(report.reportedAt),
           }}
           onClose={() => setLightboxIndex(null)}
+        />
+      ) : null}
+
+      {/* The resolution's own photos, watermarked with the resolution's time
+          and the position the arrival was recorded at — not the report's.
+          They are proof of how the call was LEFT, and a watermark naming the
+          moment it was reported would be stamping them with the wrong one. */}
+      {resolutionLightbox !== null ? (
+        <Lightbox
+          media={resolutionMedia}
+          startIndex={resolutionLightbox}
+          watermark={{
+            name: `${reference} · resolved by ${report.resolvedByName || 'security'}`,
+            address: `${address || 'Location not recorded'} · ${forensicCoordinates(report.arrival?.lat ?? report.lat, report.arrival?.lng ?? report.lng)}`,
+            timestamp: forensicTimestamp(report.resolvedAt),
+          }}
+          onClose={() => setResolutionLightbox(null)}
         />
       ) : null}
 

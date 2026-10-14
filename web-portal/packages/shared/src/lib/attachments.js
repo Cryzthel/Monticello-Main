@@ -107,5 +107,21 @@ export function describeUploadError(err) {
   if (err?.code === 'storage/retry-limit-exceeded') {
     return 'Upload timed out. Check the connection and try again.'
   }
+  /**
+   * THE ONE ERROR HERE THAT TRYING AGAIN CANNOT FIX.
+   *
+   * Every other case above is a condition that may have passed by the next
+   * attempt — a dropped connection, a rule not yet deployed. This one is the
+   * project's Firebase plan being out of Storage, so the retry a guard
+   * reasonably infers from "Upload failed. Please try again." will fail
+   * identically, every time, for as long as the quota is exhausted.
+   *
+   * Firebase's own message is worse than unhelpful on a guardhouse console: it
+   * names the bucket and links a pricing page, which reads to the officer at
+   * the gate as something they have done wrong. Say who can actually clear it.
+   */
+  if (err?.code === 'storage/quota-exceeded') {
+    return 'Storage is full on this project’s Firebase plan. Trying again will not help — an administrator has to free space or upgrade the plan before photos can be attached.'
+  }
   return err?.message || 'Upload failed. Please try again.'
 }

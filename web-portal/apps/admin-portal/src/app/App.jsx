@@ -3,6 +3,7 @@ import { AuthProvider } from '@shared/auth/AuthContext'
 import ErrorBoundary from '@shared/components/ErrorBoundary'
 import ToastProvider from '@shared/components/ToastProvider'
 import SystemSettingsSync from '@shared/components/SystemSettingsSync'
+import IdleSignOut from '@shared/components/IdleSignOut'
 import { ALLOWED_ROLES, UNAUTHORIZED_MESSAGE } from '@/config/portal'
 import AppRoutes from '@/app/AppRoutes'
 
@@ -22,6 +23,13 @@ export default function App() {
         <AuthProvider allowedRoles={ALLOWED_ROLES} unauthorizedMessage={UNAUTHORIZED_MESSAGE}>
           {/* The notification preferences Settings edits, kept live. */}
           <SystemSettingsSync />
+          {/* Settings › Security ‣ "Sign out when idle". Mounted here because it
+              needs `logout` from AuthProvider and the policy from the sync
+              above, and because it must outlive any one route — the clock does
+              not restart when an administrator navigates. It renders nothing
+              while the policy is off, which is the default. The guardhouse
+              console deliberately does NOT mount this; see IdleSignOut. */}
+          <IdleSignOut />
           {/* Inside the router so a toast's quick action can navigate, and
               inside auth so the alert listener only ever attaches for a
               signed-in staff session. */}
