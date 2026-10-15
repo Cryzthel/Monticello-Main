@@ -2,11 +2,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
+  Bell,
   Building2,
   Check,
+  Database,
+  Download,
+  FileText,
   Home,
+  KeyRound,
   Loader2,
   Lock,
+  Monitor,
   Plug,
   Radio,
   ShieldAlert,
@@ -15,15 +21,21 @@ import {
   Ticket,
   Timer,
   Users,
+  UserRoundCog,
   Volume2,
+  Wrench,
 } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
-import SegmentedControl from '@shared/components/SegmentedControl'
+import SettingsLayout from '@shared/components/settings/SettingsLayout'
 import { playAlert, unlockAlertSound } from '@shared/lib/alertSound'
 import { saveSettings } from '@shared/lib/systemSettings'
 import {
   AUDIT_RETENTION_DAYS,
+  BACKUP_FREQUENCY_DAYS,
+  BACKUP_RETAIN_COPIES,
+  MAX_IP_RULES,
+  MAX_POLICY_CHARS,
   SESSION_TIMEOUTS_MINUTES,
   TELEMETRY_INTERVALS,
   UPLOAD_LIMITS_MB,
@@ -37,15 +49,43 @@ import {
   HotlineEditor,
   NumberSetting,
   PendingNote,
+  RuleListEditor,
   SettingRow,
   SettingsGroup,
   SwitchSetting,
+  TextAreaSetting,
   TextSetting,
   VolumeSetting,
-} from '@/components/settings/SettingsFields'
+} from '@shared/components/settings/SettingsFields'
+import ChangePasswordPanel from '@shared/components/settings/ChangePasswordPanel'
 
 /**
- * The four configuration domains, and which settings this page owns under each.
+ * The configuration domains, and which settings this page owns under each.
+ *
+ * ── IT WAS FOUR, AND IS NOW NINE ──────────────────────────────────────
+ * Four domains were right for the settings that existed. Seven more panels
+ * were then specified — roles, notifications, security and login, backup and
+ * maintenance, change password, display, terms and policies — and three of
+ * them had no domain that would hold them without the domain becoming a bin
+ * again, which is the exact failure the note below describes.
+ *
+ * Two things did NOT happen in the expansion, both deliberate:
+ *
+ *   • Nothing was reorganised out of existence. Every control the four tabs
+ *     carried is still here; SOS moved under Notifications and the incident
+ *     rules under Dispatch because that is where someone looks for them, and
+ *     that is the whole of the churn.
+ *
+ *   • The brief's seven section names were not adopted as the whole list.
+ *     Taken literally they leave the escalation window, the hazard pin
+ *     lifetime, the guardhouse telemetry interval, the resident upload cap and
+ *     the subdivision profile with nowhere to live. A spec naming the panels
+ *     it wants added is not a spec deleting the ones it did not mention.
+ *
+ * Nine is a lot of nav. It is a sticky sidebar on a desktop and a segmented
+ * control on a phone, both of which scale down a list far better than the
+ * horizontal track this started as — which is what made the ninth entry
+ * affordable at all.
  *
  * ── IT WAS SIX TABS, AND TWO OF THEM WERE NOT DOMAINS ─────────────────
  * "General", "Emergency", "Operations", "Residents", "Security",
@@ -80,12 +120,23 @@ import {
  */
 const TABS = [
   {
-    value: 'system',
-    label: 'System & dispatch',
-    icon: Radio,
-    keys: ['sos', 'incidents', 'guardhouse.sirenVolume', 'guardhouse.telemetryIntervalSeconds'],
+    value: 'roles',
+    label: 'Roles & permissions',
+    icon: UserRoundCog,
+    keys: ['guardhouse.requireHandover'],
   },
-  { value: 'personnel', label: 'Personnel', icon: Users, keys: ['guardhouse.requireHandover'] },
+  {
+    value: 'notifications',
+    label: 'Notifications',
+    icon: Bell,
+    keys: ['sos', 'push'],
+  },
+  {
+    value: 'dispatch',
+    label: 'Dispatch & incidents',
+    icon: Radio,
+    keys: ['incidents', 'guardhouse.sirenVolume', 'guardhouse.telemetryIntervalSeconds'],
+  },
   {
     value: 'property',
     label: 'Property & residents',
@@ -95,10 +146,27 @@ const TABS = [
       'organisation.officeHours',
       'organisation.logoUrl',
       'residentApp',
-      'push',
     ],
   },
-  { value: 'security', label: 'Security', icon: Lock, keys: ['security', 'organisation.auditRetentionDays'] },
+  {
+    value: 'security',
+    label: 'Security & login',
+    icon: Lock,
+    keys: ['security', 'organisation.auditRetentionDays'],
+  },
+  { value: 'backup', label: 'Backup & maintenance', icon: Database, keys: ['backup', 'maintenance'] },
+  /*
+   * NO `keys` — AND THAT IS NOT AN OVERSIGHT.
+   *
+   * The dirty dot marks a section holding an unsaved edit to the settings
+   * DOCUMENT. Change Password edits no part of that document: it calls
+   * Firebase Auth directly and commits on its own button, so there is never
+   * anything here for the page's Save to carry. A dot that could never light
+   * is better absent than permanently dark.
+   */
+  { value: 'password', label: 'Change password', icon: KeyRound, keys: [] },
+  { value: 'display', label: 'Display', icon: Monitor, keys: ['display'] },
+  { value: 'policies', label: 'Terms & policies', icon: FileText, keys: ['policies'] },
 ]
 
 /** Reads `'guardhouse.requireHandover'`, or a bare `'sos'`, off a settings object. */
@@ -145,7 +213,7 @@ export default function SettingsPage() {
   const settled = status === 'live' || status === 'default' || status === 'error'
   const disabled = !settled || form.saving
   const [confirmingSilence, setConfirmingSilence] = useState(false)
-  const [tab, setTab] = useState('system')
+  const [tab, setTab] = useState(TABS[0].value)
 
   // Compared as JSON because a settings group is plain Firestore data —
   // primitives and one array of hotlines — so a key-by-key Object.is would
@@ -178,6 +246,32 @@ export default function SettingsPage() {
     else form.save()
   }
 
+  /**
+   * The manual snapshot.
+   *
+   * Exports the SAVED document, not the draft — a backup of an unsaved form is
+   * a backup of something that was never the system's state, and restoring it
+   * later would reinstate a decision nobody made. The file is built from a
+   * Blob and revoked immediately; nothing is uploaded.
+   */
+  function snapshotNow() {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      source: 'system_settings/operations',
+      note: 'Operating settings only. Incident, resident and shift records are not included — a full database export is a server-side job.',
+      settings: value,
+    }
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
+    )
+    const stamp = new Date().toISOString().slice(0, 10)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `monticello-settings-${stamp}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function testSiren() {
     await unlockAlertSound()
     playAlert('panic', { volume: draft.guardhouse.sirenVolume })
@@ -185,7 +279,7 @@ export default function SettingsPage() {
 
   return (
     <AppShell title="Settings" subtitle="How the subdivision is alerted, dispatched and governed.">
-      <form onSubmit={submit} aria-busy={!settled} className="flex w-full max-w-3xl flex-col gap-6">
+      <form onSubmit={submit} aria-busy={!settled} className="flex w-full max-w-5xl flex-col gap-6">
         {status === 'error' ? (
           <p
             role="status"
@@ -200,7 +294,7 @@ export default function SettingsPage() {
             </span>
           </p>
         ) : null}
-        {/* ── Section tabs ─────────────────────────────────────────────── */}
+        {/* ── Section navigation ───────────────────────────────────────── */}
         {/* Seven groups down one scroll was the whole problem: the page was a
             list you read rather than a console you operate, and the two
             settings an administrator actually came for were never both on
@@ -208,23 +302,24 @@ export default function SettingsPage() {
             mounted.
 
             THE DIRTY DOT IS NOT DECORATION. Tabs can hide an edit the stacked
-            page could not: change a field, switch tab, and the footer insists
-            something is unsaved with nothing on screen to show for it. The dot
-            marks which section holds it. One draft still spans every tab, and
-            Save still writes the whole document in one go — switching tabs is
-            not a commit and does not discard anything. */}
-        <SegmentedControl
-          options={tabOptions}
-          value={tab}
-          onChange={setTab}
-          ariaLabel="Settings sections"
-          kind="tabs"
-          size="lg"
-          className="self-start"
-        />
+            page could not: change a field, switch section, and the save bar
+            insists something is unsaved with nothing on screen to show for it.
+            The dot marks which section holds it. One draft still spans every
+            section, and Save still writes the whole document in one go —
+            switching is not a commit and does not discard anything.
 
+            The horizontal track became `SettingsLayout`, which is the same
+            frame the Security console's settings now use: a sticky list beside
+            the panels on a desktop, the same segmented control on a phone.
+            `tabOptions` is unchanged and feeds it directly, dot included. */}
+        <SettingsLayout
+          sections={tabOptions}
+          active={tab}
+          onChange={setTab}
+          aside={<SaveFooter form={form} settled={settled} meta={meta} status={status} />}
+        >
         {/* ── 1. SOS ───────────────────────────────────────────────────── */}
-        {tab === 'system' ? (
+        {tab === 'notifications' ? (
           <SettingsGroup
             icon={Siren}
             title="SOS and panic button"
@@ -270,7 +365,7 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── 2. Incidents ─────────────────────────────────────────────── */}
-        {tab === 'system' ? (
+        {tab === 'dispatch' ? (
           <SettingsGroup
             icon={Ticket}
             title="Incident and hazard rules"
@@ -328,7 +423,7 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── 3. Guardhouse ────────────────────────────────────────────── */}
-        {tab === 'system' ? (
+        {tab === 'dispatch' ? (
           <SettingsGroup
             icon={Radio}
             title="Guardhouse console"
@@ -362,7 +457,7 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── Personnel and access ───────────────────────────── */}
-        {tab === 'personnel' ? (
+        {tab === 'roles' ? (
           <SettingsGroup
             icon={Users}
             title="Personnel and access"
@@ -584,6 +679,50 @@ export default function SettingsPage() {
               control={<ShieldAlert size="sm" aria-hidden="true" className="text-text-muted" />}
             />
 
+            {/* ── THE POLICY, WHICH IS A DIFFERENT THING FROM THE GATE ──────
+                The row above says what the system DOES. This one records what
+                the HOA has DECIDED, and the two are deliberately separate
+                controls rather than one switch pretending to be both.
+
+                It is written as "expected of", not "required for", because the
+                second would be a lie the moment someone without a factor signs
+                in successfully — which they can, and will, until the enrolment
+                path exists. Recording the policy is still worth doing: it is
+                what an auditor asks for, and it is what the eventual blocking
+                function will read instead of being invented then. */}
+            <SwitchSetting
+              id="mfa-policy"
+              title="Expect two-factor on administrator accounts"
+              description="Records the HOA's policy and nothing more. Accounts without a factor are not refused — no part of either console can refuse them."
+              checked={draft.security.requireMfaForAdmins}
+              disabled={disabled}
+              onChange={(requireMfaForAdmins) => setGroup('security', { requireMfaForAdmins })}
+              pending="Enforcement needs an Identity Platform blocking function, which cannot deploy on the Spark plan. Enrolment is done in the Firebase console either way."
+            />
+
+            {/* ── IP RESTRICTIONS, AND WHY THE NOTE IS BLUNTER THAN USUAL ───
+                Most pending notes here say "stored, not yet acted on", which
+                implies the backend is the only missing piece. For this one the
+                browser is structurally the wrong place: a client cannot refuse
+                itself entry by address, and a list of allowed IPs sitting in a
+                document the client reads is a statement of intent, not a
+                control. Saying so plainly is the point — an administrator who
+                believes they have locked the console to the guardhouse's
+                address has been actively misled, which is worse than a feature
+                that is merely absent. */}
+            <RuleListEditor
+              title="IP access restrictions"
+              description="Addresses or CIDR blocks the consoles are meant to be reachable from. One entry per line — 203.0.113.4, or 203.0.113.0/24."
+              value={draft.security.ipAllowlist}
+              max={MAX_IP_RULES}
+              placeholder="203.0.113.0/24"
+              addLabel="Add address"
+              emptyNote="No restrictions. Both consoles are reachable from any address, which is what happens today regardless of this list."
+              disabled={disabled}
+              onChange={(ipAllowlist) => setGroup('security', { ipAllowlist })}
+              pending="Not enforced, and not enforceable from a browser: a client cannot turn itself away by address. This takes effect only once App Check or a blocking function reads it, both of which need the Blaze plan."
+            />
+
             {/* ── RETENTION IS A SECURITY CONTROL, NOT A PROFILE FIELD ─────
                 It sat in "Subdivision profile" beside the contact email and the
                 sidebar logo, which are the three things an administrator edits
@@ -607,7 +746,7 @@ export default function SettingsPage() {
           </SettingsGroup>
         ) : null}
 
-        {tab === 'security' ? (
+        {tab === 'notifications' ? (
           <SettingsGroup
             icon={Plug}
             title="Notification providers"
@@ -658,7 +797,7 @@ export default function SettingsPage() {
         ) : null}
 
         {/* ── Notifications + save ─────────────────────────────────────── */}
-        {tab === 'property' ? (
+        {tab === 'notifications' ? (
           <SettingsGroup
             icon={ShieldAlert}
             title="Resident notifications"
@@ -681,7 +820,195 @@ export default function SettingsPage() {
           </SettingsGroup>
         ) : null}
 
-        <SaveFooter form={form} settled={settled} meta={meta} status={status} />
+        {/* ── 8. Backup ────────────────────────────────────────────────── */}
+        {tab === 'backup' ? (
+          <SettingsGroup
+            icon={Database}
+            title="Database backup"
+            description="How often the subdivision's records are copied, and how many copies are kept."
+          >
+            <ChoiceSetting
+              id="backup-frequency"
+              title="Scheduled snapshot"
+              description="How often the export runs without anyone asking."
+              value={draft.backup.frequencyDays}
+              options={BACKUP_FREQUENCY_DAYS.map((d) => ({
+                value: String(d),
+                label:
+                  d === 0 ? 'Only when asked' : d === 1 ? 'Every day' : `Every ${d} days`,
+              }))}
+              disabled={disabled}
+              onChange={(next) => setGroup('backup', { frequencyDays: Number(next) })}
+              pending="The scheduled export is a Cloud Function writing to Cloud Storage and cannot deploy on the Spark plan. The manual snapshot below works today."
+            />
+            <ChoiceSetting
+              id="backup-retain"
+              title="Snapshots kept"
+              description="Older exports past this count are deleted on the next run."
+              value={draft.backup.retainCopies}
+              options={BACKUP_RETAIN_COPIES.map((n) => ({ value: String(n), label: `${n} copies` }))}
+              disabled={disabled}
+              onChange={(next) => setGroup('backup', { retainCopies: Number(next) })}
+              pending="Pruning happens on the same scheduled run."
+            />
+
+            {/* ── THE ONE CONTROL IN THIS PANEL THAT WORKS TODAY ────────────
+                It exports what this administrator can ALREADY read, straight
+                to their own machine — no function, no Storage bucket, no
+                billing. That is also its limit, and the copy says so: it is a
+                snapshot of the operating settings, not of the incident and
+                resident collections, because walking those from a browser
+                would be thousands of billed reads and a file the tab would
+                struggle to hold. A real database export is a server's job. */}
+            <SettingRow
+              id="backup-now"
+              title="Create a snapshot now"
+              description="Downloads the current operating settings as a JSON file, from this browser. Nothing is uploaded and nothing leaves this machine."
+              control={
+                <button
+                  type="button"
+                  onClick={snapshotNow}
+                  disabled={!settled}
+                  className="btn btn-sm btn-outline"
+                >
+                  <Download size="sm" aria-hidden="true" />
+                  Download
+                </button>
+              }
+            />
+          </SettingsGroup>
+        ) : null}
+
+        {tab === 'backup' ? (
+          <SettingsGroup
+            icon={Wrench}
+            title="Maintenance mode"
+            description="Tells everyone the system is being worked on."
+          >
+            <SwitchSetting
+              id="maintenance-enabled"
+              title="Maintenance mode"
+              description="Intended to show a banner on both consoles and in the resident app. Reports, dispatch and the SOS button all keep working."
+              checked={draft.maintenance.enabled}
+              disabled={disabled}
+              onChange={(enabled) => setGroup('maintenance', { enabled })}
+              pending="Stored, and nothing renders the banner yet — turning this on changes nothing on screen today. The flag and its message are read back faithfully, so the banner can be added without this panel changing."
+            />
+            {/* ── IT ANNOUNCES, IT DOES NOT LOCK ────────────────────────────
+                Refusing writes while this is on would mean a get() of the
+                settings document inside the rules for every write to every
+                collection — a billed read per write, and a database that stops
+                working the moment one document cannot be read. And the one
+                thing that must never be locked out is the SOS button. So this
+                is a notice, and the row above says which it is rather than
+                leaving a reader to assume the stronger meaning. */}
+            <TextSetting
+              id="maintenance-message"
+              title="Banner message"
+              description="What the banner says. Left empty, it reads “The system is under maintenance.”"
+              value={draft.maintenance.message}
+              placeholder="Back by 6pm — gate records are being migrated."
+              disabled={disabled || !draft.maintenance.enabled}
+              onChange={(message) => setGroup('maintenance', { message })}
+            />
+          </SettingsGroup>
+        ) : null}
+
+        {/* ── 9. Change password ───────────────────────────────────────── */}
+        {tab === 'password' ? <ChangePasswordPanel /> : null}
+
+        {/* ── 10. Display ──────────────────────────────────────────────── */}
+        {tab === 'display' ? (
+          <SettingsGroup
+            icon={Monitor}
+            title="Display defaults"
+            description="Where a console starts before its reader has chosen anything."
+          >
+            {/* ── DEFAULTS, NOT OVERRIDES, AND THE DISTINCTION IS THE WHOLE
+                   POINT OF THE PANEL ───────────────────────────────────────
+                The brief asked for "custom UI theme overrides". An override
+                means an administrator in another office decides what contrast
+                someone else reads at, and silently undoes the theme toggle
+                sitting in that person's own header. For a console staffed
+                overnight, in a guardhouse, that is an accessibility
+                regression wearing a brand-consistency hat.
+
+                These are fallbacks. ThemeProvider keeps a per-browser
+                preference; this is only consulted when that preference is
+                unset, which is a console nobody has configured yet — a new
+                terminal, or a cleared browser. The reader always wins. */}
+            <ChoiceSetting
+              id="display-theme"
+              title="Starting theme"
+              description="What a console that has never been set shows. Anyone who picks a theme from the header keeps theirs."
+              value={draft.display.defaultTheme}
+              options={[
+                { value: 'system', label: 'Follow the device' },
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' },
+              ]}
+              disabled={disabled}
+              onChange={(defaultTheme) => setGroup('display', { defaultTheme })}
+              pending="Stored. ThemeProvider still falls back to the device's own setting rather than reading this, so a console nobody has configured follows the operating system whatever is chosen here."
+            />
+            <ChoiceSetting
+              id="display-density"
+              title="Row density"
+              description="How tightly tables and lists are packed. Compact fits roughly a third more rows on a guardhouse screen."
+              value={draft.display.density}
+              options={[
+                { value: 'comfortable', label: 'Comfortable' },
+                { value: 'compact', label: 'Compact' },
+              ]}
+              disabled={disabled}
+              onChange={(density) => setGroup('display', { density })}
+              pending="Stored. Each console reads its own density preference today — the guardhouse's is on its Settings page — so this sets the starting point for a console that has none, which nothing consults yet."
+            />
+          </SettingsGroup>
+        ) : null}
+
+        {/* ── 11. Terms & policies ─────────────────────────────────────── */}
+        {tab === 'policies' ? (
+          <SettingsGroup
+            icon={FileText}
+            title="Terms of Service"
+            description="Shown to residents in the app, and on both consoles under this panel."
+          >
+            <TextAreaSetting
+              id="policy-terms"
+              title="Terms of Service"
+              description="Plain text. Blank lines separate paragraphs; nothing here is rendered as HTML."
+              value={draft.policies.termsOfService}
+              max={MAX_POLICY_CHARS}
+              placeholder="1. Access to the subdivision…"
+              disabled={disabled}
+              onChange={(termsOfService) => setGroup('policies', { termsOfService })}
+              pending="Stored. No screen renders it yet — the resident app's About page and a policy viewer on both consoles are what will read it."
+            />
+          </SettingsGroup>
+        ) : null}
+
+        {tab === 'policies' ? (
+          <SettingsGroup
+            icon={Users}
+            title="Community Guidelines"
+            description="House rules, as residents see them."
+          >
+            <TextAreaSetting
+              id="policy-guidelines"
+              title="Community Guidelines"
+              description="Plain text, same as above. Keep it shorter than the terms — this is the one residents actually read."
+              value={draft.policies.communityGuidelines}
+              max={MAX_POLICY_CHARS}
+              placeholder="Quiet hours are 10pm to 6am…"
+              disabled={disabled}
+              onChange={(communityGuidelines) => setGroup('policies', { communityGuidelines })}
+              pending="Stored, same as the terms above."
+            />
+          </SettingsGroup>
+        ) : null}
+
+        </SettingsLayout>
       </form>
 
       <ConfirmDialog

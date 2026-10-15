@@ -155,6 +155,14 @@ const MAPPING = {
   CornerUpLeft: "arrow-bend-up-left",
   CornerUpRight: "arrow-bend-up-right",
   Crosshair: "crosshair",
+  // The backup panel's own glyph. `hard-drive` over `database`: what the
+  // schedule produces is a copy kept somewhere, and the stacked-cylinder
+  // database mark reads as "the live database" — which is the thing being
+  // copied FROM, not the artefact the panel is about.
+  Database: "hard-drive",
+  // `file-arrow-down`, not `download`: every use of this is "save this record
+  // as a file", so the mark says document rather than a bare tray arrow.
+  Download: "file-arrow-down",
   Eye: "eye",
   EyeOff: "eye-slash",
   FileClock: "file-text",

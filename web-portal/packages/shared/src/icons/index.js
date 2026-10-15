@@ -97,6 +97,8 @@ import {
   CornerUpLeft as CornerUpLeftGlyph,
   CornerUpRight as CornerUpRightGlyph,
   Crosshair as CrosshairGlyph,
+  Database as DatabaseGlyph,
+  Download as DownloadGlyph,
   Eye as EyeGlyph,
   EyeOff as EyeOffGlyph,
   FileClock as FileClockGlyph,
@@ -246,6 +248,8 @@ export const Copy = /* @__PURE__ */ createIcon('Copy', CopyGlyph)
 export const CornerUpLeft = /* @__PURE__ */ createIcon('CornerUpLeft', CornerUpLeftGlyph)
 export const CornerUpRight = /* @__PURE__ */ createIcon('CornerUpRight', CornerUpRightGlyph)
 export const Crosshair = /* @__PURE__ */ createIcon('Crosshair', CrosshairGlyph)
+export const Database = /* @__PURE__ */ createIcon('Database', DatabaseGlyph)
+export const Download = /* @__PURE__ */ createIcon('Download', DownloadGlyph)
 export const Eye = /* @__PURE__ */ createIcon('Eye', EyeGlyph)
 export const EyeOff = /* @__PURE__ */ createIcon('EyeOff', EyeOffGlyph)
 export const FileClock = /* @__PURE__ */ createIcon('FileClock', FileClockGlyph)

@@ -54,6 +54,46 @@ export const AUDIT_RETENTION_DAYS = Object.freeze([30, 60, 90, 0])
  */
 export const SESSION_TIMEOUTS_MINUTES = Object.freeze([15, 30, 60, 120, 0])
 
+/** How often the database is snapshotted. 0 means "only when asked". */
+export const BACKUP_FREQUENCY_DAYS = Object.freeze([1, 7, 30, 0])
+
+/** How many snapshots are kept before the oldest is dropped. */
+export const BACKUP_RETAIN_COPIES = Object.freeze([4, 12, 52])
+
+/** Row height across both consoles. Mirrors the guardhouse's own density pref. */
+export const DISPLAY_DENSITIES = Object.freeze(['comfortable', 'compact'])
+
+/**
+ * The theme a console starts on before anyone touches the toggle.
+ *
+ * NOT a lock. `ThemeProvider` keeps a per-browser preference and this is only
+ * what it falls back to when that preference is unset — an administrator who
+ * has chosen dark keeps dark whatever this says. A setting that overrode a
+ * reader's own choice of contrast is an accessibility regression, not a brand
+ * control.
+ */
+export const DISPLAY_THEMES = Object.freeze(['system', 'light', 'dark'])
+
+/**
+ * The ceiling on the IP allowlist.
+ *
+ * Capped for the same reason the hotlines are: the rules cannot iterate a list,
+ * so size is the only thing they can assert, and an unbounded list of strings
+ * in a document every staff account can read is an invitation to paste
+ * something else into it.
+ */
+export const MAX_IP_RULES = 20
+
+/**
+ * The legal documents, capped at what Firestore will carry comfortably.
+ *
+ * A Firestore document is 1 MiB in total and these two share it with every
+ * other setting, so they are bounded well below that. 20k characters is about
+ * eight pages of terms — longer than any subdivision's, and short enough that
+ * the settings document cannot be grown into a CMS by accident.
+ */
+export const MAX_POLICY_CHARS = 20000
+
 export const DEFAULTS = Object.freeze({
   /** Resident push, read by the Cloud Functions before they send. */
   push: Object.freeze({ enabled: true }),
@@ -162,6 +202,82 @@ export const DEFAULTS = Object.freeze({
    */
   security: Object.freeze({
     sessionTimeoutMinutes: 0,
+
+    /**
+     * requireMfaForAdmins  STORED — and deliberately not called "enforced".
+     *
+     * Neither console can enrol or revoke a factor: Firebase adds one through
+     * the Admin SDK or its own console, on a project running Identity Platform
+     * with the TOTP provider on (see shared/lib/twoFactor.js). What this flag
+     * does today is record the HOA's policy and let the Security panel show
+     * who is short of it; what it cannot do is refuse a sign-in, and the row
+     * on screen says exactly that rather than implying a gate.
+     *
+     * ipAllowlist  ADVISORY — and it is worth being blunt about why.
+     *
+     * A browser cannot refuse itself entry by IP. The only places this can be
+     * enforced are App Check, a Cloud Function or Identity Platform's blocking
+     * triggers, none of which can deploy on the Spark plan. Stored here so the
+     * policy exists and travels with the project; honoured by nothing yet.
+     * Entries are free text — a single address or a CIDR block.
+     */
+    requireMfaForAdmins: false,
+    ipAllowlist: Object.freeze([]),
+  }),
+
+  /**
+   * frequencyDays  SWEEP — the scheduled sweep exports the collections it is
+   *                given on this cadence. 0 means snapshots only happen when
+   *                an administrator asks for one.
+   * retainCopies   SWEEP — the oldest export past this count is deleted.
+   *
+   * MANUAL SNAPSHOTS ARE NOT STORED STATE. The "Create snapshot now" button
+   * exports what the signed-in administrator can already read, straight to
+   * their machine, so it works today and needs no backend. A scheduled export
+   * to Cloud Storage is the part that waits on billing.
+   */
+  backup: Object.freeze({
+    frequencyDays: 7,
+    retainCopies: 4,
+  }),
+
+  /**
+   * enabled  ADVISORY — both consoles show the banner and the resident app is
+   *          told, but nothing stops a write. Refusing writes is a rules
+   *          change, and rules cannot read this document while evaluating
+   *          another collection without a `get()` on every single write, which
+   *          is a billed read per write and a hard dependency on one document
+   *          being available. Maintenance mode here means "tell everyone",
+   *          not "lock the database".
+   */
+  maintenance: Object.freeze({
+    enabled: false,
+    message: '',
+  }),
+
+  /**
+   * Defaults for a console that has never been configured by its reader.
+   *
+   * Both fields are FALLBACKS, never overrides — see DISPLAY_THEMES. The
+   * theme toggle and the guardhouse's own density switch keep winning.
+   */
+  display: Object.freeze({
+    defaultTheme: 'system',
+    density: 'comfortable',
+  }),
+
+  /**
+   * The two legal documents, as Markdown-ish plain text.
+   *
+   * STORED, and read by the resident app's About screen and the portals' own
+   * policy viewer. Kept in the settings document rather than a collection of
+   * their own because there is exactly one of each, they are edited by the
+   * same officer who edits everything else here, and a two-document collection
+   * is a collection that will grow a draft state nobody asked for.
+   */
+  policies: Object.freeze({
+    termsOfService: '',
+    communityGuidelines: '',
   }),
 })
 
@@ -182,8 +298,43 @@ function oneOf(value, fallback, allowed) {
   return allowed.includes(n) ? n : fallback
 }
 
+/**
+ * The string counterpart of `oneOf`.
+ *
+ * `oneOf` coerces with Number() and compares numerically, so it reports every
+ * string enum as invalid and silently hands back the fallback — which is the
+ * quiet kind of wrong where a saved theme reads back as 'system' forever.
+ */
+function pick(value, fallback, allowed) {
+  return allowed.includes(value) ? value : fallback
+}
+
 function text(value, fallback, max = 200) {
   return typeof value === 'string' ? value.slice(0, max) : fallback
+}
+
+/**
+ * The IP allowlist: trimmed strings, deduplicated, capped.
+ *
+ * No CIDR validation. This value is advisory until something can enforce it
+ * (see the note on `security.ipAllowlist`), and a validator here would be a
+ * second opinion about syntax that the eventual enforcer has to hold anyway —
+ * better one authority later than two that can disagree. Blanks are dropped so
+ * an empty row left behind by the editor is not stored as a rule.
+ */
+function ipRules(value) {
+  if (!Array.isArray(value)) return []
+  const seen = new Set()
+  const out = []
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue
+    const rule = entry.trim().slice(0, 64)
+    if (!rule || seen.has(rule)) continue
+    seen.add(rule)
+    out.push(rule)
+    if (out.length >= MAX_IP_RULES) break
+  }
+  return out
 }
 
 /**
@@ -264,6 +415,32 @@ export function sanitizeSettings(raw = {}) {
         raw.security?.sessionTimeoutMinutes,
         d.security.sessionTimeoutMinutes,
         SESSION_TIMEOUTS_MINUTES,
+      ),
+      requireMfaForAdmins: bool(raw.security?.requireMfaForAdmins, d.security.requireMfaForAdmins),
+      ipAllowlist: ipRules(raw.security?.ipAllowlist),
+    },
+
+    backup: {
+      frequencyDays: oneOf(raw.backup?.frequencyDays, d.backup.frequencyDays, BACKUP_FREQUENCY_DAYS),
+      retainCopies: oneOf(raw.backup?.retainCopies, d.backup.retainCopies, BACKUP_RETAIN_COPIES),
+    },
+
+    maintenance: {
+      enabled: bool(raw.maintenance?.enabled, d.maintenance.enabled),
+      message: text(raw.maintenance?.message, d.maintenance.message, 280),
+    },
+
+    display: {
+      defaultTheme: pick(raw.display?.defaultTheme, d.display.defaultTheme, DISPLAY_THEMES),
+      density: pick(raw.display?.density, d.display.density, DISPLAY_DENSITIES),
+    },
+
+    policies: {
+      termsOfService: text(raw.policies?.termsOfService, d.policies.termsOfService, MAX_POLICY_CHARS),
+      communityGuidelines: text(
+        raw.policies?.communityGuidelines,
+        d.policies.communityGuidelines,
+        MAX_POLICY_CHARS,
       ),
     },
   }

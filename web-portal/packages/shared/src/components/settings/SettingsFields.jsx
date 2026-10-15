@@ -7,6 +7,158 @@ import StatusBadge from '@shared/components/StatusBadge'
 import { MAX_HOTLINES } from '@shared/lib/systemSettingsStore'
 
 /**
+ * A setting whose value is long enough to need its own block.
+ *
+ * ── WHY THIS BREAKS THE ONE-ROW SHAPE ON PURPOSE ────────────────────────────
+ * Every other control here sits right-aligned on the row's first line, which
+ * is what gives the page its single right edge. Terms of Service is eight
+ * pages of prose, and there is no version of "right-aligned on the first line"
+ * that works for it: squeezed into the control column it is a four-character
+ * window onto a legal document.
+ *
+ * So the label keeps the row and the field takes the full width beneath it.
+ * The rule above and below still comes from the group's `divide-y`, so it
+ * reads as one of the rows rather than as a panel that wandered in.
+ */
+export function TextAreaSetting({
+  id,
+  title,
+  description,
+  value,
+  placeholder,
+  rows = 12,
+  max,
+  disabled,
+  onChange,
+  pending,
+}) {
+  const used = typeof value === 'string' ? value.length : 0
+  return (
+    <div className="px-4 py-3.5">
+      <div className="flex items-start justify-between gap-6">
+        <div className="min-w-0">
+          <label htmlFor={id} className="text-sm font-medium leading-snug text-text-primary">
+            {title}
+          </label>
+          {description ? (
+            <p id={`${id}-description`} className="mt-1 max-w-prose text-xs leading-relaxed text-text-secondary">
+              {description}
+            </p>
+          ) : null}
+          {pending ? <PendingNote>{pending}</PendingNote> : null}
+        </div>
+        {/* The counter only appears once it is worth knowing. A "0 / 20,000"
+            on an empty field is a demand to fill it. */}
+        {max && used > max * 0.75 ? (
+          <StatusBadge tone={used >= max ? 'danger' : 'neutral'} size="sm">
+            {used.toLocaleString()} / {max.toLocaleString()}
+          </StatusBadge>
+        ) : null}
+      </div>
+      <textarea
+        id={id}
+        value={value}
+        rows={rows}
+        maxLength={max}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        aria-describedby={`${id}-description`}
+        /* `font-mono` and a relaxed leading: this is a document being edited,
+           not a form field being filled, and the monospace is what makes a
+           pasted clause's indentation survive long enough to be noticed. */
+        className="field mt-3 w-full resize-y p-3 font-mono text-xs leading-relaxed"
+      />
+    </div>
+  )
+}
+
+/**
+ * A list of short free-text rules — today, the IP allowlist.
+ *
+ * Deliberately NOT a reuse of `HotlineEditor`: that one edits a list of
+ * `{ label, number }` pairs with its own copy and its own cap, and
+ * generalising it into "an editor for lists of things" to take one more caller
+ * would make both harder to read than two clear editors. If a third list
+ * arrives, that is the moment to find the shape they share.
+ */
+export function RuleListEditor({
+  title,
+  description,
+  value,
+  max,
+  placeholder,
+  addLabel,
+  emptyNote,
+  disabled,
+  onChange,
+  pending,
+}) {
+  const rows = Array.isArray(value) ? value : []
+  const full = rows.length >= max
+
+  return (
+    <div className="px-4 py-3.5">
+      <div className="flex items-start justify-between gap-6">
+        <div className="min-w-0">
+          <p className="text-sm font-medium leading-snug text-text-primary">{title}</p>
+          {description ? (
+            <p className="mt-1 max-w-prose text-xs leading-relaxed text-text-secondary">{description}</p>
+          ) : null}
+          {pending ? <PendingNote>{pending}</PendingNote> : null}
+        </div>
+        <StatusBadge tone="neutral" size="sm">
+          {rows.length} of {max}
+        </StatusBadge>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="mt-3 rounded-lg border border-dashed border-hairline px-4 py-6 text-center text-xs text-text-muted">
+          {emptyNote}
+        </p>
+      ) : (
+        <ul className="mt-3 flex flex-col gap-2">
+          {rows.map((rule, index) => (
+            <li key={index} className="flex items-center gap-2">
+              <input
+                aria-label={`${title} entry ${index + 1}`}
+                value={rule}
+                disabled={disabled}
+                placeholder={placeholder}
+                onChange={(event) =>
+                  onChange(rows.map((r, i) => (i === index ? event.target.value : r)))
+                }
+                className="field h-9 min-w-0 flex-1 font-mono text-xs"
+              />
+              <button
+                type="button"
+                disabled={disabled}
+                aria-label={`Remove ${rule || `entry ${index + 1}`}`}
+                onClick={() => onChange(rows.filter((_, i) => i !== index))}
+                className="icon-btn icon-btn-sm shrink-0 border border-hairline text-text-muted hover:text-danger"
+              >
+                <Trash2 size="sm" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button
+        type="button"
+        disabled={disabled || full}
+        onClick={() => onChange([...rows, ''])}
+        className="btn btn-sm btn-outline mt-3"
+        title={full ? `The list is capped at ${max}` : undefined}
+      >
+        <Plus size="sm" aria-hidden="true" />
+        {addLabel}
+      </button>
+    </div>
+  )
+}
+
+/**
  * The field vocabulary for Admin › Settings.
  *
  * ── ONE ROW SHAPE, FIVE CONTROLS ────────────────────────────────────────────
@@ -350,10 +502,24 @@ export function HotlineEditor({ value, disabled, onChange }) {
  * reached for `divide-slate-100` — the CARD edge token, one step darker — and
  * was the only use of it in either console. It has been moved onto this one.)
  */
-export function SettingsGroup({ title, description, icon, children }) {
+/**
+ * One titled panel of settings rows.
+ *
+ * ── IT WAS WRITTEN TWICE ───────────────────────────────────────────────────
+ * The Security portal had its own `Section`, local to its settings page and
+ * byte-for-byte this one apart from the slot it offered: this took an `icon`,
+ * that took an `aside` for a "Test tone" button. Two copies of one component,
+ * already diverging in the only way that mattered — so neither page could use
+ * the other's feature without a third copy.
+ *
+ * Merged here with both. `action` is the former `aside`; `icon` is unchanged.
+ * The Security page's local pair is deleted, which is what makes the two
+ * consoles render the same panel rather than two panels that look alike.
+ */
+export function SettingsGroup({ title, description, icon, action, children }) {
   return (
     <Card as="section" className="overflow-hidden p-0">
-      <CardHeader icon={icon} title={title} description={description} />
+      <CardHeader icon={icon} title={title} description={description} action={action} />
       <div className="divide-y divide-divider">{children}</div>
     </Card>
   )

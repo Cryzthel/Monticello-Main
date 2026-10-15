@@ -252,12 +252,25 @@ service cloud.firestore {
         // reads consistently either side of the change.
         return r.keys().hasOnly(['outcome', 'notes', 'photoUrls', 'tags'])
           && r.get('tags', []) is list
+          // KEEP IN STEP with INVESTIGATION_TAGS and RESOLUTION_OUTCOMES in
+          // web-portal/packages/shared/src/lib/dispatchStage.js. The console
+          // only offers what is listed there; this is what makes the offer
+          // true. A value added to one and not the other is either an option
+          // the server refuses on submit, or a value the server would accept
+          // that no screen can produce.
+          //
+          // ADDING is safe and REMOVING is not: every resolved call in the
+          // history carries its outcome and tags verbatim, so dropping a
+          // value here does not rewrite those documents — it only refuses
+          // the next write that uses it.
           && r.get('tags', []).hasOnly([
-            'area_secured', 'medical_requested', 'police_requested',
-            'fire_requested', 'suspect_detained', 'property_damage'
+            'area_secured', 'resident_contacted', 'medical_requested',
+            'police_requested', 'fire_requested', 'warning_issued',
+            'suspect_detained', 'property_damage'
           ])
           && r.outcome in [
-            'resolved_on_site', 'referred_authorities', 'medical_handover',
+            'resolved_on_site', 'dispute_mediated', 'threat_contained',
+            'referred_authorities', 'medical_handover',
             'false_alarm', 'no_issue_found', 'resident_unreachable'
           ]
           && r.notes is string && r.notes.size() >= 10 && r.notes.size() <= 1000
@@ -541,6 +554,7 @@ service cloud.firestore {
       allow create, update: if isAdminStaff()
         && request.resource.data.keys().hasOnly([
           'push', 'sos', 'incidents', 'guardhouse', 'residentApp', 'organisation',
+          'security', 'backup', 'maintenance', 'display', 'policies',
           'updatedAt', 'updatedBy'
         ])
 
@@ -592,7 +606,53 @@ service cloud.firestore {
         && request.resource.data.get(['organisation', 'contactEmail'], '') is string
         && request.resource.data.get(['organisation', 'officeHours'], '') is string
         && request.resource.data.get(['organisation', 'logoUrl'], '') is string
-        && request.resource.data.get(['organisation', 'auditRetentionDays'], 90) in [0, 30, 60, 90];
+        && request.resource.data.get(['organisation', 'auditRetentionDays'], 90) in [0, 30, 60, 90]
+
+        // Idle sign-out for the ADMIN console. 0 is off, and is the default:
+        // nothing signed anyone out before this field existed, so an absent
+        // value has to mean the old behaviour. The enum is closed for the same
+        // reason every other one here is — a document edited in the Firebase
+        // console must not be able to hand a live console a 9000-minute policy,
+        // or a 1-minute one that locks every administrator out of their own
+        // settings page.
+        && request.resource.data.get('security', {}).keys().hasOnly([
+          'sessionTimeoutMinutes', 'requireMfaForAdmins', 'ipAllowlist'
+        ])
+        && request.resource.data.get(['security', 'sessionTimeoutMinutes'], 0) in [0, 15, 30, 60, 120]
+        && request.resource.data.get(['security', 'requireMfaForAdmins'], false) is bool
+        // Length only, as with the hotlines: rules cannot iterate a list, so
+        // the cap is what bounds the blast radius of a document edited outside
+        // this console. The sanitizer trims and deduplicates the contents.
+        && request.resource.data.get(['security', 'ipAllowlist'], []) is list
+        && request.resource.data.get(['security', 'ipAllowlist'], []).size() <= 20
+
+        && request.resource.data.get('backup', {}).keys().hasOnly(['frequencyDays', 'retainCopies'])
+        && request.resource.data.get(['backup', 'frequencyDays'], 7) in [0, 1, 7, 30]
+        && request.resource.data.get(['backup', 'retainCopies'], 4) in [4, 12, 52]
+
+        // Maintenance mode is ADVISORY and the rules deliberately do not act on
+        // it. Refusing writes while it is on would mean a get() of this
+        // document on every write in every collection — a billed read per
+        // write, and a hard dependency on one document being readable for the
+        // database to stay usable. The banner tells people; it does not lock.
+        && request.resource.data.get('maintenance', {}).keys().hasOnly(['enabled', 'message'])
+        && request.resource.data.get(['maintenance', 'enabled'], false) is bool
+        && request.resource.data.get(['maintenance', 'message'], '') is string
+        && request.resource.data.get(['maintenance', 'message'], '').size() <= 280
+
+        && request.resource.data.get('display', {}).keys().hasOnly(['defaultTheme', 'density'])
+        && request.resource.data.get(['display', 'defaultTheme'], 'system') in ['system', 'light', 'dark']
+        && request.resource.data.get(['display', 'density'], 'comfortable') in ['comfortable', 'compact']
+
+        // The two legal documents. Capped well under the 1 MiB document limit
+        // they share with every other setting here — see MAX_POLICY_CHARS.
+        && request.resource.data.get('policies', {}).keys().hasOnly([
+          'termsOfService', 'communityGuidelines'
+        ])
+        && request.resource.data.get(['policies', 'termsOfService'], '') is string
+        && request.resource.data.get(['policies', 'termsOfService'], '').size() <= 20000
+        && request.resource.data.get(['policies', 'communityGuidelines'], '') is string
+        && request.resource.data.get(['policies', 'communityGuidelines'], '').size() <= 20000;
       allow delete: if false;
     }
 
