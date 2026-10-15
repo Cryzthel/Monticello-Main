@@ -67,12 +67,18 @@ export default defineConfig({
 
   server: {
     port: 3000,
+    // Bind the IPv4 loopback explicitly. Vite's default host is `localhost`,
+    // which Node resolves to ::1 alone on this machine — so the port listens
+    // on IPv6 only, and anything that reaches it over IPv4 (a dev tunnel, a
+    // proxy, curl 127.0.0.1) is refused and reports a 502 it cannot explain.
+    // Still loopback, so this does not put the console on the LAN.
+    host: '127.0.0.1',
     strictPort: true,
     // Optional custom hostname from the OS hosts file — see README. It must be
     // listed here because Vite rejects requests whose Host header it does not
     // recognise (DNS-rebinding protection), so a hosts-file entry on its own
     // yields a blank page and a "host not allowed" error rather than a clue.
-    allowedHosts: ['admin.local'],
+    allowedHosts: ['admin.local', '.devtunnels.ms'],
     fs: {
       // Required for the @shared and @geo aliases: the dev server refuses to
       // serve files outside its root unless the path is explicitly allowed,
@@ -84,7 +90,7 @@ export default defineConfig({
   preview: {
     port: 4300,
     strictPort: true,
-    allowedHosts: ['admin.local'],
+    allowedHosts: ['admin.local', '.devtunnels.ms'],
   },
 
   build: {
