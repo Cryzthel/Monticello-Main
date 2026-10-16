@@ -133,6 +133,11 @@ test("an App Password pasted as Google shows it (with spaces) is sent without th
   assert.equal(auth.user, "office@example.com");
 });
 
+test("a bare SMTP_USER with no @ is refused with the real cause, not sent to Gmail", () => {
+  const mailer = load({});
+  assert.throws(() => mailer.smtpAuth({ SMTP_USER: "office", SMTP_PASS: "abcdefghijklmnop" }), /full Gmail address/);
+});
+
 (async () => {
   let failed = 0;
   for (const { name, fn } of cases) {

@@ -94,8 +94,19 @@ async function sendViaResend(message) {
  * `secrets:set` piped input).
  */
 function smtpAuth(env = process.env) {
+  const user = String(env.SMTP_USER || "").trim();
+  // Gmail's SMTP username is the FULL address. On 2026-10-17 SMTP_USER was
+  // found to hold a bare name with no "@", which Gmail answers with the same
+  // "535 Username and Password not accepted" as a wrong password — so three
+  // App Passwords in a row were blamed for a username problem. Refusing here
+  // puts the real cause in the log instead of Gmail's generic rejection.
+  if (!user.includes("@")) {
+    throw new Error(
+      "SMTP_USER must be the full Gmail address (name@gmail.com) of the account the App Password was created on."
+    );
+  }
   return {
-    user: String(env.SMTP_USER || "").trim(),
+    user,
     pass: String(env.SMTP_PASS || "").replace(/\s+/g, ""),
   };
 }
