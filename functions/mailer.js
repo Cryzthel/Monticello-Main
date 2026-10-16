@@ -50,7 +50,7 @@ function senderAddress() {
     if (!from) throw new Error("MAIL_FROM is not set (see functions/.env.example).");
     return from;
   }
-  return `"Monticello Villas" <${process.env.SMTP_USER}>`;
+  return `"Monticello Villas" <${smtpAuth().user}>`;
 }
 
 async function sendViaResend(message) {
@@ -80,10 +80,30 @@ async function sendViaResend(message) {
   }
 }
 
+/**
+ * The SMTP login, normalised.
+ *
+ * Google DISPLAYS an App Password as four groups of four separated by spaces
+ * ("abcd efgh ijkl mnop"), so pasting it the way it is shown stores 19
+ * characters. Gmail's AUTH does not ignore those spaces: it answers
+ * "535-5.7.8 Username and Password not accepted", which is exactly what every
+ * reset-code mail failed with on 2026-10-16/17 while SMTP_PASS held 19
+ * characters. An App Password never contains whitespace, so stripping all of
+ * it is lossless, and it makes the setup step impossible to get wrong this way
+ * again. The username is trimmed for the same reason (a trailing newline from
+ * `secrets:set` piped input).
+ */
+function smtpAuth(env = process.env) {
+  return {
+    user: String(env.SMTP_USER || "").trim(),
+    pass: String(env.SMTP_PASS || "").replace(/\s+/g, ""),
+  };
+}
+
 async function sendViaSmtp(message) {
   const transport = nodemailer.createTransport({
     service: "gmail",
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    auth: smtpAuth(),
   });
   await transport.sendMail({ from: senderAddress(), ...message });
 }
@@ -117,7 +137,7 @@ function buildResetCodeEmail(otp, ttlMinutes) {
     "If you didn't ask to reset your password, you can ignore this email. " +
       "Your password has not changed.",
     "",
-    "The HOA office will never ask you for this code.",
+    "No one from Monticello Villas will ever ask you for this code.",
     "",
     "— Monticello Villas HOA",
   ].join("\n");
@@ -134,11 +154,11 @@ function buildResetCodeEmail(otp, ttlMinutes) {
     `<p style="margin:0 0 16px">It expires in ${ttlMinutes} minutes and can be used once.</p>` +
     `<p style="margin:0 0 8px;color:#475569">If you didn't ask to reset your password, you ` +
     `can ignore this email. Your password has not changed.</p>` +
-    `<p style="margin:0 0 24px;color:#475569">The HOA office will never ask you for this code.</p>` +
+    `<p style="margin:0 0 24px;color:#475569">No one from Monticello Villas will ever ask you for this code.</p>` +
     `<p style="margin:0;font-size:12px;color:#94A3B8">Monticello Villas HOA · automated message</p>` +
     `</div>`;
 
   return { subject, text, html };
 }
 
-module.exports = { sendMail, mailSecrets, buildResetCodeEmail, provider };
+module.exports = { sendMail, mailSecrets, buildResetCodeEmail, provider, smtpAuth };

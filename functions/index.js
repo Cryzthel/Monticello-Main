@@ -258,9 +258,16 @@ exports.sendPasswordOtp = functions
       });
     } catch (err) {
       console.error("Failed to send OTP email", err);
+      // `details.reason` so a client can tell "the mail provider refused"
+      // from "the function did not run". Both arrive as `internal`, and the
+      // web portal used to show this one as "Password reset is unavailable",
+      // which on 2026-10-16 hid a rejected Gmail login behind what read as a
+      // billing outage. The code stays `internal` so the mobile app's existing
+      // handling is unchanged.
       throw new functions.https.HttpsError(
         "internal",
-        "Could not send the verification email. Try again later."
+        "Could not send the verification email. Try again later.",
+        { reason: "mail-failed" }
       );
     }
 

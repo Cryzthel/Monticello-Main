@@ -63,7 +63,7 @@ test("carries the expiry and both security lines", () => {
   const { text } = buildResetCodeEmail("1234", 10);
   assert.ok(text.includes("expires in 10 minutes"));
   assert.ok(text.includes("you can ignore this email"));
-  assert.ok(text.includes("will never ask you for this code"));
+  assert.ok(text.includes("will ever ask you for this code"));
 });
 
 test("no spam-trigger phrasing", () => {
@@ -123,6 +123,14 @@ test("Resend without MAIL_FROM refuses rather than guessing a sender", async () 
   const mailer = load({ MAIL_PROVIDER: "resend", RESEND_API_KEY: "k" });
   global.fetch = async () => ({ ok: true, status: 200, text: async () => "" });
   await assert.rejects(mailer.sendMail({ to: "x@y.co", subject: "S", text: "T", html: "H" }), /MAIL_FROM/);
+});
+
+test("an App Password pasted as Google shows it (with spaces) is sent without them", () => {
+  const mailer = load({});
+  const auth = mailer.smtpAuth({ SMTP_USER: " office@example.com\n", SMTP_PASS: "abcd efgh ijkl mnop\n" });
+  assert.equal(auth.pass, "abcdefghijklmnop");
+  assert.equal(auth.pass.length, 16);
+  assert.equal(auth.user, "office@example.com");
 });
 
 (async () => {
