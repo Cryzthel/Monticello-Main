@@ -2,11 +2,11 @@
   "name": "monticello-functions",
   "description": "Cloud Functions for Monticello Villas (password-reset OTP)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "scripts": {
-    "test": "node scripts/sweepRules.test.cjs",
+    "test": "node scripts/sweepRules.test.cjs && node scripts/mailer.test.cjs",
     "test:agreement": "node scripts/agreement.mjs"
   },
   "dependencies": {

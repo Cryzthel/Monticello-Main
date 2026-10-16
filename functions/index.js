@@ -15,12 +15,39 @@
  *     does not reveal the code.
  *   - Codes expire after 10 minutes and are single-use, with a small
  *     attempt counter to throttle brute force.
+ *
+ * ── THE RECORD: password_reset_otps/{email} ────────────────────────────────
+ *
+ *   field            type        meaning
+ *   ───────────────  ──────────  ─────────────────────────────────────────────
+ *   (doc id)         string      the normalised email — ONE live code per
+ *                                address, so a resend replaces, never stacks
+ *   email            string      the same, as a field, so it can be queried
+ *   uid              string      Firebase Auth uid the code would reset
+ *   hash             string      sha256(salt + ":" + code), hex — never the code
+ *   salt             string      16 random bytes, hex, fresh per code
+ *   expiresAt        Timestamp   issue + OTP_TTL_MINUTES; refused after
+ *   used             boolean     true once verified; a used code never works
+ *   usedAt           Timestamp   when it was verified (absent until then)
+ *   attempts         number      wrong guesses in the current window
+ *   windowStartedAt  Timestamp   start of the OTP_ATTEMPT_WINDOW_MS budget
+ *   lastSentAt       Timestamp   when a code last actually reached the inbox
+ *   createdAt        Timestamp   when THIS code was issued
+ *   requestIp        string      caller IP at issue, for abuse review
+ *   usedIp           string      caller IP at verification
+ *   purgeAt          Timestamp   Firestore TTL field — see PURGE_AFTER_MS
+ *
+ * Clients can neither read nor write this collection (firestore.rules names
+ * it explicitly); only the Admin SDK here touches it. The relational version
+ * of the same table, with the constraints Firestore cannot state, is
+ * db/schema.auth.postgres.sql (`password_resets`).
  */
 
 const crypto = require("crypto");
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
-const nodemailer = require("nodemailer");
+// Transactional mail: Resend or Gmail SMTP, chosen in functions/.env.
+const { sendMail, mailSecrets, buildResetCodeEmail } = require("./mailer");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -32,21 +59,53 @@ const OTP_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 const COLLECTION = "password_reset_otps";
 
+/**
+ * How long a record outlives its code before Firestore's TTL deletes it.
+ *
+ * NOT `expiresAt`, and the difference matters. The record also carries the
+ * attempt window (OTP_ATTEMPT_WINDOW_MS, 30 minutes) and the resend cooldown.
+ * A TTL on `expiresAt` would delete it ten minutes in, and with it the count
+ * of wrong guesses — handing the next request a fresh budget, which is exactly
+ * the reset the window exists to prevent. A day clears both with room to
+ * spare and still means an IP address is not kept indefinitely.
+ *
+ * The TTL policy itself is a one-time console / gcloud setting, not code:
+ *   gcloud firestore fields ttls update purgeAt \
+ *     --collection-group=password_reset_otps --enable-ttl
+ */
+const PURGE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The caller's address, for abuse review only — it never gates anything.
+ *
+ * The first `x-forwarded-for` hop is the client; Google's front end appends
+ * itself after it. Falls back to the socket address, then to null rather than
+ * a made-up value.
+ */
+function requestIpOf(context) {
+  const req = context && context.rawRequest;
+  if (!req) return null;
+  const forwarded = String(req.headers?.["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+  return forwarded || req.ip || null;
+}
+
 // ── HOW MANY DIGITS A RESET CODE HAS ────────────────────────────────────────
 //
-// Was 4. Six is what every mail-delivered code a resident has ever typed looks
-// like, and it is what iOS and Android's one-time-code autofill expects to
-// find in the message — but the reason to change it is the search space. A
-// 4-digit code is 10,000 possibilities; six is a million, against the same
-// 5-attempt limit and the same 10-minute window.
+// FOUR DIGITS, BY DECISION (2026-10-16). It was six; the estate asked for
+// four. What that costs, stated so nobody has to rediscover it: 10,000 values
+// against the 5-guess, 30-minute budget below is about a 1-in-2,000 chance per
+// window per account, against 1-in-200,000 at six. The attempt window and the
+// resend cooldown are what keep four survivable — weaken either and four is
+// not safe at all.
 //
-// THIS IS HALF OF A PAIR. `kOtpLength` in
-// lib/features/auth/widgets/otp_pin_input.dart is the other, and the two must
-// ship together: `verifyPasswordOtp` rejects a code of the wrong length before
-// it ever reaches the hash comparison, so a client sending 6 against a deployed
-// 4 (or the reverse) fails every reset in the estate at the same step with
-// "Email and a 6-digit code are required."
-const OTP_LENGTH = 6;
+// THIS IS ONE OF THREE. `kOtpLength` in
+// lib/features/auth/widgets/otp_pin_input.dart and RESET_CODE_LENGTH in
+// web-portal/packages/shared/src/auth/PasswordRecovery.jsx are the others.
+// `verifyPasswordOtp` rejects a code of the wrong length before it reaches the
+// hash comparison, so a mismatch fails every reset at the same step.
+const OTP_LENGTH = 4;
 const OTP_MAX_EXCLUSIVE = 10 ** OTP_LENGTH;
 
 /**
@@ -67,26 +126,15 @@ const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
  * cycles walked the entire keyspace. The window makes the cap cumulative and
  * the cooldown bounds the email flood that refilling it required.
  *
- * THE OTHER HALF IS NOW DONE TOO. OTP_LENGTH is six, so the same attack faces a
- * million values rather than ten thousand. Both halves matter and neither is
- * redundant: the window is what makes the cap real, and the width is what keeps
- * a future regression of the window from being immediately catastrophic — which
- * is not hypothetical, because that is exactly what happened here once.
+ * OTP_LENGTH WENT 4 → 6 → 4. It is four again by the estate's decision, which
+ * makes this window the ONLY thing standing between the code and the walk
+ * described above. Do not loosen it, and do not reset `attempts` on a send.
  */
 const OTP_ATTEMPT_WINDOW_MS = 30 * 60 * 1000;
 
-// SMTP credentials are stored in Google Secret Manager (encrypted,
-// access-controlled) and injected at runtime as environment variables.
-// Set them with an interactive prompt (the value is never typed in a command):
-//   firebase functions:secrets:set SMTP_USER   -> paste you@gmail.com
-//   firebase functions:secrets:set SMTP_PASS   -> paste the 16-char App Password
-// (For Gmail, use an App Password, not your account password.)
-function buildTransport() {
-  return nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  });
-}
+// Mail credentials live in Google Secret Manager and reach the function as
+// environment variables; which ones depends on MAIL_PROVIDER in functions/.env.
+// See functions/mailer.js and functions/MAIL_SETUP.md.
 
 function hashOtp(otp, salt) {
   return crypto.createHash("sha256").update(`${salt}:${otp}`).digest("hex");
@@ -97,8 +145,8 @@ function normalizeEmail(email) {
 }
 
 exports.sendPasswordOtp = functions
-  .runWith({ secrets: ["SMTP_USER", "SMTP_PASS"] })
-  .https.onCall(async (data) => {
+  .runWith({ secrets: mailSecrets() })
+  .https.onCall(async (data, context) => {
   const email = normalizeEmail(data.email);
   if (!email || !email.includes("@")) {
     throw new functions.https.HttpsError(
@@ -107,14 +155,35 @@ exports.sendPasswordOtp = functions
     );
   }
 
-  // Confirm the account exists. We do NOT reveal the result to the caller to
-  // avoid account enumeration — we always respond success.
-  let userExists = true;
+  // ── AN UNREGISTERED ADDRESS IS TOLD SO (decision, 2026-10-16) ─────────
+  // This used to answer `{ ok: true }` for every address so that nobody could
+  // learn which emails have accounts. The estate chose the clearer message
+  // instead: a resident who mistypes their address is told at once, under the
+  // field, rather than waiting for a code that will never come.
+  //
+  // The trade, on the record: anyone can now ask this function whether an
+  // address is registered. The per-address cooldown below does not slow that
+  // (it only applies to registered addresses), so the lookup is as fast as
+  // the caller can call. If probing is ever seen in the logs, the fix is a
+  // per-`requestIp` throttle here — not going back to silence, which the
+  // clients no longer expect.
+  //
+  // `failed-precondition` with `details.reason`, NOT `not-found`: both clients
+  // read `not-found` as "the function is not deployed".
+  let uid = null;
   try {
-    await admin.auth().getUserByEmail(email);
+    uid = (await admin.auth().getUserByEmail(email)).uid;
   } catch (_) {
-    userExists = false;
+    uid = null;
   }
+  if (!uid) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "This email address is not registered.",
+      { reason: "not-registered" }
+    );
+  }
+  const userExists = true;
 
   if (userExists) {
     const ref = db.collection(COLLECTION).doc(email);
@@ -155,6 +224,8 @@ exports.sendPasswordOtp = functions
     // the mail is away, so a failed send does not start a cooldown against a
     // caller who never received anything.
     await ref.set({
+      email,
+      uid,
       hash: hashOtp(otp, salt),
       salt,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -166,62 +237,24 @@ exports.sendPasswordOtp = functions
         ? prev.windowStartedAt
         : admin.firestore.Timestamp.fromMillis(now),
       used: false,
+      requestIp: requestIpOf(context),
+      purgeAt: admin.firestore.Timestamp.fromMillis(now + PURGE_AFTER_MS),
       ...(lastSentAt ? { lastSentAt: prev.lastSentAt } : {}),
     });
 
     try {
-      await buildTransport().sendMail({
-        from: `"Monticello Villas" <${process.env.SMTP_USER}>`,
+      const mail = buildResetCodeEmail(otp, OTP_TTL_MINUTES);
+      await sendMail({
         to: email,
-        subject: "Your password reset code",
-
-        // ── WHY THIS HEADER IS HERE ──────────────────────────────────────
-        // Gmail threads messages that share a subject and participants. Every
-        // code this function sends has the same subject and goes to the same
-        // person, so a resent code is filed UNDER the first one in a collapsed
-        // conversation — and the code the resident is now waiting for is the
-        // one hidden at the bottom. They read the stale code, it fails, and
-        // the obvious conclusion is that the resend did not work.
-        //
-        // A unique reference per message is the documented way to opt a
-        // transactional mail out of that grouping. It matters specifically
-        // because this flow HAS a resend button with a countdown behind it.
-        //
-        // Its own random value, NOT the OTP's salt. The salt is one half of
-        // what protects the stored hash, and a cryptographic input does not
-        // belong in a header that travels in clear text through every relay
-        // between here and the inbox — however harmless it looks when the
-        // recipient already knows the code.
-        headers: {
-          "X-Entity-Ref-ID": crypto.randomUUID(),
-        },
-
-        // Plain text first and genuinely equivalent, not an afterthought: a
-        // multipart message with a real text alternative is treated as more
-        // legitimate than an HTML-only one, and it is what a watch, a screen
-        // reader or a text-only client actually renders. The code leads the
-        // sentence so it is the first thing in the inbox preview snippet.
-        text:
-          `${otp} is your Monticello Villas password reset code. ` +
-          `It expires in ${OTP_TTL_MINUTES} minutes. ` +
-          `If you didn't request this, you can ignore this email — ` +
-          `your password has not changed.`,
-
-        // No images, no tracking pixel, no link. A transactional code has
-        // nothing to click, and the things that make mail look like marketing
-        // — remote images, redirect URLs, wide colour blocks — are the things
-        // that get it filtered. System fonts only; a webfont in email is a
-        // remote request that will not load.
-        html:
-          `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;` +
-          `font-size:15px;line-height:1.6;color:#0F172A">` +
-          `<p style="margin:0 0 16px">Your Monticello Villas password reset code is:</p>` +
-          `<p style="margin:0 0 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;` +
-          `font-size:30px;font-weight:700;letter-spacing:8px;color:#047857">${otp}</p>` +
-          `<p style="margin:0 0 16px">It expires in ${OTP_TTL_MINUTES} minutes.</p>` +
-          `<p style="margin:0;color:#475569">If you didn't request this, you can ignore ` +
-          `this email — your password has not changed.</p>` +
-          `</div>`,
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+        // Gmail threads messages that share a subject and participants, so a
+        // resent code would be filed UNDER the first one and the resident
+        // would read the stale code. A unique reference per message opts a
+        // transactional mail out of that grouping. Its own random value —
+        // never the OTP's salt, which protects the stored hash.
+        headers: { "X-Entity-Ref-ID": crypto.randomUUID() },
       });
     } catch (err) {
       console.error("Failed to send OTP email", err);
@@ -240,7 +273,7 @@ exports.sendPasswordOtp = functions
   return { ok: true };
 });
 
-exports.verifyPasswordOtp = functions.https.onCall(async (data) => {
+exports.verifyPasswordOtp = functions.https.onCall(async (data, context) => {
   const email = normalizeEmail(data.email);
   const otp = String(data.otp || "").trim();
 
@@ -288,7 +321,11 @@ exports.verifyPasswordOtp = functions.https.onCall(async (data) => {
     );
   }
 
-  await ref.update({ used: true });
+  await ref.update({
+    used: true,
+    usedAt: admin.firestore.FieldValue.serverTimestamp(),
+    usedIp: requestIpOf(context),
+  });
 
   // Hand the client a one-time reset link so they can set a new password.
   const link = await admin.auth().generatePasswordResetLink(email);
@@ -583,7 +620,7 @@ const INVITE_ROLES = STAFF_ROLES.filter((role) => role !== "super_admin");
  * staff_accounts role is simply attached to that uid.
  */
 exports.createStaffAccount = functions
-  .runWith({ secrets: ["SMTP_USER", "SMTP_PASS"] })
+  .runWith({ secrets: mailSecrets() })
   .https.onCall(async (data, context) => {
     await requireStaff(context.auth && context.auth.uid, "super_admin");
 
@@ -629,8 +666,7 @@ exports.createStaffAccount = functions
     if (created) {
       const link = await admin.auth().generatePasswordResetLink(email);
       try {
-        await buildTransport().sendMail({
-          from: `"Monticello Villas" <${process.env.SMTP_USER}>`,
+        await sendMail({
           to: email,
           subject: "You've been added to the Monticello Villas dashboard",
           text:
