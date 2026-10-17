@@ -116,6 +116,9 @@ const MIN_PASSWORD_LENGTH = 8;
 // endpoint, and "the client validates it" is not a constraint.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const BADGE_RE = /^[A-Za-z0-9-]{2,16}$/;
+// The officer's official contact number: digits with the usual separators.
+// Optional on the wire, so existing clients that never send it keep working.
+const PHONE_RE = /^\+?[0-9(][0-9 ()-]{6,19}$/;
 
 // ── HELPERS ─────────────────────────────────────────────────────────────────
 
@@ -206,6 +209,18 @@ function readAssignment(data, { partial = false } = {}) {
     out.badgeNumber = badge;
   } else if (!partial) {
     fail("invalid-argument", "A badge number is required.");
+  }
+
+  // ── CONTACT NUMBER (added 2026-10-18) ─────────────────────────────────────
+  // Only touched when the request carries it: an edit from a client that does
+  // not know the field must not blank a number someone else saved. An empty
+  // string clears it on purpose.
+  if (data.phone !== undefined) {
+    const phone = String(data.phone || "").trim();
+    if (phone && !PHONE_RE.test(phone)) {
+      fail("invalid-argument", "Contact number must be 7–20 digits; spaces, +, - and () are allowed.");
+    }
+    out.phone = phone;
   }
 
   // ── ACCESS ROLE → RBAC ROLE + DUTY ────────────────────────────────────────
