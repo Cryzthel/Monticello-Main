@@ -705,6 +705,33 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── Password reset codes ───────────────────────────────────────────────
+    // Server-only. Written and read exclusively by sendPasswordOtp /
+    // verifyPasswordOtp through the Admin SDK, which bypasses these rules.
+    // The catch-all below already denies it; it is named here so that a
+    // future broad `match` above cannot quietly expose salted hashes, attempt
+    // counts and caller IPs to a client. Record layout: functions/index.js.
+    match /password_reset_otps/{email} {
+      allow read, write: if false;
+    }
+
+    // ── Security account change log ────────────────────────────────────────
+    // Written ONLY by the provisioning functions (functions/
+    // securityProvisioning.js, writeAudit) through the Admin SDK, after each
+    // create / credential reset / status change / assignment update / delete
+    // has committed — each entry carries actorUid, actorName and a server
+    // `at`. Admin staff may read it (Security accounts › Change log listens to
+    // it live). No client may create, edit or delete an entry, so the trail
+    // is immutable from every console; the retention sweep prunes it with the
+    // Admin SDK, which bypasses these rules.
+    //
+    // This block was missing: the catch-all below denied the read, so the
+    // Change log could never load even though every action was being logged.
+    match /provisioning_logs/{logId} {
+      allow read: if isAdminStaff();
+      allow create, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
