@@ -732,6 +732,21 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // The Settings audit trail: one entry per confirmed Save on Admin ›
+    // Settings, naming every field that moved. Append-only — stamped as the
+    // writer, at server time, and never edited or removed from a console.
+    match /settings_changes/{changeId} {
+      allow read: if isAdminStaff();
+      allow create: if isAdminStaff()
+        && request.resource.data.keys().hasOnly(['at', 'actorUid', 'actorName', 'changes'])
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.changes is list
+        && request.resource.data.changes.size() > 0
+        && request.resource.data.changes.size() <= 40;
+      allow update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
