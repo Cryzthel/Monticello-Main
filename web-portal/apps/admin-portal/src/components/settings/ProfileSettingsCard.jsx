@@ -1,7 +1,10 @@
-import { CheckCircle2, CircleAlert, Loader2, Mail, MailCheck, ShieldCheck, UserRound } from '@shared/icons'
+import { useEffect, useId, useRef, useState } from 'react'
+import { CheckCircle2, CircleAlert, Loader2, Mail, MailCheck, Pencil, ShieldCheck, UserRound } from '@shared/icons'
+import Pill from '@shared/components/Pill'
 import FormField from '@shared/components/settings/FormField'
 import { ROLE_LABELS } from '@shared/auth/roles'
 import { useAccountEmail } from '@/hooks/useAccountEmail'
+import Disclosure from './Disclosure'
 import SettingsItem from './SettingsItem'
 import SettingsSection from './SettingsSection'
 
@@ -13,15 +16,35 @@ const ROLE_SCOPE = {
 /**
  * Profile: the signed-in administrator's email and role.
  *
- * The new-email field is always there, as in the design; the password and
- * Send button appear only once something has been typed (progressive
- * disclosure), because a confirmation needs both and a quiet page needs
- * neither until then. The email change is NOT part of the page's Save — it is
- * an Auth action with its own confirmation link, so it carries its own button.
+ * The email is shown read-only; "Edit email address" opens the change form
+ * inline beneath it (2026-10-19, by request — no open input by default).
+ * Cancelling, or a sent link, closes it and clears what was typed. The change
+ * is a Firebase Auth action with its own button, not part of the page's Save.
  */
 export default function ProfileSettingsCard({ role }) {
   const account = useAccountEmail()
-  const editing = account.nextEmail.trim().length > 0
+  const [editing, setEditing] = useState(false)
+  const formId = useId()
+  const toggleRef = useRef(null)
+  const firstFieldRef = useRef(null)
+
+  // Focus follows the form: into it on open, back to the (re-rendered) Edit
+  // button on close, so a keyboard user is never dropped at the page top.
+  const wasEditing = useRef(false)
+  useEffect(() => {
+    if (editing) firstFieldRef.current?.focus({ preventScroll: true })
+    else if (wasEditing.current) toggleRef.current?.focus({ preventScroll: true })
+    wasEditing.current = editing
+  }, [editing])
+
+  function close() {
+    setEditing(false)
+    account.cancel()
+  }
+
+  async function send() {
+    if (await account.submit()) setEditing(false)
+  }
 
   return (
     <SettingsSection id="profile" icon={UserRound} title="Profile">
@@ -34,17 +57,17 @@ export default function ProfileSettingsCard({ role }) {
           <div className="flex min-w-0 items-center gap-3 rounded-lg border border-hairline bg-base-900/40 p-3">
             <Mail size="sm" aria-hidden="true" className="shrink-0 text-text-muted" />
             <span className="min-w-0 truncate text-sm font-medium text-text-secondary">{account.email || '—'}</span>
-            {account.verified ? (
-              <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-success/20 bg-success/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-success">
-                <CheckCircle2 size={12} aria-hidden="true" />
-                Verified
-              </span>
-            ) : (
-              <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-warning/25 bg-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
-                <CircleAlert size={12} aria-hidden="true" />
-                Not verified
-              </span>
-            )}
+            <span className="ml-auto shrink-0">
+              {account.verified ? (
+                <Pill tone="success" icon={CheckCircle2}>
+                  Verified
+                </Pill>
+              ) : (
+                <Pill tone="warning" icon={CircleAlert}>
+                  Not verified
+                </Pill>
+              )}
+            </span>
           </div>
 
           {account.pending ? (
@@ -76,29 +99,44 @@ export default function ProfileSettingsCard({ role }) {
             </p>
           ) : null}
 
-          <FormField
-            id="new-email"
-            label="New email address"
-            type="email"
-            inputMode="email"
-            value={account.nextEmail}
-            autoComplete="email"
-            disabled={account.busy || !account.available}
-            invalid={account.invalid || account.same}
-            hint={
-              account.invalid
-                ? 'Enter a valid email address.'
-                : account.same
-                  ? 'That is already your sign-in email.'
-                  : editing
-                    ? 'A confirmation link goes to this address; nothing changes until it is opened.'
-                    : undefined
-            }
-            onChange={account.setNextEmail}
-          />
+          {editing ? null : (
+            <div>
+              <button
+                ref={toggleRef}
+                type="button"
+                onClick={() => setEditing(true)}
+                disabled={!account.available}
+                aria-expanded={editing}
+                aria-controls={formId}
+                className="btn btn-sm btn-outline"
+              >
+                <Pencil size="sm" aria-hidden="true" />
+                Edit email address
+              </button>
+            </div>
+          )}
 
-          {editing ? (
-            <>
+          <Disclosure id={formId} open={editing}>
+            <div className="flex flex-col gap-4 rounded-lg border border-hairline bg-base-900/30 p-4">
+              <FormField
+                inputRef={firstFieldRef}
+                id="new-email"
+                label="New email address"
+                type="email"
+                inputMode="email"
+                value={account.nextEmail}
+                autoComplete="email"
+                disabled={account.busy}
+                invalid={account.invalid || account.same}
+                hint={
+                  account.invalid
+                    ? 'Enter a valid email address.'
+                    : account.same
+                      ? 'That is already your sign-in email.'
+                      : 'A confirmation link goes to this address; nothing changes until it is opened.'
+                }
+                onChange={account.setNextEmail}
+              />
               <FormField
                 id="email-current-password"
                 label="Current password"
@@ -114,29 +152,23 @@ export default function ProfileSettingsCard({ role }) {
                 </p>
               ) : null}
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={account.submit}
-                  disabled={account.busy || !account.ready}
-                  className="btn btn-sm btn-brand"
-                >
+                <button type="button" onClick={send} disabled={account.busy || !account.ready} className="btn btn-sm btn-brand">
                   {account.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
                   {account.busy ? 'Sending…' : 'Send confirmation link'}
                 </button>
-                <button type="button" onClick={account.cancel} disabled={account.busy} className="btn btn-sm btn-outline">
+                <button type="button" onClick={close} disabled={account.busy} className="btn btn-sm btn-outline">
                   Cancel
                 </button>
               </div>
-            </>
-          ) : null}
+            </div>
+          </Disclosure>
         </div>
       </SettingsItem>
 
       <SettingsItem title="System role" description={ROLE_SCOPE[role] ?? 'Staff access.'}>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-tint/[0.05] px-3 py-1.5 text-xs font-medium text-text-secondary">
-          <ShieldCheck size={14} aria-hidden="true" className="text-brand-500" />
+        <Pill tone="neutral" icon={ShieldCheck}>
           {ROLE_LABELS[role] ?? 'Staff'}
-        </span>
+        </Pill>
       </SettingsItem>
     </SettingsSection>
   )

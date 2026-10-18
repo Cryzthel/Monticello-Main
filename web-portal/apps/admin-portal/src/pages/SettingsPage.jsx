@@ -1,8 +1,8 @@
 import { toast } from '@shared/lib/toast'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import Pill from '@shared/components/Pill'
-import { AlertTriangle, Check, Loader2, RotateCcw, Save } from '@shared/icons'
+import { AlertTriangle, Loader2, RotateCcw, Save } from '@shared/icons'
 import { diffSettings, logSettingsChange } from '@/lib/settingsChanges'
 import AppShell from '@/layouts/AppShell'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
@@ -60,9 +60,6 @@ const LEGACY_SLUGS = {
   property: 'system',
 }
 
-/** How long the header's "Saved" confirmation stays green after a save. */
-const SAVED_FLASH_MS = 2500
-
 /** Reads `'guardhouse.sirenVolume'`, or a bare `'push'`, off a settings object. */
 const at = (settings, path) => path.split('.').reduce((node, key) => node?.[key], settings)
 
@@ -83,11 +80,24 @@ export default function SettingsPage() {
   const settled = status === 'live' || status === 'default' || status === 'error'
   const disabled = !settled || form.saving
   const [confirmingSave, setConfirmingSave] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
-  const flashTimer = useRef(null)
   const location = useLocation()
 
-  useEffect(() => () => clearTimeout(flashTimer.current), [])
+  // ── THE HEADER CARRIES ACTIONS ONLY (2026-10-19) ─────────────────────────
+  // "All changes saved", the unsaved count and the inline error were removed
+  // from the header by request; what they reported is now a toast. A failed
+  // write keeps the draft and says why…
+  useEffect(() => {
+    if (form.error) toast.error('Settings were not saved', { id: 'settings-saved', description: form.error })
+  }, [form.error])
+  // …and another administrator saving over an open draft offers their version.
+  useEffect(() => {
+    if (!form.remoteChanged) return
+    toast.warning('Another administrator saved while you were editing', {
+      id: 'settings-remote',
+      description: 'Your unsaved changes are kept. Save to replace theirs, or discard to load them.',
+      action: { label: 'Show theirs', onClick: form.reset },
+    })
+  }, [form.remoteChanged, form.reset])
 
   // Compared as JSON because a settings group is plain Firestore data.
   const dirty = useMemo(
@@ -114,13 +124,7 @@ export default function SettingsPage() {
     const pending = diffSettings(value, form.draft)
     const ok = await form.save()
     setConfirmingSave(false)
-    if (!ok) {
-      toast.error('Settings were not saved', { id: 'settings-saved', description: 'Nothing changed. The reason is shown beside Save.' })
-      return
-    }
-    clearTimeout(flashTimer.current)
-    setJustSaved(true)
-    flashTimer.current = setTimeout(() => setJustSaved(false), SAVED_FLASH_MS)
+    if (!ok) return
     try {
       await logSettingsChange(pending)
       toast.success('Settings saved', {
@@ -175,7 +179,7 @@ export default function SettingsPage() {
 
   const unsaved = (id) =>
     dirty[id] ? (
-      <Pill tone="warning" size="sm">
+      <Pill tone="warning">
         Unsaved
       </Pill>
     ) : null
@@ -186,14 +190,7 @@ export default function SettingsPage() {
       subtitle="Manage your account, alerts, and system preferences."
       stickyHeader
       headerActions={
-        <SaveStatus
-          form={form}
-          settled={settled}
-          status={status}
-          justSaved={justSaved}
-          changeCount={changes.length}
-          onSave={() => setConfirmingSave(true)}
-        />
+        <SaveActions form={form} settled={settled} changeCount={changes.length} onSave={() => setConfirmingSave(true)} />
       }
     >
       <form onSubmit={(event) => event.preventDefault()} aria-busy={!settled}>
@@ -261,90 +258,35 @@ export default function SettingsPage() {
 }
 
 /**
- * The sticky header's save controls. The status line moves through
- * Loading → "N unsaved changes" → Saving… → Saved (green, briefly) → "All
- * changes saved"; a failed write keeps the draft, says why, and the button
- * becomes Retry, which reopens the same confirmation rather than writing blind.
+ * The sticky header's two actions, and nothing else: Discard (secondary) and
+ * Save changes (primary). Both stay put so the header never reflows; Discard
+ * is enabled only with unsaved edits, Save also waits for the saved values to
+ * load. Save opens the confirmation that lists each change — nothing is
+ * written until that is accepted — and shows a spinner while writing.
  */
-function SaveStatus({ form, settled, status, justSaved, changeCount, onSave }) {
-  if (!settled) {
-    return (
-      <StatusLine>
-        <Loader2 size="sm" aria-hidden="true" className="animate-spin" />
-        Loading saved settings…
-      </StatusLine>
-    )
-  }
-
-  let line
-  if (form.saving) {
-    line = <StatusLine>Saving…</StatusLine>
-  } else if (form.error) {
-    line = (
-      <p role="alert" className="max-w-xs text-xs leading-snug text-danger">
-        {form.error}
-      </p>
-    )
-  } else if (form.remoteChanged) {
-    line = (
-      <p className="flex max-w-xs items-center gap-2 text-xs leading-snug text-warning">
-        Another administrator saved while you were editing.
-        <button type="button" onClick={form.reset} className="font-semibold underline underline-offset-2">
-          Show theirs
-        </button>
-      </p>
-    )
-  } else if (form.dirty) {
-    line = (
-      <StatusLine tone="text-warning">
-        {changeCount} unsaved {changeCount === 1 ? 'change' : 'changes'}
-      </StatusLine>
-    )
-  } else if (status === 'error') {
-    line = <StatusLine>Showing the defaults</StatusLine>
-  } else {
-    line = (
-      <StatusLine tone={justSaved ? 'text-success' : 'text-text-muted'}>
-        <Check size="sm" aria-hidden="true" />
-        {justSaved ? 'Saved' : 'All changes saved'}
-      </StatusLine>
-    )
-  }
-
+function SaveActions({ form, settled, changeCount, onSave }) {
+  const canSave = settled && !form.saving && form.dirty && changeCount > 0
   return (
-    <div className="flex flex-wrap items-center justify-end gap-3">
-      {line}
-      {form.dirty && !form.saving ? (
-        <button
-          type="button"
-          onClick={form.reset}
-          className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-text-secondary transition-colors duration-150 hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-        >
-          <RotateCcw size="sm" aria-hidden="true" />
-          Discard
-        </button>
-      ) : null}
+    <div className="flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={form.reset}
+        disabled={!form.dirty || form.saving}
+        className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-text-secondary transition-colors duration-150 hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:pointer-events-none disabled:opacity-40"
+      >
+        <RotateCcw size="sm" aria-hidden="true" />
+        Discard
+      </button>
       <button
         type="button"
         onClick={onSave}
-        disabled={form.saving || !form.dirty || changeCount === 0}
+        disabled={!canSave}
+        aria-busy={form.saving || undefined}
         className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-[0_0_20px_-5px_color-mix(in_oklab,var(--color-brand-500)_60%,transparent)] transition-[background-color,transform,opacity] duration-150 hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
       >
-        {form.saving ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
-        {form.saving ? 'Saving…' : form.error ? 'Retry save' : 'Save changes'}
+        {form.saving ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : <Save size="sm" aria-hidden="true" />}
+        {form.saving ? 'Saving…' : 'Save changes'}
       </button>
     </div>
-  )
-}
-
-function StatusLine({ tone = 'text-text-muted', children }) {
-  return (
-    <p
-      role="status"
-      aria-live="polite"
-      className={`inline-flex items-center gap-1.5 text-sm font-medium transition-colors duration-200 ${tone}`}
-    >
-      {children}
-    </p>
   )
 }

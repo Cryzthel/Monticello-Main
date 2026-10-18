@@ -115,7 +115,7 @@ export function useAccountEmail() {
 
   async function submit() {
     const current = auth.currentUser
-    if (busy || !ready || !current?.email) return
+    if (busy || !ready || !current?.email) return false
     setBusy(true)
     setError('')
     try {
@@ -125,8 +125,10 @@ export function useAccountEmail() {
       setPending(trimmed)
       toast.success('Confirmation link sent', { description: `Open the link sent to ${trimmed} to finish the change.` })
       cancel()
+      return true
     } catch (err) {
       setError(emailErrorMessage(err))
+      return false
     } finally {
       setBusy(false)
     }

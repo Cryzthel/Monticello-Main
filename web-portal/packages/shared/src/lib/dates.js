@@ -86,10 +86,23 @@ export function setPortalTimeZone(zone) {
   return true
 }
 
+// One offset formatter per zone, built on first use. Constructing an
+// Intl.DateTimeFormat is the expensive part (milliseconds, not microseconds),
+// and the time-zone picker asks for ~420 of them.
+const OFFSET_FORMATS = new Map()
+function offsetFormat(zone) {
+  let format = OFFSET_FORMATS.get(zone)
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+    OFFSET_FORMATS.set(zone, format)
+  }
+  return format
+}
+
 /** "UTC+08:00" for `zone` at `at` — offsets move with daylight saving. */
 export function timeZoneOffsetLabel(zone, at = new Date()) {
   try {
-    const part = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+    const part = offsetFormat(zone)
       .formatToParts(at)
       .find((p) => p.type === 'timeZoneName')?.value
     return !part || part === 'GMT' ? 'UTC+00:00' : part.replace('GMT', 'UTC')
