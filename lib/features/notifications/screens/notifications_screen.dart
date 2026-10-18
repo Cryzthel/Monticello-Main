@@ -8,7 +8,6 @@ import 'package:monticello_villas_app/core/widgets/page_title_bar.dart';
 import 'package:monticello_villas_app/core/storage/local_data_store.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/animated_list_entry.dart';
-import 'package:monticello_villas_app/core/widgets/app_card.dart';
 import 'package:monticello_villas_app/core/widgets/refresh_shell.dart';
 import 'package:monticello_villas_app/core/widgets/swipe_to_delete.dart';
 import 'package:monticello_villas_app/features/notifications/models/resident_notification.dart';
@@ -65,6 +64,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   /// Alerts the resident has opened. A New row stays in New after it is read
   /// — the section says when it arrived — but its dot and tint go out.
   Set<String> _read = const {};
+
+  /// Deleted on screen but not yet written: the Undo window is still open.
+  /// See [_delete].
+  Set<String> _pending = const {};
   DateTime? _lastOpened;
   bool _ready = false;
   bool _showPrevious = false;
@@ -125,38 +128,112 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     await NotificationPrefsStore.markOpened(DateTime.now());
   }
 
-  Future<void> _delete(ResidentNotification notification) async {
-    HapticFeedback.mediumImpact();
-    setState(() => _dismissed = {..._dismissed, notification.id});
-    await NotificationPrefsStore.dismiss(notification.id);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-          backgroundColor: AppColors.textPrimary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-          duration: const Duration(seconds: 4),
-          content: Text(
-            'Notification deleted',
-            style: _t(size: 13, weight: FontWeight.w600, color: AppColors.onAccent),
-          ),
-          // Undo matters more here than on most destructive actions: the swipe
-          // is easy to trigger by accident while scrolling, and a dismissed
-          // alert has no other way back — there is no server-side record of it
-          // to re-sync.
-          action: SnackBarAction(
-            label: 'Undo',
-            textColor: AppColors.accentSecondary,
-            onPressed: () => _undo(notification.id),
-          ),
+  /// Asks before deleting. Both routes to delete — the swipe and the
+  /// overflow menu — go through this, so a scroll that drifts sideways past
+  /// the threshold costs a Cancel, not an alert.
+  Future<bool> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.backgroundSecondary,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          side: const BorderSide(color: AppColors.innerStroke),
         ),
-      );
+        title: Text('Delete notification?',
+            style: _t(size: 17, weight: FontWeight.w700)),
+        content: Text(
+          'It is removed from this list on all your devices. The report or '
+          'announcement it points to is not affected.',
+          style: _t(size: 13.5, color: AppColors.textSecondary, height: 1.45),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: _t(
+                    size: 14,
+                    weight: FontWeight.w600,
+                    color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.danger,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Delete',
+                style: _t(
+                    size: 14, weight: FontWeight.w600, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  /// Hides a confirmed deletion at once and offers Undo; the dismissal is
+  /// WRITTEN only once the snackbar closes without Undo.
+  ///
+  /// ── WHY THE WRITE WAITS ──────────────────────────────────────────────────
+  /// Writing first and backing it out on Undo meant every undone delete still
+  /// reached Firestore twice, and for a moment the resident's other devices
+  /// hid the row too. Holding the id in [_pending] instead keeps the change
+  /// on this screen until it is final. The snackbar lives on the app-level
+  /// ScaffoldMessenger, so its `closed` future still completes after this
+  /// screen is popped, and the write goes through the static store either
+  /// way. A process killed inside the 4s window loses the deletion, which is
+  /// the safe direction: the alert simply comes back.
+  void _delete(ResidentNotification notification) {
+    HapticFeedback.mediumImpact();
+    final id = notification.id;
+    setState(() => _pending = {..._pending, id});
+
+    final controller = ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar();
+    controller
+        .showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+            backgroundColor: AppColors.textPrimary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            duration: const Duration(seconds: 4),
+            content: Text(
+              'Notification deleted',
+              style: _t(
+                  size: 13, weight: FontWeight.w600, color: AppColors.onAccent),
+            ),
+            action: SnackBarAction(
+              label: 'Undo',
+              textColor: AppColors.accentSecondary,
+              onPressed: () => _undo(id),
+            ),
+          ),
+        )
+        .closed
+        .then((reason) async {
+      if (reason == SnackBarClosedReason.action) return;
+      await NotificationPrefsStore.dismiss(id);
+      if (!mounted) return;
+      setState(() {
+        _pending = {..._pending}..remove(id);
+        _dismissed = {..._dismissed, id};
+      });
+    });
+  }
+
+  void _undo(String id) {
+    HapticFeedback.selectionClick();
+    if (!mounted) return;
+    setState(() => _pending = {..._pending}..remove(id));
   }
 
   /// Opens the alert and marks it read. The state flips BEFORE the sheet
@@ -168,12 +245,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       unawaited(NotificationPrefsStore.markRead(notification.id));
     }
     showNotificationDetail(context, notification);
-  }
-
-  Future<void> _undo(String id) async {
-    await NotificationPrefsStore.restore(id);
-    if (!mounted) return;
-    setState(() => _dismissed = {..._dismissed}..remove(id));
   }
 
   @override
@@ -196,7 +267,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   final feed = ResidentNotification.build(
                     incidents: store.incidents,
                     announcements: store.announcements,
-                  ).where((n) => !_dismissed.contains(n.id)).toList();
+                  ).where((n) =>
+                          !_dismissed.contains(n.id) &&
+                          !_pending.contains(n.id)).toList();
 
                   // Both feeds this list merges have to have answered, and the
                   // stored New/Earlier boundary has to be back, before there is
@@ -211,7 +284,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         : feed.isEmpty && _ready
                         ? const _EmptyState()
                         : ListView(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                            // No side padding: rows run edge to edge so the
+                            // unread wash and the swipe plate are full-bleed.
+                            // The headers carry their own 16px gutter.
+                            padding: const EdgeInsets.fromLTRB(0, 4, 0, 80),
                             children: _buildSections(feed),
                           ),
                   );
@@ -260,18 +336,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _row(ResidentNotification notification, {bool unread = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SwipeToDelete(
-        key: ValueKey(notification.id),
-        onDismissed: () => _delete(notification),
-        child: AnimatedListEntry(
-          child: ResidentNotificationTile(
-            notification: notification,
-            unread: unread && !_read.contains(notification.id),
-            onDelete: () => _delete(notification),
-            onTap: () => _open(notification),
-          ),
+    return SwipeToDelete(
+      key: ValueKey(notification.id),
+      plateRadius: BorderRadius.zero,
+      confirmDismiss: _confirmDelete,
+      onDismissed: () => _delete(notification),
+      child: AnimatedListEntry(
+        child: ResidentNotificationTile(
+          notification: notification,
+          unread: unread && !_read.contains(notification.id),
+          onDelete: () async {
+            if (await _confirmDelete() && mounted) _delete(notification);
+          },
+          onTap: () => _open(notification),
         ),
       ),
     );
@@ -295,7 +372,7 @@ class _SectionHeader extends StatelessWidget {
     final tone = accent ? AppColors.primaryDark : AppColors.textSecondary;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 14, 2, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
       child: Row(
         children: [
           Text(
@@ -345,7 +422,7 @@ class _SeePreviousButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: GestureDetector(
         onTap: () {
           HapticFeedback.selectionClick();
@@ -402,31 +479,15 @@ class _ScopeNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Plain muted text, no callout box. It used to sit in a mint card, which
+    // is now the colour of an unread row — a scope note dressed as an alert.
+    // Inert: it states scope, it does nothing.
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      // Neutral border and shared radius like every other container; only the
-      // FILL differs, so the note reads as a callout rather than as a tile you
-      // might mistake for an alert. Inert — it states scope, it does nothing.
-      child: AppCard(
-        color: AppColors.surfaceAccentSoft,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        showShadow: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(PhosphorIconsFill.bell,
-                size: 15, color: AppColors.primary),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(
-                'Security updates on your reports, and new subdivision notices. '
-                'Swipe a card left, or use its menu, to remove it from here.',
-                style:
-                    _t(size: 11.5, color: AppColors.textSecondary, height: 1.35),
-              ),
-            ),
-          ],
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Text(
+        'Security updates on your reports, and new subdivision notices. '
+        'Swipe a row left, or use its menu, to remove it.',
+        style: _t(size: 12.5, color: AppColors.textMuted, height: 1.4),
       ),
     );
   }

@@ -100,11 +100,11 @@ void main() {
             ),
           );
       await tester.pumpWidget(tile(true));
-      expect(find.bySemanticsLabel('Unread'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('Unread')), findsOneWidget);
 
       await tester.pumpWidget(tile(false));
       await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('Unread'), findsNothing);
+      expect(find.bySemanticsLabel(RegExp('Unread')), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

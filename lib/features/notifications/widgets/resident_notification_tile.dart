@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
-import 'package:monticello_villas_app/core/widgets/app_card.dart';
 import 'package:monticello_villas_app/features/notifications/models/resident_notification.dart';
 
 /// Tabular figures, for anything read down a column — the timestamp badges.
@@ -235,7 +234,7 @@ class _ActivityAvatar extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: n.tint,
                   border:
-                      Border.all(color: AppColors.backgroundElevated, width: 2),
+                      Border.all(color: AppColors.background, width: 2),
                 ),
                 child: Icon(n.icon, size: 9, color: AppColors.onAccent),
               ),
@@ -344,15 +343,38 @@ class ResidentNotificationTile extends StatelessWidget {
     final statusLabel = notification.statusLabel;
     final hasMeta = statusLabel != null || !notification.isAnnouncement;
 
-    // AppCard's press animation is the tap feedback; with no [onTap] the
-    // tile is an inert surface with the same border, radius and shadow.
-    return AppCard(
-      onTap: onTap,
-      padding: const EdgeInsets.all(14),
-      // Null falls through to AppCard's own default surface.
-      color: unread ? AppColors.surfaceAccentSoft : null,
-      borderColor: unread ? AppColors.primary.withValues(alpha: 0.22) : null,
-      child: Column(
+    // ── A ROW, NOT A CARD ───────────────────────────────────────────────────
+    // No border, no shadow, no surface: an activity feed reads as one list,
+    // and a stack of bordered cards read as forty separate objects. The only
+    // fill a row ever carries is the unread wash, edge to edge, which fades
+    // out (180ms ease-out) the moment the row is read — so the tap visibly
+    // does what it says.
+    //
+    // Press feedback is a faint highlight, no ripple. A ripple across a
+    // full-width row is a lot of motion for "open this".
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: unread ? AppColors.surfaceAccentSoft : Colors.transparent,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: AppColors.textPrimary.withValues(alpha: 0.04),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: _body(statusLabel, hasMeta),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _body(String? statusLabel, bool hasMeta) {
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -447,7 +469,6 @@ class ResidentNotificationTile extends StatelessWidget {
             ),
           ],
         ],
-      ),
     );
   }
 }

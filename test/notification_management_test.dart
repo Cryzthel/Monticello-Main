@@ -204,6 +204,8 @@ void main() {
       final unreadPaint = unreadCard.decoration as BoxDecoration?;
 
       await pump(tester, unread: false);
+      // The wash fades out rather than snapping; read it once it has.
+      await tester.pumpAndSettle();
       final readCard = tester.widget<Container>(
         find
             .descendant(

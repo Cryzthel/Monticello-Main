@@ -22,10 +22,16 @@ class SwipeToDelete extends StatefulWidget {
     required this.child,
     required this.onDismissed,
     this.confirmDismiss,
+    this.plateRadius,
   }) : super(key: key);
 
   final Widget child;
   final VoidCallback onDismissed;
+
+  /// Corners of the plate revealed behind the row. Defaults to the card
+  /// radius; a full-bleed row (the notifications feed) passes
+  /// [BorderRadius.zero] so the plate meets the screen edge flush.
+  final BorderRadius? plateRadius;
 
   /// Asked once the row is released past [threshold], BEFORE it animates away.
   /// Returning false springs it back and [onDismissed] never fires.
@@ -97,7 +103,10 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
       onDismissed: (_) => widget.onDismissed(),
       background: ValueListenableBuilder<double>(
         valueListenable: _progress,
-        builder: (context, progress, _) => SwipeDeletePlate(progress: progress),
+        builder: (context, progress, _) => SwipeDeletePlate(
+          progress: progress,
+          borderRadius: widget.plateRadius,
+        ),
       ),
       child: widget.child,
     );
@@ -112,7 +121,10 @@ class _SwipeToDeleteState extends State<SwipeToDelete> {
 /// whole reason Instagram's version feels decisive where a static plate does
 /// not.
 class SwipeDeletePlate extends StatelessWidget {
-  const SwipeDeletePlate({super.key, required this.progress});
+  const SwipeDeletePlate({super.key, required this.progress, this.borderRadius});
+
+  /// Null is the card radius.
+  final BorderRadius? borderRadius;
 
   /// Travel as reported by [Dismissible.onUpdate]: 0 at rest, 1 at full width.
   final double progress;
@@ -131,7 +143,7 @@ class SwipeDeletePlate extends StatelessWidget {
       padding: const EdgeInsets.only(right: 24),
       decoration: BoxDecoration(
         color: AppColors.swipeDelete,
-        borderRadius: AppCard.borderRadius,
+        borderRadius: borderRadius ?? AppCard.borderRadius,
       ),
       child: Opacity(
         // Fades in over the first third of the travel, so a scroll that nudges
