@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
- * Edit-then-save state for a settings form.
+ * Draft state for a settings form, committed by the page's Save button.
  *
  * Organisation preferences reach live guardhouse consoles the moment they are
- * written, so nothing here auto-saves: the form holds a DRAFT, shows what is
- * unsaved, and commits only on Save.
+ * written, so nothing auto-saves (the explicit-save decision, 2026-10-18).
+ * `commit` coalesces: a save requested while one is in flight does not queue a
+ * second write — it marks the draft dirty again and re-saves once the first
+ * lands.
  *
  * ── WHEN SOMEONE ELSE SAVES FIRST ──────────────────────────────────────────
  * The saved value arrives live. With no edits, the form simply takes it. With
@@ -27,6 +29,31 @@ export function useSettingsDraft({ value, onSave }) {
   const baseRef = useRef(value)
   const draftRef = useRef(draft)
   draftRef.current = draft
+  // A commit asked for while one is in flight. Firestore writes are not
+  // instant, and a switch flipped twice in a second must not become two
+  // racing writes whose arrival order decides the stored value.
+  const againRef = useRef(false)
+  const savingRef = useRef(false)
+  /**
+   * The last draft this form successfully wrote.
+   *
+   * ── WHY "DIRTY" NEEDS TWO REFERENCE POINTS ─────────────────────
+   * `value` is the STORE's copy, which only updates when Firestore echoes the
+   * write back through the snapshot listener. Between the write landing and
+   * the echo arriving, the draft differs from `value` — so a form that
+   * measures dirtiness against `value` alone reports unsaved changes for a
+   * change it has just saved.
+   *
+   * Under an explicit Save button that was invisible: the button had already
+   * been pressed and the footer said "Saving…". With auto-save the status
+   * line is the only feedback there is, and having it sit on "not saved yet"
+   * after a successful write is precisely the thing that makes people
+   * distrust auto-save.
+   *
+   * So a draft is clean if it matches EITHER the store or the last thing we
+   * wrote. Both are true statements of "this is saved".
+   */
+  const savedDraftRef = useRef(null)
 
   useEffect(() => {
     const previous = baseRef.current
@@ -45,25 +72,69 @@ export function useSettingsDraft({ value, onSave }) {
     }
   }, [value])
 
-  const dirty = !sameValue(draft, value)
+  const dirty = !sameValue(draft, value) && !sameValue(draft, savedDraftRef.current)
 
+  /**
+   * Apply a patch to the draft.
+   *
+   * ── THE REF IS UPDATED EAGERLY, AND THAT IS WHAT MAKES AUTO-SAVE WORK ─
+   * `draftRef` was only assigned during render, which was fine when the only
+   * thing that read it was a Save button pressed in a later tick. It is not
+   * fine now: a switch calls `update` and then `commit` in the SAME handler,
+   * and React has not re-rendered in between — so `save` read the draft from
+   * before the change, found it equal to the saved value, and wrote nothing.
+   * Measured: flipping a switch saved nothing at all.
+   *
+   * Assigning the ref here makes it mean "what would be written if we saved
+   * right now", which is what every caller already assumed it meant. The
+   * render-time assignment below is then a no-op that keeps the two in step
+   * when the draft is replaced wholesale (a remote update, or Discard).
+   */
   const update = useCallback((patch) => {
     setError(null)
-    setDraft((current) => ({ ...current, ...patch }))
+    const next = { ...draftRef.current, ...patch }
+    draftRef.current = next
+    setDraft(next)
   }, [])
 
   const reset = useCallback(() => {
+    draftRef.current = baseRef.current
     setDraft(baseRef.current)
     setError(null)
     setRemoteChanged(false)
   }, [])
 
+  /**
+   * Write the draft.
+   *
+   * Reads `draftRef`, never the `draft` closure: a control that updates and
+   * commits in the same tick would otherwise save the value from BEFORE its
+   * own change, because the re-render has not happened yet.
+   *
+   * Dirtiness is checked against `baseRef` for the same reason — the `dirty`
+   * computed above is a render-time value and is stale inside a handler that
+   * has just called `update`.
+   */
   const save = useCallback(async () => {
-    if (!dirty) return false
+    // Against the store AND the last write, for the reason on savedDraftRef.
+    if (
+      sameValue(draftRef.current, baseRef.current) ||
+      sameValue(draftRef.current, savedDraftRef.current)
+    ) {
+      return false
+    }
+    if (savingRef.current) {
+      // Fold into the save already running rather than starting a second.
+      againRef.current = true
+      return false
+    }
+    savingRef.current = true
     setSaving(true)
     setError(null)
     try {
-      await onSave(draftRef.current)
+      const written = draftRef.current
+      await onSave(written)
+      savedDraftRef.current = written
       setSavedAt(Date.now())
       setRemoteChanged(false)
       return true
@@ -71,9 +142,20 @@ export function useSettingsDraft({ value, onSave }) {
       setError(describeSaveError(err))
       return false
     } finally {
+      savingRef.current = false
       setSaving(false)
+      if (againRef.current) {
+        againRef.current = false
+        // Whatever changed while the last write was in flight.
+        saveRef.current?.()
+      }
     }
-  }, [dirty, onSave])
+  }, [onSave])
+
+  // So the `finally` above can re-enter the latest `save` without making it
+  // depend on itself.
+  const saveRef = useRef(null)
+  saveRef.current = save
 
   return { draft, update, dirty, saving, error, savedAt, remoteChanged, save, reset }
 }

@@ -3,6 +3,7 @@ import { collection, limit, orderBy, query, where } from 'firebase/firestore'
 import {
   FileClock,
   KeyRound,
+  Mail,
   PauseCircle,
   PlayCircle,
   ShieldOff,
@@ -18,6 +19,7 @@ import { db } from '@shared/lib/firebase'
 import { relativeTime } from '@shared/lib/notifications'
 import { describeFirestoreError } from '@shared/lib/audit'
 import { Skeleton } from '@shared/components/Skeleton'
+import { formatDateTimeSeconds } from '@shared/lib/dates'
 
 /**
  * The provisioning audit trail — `provisioning_logs`, filtered to security actions.
@@ -56,6 +58,9 @@ const ACTION_STYLE = {
   'security.status.reactivated': { icon: PlayCircle, tone: 'success', label: 'Reactivated' },
   'security.status.revoked': { icon: ShieldOff, tone: 'danger', label: 'Revoked' },
   'security.account.deleted': { icon: UserX, tone: 'danger', label: 'Deleted' },
+  // Written by functions/scripts/migrateStaffEmails.cjs, not by a callable:
+  // a sign-in email change is an account migration run from a terminal.
+  'security.account.email_changed': { icon: Mail, tone: 'info', label: 'Email changed' },
 }
 
 const FALLBACK_STYLE = { icon: FileClock, tone: 'neutral', label: 'Event' }
@@ -173,9 +178,9 @@ export default function SecurityAuditLog() {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <StatusBadge tone={style.tone} icon={style.icon}>
-                        {style.label}
-                      </StatusBadge>
+                      {/* No icon in the badge: the tile beside it already
+                          carries the action's glyph, and the row drew it twice. */}
+                      <StatusBadge tone={style.tone}>{style.label}</StatusBadge>
                       <p className="min-w-0 text-sm text-text-primary">
                         {/* The summary is composed server-side, in the same
                             function that made the change, so it describes what
@@ -200,7 +205,7 @@ export default function SecurityAuditLog() {
 
                   <time
                     dateTime={entry.at ? entry.at.toISOString() : undefined}
-                    title={entry.at ? entry.at.toLocaleString() : undefined}
+                    title={entry.at ? formatDateTimeSeconds(entry.at) : undefined}
                     className="shrink-0 whitespace-nowrap pt-0.5 text-xs text-text-muted"
                   >
                     {relativeTime(entry.at)}

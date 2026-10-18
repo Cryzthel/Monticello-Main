@@ -115,11 +115,13 @@ export default function CredentialHandoff({ mode = 'created', credentials, onDon
           <h2 className="text-base font-semibold leading-tight text-text-primary">
             {isReset ? 'New password issued' : 'Account created'}
           </h2>
-          <p className="mt-1 text-sm leading-snug text-text-secondary">
-            {isReset
-              ? `${credentials.fullName}'s previous password no longer works. Hand over the new one below.`
-              : `${credentials.fullName} can now sign in to the Guardhouse Portal with these credentials.`}
-          </p>
+          {/* Reset only: "X can now sign in…" under "Account created" said
+              the heading twice and was removed (2026-10-18). */}
+          {isReset ? (
+            <p className="mt-1 text-sm leading-snug text-text-secondary">
+              {`${credentials.fullName}'s previous password no longer works. Hand over the new one below.`}
+            </p>
+          ) : null}
         </div>
       </div>
 

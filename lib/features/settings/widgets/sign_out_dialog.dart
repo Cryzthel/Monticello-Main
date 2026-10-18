@@ -1,10 +1,9 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'package:monticello_villas_app/core/theme/app_icons.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
+import 'package:monticello_villas_app/core/widgets/blur_modal.dart';
 
 /// Asks before ending the session. Resolves true only on "Log Out"; Cancel,
 /// a tap on the backdrop and the system back gesture all resolve false.
@@ -20,19 +19,12 @@ Future<bool> confirmSignOut(BuildContext context) async {
     barrierDismissible: true,
     barrierLabel: 'Dismiss',
     barrierColor: Colors.transparent, // the blur layer paints its own scrim
-    transitionDuration: Duration(milliseconds: reduceMotion ? 0 : 200),
+    transitionDuration: Duration(milliseconds: reduceMotion ? 0 : 220),
     pageBuilder: (context, _, __) => const SignOutDialog(),
-    transitionBuilder: (context, animation, _, child) {
-      final curved =
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.96, end: 1).animate(curved),
-          child: child,
-        ),
-      );
-    },
+    // Untouched on purpose. The backdrop and the card animate themselves off
+    // the route — see the note in blur_modal.dart for why a fade around the
+    // whole page made the blur snap in on the last frame.
+    transitionBuilder: (context, animation, _, child) => child,
   );
   return result ?? false;
 }
@@ -45,19 +37,14 @@ class SignOutDialog extends StatelessWidget {
     return Stack(
       children: [
         Positioned.fill(
-          child: GestureDetector(
+          child: BlurModalBackdrop(
             onTap: () => Navigator.of(context).pop(false),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.45),
-                child: const SizedBox.expand(),
-              ),
-            ),
           ),
         ),
         Center(
-          child: Padding(
+          child: ModalCardEntrance(
+            scaleFrom: 0.96,
+            child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
@@ -127,6 +114,7 @@ class SignOutDialog extends StatelessWidget {
                 ),
               ),
             ),
+          ),
           ),
         ),
       ],

@@ -4,11 +4,15 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/leaf_loader.dart';
 import 'package:monticello_villas_app/core/widgets/staged_progress.dart'
     show AnimatedCheckmark;
+import 'package:monticello_villas_app/features/auth/widgets/verification_lock.dart';
+import 'package:monticello_villas_app/features/contact/widgets/hoa_contact_sheet.dart'
+    show HoaContact;
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
 import 'package:monticello_villas_app/features/panic_button/services/sos_alert_status.dart';
 
@@ -23,10 +27,22 @@ import 'package:monticello_villas_app/features/panic_button/services/sos_alert_s
 ///
 /// [dispatcher] exists for tests, which must be able to drive the whole timing
 /// and cancellation flow without a Firebase app or a GPS fix.
+///
+/// ── LOCKED FOR AN UNVERIFIED ACCOUNT ─────────────────────────────────────
+/// Like filing a report, raising an SOS needs an account the HOA office has
+/// verified (the user's decision, 2026-10-18). A resident whose standing we
+/// have OBSERVED as pending or rejected gets the sheet in its locked form:
+/// no countdown, the reason, and the main gate's number to call instead.
+/// [verification] reads the standing; it is checked on open, on every tick
+/// of the countdown and once more right before dispatch, so a status that
+/// lands mid-countdown still stops the alert. An UNKNOWN standing does not
+/// lock — see [ResidentVerificationX.locksReporting] for why a check that
+/// could not be made must not read as "not verified".
 Future<void> showSosCountdown(
   BuildContext context, {
   Future<SosDispatchReceipt> Function()? dispatcher,
   SosStatusStream? statusStream,
+  ResidentVerification Function()? verification,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -41,6 +57,7 @@ Future<void> showSosCountdown(
     builder: (_) => _SosCountdownSheet(
       dispatcher: dispatcher ?? PanicAlertService.dispatch,
       statusStream: statusStream ?? watchSosAlert,
+      verification: verification ?? cachedResidentVerification,
     ),
   );
 }
@@ -54,7 +71,11 @@ class _SosCountdownSheet extends StatefulWidget {
   const _SosCountdownSheet({
     required this.dispatcher,
     required this.statusStream,
+    required this.verification,
   });
+
+  /// The resident's standing as last observed. See [showSosCountdown].
+  final ResidentVerification Function() verification;
 
   final Future<SosDispatchReceipt> Function() dispatcher;
 
@@ -95,6 +116,22 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
   /// Without it a second hold landing in the same frame could pop twice.
   bool _closing = false;
 
+  /// Set when the account's standing locks SOS. The sheet then shows
+  /// [_SosLockedBody] instead of anything below, and nothing is dispatched.
+  ResidentVerification? _locked;
+
+  /// True (and the sheet switched to its locked form) when the standing now
+  /// locks SOS.
+  bool _lockIfUnverified() {
+    if (_locked != null) return true;
+    final standing = widget.verification();
+    if (!standing.locksReporting) return false;
+    _clock.stop();
+    _hold.stop();
+    if (mounted) setState(() => _locked = standing);
+    return true;
+  }
+
   int get _secondsLeft =>
       (countdown.inSeconds * (1 - _clock.value)).ceil().clamp(0, countdown.inSeconds);
 
@@ -131,6 +168,14 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
         if (status == AnimationStatus.completed) _dispatch();
       });
 
+    final standing = widget.verification();
+    if (standing.locksReporting) {
+      // No countdown, and no firm "it's armed" tap: nothing was armed.
+      _locked = standing;
+      HapticFeedback.selectionClick();
+      return;
+    }
+
     // A firm tap the instant the sheet appears, so the resident knows the
     // trigger registered before they have looked at the screen.
     HapticFeedback.heavyImpact();
@@ -138,6 +183,7 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
   }
 
   void _onTick() {
+    if (_phase == _Phase.counting && _lockIfUnverified()) return;
     final left = _secondsLeft;
     if (left == _lastTick) return;
     _lastTick = left;
@@ -163,9 +209,23 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
   /// still open) becomes SENT. The resident was told "the guardhouse has not
   /// seen it yet"; leaving that up once the guardhouse has would be the
   /// sheet misleading them in the other direction.
-  void _watch(String alertId) {
+  ///
+  /// -- AND IT RESUBSCRIBES WHEN THE FEED ENDS --
+  /// firestore.rules lets a resident read an alert only by checking
+  /// `resource.data.residentUid`, which DENIES a listen on a document that
+  /// does not exist yet. A queued alert's document does not exist until the
+  /// sync service lands it, so the first listen can be refused, and a refused
+  /// snapshot stream closes for good. Without a retry the tracker would sit
+  /// on "Waiting for signal" after the alert had in fact landed. Every
+  /// [_retryDelay] while the sheet is open and the alert unresolved, it asks
+  /// again; once the document exists the listen is allowed.
+  static const Duration _retryDelay = Duration(seconds: 5);
+  Timer? _resubscribe;
+
+  void _watch(String alertId, {bool fresh = true}) {
+    _resubscribe?.cancel();
     _statusSub?.cancel();
-    _status = SosAlertStatus.unknown;
+    if (fresh) _status = SosAlertStatus.unknown;
     _statusSub = widget.statusStream(alertId).listen(
       (status) {
         if (!mounted) return;
@@ -183,11 +243,18 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       // The production stream already swallows its errors; this covers any
       // other feed. A dead tracker is no reason to take the sheet down.
       onError: (Object _) {},
+      onDone: () {
+        if (!mounted || _status.resolved) return;
+        _resubscribe = Timer(_retryDelay, () {
+          if (mounted) _watch(alertId, fresh: false);
+        });
+      },
     );
   }
 
   @override
   void dispose() {
+    _resubscribe?.cancel();
     _statusSub?.cancel();
     _clock.dispose();
     _hold.dispose();
@@ -213,10 +280,27 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
 
   Future<void> _dispatch() async {
     if (!mounted) return;
+    // The last check before anything is written.
+    if (_lockIfUnverified()) return;
     setState(() => _phase = _Phase.sending);
     try {
       final receipt = await widget.dispatcher();
       if (!mounted) return;
+      // ── THE SERVER SAID NO ────────────────────────────────────────────────
+      // The app's own check passed (the standing was unknown, so it could not
+      // lock), but firestore.rules refused the alert because the account is
+      // not verified. Same locked form as an observed pending account, never
+      // "saved, will send itself": nothing is queued, and nothing will send.
+      // The cached standing names which lock it is when it is known; when it
+      // is not, pending is the common case and the copy that fits it.
+      if (receipt.outcome == SosDispatchOutcome.refused) {
+        final known = widget.verification();
+        setState(() => _locked = known.locksReporting
+            ? known
+            : ResidentVerification.pending);
+        HapticFeedback.heavyImpact();
+        return;
+      }
       setState(() {
         _alertId = receipt.alertId;
         _phase = receipt.outcome == SosDispatchOutcome.delivered
@@ -239,23 +323,17 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
 
   @override
   Widget build(BuildContext context) {
+    final locked = _locked;
+    if (locked != null) {
+      return _SheetSurface(child: _SosLockedBody(standing: locked));
+    }
     return PopScope(
       // Same reasoning as the barrier: a back gesture must not silently abort
       // an alert. Once dispatched the sheet pops normally via Done.
       canPop: _phase == _Phase.sent ||
           _phase == _Phase.queued ||
           _phase == _Phase.failed,
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.fromLTRB(
-            24, 18, 24, 24 + MediaQuery.of(context).padding.bottom),
-        decoration: const BoxDecoration(
-          color: AppColors.backgroundSecondary,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-          border: Border(
-            top: BorderSide(color: AppColors.glassBorderLight),
-          ),
-        ),
+      child: _SheetSurface(
         // ── CENTRED RING, LEFT-ALIGNED TEXT ─────────────────────────────────
         // The ring (or the outcome badge) is centred: it is the one graphic on
         // the sheet, and a timer off to one side reads as misplaced. Every
@@ -492,6 +570,133 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
           ],
         );
     }
+  }
+}
+
+/// The sheet's panel: one surface for the countdown and the locked form, so
+/// the two cannot drift apart in fill, radius or inset.
+class _SheetSurface extends StatelessWidget {
+  const _SheetSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+          24, 18, 24, 24 + MediaQuery.of(context).padding.bottom),
+      decoration: const BoxDecoration(
+        color: AppColors.backgroundSecondary,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
+        border: Border(
+          top: BorderSide(color: AppColors.glassBorderLight),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// SOS for an account that is not verified: why, and who to call instead.
+///
+/// Same layout as the live sheet (left-aligned header, centred badge,
+/// left-aligned caption, actions at the foot), so a resident who has seen
+/// one recognises the other. The badge is a lock, not a warning: nothing has
+/// gone wrong, the control simply is not available to this account yet.
+///
+/// The PRIMARY action is the call, not Close. Whoever pressed SOS may be in
+/// an emergency regardless of their paperwork, and the one useful thing this
+/// sheet can still do is put the guardhouse's number under their thumb.
+class _SosLockedBody extends StatelessWidget {
+  const _SosLockedBody({required this.standing});
+
+  final ResidentVerification standing;
+
+  Future<void> _callGate() async {
+    try {
+      await launchUrl(
+        HoaContact.dialUri(HoaContact.mainGateNumber),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      // No dialer (a tablet, an emulator). The number is printed on the
+      // button, so failing quietly still leaves the resident with it.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(PhosphorIconsFill.lockSimple,
+                size: 18, color: AppColors.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              'SOS UNAVAILABLE',
+              style: sfPro(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Center(
+          child: Container(
+            width: 88,
+            height: 88,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.textSecondary.withValues(alpha: 0.10),
+              border: Border.all(color: AppColors.borderNeutral, width: 2),
+            ),
+            child: const Icon(PhosphorIconsBold.lockSimple,
+                size: 36, color: AppColors.textSecondary),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          standing.lockHeadline,
+          style: sfPro(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+            letterSpacing: -0.2,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          standing.sosLockBody,
+          style: sfPro(
+            fontSize: 15,
+            color: AppColors.textSecondary,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: 24),
+        _FlatButton(
+          label: 'Call main gate · ${HoaContact.mainGateNumber}',
+          background: AppColors.panicOxblood,
+          foreground: Colors.white,
+          onTap: _callGate,
+        ),
+        const SizedBox(height: 10),
+        _FlatButton(
+          label: 'Close',
+          background: AppColors.backgroundElevated,
+          foreground: AppColors.textSecondary,
+          onTap: () => Navigator.of(context).pop(),
+        ),
+      ],
+    );
   }
 }
 

@@ -105,8 +105,13 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                           itemCount: list.length,
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: 12),
-                          itemBuilder: (_, i) =>
-                              AnnouncementCard(announcement: list[i]),
+                          // Keyed by post: the card holds its own Read More
+                          // state, and a post arriving live at the top would
+                          // otherwise hand each card its neighbour's.
+                          itemBuilder: (_, i) => AnnouncementCard(
+                            key: ValueKey(list[i].id),
+                            announcement: list[i],
+                          ),
                         ),
                 ),
               ),

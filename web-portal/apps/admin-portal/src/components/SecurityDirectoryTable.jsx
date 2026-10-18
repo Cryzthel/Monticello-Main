@@ -14,16 +14,10 @@ import Tooltip from '@shared/components/Tooltip'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
 import ResidentAvatar from '@/components/ResidentAvatar'
 import { relativeTime } from '@shared/lib/notifications'
-import {
-  ACCESS_ROLE_LABELS,
-  ACCOUNT_STATUS,
-  SHIFT_BY_VALUE,
-  STATUS_LABELS,
-  STATUS_TONES,
-  postLabel,
-  resolveAccessRole,
-  shiftLabel,
-} from '@/lib/securityAccounts'
+import { ACCOUNT_STATUS, STATUS_LABELS, STATUS_TONES } from '@/lib/securityAccounts'
+import { formatDate, formatDateTime, formatShortDate, formatTime } from '@shared/lib/dates'
+import { useNow } from '@shared/hooks/useNow'
+import DataTable from '@shared/components/DataTable'
 
 /**
  * The security personnel directory.
@@ -48,7 +42,54 @@ import {
  *   • Below `min-w-[64rem]` the panel scrolls sideways instead of compressing.
  */
 
-function LastActiveCell({ account }) {
+/** "2:14 PM" today, "Oct 17 · 2:14 PM" before that — in the portal time zone. */
+function seenAt(date, now) {
+  return formatDate(date) === formatDate(now)
+    ? formatTime(date)
+    : `${formatShortDate(date)} · ${formatTime(date)}`
+}
+
+/**
+ * Presence, when the officer's console has published any (see
+ * useSecurityAccounts): Online with a live dot, or Offline with the exact
+ * moment they were last connected. The second line keeps every row the same
+ * height as the two-line Officer cell beside it.
+ */
+function PresenceCell({ account, now }) {
+  const { online, lastSeenAt, onlineSince } = account.presence
+  if (online) {
+    return (
+      <Tooltip side="left" label={onlineSince ? `Connected since ${formatDateTime(onlineSince)}` : 'Connected now'}>
+        <span className="flex flex-col gap-0.5 whitespace-nowrap">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
+            <span aria-hidden="true" className="relative flex h-2 w-2 shrink-0">
+              <span className="absolute inset-0 rounded-full bg-success opacity-60 motion-safe:animate-ping" />
+              <span className="relative h-2 w-2 rounded-full bg-success" />
+            </span>
+            Online
+          </span>
+          <span className="text-2xs text-text-muted">{account.onDuty ? 'On duty' : 'Signed in, off duty'}</span>
+        </span>
+      </Tooltip>
+    )
+  }
+  return (
+    <Tooltip side="left" label={lastSeenAt ? `${formatDateTime(lastSeenAt)} (${relativeTime(lastSeenAt, now)})` : 'Not seen yet'}>
+      <span className="flex flex-col gap-0.5 whitespace-nowrap">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+          <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-text-muted/50" />
+          Offline
+        </span>
+        <span className="text-2xs tabular-nums text-text-muted">
+          {lastSeenAt ? `Last seen ${seenAt(lastSeenAt, now)}` : 'Not seen yet'}
+        </span>
+      </span>
+    </Tooltip>
+  )
+}
+
+function LastActiveCell({ account, now }) {
+  if (account.presence) return <PresenceCell account={account} now={now} />
   if (account.onDuty && account.onDutySince) {
     return (
       <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-success">
@@ -64,7 +105,7 @@ function LastActiveCell({ account }) {
     return <span className="whitespace-nowrap text-xs text-text-muted">No shifts logged</span>
   }
   return (
-    <Tooltip side="left" label={account.lastActiveAt.toLocaleString()}>
+    <Tooltip side="left" label={formatDateTime(account.lastActiveAt)}>
       <span className="whitespace-nowrap text-xs text-text-secondary">
         {relativeTime(account.lastActiveAt)}
       </span>
@@ -96,16 +137,24 @@ export default function SecurityDirectoryTable({
   loading,
   error,
   filtered,
+  // Super Admin only. Without it the row keeps its click-to-view and loses
+  // every write action — they used to render for an HOA admin and do
+  // nothing when chosen, which read as a broken menu.
+  canManage = false,
   onEdit,
+  onView,
   onReset,
   onStatusChange,
   onDelete,
 }) {
-  const COLUMNS = 7
+  const COLUMNS = 6
+  // Re-renders every 30 s so "Last seen" and relative times stay true while
+  // the page sits open; presence itself arrives through the live listener.
+  const now = useNow()
 
   return (
     <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-      {/* `overflow-x-auto`, not just `-y`. The seven columns have a real
+      {/* `overflow-x-auto`, not just `-y`. The six columns have a real
           min-content width, and below roughly 1100px it exceeds the panel:
           measured at 1100px the table wanted 1061px inside a 1050px container.
           The Card is `overflow-hidden` for its corner radius, so without this
@@ -113,40 +162,30 @@ export default function SecurityDirectoryTable({
           what got clipped was the right-hand edge of the actions column. A
           table that quietly amputates its own controls at a common laptop
           width is worse than one that scrolls. */}
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto pb-6">
-        <table className="w-full min-w-[64rem] text-left text-sm">
-          {/* PROPORTIONAL HINTS, not hard widths — `table-layout` is `auto`, so
-              a column whose content cannot fit will still take what it needs.
-              What these buy is a STABLE proportion: without them the Officer
-              column collapses the moment one badge number is long, and every
-              column re-measures each time the live query echoes a change, so
-              the table visibly twitches while an admin is reading it.
-
-              `min-w-[64rem]` is the other half. It is the width below which the
-              columns stop fitting at all; past that point the panel scrolls
-              horizontally instead of squeezing text into two-line cells and
-              breaking the row rhythm the fixed heights above exist to keep. */}
-          <colgroup>
-            <col className="w-[22%]" />
-            <col className="w-[9%]" />
-            <col className="w-[16%]" />
-            <col className="w-[16%]" />
-            <col className="w-[13%]" />
+      <DataTable
+        // Six columns since Assignment went (2026-10-17). Its 16% went to the
+        // two columns that actually carry text — the officer's name/email and
+        // last active — rather than being spread evenly, which would only have
+        // widened the badge and status pills.
+        colgroup={<colgroup>
+            <col className="w-[30%]" />
             <col className="w-[11%]" />
-            <col className="w-[13%]" />
-          </colgroup>
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            <tr className="table-head">
-              <th className="px-4 py-3 font-medium">Officer</th>
-              <th className="px-4 py-3 font-medium">Badge</th>
-              <th className="px-4 py-3 font-medium">Access role</th>
-              <th className="px-4 py-3 font-medium">Assignment</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Last active</th>
-              <th className="px-4 py-3 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
+            <col className="w-[16%]" />
+            <col className="w-[15%]" />
+            <col className="w-[16%]" />
+            <col className="w-[12%]" />
+          </colgroup>}
+        minWidth="56rem"
+        scrollClassName="pb-6"
+        columns={[
+          { header: <>Officer</> },
+          { header: <>Badge</> },
+          { header: <>Role</> },
+          { header: <>Status</> },
+          { header: <>Last active</> },
+          {},
+        ]}
+      >
             {error ? (
               <tr>
                 <td colSpan={COLUMNS} className="px-4 py-12 text-center">
@@ -182,7 +221,18 @@ export default function SecurityDirectoryTable({
                 return (
                   <tr
                     key={account.uid}
-                    onClick={() => onEdit?.(account)}
+                    // A row click opens the READ-ONLY details. Editing is only
+                    // through ⋯ → "Edit assignment" (2026-10-18).
+                    onClick={() => onView?.(account)}
+                    tabIndex={0}
+                    aria-label={`View ${account.name || account.email}`}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onView?.(account)
+                      }
+                    }}
                     // FIXED HEIGHT, not min-height and not padding alone.
                     // Measured at 71 / 75 / 73 / 60px across four rows before
                     // this: a cell with two stacked badges (Active + Reset
@@ -190,7 +240,7 @@ export default function SecurityDirectoryTable({
                     // height tracked the DATA. Pinning it makes the rhythm a
                     // property of the table rather than of who happens to hold
                     // three duties.
-                    className={`data-row h-[4.5rem] cursor-pointer border-t border-divider ${
+                    className={`data-row h-[4.5rem] cursor-pointer border-t border-divider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 ${
                       // A revoked credential is history, not roster. Dimming it
                       // keeps it findable (an admin still needs to see that the
                       // account exists) without it reading as staffing.
@@ -223,31 +273,14 @@ export default function SecurityDirectoryTable({
                           Derived, not read raw: an account provisioned before
                           `accessRole` existed still resolves from its RBAC role
                           and duties rather than rendering "No role". */}
-                      <StatusBadge
-                        tone={account.role === 'security_head' ? 'warning' : 'neutral'}
-                      >
-                        {ACCESS_ROLE_LABELS[resolveAccessRole(account)] ?? 'No role'}
+                      {/* ONE ROLE (2026-10-17): every officer is a Patrol
+                          guard — the post titles (gate, roving, dispatcher)
+                          were not privilege levels. An account that already
+                          holds `security_head` really does have more power in
+                          firestore.rules, so it still says so, in amber. */}
+                      <StatusBadge tone={account.role === 'security_head' ? 'warning' : 'neutral'}>
+                        {account.role === 'security_head' ? 'Security supervisor' : 'Patrol guard'}
                       </StatusBadge>
-                    </td>
-
-                    <td className="px-4 py-3.5">
-                      {account.assignedPost || account.shift ? (
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-text-primary">
-                            {postLabel(account.assignedPost) || 'Unassigned post'}
-                          </p>
-                          <p className="truncate text-caption text-text-secondary">
-                            {SHIFT_BY_VALUE[account.shift]
-                              ? `${SHIFT_BY_VALUE[account.shift].label} · ${SHIFT_BY_VALUE[account.shift].window}`
-                              : shiftLabel(account.shift) || 'No shift'}
-                          </p>
-                        </div>
-                      ) : (
-                        // Accounts that predate this form have no posting. Say
-                        // so rather than printing an em dash — it is an action
-                        // item, not a blank.
-                        <span className="text-xs text-text-muted">Not rostered</span>
-                      )}
                     </td>
 
                     <td className="px-4 py-3.5">
@@ -273,7 +306,7 @@ export default function SecurityDirectoryTable({
                             <span
                               role="img"
                               aria-label="Reset pending: a temporary password was issued and has not been replaced."
-                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-lg bg-info/10 text-info ring-1 ring-inset ring-info/25"
+                              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-info/10 text-info ring-1 ring-inset ring-info/25"
                             >
                               <BadgeAlert size="sm" />
                             </span>
@@ -283,10 +316,11 @@ export default function SecurityDirectoryTable({
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <LastActiveCell account={account} />
+                      <LastActiveCell account={account} now={now} />
                     </td>
 
-                    <td className="px-4 py-3.5" onClick={(event) => event.stopPropagation()}>
+                    <td className="px-4 py-3.5" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                      {canManage ? (
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Reset is the one action promoted out of the overflow
                             menu. It is what this page is opened for more than
@@ -355,14 +389,24 @@ export default function SecurityDirectoryTable({
                           ]}
                         />
                       </div>
+                      ) : (
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => onView?.(account)}
+                            aria-label={`View ${account.name || account.email}`}
+                            className="btn btn-sm btn-outline"
+                          >
+                            View
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
               })
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
     </Card>
   )
 }

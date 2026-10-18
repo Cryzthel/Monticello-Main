@@ -1,3 +1,4 @@
+import { toast } from '@shared/lib/toast'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -6,29 +7,27 @@ import {
   BadgeCheck,
   ClipboardCheck,
   ClipboardList,
+  Clock,
+  ExternalLink,
   FileText,
   IdCard,
   Loader2,
   MapPin,
   Radio,
-  ShieldQuestion,
   ShieldX,
-  Ticket,
   Timer,
-  User,
   UserRoundCheck,
   X,
 } from '@shared/icons'
 import StatusBadge from '@shared/components/StatusBadge'
 import Lightbox from '@shared/components/Lightbox'
-import CategoryIconBadge from '@shared/components/dispatch/CategoryIconBadge'
+import Pill from '@shared/components/Pill'
 import StageStepper from '@shared/components/dispatch/StageStepper'
 import Receipt from '@shared/components/dispatch/Receipt'
 import EvidenceGrid, {
   forensicCoordinates,
   forensicTimestamp,
 } from '@shared/components/dispatch/EvidenceGrid'
-import { MetaItem, MetaList } from '@shared/components/MetaList'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useReporterContact } from '@shared/hooks/useReporterContact'
 import { useStaffAccounts } from '@shared/hooks/useStaffAccounts'
@@ -39,8 +38,9 @@ import {
   markReportsReviewed,
 } from '@shared/lib/incidents'
 import { isOfficerFiled } from '@shared/lib/staffFiling'
-import { categoryLabel } from '@shared/lib/incidentCategories'
-import { categoryTone } from '@shared/theme/badgeStyles'
+import { categoryColor, categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
+import { categoryIcon } from '@shared/theme/categoryIcons'
+import { SEVERITY_TONES, categoryTone } from '@shared/theme/badgeStyles'
 import { relativeTime } from '@shared/lib/notifications'
 import {
   ACK_TIMEOUT_MS,
@@ -50,16 +50,17 @@ import {
 import { unitLabel } from '@shared/lib/unitIdentity'
 import { normalizeResidentStatus, RESIDENT_STATUS, RESIDENT_STATUS_LABELS } from '@shared/lib/residents'
 import { ROUTES } from '@/config/portal'
+import { formatDateTime } from '@shared/lib/dates'
 
 /**
  * Width of the desktop rail, in px, exported so the Hazard Map can tell
  * IncidentMap how much of its right edge is spoken for. It IS this component's
- * `lg:w-[26rem]`, and matches the Guardhouse's DispatchDetailDrawer so the two
- * consoles' panels are the same object at the same size. Two places holding
+ * `lg:w-[28rem]` (the reference's `max-w-md`). It was 416px to match the
+ * Guardhouse's DispatchDetailDrawer; the redesign widened this rail only. Two places holding
  * this number independently is how a centred marker ends up underneath the
  * panel that was opened to describe it.
  */
-export const DRAWER_WIDTH_PX = 416
+export const DRAWER_WIDTH_PX = 448
 
 const SEVERITY_LABELS = {
   critical: 'Critical',
@@ -76,54 +77,40 @@ const exactTime = (value) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime())
     ? ''
-    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    : formatDateTime(date)
 }
 
 const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
 const clock = (at) => (at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—')
 
-/**
- * One titled group inside the unified inspection card.
- *
- * This is MetaSection's header with the panel taken away: inside a single
- * divided surface the per-group border, background and rounding are exactly
- * the chrome the merge set out to remove, but the icon + 14px semibold title
- * is what still tells two groups apart at a glance.
- *
- * `p-6` by request and because the rail earns it — measured at 416px the
- * coordinate row, the narrowest thing here, still holds one line.
- */
-function Group({ icon: Icon, title, action, children }) {
+// Tags are the shared oblong Pill — the same shape on every Hazard Map modal
+// (user's request, 2026-10-18). MiniTag is its one-step-down size, inline
+// beside the reporter's name.
+const Tag = Pill
+const MiniTag = (props) => <Pill size="sm" {...props} />
+
+/** Section label: a muted glyph and 11px tracked caps, with an optional right-hand note. */
+function SectionTitle({ icon: Icon, action = null, children }) {
   return (
-    <div className="p-6">
-      <header className="mb-4 flex min-h-6 items-center justify-between gap-3">
-        <h3 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-text-primary">
-          {Icon ? <Icon size="sm" className="shrink-0 text-brand-400" /> : null}
-          <span className="truncate">{title}</span>
-        </h3>
-        {action}
-      </header>
-      {children}
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <Icon size="sm" className="text-text-muted" aria-hidden="true" />
+        <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{children}</h3>
+      </div>
+      {action}
     </div>
   )
 }
 
-/**
- * The key/value treatment for this rail: 12px uppercase labels on wide
- * tracking against semibold values, by request.
- *
- * Applied with child selectors on the <dl> rather than by editing
- * `.meta-label`, which four other detail views share and which deliberately
- * sets labels at the SAME 14px as their values — see the note in
- * shared/components/MetaList.jsx. This rail opts out; nothing else moves.
- *
- * The tradeoff is real and worth stating: 12px uppercase on wide tracking is
- * a weaker read than 14px sentence case, and it is the label — the word naming
- * the fact — that pays. It buys a sharper value column, which is the B2B
- * convention this panel was asked for.
- */
-const META =
-  '[&>dt]:text-xs [&>dt]:uppercase [&>dt]:tracking-wider [&>dt]:text-text-muted [&>dd]:font-semibold'
+/** One label/value line inside the location container: a 100px label column. */
+function LocationRow({ label, children }) {
+  return (
+    <div className="grid grid-cols-[100px_1fr] items-baseline gap-2">
+      <dt className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</dt>
+      <dd className="min-w-0 break-words">{children}</dd>
+    </div>
+  )
+}
 
 /**
  * Whether the assigned unit has blown its acknowledgement window.
@@ -176,7 +163,8 @@ function useAdminAction(incidentId) {
     setFeedback(null)
     try {
       await task()
-      setFeedback({ tone: 'success', text: `${label}.` })
+      // Success is a toast (it outlives the drawer); failure stays inline.
+      toast.success(label)
       return true
     } catch (err) {
       console.error(`${label} failed`, err)
@@ -300,7 +288,7 @@ function useAdminAction(incidentId) {
  * Admin › Reports filters to officer-filed reports, so a resolved
  * RESIDENT-filed report had no manual archive path anywhere in the console.
  */
-export default function IncidentInspectorDrawer({ report, units = [], onClose }) {
+export default function IncidentInspectorDrawer({ report, onClose }) {
   const navigate = useNavigate()
 
   /**
@@ -317,7 +305,7 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
   const [lightbox, setLightbox] = useState(null)
 
   const { contact, loading: contactLoading } = useReporterContact(report?.reporterUid)
-  const { staffIds } = useStaffAccounts()
+  const { staffIds, badgeByUid } = useStaffAccounts()
   const action = useAdminAction(report?.id)
   const { busy, feedback, run, dismiss } = action
 
@@ -403,16 +391,13 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
 
   /**
    * The assigned officer, as this panel is allowed to name them — never the
-   * address their account was provisioned with. The live fleet is consulted
+   * address their account was provisioned with. The staff record is consulted
    * for a badge number the incident document may predate.
    */
-  const assignedUnit = report.assignedGuardUid
-    ? units.find((u) => u.uid === report.assignedGuardUid) ?? null
-    : null
   const assigned = report.assignedGuardUid
     ? unitLabel({
         name: report.assignedGuardName,
-        badgeNumber: report.assignedGuardBadge || assignedUnit?.badgeNumber,
+        badgeNumber: report.assignedGuardBadge || badgeByUid.get(report.assignedGuardUid),
       })
     : null
 
@@ -429,6 +414,7 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
     lat: report.arrival?.lat ?? report.lat,
     lng: report.arrival?.lng ?? report.lng,
     reference: code,
+    label: 'Resolved',
   }
   const outcomeLabel = RESOLUTION_OUTCOMES.find((o) => o.value === report.resolution?.outcome)?.label
 
@@ -446,7 +432,7 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
           onClick={() =>
             run('review', 'Resolution verified', () => markReportsReviewed([report.id]))
           }
-          className="btn btn-action btn-brand"
+          className="sheet-btn sheet-btn-primary flex-1"
         >
           {busy === 'review' ? spinner : <ClipboardCheck size="sm" aria-hidden="true" />}
           {reviewed ? 'Resolution verified' : 'Verify resolution'}
@@ -456,7 +442,7 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
             type="button"
             disabled={Boolean(busy)}
             onClick={() => run('archive', 'Incident archived', () => archiveIncidents([report.id]))}
-            className="btn btn-action btn-outline"
+            className="sheet-btn sheet-btn-outline"
           >
             {busy === 'archive' ? spinner : <Archive size="sm" aria-hidden="true" />}
             Archive
@@ -479,9 +465,9 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
       <button
         type="button"
         onClick={() => navigate(`${ROUTES.tickets}?incident=${report.id}`)}
-        className="btn btn-action btn-outline"
+        className="sheet-btn sheet-btn-primary flex-1"
       >
-        <Ticket size="sm" aria-hidden="true" />
+        <ExternalLink size="sm" aria-hidden="true" />
         Open full ticket record
       </button>
     )
@@ -503,15 +489,17 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
             : `${assigned?.label ?? 'The assigned unit'} is en route. Verification and archiving unlock once the call is resolved.`
   }
 
+  const CategoryGlyph = categoryIcon(normalizeCategory(report.category))
+  const categoryHex = categoryColor(normalizeCategory(report.category))
+
   return (
     <div className="pointer-events-none fixed inset-0 z-[var(--z-modal)] flex items-end justify-end lg:items-stretch">
       {/* Scrim BELOW `lg` only. On a desktop the map behind this rail is still
-          the thing being read — dimming it would undo the whole reason this is
-          a rail — and the camera has already slid the marker clear of it. On a
-          phone the sheet covers the map anyway, so the scrim is what makes the
-          strip above it read as a way out. */}
+          the thing being read — dimming or blurring it would undo the whole
+          reason this is a rail — and the camera has already slid the marker
+          clear of it. On a phone the sheet covers the map anyway. */}
       <div
-        className="dialog-scrim pointer-events-auto absolute inset-0 bg-scrim lg:hidden"
+        className="dialog-scrim pointer-events-auto absolute inset-0 bg-black/50 backdrop-blur-sm lg:hidden"
         onClick={onClose}
         role="presentation"
       />
@@ -521,10 +509,9 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
         role="dialog"
         aria-modal="true"
         aria-label={`Incident ${code}`}
-        className="pointer-events-auto relative flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-xl border border-hairline bg-base-900 shadow-modal animate-[riseIn_220ms_var(--ease-spring)] lg:h-full lg:w-[26rem] lg:animate-[drawerInRight_260ms_var(--ease-spring)] lg:rounded-none lg:border-y-0 lg:border-r-0"
+        className="pointer-events-auto relative flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-[-30px_0_60px_-15px_rgba(0,0,0,0.8)] animate-[riseIn_220ms_var(--ease-spring)] lg:h-full lg:w-[28rem] lg:animate-[drawerInRight_260ms_var(--ease-spring)] lg:rounded-none lg:border-y-0 lg:border-r-0 dark:bg-base-950"
       >
-        {/* Grab handle — the affordance that says "this sheet dismisses", and a
-            tap target for it. */}
+        {/* Grab handle (phone sheet only). */}
         <button
           type="button"
           onClick={onClose}
@@ -534,364 +521,263 @@ export default function IncidentInspectorDrawer({ report, units = [], onClose })
           <span className="h-1 w-9 rounded-full bg-tint/25" />
         </button>
 
-        {/* ══ HEADER ══ what this is, its quotable code, how urgent, and where
-            in the response it stands — the Guardhouse's header, group for
-            group, so an administrator and a dispatcher looking at the same
-            call see the same four things in the same order. */}
-        <header className="shrink-0 border-b border-hairline px-4 pb-3 pt-3.5">
-          <div className="flex items-start gap-3">
-            <CategoryIconBadge category={report.category} />
-            <div className="min-w-0 flex-1">
-              <h2 className="line-clamp-2 text-base font-semibold leading-snug text-text-primary">{title}</h2>
-              <p className="mt-0.5 text-caption text-text-muted">
-                <span className="font-mono font-semibold text-text-secondary">{code}</span>
-                {report.reportedAt ? ` · Reported ${clock(report.reportedAt)}` : ''}
+        {/* ══ STICKY HEADER ══ what it is, its code, and where the response
+            stands: the category tile, the tags, then the 3-step pipeline. */}
+        <header className="relative z-20 shrink-0 border-b border-hairline bg-base-900/95 px-6 pb-6 pt-6 backdrop-blur-md sm:px-8 lg:pt-8 dark:bg-base-950/95">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close incident details"
+            className="absolute right-6 top-6 rounded-md p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:right-8 lg:top-8"
+          >
+            <X size="md" />
+          </button>
+
+          <div className="flex items-start gap-4 pr-10">
+            {/* The category's own colour, as the reference's rose tile is for
+                Medical: tinted fill, a matching edge and a soft glow. */}
+            <span
+              aria-hidden="true"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border"
+              style={{
+                color: categoryHex,
+                backgroundColor: `${categoryHex}1a`,
+                borderColor: `${categoryHex}33`,
+                boxShadow: `0 0 15px -3px ${categoryHex}26`,
+              }}
+            >
+              <CategoryGlyph size="md" />
+            </span>
+            <div className="flex min-w-0 flex-col pt-0.5">
+              <h2 className="line-clamp-2 text-lg font-semibold leading-snug tracking-tight text-text-primary">{title}</h2>
+              <p className="mt-0.5 text-[13px] font-medium text-text-secondary">
+                <span className="font-mono">{code}</span>
+                {report.reportedAt ? (
+                  <>
+                    <span aria-hidden="true" className="mx-1.5 opacity-40">•</span>
+                    Reported {clock(report.reportedAt)}
+                  </>
+                ) : null}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close incident details"
-              className="icon-btn icon-btn-sm -mr-1.5 -mt-1 shrink-0"
-            >
-              <X size="sm" />
-            </button>
           </div>
 
-          {/* ── THE PILL ROW ───────────────────────────────────────────────
-              What KIND of call and how urgent — the two questions a badge is
-              good at and a stepper is not. Both were a plain sentence and a
-              bare severity word inside the card below; as pills in the header
-              they are the same objects, in the same tones, that the Guardhouse
-              and the incident tables already draw.
-
-              THE WIRE-STATUS PILL IS GONE. It read "Pending" / "Dispatched" /
-              "Resolved" directly above a three-step pipeline that spells the
-              same fact out in labelled steps WITH the time each was reached —
-              and worse, it could disagree with the pipeline, because `status`
-              and `dispatchStage` are two fields and a legacy document carries
-              `in_progress` under a stage of `responding`. One of them had to
-              be the panel's answer. The pipeline is the better one: it is the
-              fact the Guardhouse writes, and it shows the whole arc rather
-              than one word of it.
-
-              `archived` moved up here from the reporter banner, where being
-              archived was never a property of the person who filed it. */}
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            {/* ── NOBODY IS ON THIS CALL ──────────────────────────────────
-                The one stage the pipeline understates. Steps 2 and 3 are
-                plainly ahead of you, but step 1 not having happened looks the
-                same as step 1 being in progress at a glance — both are "the
-                first node is not filled in". So the header says it in words,
-                in the Guardhouse's words, rather than leaving an em-dash in an
-                "Assigned to" row to imply it. */}
+          {/* ── TAGS ── unassigned state, category, priority, and the
+              exceptional states (no acknowledgement, escalated, archived). */}
+          <div className="mt-6 flex flex-wrap items-center gap-2">
             {stage === 'none' ? (
-              <StatusBadge tone="warning" size="sm" icon={Radio}>
-                Unassigned — awaiting dispatch
-              </StatusBadge>
+              <Tag tone="warning" icon={Radio}>
+                Unassigned
+              </Tag>
             ) : null}
-            <StatusBadge tone={categoryTone(report.category)} size="sm">
-              {categoryLabel(report.category)}
-            </StatusBadge>
-            <StatusBadge severity={severity} size="sm">
+            <Tag tone={categoryTone(report.category)}>{categoryLabel(report.category)}</Tag>
+            <Tag tone={SEVERITY_TONES[severity] ?? 'warning'} pulse={severity === 'critical'}>
               {SEVERITY_LABELS[severity] ?? 'Medium'} priority
-            </StatusBadge>
+            </Tag>
             {ackExpired ? (
-              <StatusBadge tone="danger" size="sm" icon={Timer}>
+              <Tag tone="danger" icon={Timer}>
                 No acknowledgement
-              </StatusBadge>
+              </Tag>
             ) : null}
             {report.escalation ? (
-              <StatusBadge tone="danger" size="sm" icon={AlertOctagon}>
+              <Tag tone="danger" icon={AlertOctagon}>
                 Escalated
-              </StatusBadge>
+              </Tag>
             ) : null}
             {archived ? (
-              <StatusBadge tone="neutral" size="sm" icon={Archive}>
+              <Tag tone="neutral" icon={Archive}>
                 Archived
-              </StatusBadge>
+              </Tag>
             ) : null}
           </div>
 
-          {/* ── THE PIPELINE, CENTRED ──────────────────────────────────────
-              In the header rather than three groups down the card, and centred
-              rather than strung across a five-column grid built for a machine
-              that has two fewer stages than it used to. Same component, same
-              geometry and same derived stage as the Guardhouse's. */}
-          <div className="mt-3">
+          {/* ── THE 3-STEP LIFECYCLE ── Dispatched → Responding → Resolved, the
+              same component and derived stage as the Guardhouse's drawer. */}
+          <div className="mt-6">
             <StageStepper report={report} stage={stage} />
           </div>
         </header>
 
-        {/* ══ ONE CARD ═══════════════════════════════════════════════════
-            One surface divided by hairlines rather than five bordered cards
-            stacked in a 416px column. `divide-y` rather than a border on each
-            child, so there is no doubled rule where two groups meet and no
-            leading rule under the header; `overflow-hidden` keeps the dividers
-            inside the rounded corners.
-
-            ── WHY THERE IS STILL EXACTLY ONE SCROLLBAR ────────────────────
-            The <aside> is height-bounded (`h-[88dvh]`, `lg:h-full`) and is a
-            flex column; THIS div is the only `overflow-y-auto` in the panel
-            and takes `min-h-0 flex-1`, which is what lets a flex child shrink
-            below its content and scroll instead of pushing the panel taller.
-            That is already the "fits the viewport, no double scrollbar"
-            behaviour — a `max-h-[calc(100vh-80px)]` on top of a parent that
-            is exactly 100vh would simply strand 80px of empty rail under the
-            card, so the bound stays on the panel where it belongs. */}
-        <div ref={bodyRef} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-          <section className="divide-y divide-hairline overflow-hidden rounded-xl border border-hairline bg-base-800">
-            {/* ── 1. REPORTER PROFILE ───────────────────────────────────
-                Who filed it, answered before anything else on the card. The
-                name is the only `text-base` on the surface and the only bold
-                weight, so it wins the first fixation; everything below it is
-                14px or smaller. */}
-            <Group icon={officerFiled ? IdCard : User} title={officerFiled ? 'Filed by officer' : 'Reporter'}>
-              <div className="flex items-start gap-3">
-                <span
-                  aria-hidden="true"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-400 ring-1 ring-inset ring-brand-500/25"
-                >
-                  {reporterInitial}
+        {/* ══ BODY ══ borderless sections on the panel itself. The one scroll
+            region; the scrollbar is hidden per the reference. */}
+        <div
+          ref={bodyRef}
+          className="hide-scrollbar min-h-0 flex-1 space-y-10 overflow-y-auto overscroll-contain px-6 py-8 sm:px-8"
+        >
+          {/* ── REPORTER ── */}
+          <section className="flex items-center gap-4" aria-label={officerFiled ? 'Filed by officer' : 'Reporter'}>
+            <span
+              aria-hidden="true"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-brand-500/20 bg-brand-500/10 text-[15px] font-semibold text-brand-500"
+            >
+              {reporterInitial}
+            </span>
+            <div className="flex min-w-0 flex-col">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                <span className="truncate text-[15px] font-semibold text-text-primary">
+                  {report.reportedByName || 'Unknown reporter'}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-bold leading-tight text-text-primary">
-                    {report.reportedByName || 'Unknown reporter'}
-                  </p>
-
-                  {/* The verification badge, which is the whole reason this
-                      block is a banner and not another key/value row. It
-                      states whether an administrator has confirmed the
-                      resident owns or occupies the lot. It is NOT a verified
-                      phone number — nothing here sends a code to a handset. */}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {officerFiled ? (
-                      <StatusBadge tone="neutral" size="sm" icon={IdCard}>
-                        Security officer
-                      </StatusBadge>
-                    ) : contactLoading ? (
-                      <span className="text-2xs text-text-muted">{'Looking up…'}</span>
-                    ) : household === RESIDENT_STATUS.verified ? (
-                      <StatusBadge tone="success" size="sm" icon={BadgeCheck}>
-                        Verified resident
-                      </StatusBadge>
-                    ) : household === RESIDENT_STATUS.rejected ? (
-                      <StatusBadge tone="danger" size="sm" icon={ShieldX}>
-                        {RESIDENT_STATUS_LABELS[household]}
-                      </StatusBadge>
-                    ) : (
-                      <StatusBadge tone="warning" size="sm" icon={ShieldQuestion}>
-                        {RESIDENT_STATUS_LABELS[household]}
-                      </StatusBadge>
-                    )}
-                  </div>
-
-                  {/* Both times, one line. "14 minutes ago" is what an
-                      operator reasons with; the timestamp is what they quote
-                      into a log. A record needs both. */}
-                  <p className="mt-2 text-2xs leading-relaxed text-text-muted">
-                    {exactTime(report.reportedAt) || 'Time unavailable'}
-                    {report.reportedAt ? ` · ${relativeTime(report.reportedAt)}` : ''}
-                  </p>
-                </div>
+                {/* Whether an administrator has confirmed this resident owns or
+                    occupies the lot. Not a verified phone number. */}
+                {officerFiled ? (
+                  <MiniTag tone="neutral" icon={IdCard}>Security officer</MiniTag>
+                ) : contactLoading ? (
+                  <span className="text-[11px] text-text-muted">Looking up…</span>
+                ) : household === RESIDENT_STATUS.verified ? (
+                  <MiniTag tone="success" icon={BadgeCheck}>Verified</MiniTag>
+                ) : household === RESIDENT_STATUS.rejected ? (
+                  <MiniTag tone="danger" icon={ShieldX}>{RESIDENT_STATUS_LABELS[household]}</MiniTag>
+                ) : (
+                  <MiniTag tone="warning" icon={Clock}>{RESIDENT_STATUS_LABELS[household]}</MiniTag>
+                )}
               </div>
-            </Group>
+              <span className="mt-1 text-[13px] font-medium text-text-muted">
+                {exactTime(report.reportedAt) || 'Time unavailable'}
+                {/* The relative time only while it IS relative: past a week
+                    relativeTime falls back to a plain date, which beside the
+                    exact time above just printed the date twice. */}
+                {report.reportedAt && /ago|now|Yesterday/i.test(relativeTime(report.reportedAt))
+                  ? ` · ${relativeTime(report.reportedAt)}`
+                  : ''}
+              </span>
+            </div>
+          </section>
 
-            {/* ── 2. WHO IS ON IT ───────────────────────────────────────
-                ── NO MORE "ASSIGNED TO: —" ────────────────────────────────
-                This was a key/value row printing `report.assignedGuardName`
-                raw. It failed at both ends: with nobody on the call it drew an
-                em-dash, which reads as a field the console failed to load
-                rather than as the most important fact on the panel; and with
-                somebody on it, it printed whatever is in `staff_accounts.name`
-                — frequently the address the account was provisioned with — on
-                a screen an administrator shares in a meeting.
-
-                A badge instead, from `unitLabel` — the same derivation the
-                Guardhouse's unit picker and drawer use, so the officer is
-                named identically in both consoles.
-
-                ── AND NO GROUP AT ALL WHEN NOBODY IS ON IT ────────────────
-                The unassigned case is stated ONCE, as the amber badge in the
-                header, where it sits beside the other two facts a reader
-                scans for before anything else. Drawn here as well it was the
-                same badge with the same words twice in one viewport, 300px
-                apart, which is the redundancy every other change on this
-                panel has been spending lines to remove.
-
-                The header is the right of the two because "nobody has this
-                call" outranks the card: it is the first thing a reader needs
-                and it is exceptional, which is what the header's pill row is
-                for. An empty group under a heading reading "Assigned unit" is
-                the weaker statement of the same fact. */}
-            {assigned ? (
-              <Group icon={Radio} title="Assigned unit">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <StatusBadge tone="info" size="sm" icon={UserRoundCheck}>
-                    {assigned.label}
+          {/* ── ASSIGNED UNIT ── only when somebody is on the call; the
+              unassigned case is the amber tag in the header. */}
+          {assigned ? (
+            <section className="space-y-3">
+              <SectionTitle icon={Radio}>Assigned unit</SectionTitle>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <StatusBadge tone="info" size="sm" icon={UserRoundCheck}>
+                  {assigned.label}
+                </StatusBadge>
+                {assigned.badge ? (
+                  <StatusBadge tone="neutral" size="sm">
+                    Badge {assigned.badge}
                   </StatusBadge>
-                  {assigned.badge ? (
-                    <StatusBadge tone="neutral" size="sm">
-                      Badge {assigned.badge}
-                    </StatusBadge>
-                  ) : null}
-                </div>
-              </Group>
-            ) : null}
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
-            {/* ── 3. GEOSPATIAL LOCATION ────────────────────────────────
-                The address lives HERE and only here. It is not repeated in
-                the reporter banner above: `phase`/`block`/`lot` on an incident
-                ARE the reporting resident's property fields, so the two rows
-                could never disagree — printing them twice in a 416px rail
-                spends a line to say nothing new. */}
-            <Group icon={MapPin} title="Location">
-              <MetaList className={META}>
-                <MetaItem label="Address">{address || report.location}</MetaItem>
-                {/* `location` is `describeIncidentLocation`, which composes the
-                    very phase/block/lot string above whenever the document has
-                    no `propertyLabel` and no free-text location — so for most
-                    reports this row printed the Address again, verbatim, one
-                    line below it. Shown only when it says something else. */}
-                <MetaItem label="Reported at" hidden={!report.location || report.location === address}>
-                  {report.location}
-                </MetaItem>
-                <MetaItem label="Coordinates" mono>
-                  {coordinates}
-                </MetaItem>
-              </MetaList>
-            </Group>
+          {/* ── LOCATION ── */}
+          <section className="space-y-3">
+            <SectionTitle icon={MapPin}>Location</SectionTitle>
+            <dl className="flex flex-col gap-4 rounded-xl border border-hairline bg-base-800/60 p-5 dark:bg-base-900/40">
+              <LocationRow label="Address">
+                <span className="text-[14px] font-semibold text-text-primary">
+                  {(address || report.location || '').replaceAll(' · ', ' • ') || '—'}
+                </span>
+              </LocationRow>
+              {/* Only when it says something the address does not. */}
+              {report.location && report.location !== address ? (
+                <LocationRow label="Reported at">
+                  <span className="text-[14px] text-text-primary">{report.location}</span>
+                </LocationRow>
+              ) : null}
+              <LocationRow label="Coordinates">
+                <span className="select-all font-mono text-[13px] text-text-secondary">{coordinates || '—'}</span>
+              </LocationRow>
+            </dl>
+          </section>
 
-            {/* ── 4. WHAT THE RESIDENT SENT, IN ONE CONTAINER ───────────
-                The description and the photos were two groups with two headers,
-                and they are one submission: the resident typed the sentence and
-                attached the pictures in the same breath, about the same thing.
-                Reading them apart is the administrator doing a join the panel
-                should have done.
-
-                It also fixes a worse case than the tidiness one. The photos
-                frequently ARRIVE after the text — a phone on estate wi-fi
-                finishes the write before the uploads — so a "Description"
-                group and an "Evidence · 0 files" group saying "No media
-                attached" were two separate claims about one report, and the
-                reader had to work out they were about the same thing. In one
-                container the count is a caption on the content it counts.
-
-                The group is rendered even with no description, which it was
-                not: a report whose narrative is empty but whose photos are
-                still uploading used to drop the description group entirely,
-                so the panel went quiet about the submission at exactly the
-                moment it was changing.
-
-                The divider, not a gap: a hairline says "same card, next part",
-                where whitespace at this width reads as the edge of the card. */}
-            <Group
+          {/* ── WHAT THE RESIDENT SENT ── the narrative and the photos as one
+              submission. Photos often land after the text: while the document
+              says media is coming (`hasMedia`) and no URL has arrived, the
+              uploading line shows; the next snapshot that carries URLs swaps
+              it for the stamped, clickable evidence grid. */}
+          <section className="space-y-4">
+            <SectionTitle
               icon={FileText}
-              title="Reported description"
               action={
                 media.length ? (
-                  <span className="shrink-0 text-2xs font-medium text-text-muted">
+                  <span className="text-[12px] font-medium text-text-muted">
                     {media.length} file{media.length === 1 ? '' : 's'}
                   </span>
                 ) : null
               }
             >
-              {report.description ? (
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
-                  {report.description}
-                </p>
-              ) : (
-                <p className="text-sm text-text-muted">The resident submitted no written description.</p>
-              )}
+              Reported description
+            </SectionTitle>
+            {report.description ? (
+              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text-primary">
+                {report.description}
+              </p>
+            ) : (
+              <p className="text-[15px] text-text-muted">The resident submitted no written description.</p>
+            )}
 
-              {media.length || report.hasMedia ? (
-                <div className="mt-5 border-t border-hairline pt-5">
+            {media.length ? (
+              <div className="pt-2">
+                <EvidenceGrid
+                  media={media}
+                  stamp={stamp}
+                  onOpen={(index) => setLightbox({ items: media, index, watermark })}
+                  emptyText=""
+                />
+              </div>
+            ) : report.hasMedia ? (
+              <p role="status" className="flex items-center gap-3 pt-2 text-[13px] font-medium text-text-muted">
+                <Loader2 size="sm" className="animate-[spin_1.5s_linear_infinite]" aria-hidden="true" />
+                Media still uploading…
+              </p>
+            ) : null}
+          </section>
+
+          {/* ── RESOLUTION ── once the Guardhouse closes the call. */}
+          {stage === 'resolved' && report.resolution ? (
+            <section className="space-y-4">
+              <SectionTitle
+                icon={ClipboardList}
+                action={
+                  outcomeLabel ? <span className="text-[12px] font-medium text-text-muted">{outcomeLabel}</span> : null
+                }
+              >
+                Resolution
+              </SectionTitle>
+              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text-primary">
+                {report.resolution.notes}
+              </p>
+              {resolutionMedia.length ? (
+                <div className="pt-2">
                   <EvidenceGrid
-                    media={media}
-                    stamp={stamp}
-                    onOpen={(index) => setLightbox({ items: media, index, watermark })}
-                    emptyText="Media still uploading…"
+                    media={resolutionMedia}
+                    stamp={resolutionStamp}
+                    onOpen={(index) =>
+                      setLightbox({
+                        items: resolutionMedia,
+                        index,
+                        watermark: {
+                          name: `${code} · resolution evidence`,
+                          address: `${address || 'Location not recorded'} · ${forensicCoordinates(
+                            resolutionStamp.lat,
+                            resolutionStamp.lng,
+                          )}`,
+                          timestamp: forensicTimestamp(report.resolvedAt),
+                        },
+                      })
+                    }
+                    emptyText=""
                   />
                 </div>
               ) : null}
-            </Group>
-
-            {/* ── 5. WHAT CAME OUT OF IT ────────────────────────────────
-                The resolution the Guardhouse filed: its outcome, the officer's
-                notes and the scene photographs. This panel had none of it, so
-                the console that signs a resolution off could read everything
-                about the REPORT and nothing about the RESPONSE — the one thing
-                "verify" is a verb about. The grid is stamped at the
-                resolution's own time and position, not the report's. */}
-            {stage === 'resolved' && report.resolution ? (
-              <Group
-                icon={ClipboardList}
-                title="Resolution"
-                action={
-                  outcomeLabel ? (
-                    <span className="shrink-0 text-2xs font-medium text-text-muted">{outcomeLabel}</span>
-                  ) : null
-                }
-              >
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">
-                  {report.resolution.notes}
-                </p>
-                {resolutionMedia.length ? (
-                  <div className="mt-5 border-t border-hairline pt-5">
-                    <EvidenceGrid
-                      media={resolutionMedia}
-                      stamp={resolutionStamp}
-                      onOpen={(index) =>
-                        setLightbox({
-                          items: resolutionMedia,
-                          index,
-                          watermark: {
-                            name: `${code} · resolution evidence`,
-                            address: `${address || 'Location not recorded'} · ${forensicCoordinates(
-                              resolutionStamp.lat,
-                              resolutionStamp.lng,
-                            )}`,
-                            timestamp: forensicTimestamp(report.resolvedAt),
-                          },
-                        })
-                      }
-                      emptyText=""
-                    />
-                  </div>
-                ) : null}
-              </Group>
-            ) : null}
-          </section>
+            </section>
+          ) : null}
         </div>
 
-        {/* ══ THE OVERSIGHT ACTION — PINNED ══
-            The footer this panel used to have was four buttons wide — Call
-            reporter, Directions, Copy coordinates, Archive — all four
-            available at once, at every stage, whatever the call was doing.
-            That is the pattern the Guardhouse's footer was rebuilt away from:
-            a row of equally-weighted controls makes a reader answer "what can
-            I do here" on every line, and the two questions compete.
-
-            What is pinned here instead is the ONE action the stage calls for,
-            with Close last. The shortcuts that went are not missed: the
-            coordinates in Location are selectable text, and the full ticket
-            record — which the pre-resolution footer now links to directly —
-            carries the history, the documents and the PDF export. */}
-        <footer className="relative shrink-0 border-t border-hairline bg-base-900 px-3.5 pb-3.5 pt-3">
+        {/* ══ STICKY FOOTER ══ the one action the stage calls for, Close last,
+            and the helper note saying what this console may and may not do. */}
+        <footer className="relative z-20 shrink-0 border-t border-hairline bg-base-900/90 px-6 py-6 backdrop-blur-md sm:px-8 dark:bg-base-950/90">
           {feedback ? <Receipt feedback={feedback} onDismiss={dismiss} /> : null}
-          {/* Centred, and Close LAST, for the reason the X is top-RIGHT: the
-              control that takes your place away should never be where the
-              thumb lands for the thing you meant to do. `flex-wrap` lets Close
-              drop to its own row exactly when the two resolved-stage actions
-              already fill the width, instead of squeezing either. */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             {footer}
-            <button type="button" onClick={onClose} className="btn btn-action btn-outline">
-              <X size="sm" aria-hidden="true" />
+            <button type="button" onClick={onClose} className="sheet-btn sheet-btn-outline">
+              <X size="sm" className="opacity-70" aria-hidden="true" />
               Close
             </button>
           </div>
-          {hint ? <p className="mt-2 text-caption leading-snug text-text-muted">{hint}</p> : null}
+          {hint ? <p className="text-center text-[12px] leading-relaxed text-text-muted">{hint}</p> : null}
         </footer>
       </aside>
 

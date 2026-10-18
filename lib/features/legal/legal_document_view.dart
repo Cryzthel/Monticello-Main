@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
-import 'package:monticello_villas_app/core/widgets/modern_back_button.dart';
+import 'package:monticello_villas_app/core/widgets/page_title_bar.dart';
 import 'package:monticello_villas_app/features/legal/legal_content.dart';
 
 /// One legal document laid out for reading on a phone: a title block with
@@ -25,11 +25,21 @@ class LegalDocumentBody extends StatelessWidget {
   /// The Settings reader already names the document in its header bar.
   final bool showTitle;
 
+  /// 15 / 1.65. Justified text needs the extra leading more than ragged
+  /// text does: stretched word gaps make a line read looser, and tight
+  /// leading under it turns the page grey.
   static TextStyle get _bodyStyle => sfPro(
-        fontSize: 14,
+        fontSize: 15,
         color: AppColors.textSecondary,
-        height: 1.6,
+        height: 1.65,
       );
+
+  /// Every block of running text is justified, by request, so the two
+  /// documents set as documents. Flutter leaves each paragraph's LAST line
+  /// ragged, which is what keeps a short closing line from being stretched
+  /// across the page. Headings stay left-aligned: they are labels, and
+  /// justifying a one-line heading does nothing but space it out.
+  static const TextAlign bodyAlign = TextAlign.justify;
 
   @override
   Widget build(BuildContext context) {
@@ -69,12 +79,12 @@ class LegalDocumentBody extends StatelessWidget {
               border: Border.all(
                   color: AppColors.accentPrimary.withValues(alpha: 0.14)),
             ),
-            child: Text(doc.intro!, style: _bodyStyle),
+            child: Text(doc.intro!, style: _bodyStyle, textAlign: bodyAlign),
           ),
           const SizedBox(height: 24),
         ],
         for (var i = 0; i < doc.sections.length; i++) ...[
-          if (i > 0) const SizedBox(height: 24),
+          if (i > 0) const SizedBox(height: 28),
           _Section(section: doc.sections[i], bodyStyle: _bodyStyle),
         ],
       ],
@@ -96,9 +106,9 @@ class _Section extends StatelessWidget {
         Text(
           section.heading,
           style: sfPro(
-            fontSize: 16,
+            fontSize: 17,
             fontWeight: FontWeight.w700,
-            letterSpacing: -0.2,
+            letterSpacing: -0.25,
             color: AppColors.textPrimary,
             height: 1.35,
           ),
@@ -134,18 +144,22 @@ class _Bullets extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Centred on the first line: 14px text at 1.6 leading is a
-                  // 22.4px line, so a 6px dot sits 8px down.
+                  // Centred on the first line: 15px text at 1.65 leading is a
+                  // 24.75px line, so a 6px dot sits ~9.4px down.
                   Container(
                     width: 6,
                     height: 6,
-                    margin: const EdgeInsets.only(top: 8, right: 12),
+                    margin: const EdgeInsets.only(top: 9.4, right: 12),
                     decoration: const BoxDecoration(
                       color: AppColors.accentPrimary,
                       shape: BoxShape.circle,
                     ),
                   ),
-                  Expanded(child: Text(items[i], style: style)),
+                  Expanded(
+                    child: Text(items[i],
+                        style: style,
+                        textAlign: LegalDocumentBody.bodyAlign),
+                  ),
                 ],
               ),
             ),
@@ -178,11 +192,15 @@ class _ParagraphState extends State<_Paragraph> {
   @override
   Widget build(BuildContext context) {
     final at = widget.text.indexOf(kPrivacyEmail);
-    if (at < 0) return Text(widget.text, style: widget.style);
+    if (at < 0) {
+      return Text(widget.text,
+          style: widget.style, textAlign: LegalDocumentBody.bodyAlign);
+    }
 
     _mail ??= TapGestureRecognizer()
       ..onTap = () => launchUrl(Uri(scheme: 'mailto', path: kPrivacyEmail));
     return Text.rich(
+      textAlign: LegalDocumentBody.bodyAlign,
       TextSpan(
         style: widget.style,
         children: [
@@ -219,43 +237,17 @@ class LegalDocumentScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // The app-wide back-button header, title centred against the full
-            // width via a Stack — matches the incident report flow.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: SizedBox(
-                height: 44,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    const Align(
-                      alignment: Alignment.centerLeft,
-                      child: ModernBackButton(),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 52),
-                      child: Text(
-                        document.title,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: sfPro(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.3,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            // The app's shared title bar (as on Settings and History) rather
+            // than a hand-built copy of it.
+            PageTitleBar(title: document.title),
             const Divider(height: 1, color: AppColors.borderNeutral),
             Expanded(
               child: SingleChildScrollView(
+                // 24pt gutters, wider than the app's 16: a long-form reading
+                // column wants a shorter measure, and justified lines show
+                // their word gaps less the shorter they are.
                 padding: EdgeInsets.fromLTRB(
-                    20, 20, 20, MediaQuery.paddingOf(context).bottom + 40),
+                    24, 24, 24, MediaQuery.paddingOf(context).bottom + 48),
                 child: LegalDocumentBody(document: document, showTitle: false),
               ),
             ),

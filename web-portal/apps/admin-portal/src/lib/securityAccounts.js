@@ -36,6 +36,13 @@ import { APPROVED_STATUS } from '@shared/auth/roles'
 // already deployed, with no rules change and no window where a half-applied
 // policy is in force. `!== 'approved'` is a closed set: anything that is not
 // the one permitted value is denied, including values invented later.
+// What every security account is created as, and what an edit falls back to
+// when an older account has none recorded. Shared by the create and edit
+// modals so the two can never send different defaults.
+export const PATROL_ACCESS_ROLE = 'roving_patrol'
+export const DEFAULT_POST = 'perimeter_patrol'
+export const ROSTER_SHIFT = 'morning'
+
 export const ACCOUNT_STATUS = {
   active: APPROVED_STATUS,
   suspended: 'suspended',
@@ -164,6 +171,9 @@ export function resolveAccessRole(account) {
 // a guard picks one at clock-in — so the list lives in @shared where BOTH
 // portals can reach it. Every existing `from '@/lib/securityAccounts'` import
 // keeps resolving.
+// Imported as well as re-exported: `export … from` creates no local binding,
+// so shiftLabel below threw a ReferenceError the first time it ran.
+import { SHIFT_BY_VALUE } from '@shared/lib/shiftTypes'
 export { SHIFTS, SHIFT_BY_VALUE, shiftForTime } from '@shared/lib/shiftTypes'
 
 export const POSTS = [
@@ -325,6 +335,8 @@ export async function copyText(text) {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const BADGE_RE = /^[A-Za-z0-9-]{2,16}$/
+// Mirrors PHONE_RE in functions/securityProvisioning.js — keep the two in step.
+const PHONE_RE = /^\+?[0-9(][0-9 ()-]{6,19}$/
 
 export function validateAccountForm(form, { requireCredentials = true } = {}) {
   const errors = {}
@@ -341,6 +353,16 @@ export function validateAccountForm(form, { requireCredentials = true } = {}) {
   if (!form.badgeNumber?.trim()) errors.badgeNumber = 'Enter their badge ID.'
   else if (!BADGE_RE.test(form.badgeNumber.trim())) {
     errors.badgeNumber = 'Letters, numbers and dashes only (2–16 characters).'
+  }
+
+  // Official contact number. Required for a NEW account; optional on an edit,
+  // because accounts made before the field existed have none and an admin
+  // fixing a name should not be blocked on a number they may not have.
+  const phone = form.phone?.trim() ?? ''
+  if (!phone) {
+    if (requireCredentials) errors.phone = 'Enter their contact number.'
+  } else if (!PHONE_RE.test(phone)) {
+    errors.phone = 'Use 7–20 digits; spaces, +, - and () are allowed.'
   }
 
   // No role, post or shift checks. The form no longer asks for any of them —
@@ -388,6 +410,7 @@ export function mapSecurityAccount(d) {
     accessRole: d.accessRole ?? '',
     status: normalizeStatus(d.status),
     badgeNumber: d.badgeNumber ?? '',
+    phone: d.phone ?? '',
     assignedPost: d.assignedPost ?? '',
     shift: d.shift ?? '',
     duties: Array.isArray(d.duties) ? d.duties : [],

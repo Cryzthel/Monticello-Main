@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import BrandMark from '@shared/components/BrandMark'
-import { Building2, LogOut, ShieldCheck, X } from '@shared/icons'
+import { LogOut, X } from '@shared/icons'
 import Tooltip from '@shared/components/Tooltip'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
 
@@ -188,24 +188,6 @@ function SidebarHeader({ collapsed, onClose }) {
   )
 }
 
-function Avatar({ user }) {
-  const initial = (user?.displayName || user?.email || 'A').charAt(0).toUpperCase()
-  if (user?.photoURL) {
-    return (
-      <img
-        src={user.photoURL}
-        alt=""
-        className="h-8 w-8 shrink-0 rounded-full border border-tint/10 object-cover"
-      />
-    )
-  }
-  return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-400 ring-1 ring-inset ring-brand-500/25">
-      {initial}
-    </span>
-  )
-}
-
 function NavItem({ to, label, icon: Icon, count, collapsed, onNavigate }) {
   return (
     <Tooltip label={label} disabled={!collapsed}>
@@ -260,10 +242,10 @@ function NavItem({ to, label, icon: Icon, count, collapsed, onNavigate }) {
                 utilities ever land in the same class string. */}
             {count > 0 ? (
               <span
-                className={`flex h-5 shrink-0 items-center justify-center rounded-full bg-pill-danger text-2xs font-semibold tabular-nums text-pill-danger-fg transition-opacity ${
+                className={`flex shrink-0 items-center justify-center rounded-full bg-pill-danger py-1 text-xs font-semibold leading-4 tabular-nums text-pill-danger-fg ring-1 ring-inset ring-pill-danger-fg/15 transition-opacity ${
                   collapsed
                     ? 'w-0 overflow-hidden opacity-0 duration-150'
-                    : 'mr-3 min-w-5 px-1.5 opacity-100 delay-100 duration-200'
+                    : 'mr-3 min-w-6 px-3 opacity-100 delay-100 duration-200'
                 }`}
               >
                 {count > 99 ? '99+' : count}
@@ -308,77 +290,57 @@ function SidebarNav({ navGroups, badgeCounts, collapsed, onNavigate }) {
 }
 
 /**
- * Account footer: who is signed in, on which role, and the way out.
+ * Who is signed in, directly above Sign out — the same block in both portals.
  *
- * Lives at the bottom of the sidebar rather than the top-right of the header
- * because that is where an operator looks for it — and because the header on
- * these dashboards is already carrying the page title, the search trigger and
- * the live alert bell.
+ * The portal decides what it carries (2026-10-18): the Guardhouse shows the
+ * officer's full name over their email, so a shared gate terminal says whose
+ * shift it is; Admin shows the email alone. One structure either way — a
+ * missing name simply leaves the email as the only line.
+ *
+ * The HOA office block (organisation.contactEmail) that used to sit here is
+ * gone: it set the office address — `adminmonticellov@gmail.com` — directly
+ * over the signed-in account's own, so the footer read as the same address
+ * stacked twice, and on the Guardhouse as if the guard were signed in as the
+ * admin.
  */
-/**
- * The HOA office, for the person who needs to reach it at 02:00.
- *
- * ── WHY IT IS HERE AND NOT ON THE SIGN-IN PAGE ──────────────────────────────
- * The obvious home for a contact line is the sign-in screen, and it cannot go
- * there: `system_settings/operations` is readable by `isStaff()`, so a signed
- * out browser cannot read it at all. Anything rendered from these values has
- * to live inside the authenticated shell.
- *
- * Renders nothing when neither field is set, rather than an empty card with a
- * heading — an administrator who has not filled this in has not thereby asked
- * for a blank panel in every console.
- */
-function SidebarOffice({ collapsed }) {
-  const contactEmail = useSystemSettings((state) => state.values.organisation.contactEmail)
-  const officeHours = useSystemSettings((state) => state.values.organisation.officeHours)
-  if (!contactEmail && !officeHours) return null
+function SidebarProfile({ collapsed, profile }) {
+  const email = profile?.email
+  if (!email) return null
+  const name = profile.name?.trim() || ''
+  const initial = (name || email).charAt(0).toUpperCase()
 
   return (
-    <Tooltip label={contactEmail || 'HOA office'} hint={officeHours || undefined} disabled={!collapsed}>
-      <div className="nav-link cursor-default py-2 hover:bg-transparent">
+    <Tooltip label={name || email} hint={name ? email : undefined} disabled={!collapsed}>
+      <div className="nav-link cursor-default py-2 hover:bg-transparent" aria-label={name ? `Signed in as ${name}, ${email}` : `Signed in as ${email}`}>
         <span className={`nav-icon ${slotWidth(collapsed)}`}>
-          <Building2 size="sm" className="text-text-muted" />
+          <span
+            aria-hidden="true"
+            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-[#047857]"
+          >
+            {initial}
+          </span>
         </span>
-        <span className={`nav-label ${labelMotion(collapsed)}`}>
-          {contactEmail ? (
-            <a
-              href={`mailto:${contactEmail}`}
-              className="block truncate text-2xs font-medium leading-tight text-text-primary hover:underline"
-            >
-              {contactEmail}
-            </a>
-          ) : (
-            <span className="block truncate text-2xs font-medium leading-tight text-text-primary">HOA office</span>
-          )}
-          {officeHours ? (
-            <span className="mt-0.5 block truncate text-2xs leading-tight text-text-secondary">{officeHours}</span>
+        <span className={`nav-label min-w-0 ${labelMotion(collapsed)}`}>
+          {name ? (
+            <span className="block truncate text-xs font-semibold leading-tight text-text-primary">{name}</span>
           ) : null}
+          <span
+            className={`block truncate leading-tight ${
+              name ? 'mt-0.5 text-2xs text-text-secondary' : 'text-xs font-medium text-text-primary'
+            }`}
+          >
+            {email}
+          </span>
         </span>
       </div>
     </Tooltip>
   )
 }
 
-function SidebarFooter({ user, roleLabel, collapsed, onLogout }) {
-  const email = user?.email ?? 'Signed in'
-
+function SidebarFooter({ collapsed, onLogout, profile }) {
   return (
     <div className="shrink-0 border-t border-hairline pt-3">
-      <SidebarOffice collapsed={collapsed} />
-      <Tooltip label={email} hint={roleLabel} disabled={!collapsed}>
-        <div className="nav-link cursor-default py-2 hover:bg-transparent">
-          <span className={`nav-icon ${slotWidth(collapsed)}`}>
-            <Avatar user={user} />
-          </span>
-          <span className={`nav-label ${labelMotion(collapsed)}`}>
-            <span className="block truncate text-xs font-medium leading-tight text-text-primary">{email}</span>
-            <span className="mt-0.5 flex items-center gap-1 text-2xs leading-tight text-text-secondary">
-              <ShieldCheck size="sm" className="shrink-0 text-brand-400" />
-              {roleLabel}
-            </span>
-          </span>
-        </div>
-      </Tooltip>
+      <SidebarProfile collapsed={collapsed} profile={profile} />
 
       <Tooltip label="Sign out" disabled={!collapsed}>
         <button
@@ -398,11 +360,11 @@ function SidebarFooter({ user, roleLabel, collapsed, onLogout }) {
 }
 
 export default function CollapsibleSidebar({
-  roleLabel,
   navGroups,
   badgeCounts,
-  user,
   onLogout,
+  /** `{ name?, email }` for the footer's profile block. */
+  profile,
   /** Rail only. The drawer is always expanded. Toggled from TopHeader. */
   collapsed = false,
   /** Drawer only — renders a close control in the brand row. */
@@ -444,7 +406,7 @@ export default function CollapsibleSidebar({
       {sidebarSlot ? sidebarSlot({ collapsed: isRail && collapsed }) : null}
 
       {/* The collapse trigger is in TopHeader, not in here — see SidebarHeader. */}
-      <SidebarFooter user={user} roleLabel={roleLabel} collapsed={collapsed} onLogout={onLogout} />
+      <SidebarFooter collapsed={collapsed} onLogout={onLogout} profile={profile} />
     </aside>
   )
 }

@@ -4,6 +4,7 @@ import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
 import { isTestIdentity } from '@shared/lib/identity'
 import { mapShiftDoc } from '@shared/lib/shifts'
+import { toDate } from '@shared/lib/dates'
 import {
   ACCOUNT_STATUS,
   SECURITY_ROLE_VALUES,
@@ -39,6 +40,15 @@ import {
  * it as a real `last_login_at` column for exactly that reason: in a relational
  * deployment the login handler owns that write and the constraint above
  * disappears.
+ *
+ * ── PRESENCE: "IS THEIR CONSOLE OPEN RIGHT NOW?" (2026-10-19) ────────────────
+ * A second, separate signal. `staff_presence/{uid}` is mirrored from the
+ * Realtime Database by the onPresenceWrite function (see shared/lib/presence.js)
+ * and flips the moment a guard signs in, signs out, closes the tab or loses
+ * signal. Each account carries `presence` — `{ online, lastSeenAt,
+ * onlineSince }` — or null when nothing has been published for it (presence
+ * not deployed yet, or an officer who has not signed in since), in which case
+ * the column falls back to `lastActiveAt` above.
  */
 export function useSecurityAccounts() {
   // Server-side role filter rather than a client-side one. The admin console
@@ -54,6 +64,20 @@ export function useSecurityAccounts() {
 
   const shiftsQuery = useMemo(() => query(collection(db, 'guard_shifts')), [])
   const { data: rawShifts } = useLiveCollection(shiftsQuery)
+
+  const presenceQuery = useMemo(() => query(collection(db, 'staff_presence')), [])
+  const { data: rawPresence } = useLiveCollection(presenceQuery)
+  const presenceByUid = useMemo(() => {
+    const map = new Map()
+    rawPresence.forEach((p) => {
+      map.set(p.id, {
+        online: p.online === true,
+        lastSeenAt: toDate(p.lastSeenAt),
+        onlineSince: toDate(p.onlineSince),
+      })
+    })
+    return map
+  }, [rawPresence])
 
   // uid -> { lastActiveAt, onDutySince, shiftsLogged }
   const activityByUid = useMemo(() => {
@@ -99,6 +123,7 @@ export function useSecurityAccounts() {
       .filter((account) => !isTestIdentity({ name: account.name, email: account.email }))
       .map((account) => {
         const activity = activityByUid.get(account.uid)
+        const presence = presenceByUid.get(account.uid) ?? null
         return {
           ...account,
           shiftsLogged: activity?.shiftsLogged ?? 0,
@@ -109,17 +134,26 @@ export function useSecurityAccounts() {
           onDuty:
             account.status === ACCOUNT_STATUS.active && Boolean(activity?.onDutySince),
           lastActiveAt: account.lastLoginAt ?? activity?.lastActiveAt ?? null,
+          // A suspended or revoked credential is signed out by its own console
+          // within a moment, so it is never reported online here even if the
+          // mirror has not caught up yet.
+          presence: presence
+            ? { ...presence, online: presence.online && account.status === ACCOUNT_STATUS.active }
+            : null,
         }
       })
       .sort((a, b) => {
-        // On duty first — that is the answer to "who is on post" and it should
+        // Online first, then on duty — that is the answer to "who is on post" and it should
         // not require a sort click. Then by name, so the rest of the table is a
         // directory an operator can scan alphabetically rather than a list in
         // Firestore's document order.
+        const aOnline = Boolean(a.presence?.online)
+        const bOnline = Boolean(b.presence?.online)
+        if (aOnline !== bOnline) return aOnline ? -1 : 1
         if (a.onDuty !== b.onDuty) return a.onDuty ? -1 : 1
         return (a.name || a.email).localeCompare(b.name || b.email)
       })
-  }, [rawAccounts, activityByUid])
+  }, [rawAccounts, activityByUid, presenceByUid])
 
   const counts = useMemo(
     () =>
@@ -128,12 +162,14 @@ export function useSecurityAccounts() {
           acc.all += 1
           acc[account.status] = (acc[account.status] ?? 0) + 1
           if (account.onDuty) acc.onDuty += 1
+          if (account.presence?.online) acc.online += 1
           if (account.mustChangePassword) acc.pendingReset += 1
           return acc
         },
         {
           all: 0,
           onDuty: 0,
+          online: 0,
           pendingReset: 0,
           [ACCOUNT_STATUS.active]: 0,
           [ACCOUNT_STATUS.suspended]: 0,

@@ -1,0 +1,123 @@
+rules_version = '2';
+
+// Cloud Storage security rules for Monticello Villas.
+//
+// Folders:
+//   incidents/{uid}/...      → incident-report evidence (photos & videos)
+//   profile_photos/{uid}.jpg → resident profile pictures
+//
+// Only authenticated residents can upload, and only into their own folder.
+// Any signed-in resident may read (so reports/avatars are viewable in-app).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Incident evidence: photos & videos ──────────────────────────────────
+    match /incidents/{userId}/{fileName} {
+      // Any signed-in resident can view evidence.
+      allow read: if request.auth != null;
+
+      // The owner may upload to their own folder, up to 200 MB.
+      //
+      // Images and video are resident evidence from the mobile app. PDF and
+      // plain text were added for the guard portal's "Attach File" field —
+      // officers file printed logs, gate passes and incident sheets, which the
+      // previous image/video-only rule rejected with storage/unauthorized.
+      //
+      // Deliberately an ALLOWLIST, not a size-only check. Office formats
+      // (.doc/.docx/.xls) are excluded because they carry macros; add them
+      // here explicitly if the operational need outweighs that.
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 200 * 1024 * 1024
+        && (
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType.matches('video/.*') ||
+          request.resource.contentType == 'application/pdf' ||
+          request.resource.contentType.matches('text/plain.*')
+        );
+
+      // The owner may remove their own evidence.
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Profile photos: profile_photos/{uid}.jpg ────────────────────────────
+    match /profile_photos/{fileName} {
+      allow read: if request.auth != null;
+
+      // Filename is the uploader's uid (e.g. "<uid>.jpg"); images only, ≤ 10 MB.
+      allow write: if request.auth != null
+        && fileName.matches(request.auth.uid + '\\..*')
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // ── Verification IDs: verification_ids/{uid}/{fileName} ─────────────────
+    // Government-issued IDs submitted at registration. Unlike incident
+    // evidence and avatars above, these are NOT readable by every signed-in
+    // resident — only the uploader and approved staff reviewing the
+    // application. Staff membership is checked against the same
+    // staff_accounts doc firestore.rules uses, so there is one definition of
+    // "is staff" across both rule sets.
+    match /verification_ids/{userId}/{fileName} {
+      allow read: if request.auth != null
+        && (
+          request.auth.uid == userId
+          || firestore.get(
+               /databases/(default)/documents/staff_accounts/$(request.auth.uid)
+             ).data.status == 'approved'
+        );
+
+      // The applicant may upload their own HOA ID / proof of residency:
+      // an image or a PDF, < 10 MB. PDF because proof of residency is often a
+      // lease, a title or a bill, not a photo. Mirrors VerificationIdRules in
+      // lib/features/auth/services/verification_document_service.dart.
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 10 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // ── Announcement media: announcements/{uid}/{fileName} ──────────────────
+    // Images attached to an HOA broadcast from the admin portal's composer
+    // (web-portal/apps/admin-portal/src/lib/announcements.js uploadAnnouncementImage).
+    // Images are downscaled client-side to ~1.5 MB before upload, so the 5 MB
+    // bound below is a backstop rather than the limit operators actually meet.
+    // URLs are stored on the announcement's `imageUrls` array, with the first
+    // also written to `imageUrl` for the mobile reader, which the home feed
+    // renders — so every signed-in resident must be able to read them.
+    //
+    // Writing is admin-staff only, checked against the same staff_accounts doc
+    // firestore.rules gates `/announcements` on — one definition of "is admin"
+    // across both rule sets. Note this is a broader check than the folder uid:
+    // an admin may replace media on a notice a colleague authored.
+    match /announcements/{userId}/{fileName} {
+      function isAdminStaff() {
+        return request.auth != null
+          && firestore.get(
+               /databases/(default)/documents/staff_accounts/$(request.auth.uid)
+             ).data.status == 'approved'
+          && firestore.get(
+               /databases/(default)/documents/staff_accounts/$(request.auth.uid)
+             ).data.role in ['super_admin', 'hoa_admin'];
+      }
+
+      allow read: if request.auth != null;
+
+      // Images only, ≤ 5 MB — the same ceiling the composer enforces
+      // client-side (MAX_IMAGE_BYTES).
+      allow create, update: if isAdminStaff()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow delete: if isAdminStaff();
+    }
+
+    // ── Everything else is denied by default ────────────────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -72,10 +72,37 @@ export async function readBattery() {
   }
 }
 
+const DEVICE_ID_KEY = 'monticello-device-id'
+let sessionDeviceId = null
+
+/**
+ * A random id for THIS browser, so an officer's two devices can tell each
+ * other apart in their shared telemetry document (see shouldDeferPublish).
+ *
+ * Random, not derived from anything about the device, and kept in
+ * localStorage only so it is stable across reloads. Where storage is blocked
+ * it lives for the session, which is still enough to tell two devices apart
+ * while both are running.
+ */
+export function deviceId() {
+  try {
+    let id = globalThis.localStorage?.getItem(DEVICE_ID_KEY)
+    if (!id) {
+      id = globalThis.crypto?.randomUUID?.() ?? `d-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+      globalThis.localStorage?.setItem(DEVICE_ID_KEY, id)
+    }
+    return id
+  } catch {
+    sessionDeviceId ??= `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    return sessionDeviceId
+  }
+}
+
 /** What the device is, for the dispatcher and the audit log. Nothing identifying beyond the user agent. */
 export function describeDevice() {
   const nav = globalThis.navigator ?? {}
   return {
+    deviceId: deviceId(),
     platform: nav.userAgentData?.platform || nav.platform || '',
     mobile: Boolean(nav.userAgentData?.mobile ?? /Mobi|Android/i.test(nav.userAgent ?? '')),
     userAgent: String(nav.userAgent ?? '').slice(0, 256),
@@ -91,6 +118,9 @@ export function describeDevice() {
  * rules accept a fixed set of keys, and a merge would carry a stale key from
  * an older build forward forever.
  */
+/** The route this device last published; see publishRoute. */
+let lastPublishedRoute = null
+
 export function publishTelemetry(uid, payload) {
   return setDoc(doc(db, 'guard_telemetry', uid), {
     uid,
@@ -102,6 +132,12 @@ export function publishTelemetry(uid, payload) {
     position: payload.position ?? null,
     battery: payload.battery ?? null,
     device: payload.device ?? describeDevice(),
+    // Carried, not dropped. This write REPLACES the document, and publishRoute
+    // merges `route` in separately — so every position write used to erase
+    // the route a few seconds after it was published, and the admin Hazard
+    // map (useGuardFleet) almost never had a line to draw. Going off duty
+    // clears it, as it should: nobody is driving that route any more.
+    route: payload.mode === 'off' ? null : lastPublishedRoute,
     updatedAt: serverTimestamp(),
   })
 }
@@ -177,6 +213,8 @@ export function summariseRoute(route, { incidentId, alertId = null, tone = 'live
  */
 export async function publishRoute(uid, summary) {
   if (!uid) return
+  // Remembered so publishTelemetry's whole-document write carries it.
+  lastPublishedRoute = summary ?? null
   try {
     await setDoc(
       doc(db, 'guard_telemetry', uid),

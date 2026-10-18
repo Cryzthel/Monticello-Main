@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { History, Search, ShieldAlert, Trash2, X } from '@shared/icons'
+import { History, ShieldAlert, Trash2, X } from '@shared/icons'
+import DataTable from '@shared/components/DataTable'
 import Card from '@shared/components/Card'
 import TablePagination from '@shared/components/TablePagination'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -9,15 +10,27 @@ import { dismissAuditEvents, describeFirestoreError } from '@shared/lib/audit'
 import { Skeleton } from '@shared/components/Skeleton'
 import { auditEventIcon } from '@shared/theme/categoryIcons'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTimeSeconds } from '@shared/lib/dates'
 
 // Audit action -> badge tone. Deliberately the same tone vocabulary the
 // incident status badges use, so "Resolved" is the same green here as on a
 // ticket; the pill itself is drawn by the one shared StatusBadge.
+/** Role badge tones: admins in brand, security in info, everything else quiet. */
+const ROLE_TONE = {
+  super_admin: 'brand',
+  hoa_admin: 'brand',
+  security_head: 'info',
+  security_officer: 'info',
+  system: 'neutral',
+  unknown: 'neutral',
+}
+
 const CATEGORY_TONE = {
   Deleted: 'danger',
   Resolved: 'success',
   Dispatched: 'info',
   Published: 'brand',
+  Settings: 'warning',
 }
 
 /**
@@ -51,7 +64,7 @@ export default function AuditHistoryTable({
   events = [],
   loading = false,
   readError = null,
-  resolveRole = () => '—',
+  resolveRole = () => ({ key: 'unknown', label: '—' }),
   search,
   onSearchChange,
   /**
@@ -236,28 +249,32 @@ export default function AuditHistoryTable({
         </div>
       ) : null}
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto pb-6">
-        <table className="w-full min-w-[40rem] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            <tr className="table-head">
-              <th className="w-10 px-4 py-3">
-                <input
-                  type="checkbox"
-                  aria-label="Select all events"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
-                />
-              </th>
-              <th className="w-[13rem] px-4 py-3">Timestamp</th>
-              <th className="px-4 py-3">User</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="w-[9rem] px-4 py-3">Category</th>
-              <th className="px-4 py-3">Event description</th>
-              <th className="w-14 px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+      {/* The frame — scroller, minimum width, sticky header with its inset
+          edge — is DataTable's, shared by every table in both portals. */}
+      <DataTable
+        minWidth="64rem"
+        scrollClassName="pb-6"
+        columns={[
+          {
+            className: 'w-10',
+            header: (
+              <input
+                type="checkbox"
+                aria-label="Select all events"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
+              />
+            ),
+          },
+          { header: 'Timestamp', className: 'w-[13rem]', minWidth: '12rem' },
+          { header: 'User', minWidth: '12rem' },
+          { header: 'Role', minWidth: '9rem' },
+          { header: 'Category', className: 'w-[9rem]', minWidth: '8.5rem' },
+          { header: 'Event description', minWidth: '18rem' },
+          { header: 'Actions', className: 'w-14', align: 'right' },
+        ]}
+      >
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={`sk-${i}`} className="border-t border-divider">
@@ -282,46 +299,56 @@ export default function AuditHistoryTable({
                 const Icon = event.icon
                 const checked = selectedIds.has(event.id)
                 return (
-                  // ── THE ROW OPENS THE REPORT; THE CHECKBOX SELECTS IT ──
+                  // ── THE ROW OPENS THE DETAILS; ONLY THE CHECKBOX SELECTS ──
                   //
-                  // Clicking anywhere on a row used to toggle its checkbox,
-                  // which made the whole table a selection surface and left an
-                  // admin reading "Security report at Phase 2 was resolved"
-                  // with no way to see what was in it — they left for Security
-                  // Reports and found it again by hand.
-                  //
-                  // Selection has not moved: the checkbox cell already stops
-                  // propagation and is still the control for bulk delete. Rows
-                  // with nothing behind them — a published announcement — keep
-                  // the old toggle, because there is no report to open.
+                  // Two gestures used to overlap here (fixed 2026-10-18):
+                  //   • A row with no report behind it (a published
+                  //     announcement) TOGGLED its checkbox on click, so the
+                  //     same click meant "open" on one row and "select" on the
+                  //     next — and a stray click could stage a row for bulk
+                  //     delete.
+                  //   • Space or Enter on a focused CHECKBOX bubbled to the
+                  //     row's key handler, which opened the report and
+                  //     preventDefault-ed the toggle away.
+                  // Now a row click only ever opens the details (and does
+                  // nothing where there are none), the row's keys only act
+                  // when the ROW itself has focus, and the checkbox cell — the
+                  // whole cell, as a label, so its padding is a target too —
+                  // stops both click and key events at its edge.
                   <tr
                     key={event.id}
-                    onClick={() =>
-                      event.reportId && onOpenReport
-                        ? onOpenReport(event.reportId)
-                        : toggleRow(event.id)
-                    }
+                    onClick={() => {
+                      if (event.reportId && onOpenReport) onOpenReport(event.reportId)
+                    }}
                     role={event.reportId && onOpenReport ? 'button' : undefined}
                     tabIndex={event.reportId && onOpenReport ? 0 : undefined}
+                    aria-label={event.reportId && onOpenReport ? `Open details: ${event.description ?? event.category}` : undefined}
                     onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return
                       if (!event.reportId || !onOpenReport) return
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
                         onOpenReport(event.reportId)
                       }
                     }}
-                    className={`cursor-pointer border-t border-divider transition ${
-                      checked ? 'bg-brand-50' : 'hover:bg-tint/[0.03]'
-                    }`}
+                    className={`border-t border-divider transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 ${
+                      event.reportId && onOpenReport ? 'cursor-pointer' : ''
+                    } ${checked ? 'bg-brand-50' : 'hover:bg-tint/[0.03]'}`}
                   >
-                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${event.category} event`}
-                        checked={checked}
-                        onChange={() => toggleRow(event.id)}
-                        className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
-                      />
+                    <td
+                      className="p-0"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <label className="flex h-full cursor-pointer items-center px-4 py-3.5">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${event.category} event`}
+                          checked={checked}
+                          onChange={() => toggleRow(event.id)}
+                          className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
+                        />
+                      </label>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-text-secondary">
                       {event.at ? formatLogTime(event.at) : '—'}
@@ -332,8 +359,15 @@ export default function AuditHistoryTable({
                         {event.actor}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-text-secondary">
-                      {resolveRole(event.actor)}
+                    <td className="whitespace-nowrap px-4 py-3.5">
+                      {(() => {
+                        const role = resolveRole(event)
+                        return (
+                          <StatusBadge tone={ROLE_TONE[role.key] ?? 'neutral'} size="sm">
+                            {role.label}
+                          </StatusBadge>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3.5">
                       <StatusBadge
@@ -344,7 +378,11 @@ export default function AuditHistoryTable({
                       </StatusBadge>
                     </td>
                     <td className="px-4 py-3.5 text-text-secondary">{event.description}</td>
-                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                    <td
+                      className="px-4 py-3.5"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       <div className="flex justify-end">
                         <OverflowMenu
                           ariaLabel={`Actions for ${event.category} event`}
@@ -363,9 +401,7 @@ export default function AuditHistoryTable({
                 )
               })
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
 
       <TablePagination
         page={page}
@@ -395,8 +431,7 @@ export default function AuditHistoryTable({
 }
 
 // Same fixed-width form the incident queue uses, so the two logs scan alike.
-const LOG_TIME = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
 
 function formatLogTime(value) {
-  return new Date(value).toLocaleString('en-GB', LOG_TIME).replace(',', '')
+  return formatDateTimeSeconds(value)
 }

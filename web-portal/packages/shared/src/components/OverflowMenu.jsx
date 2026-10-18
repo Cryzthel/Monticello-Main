@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MoreVertical } from '@shared/icons'
+import { belowTrigger, flipIfOverflowing } from '@shared/lib/menuPosition'
 
 /**
  * Row overflow menu — the `⋯` trigger plus its dropdown.
@@ -25,7 +26,7 @@ export default function OverflowMenu({ items = [], ariaLabel = 'Row actions' }) 
     const next = !open
     if (next && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect()
-      setPosition({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+      setPosition(belowTrigger(rect))
     }
     setOpen(next)
   }
@@ -55,6 +56,19 @@ export default function OverflowMenu({ items = [], ariaLabel = 'Row actions' }) 
     }
   }, [open])
 
+
+  // Flip above the trigger when the rendered menu would run off the bottom
+  // of the window — the last rows on a page. Layout effect: measured and
+  // moved before the browser paints, so it never flashes in the wrong place.
+  useLayoutEffect(() => {
+    if (!open || !position || position.bottom != null) return
+    const menu = menuRef.current?.getBoundingClientRect()
+    const trigger = triggerRef.current?.getBoundingClientRect()
+    if (!menu || !trigger) return
+    const flipped = flipIfOverflowing(trigger, menu)
+    if (flipped) setPosition(flipped)
+  }, [open, position])
+
   return (
     <>
       <button
@@ -76,7 +90,7 @@ export default function OverflowMenu({ items = [], ariaLabel = 'Row actions' }) 
         ? createPortal(
             <div
               ref={menuRef}
-              style={{ position: 'fixed', top: position.top, right: position.right, '--popover-origin': 'top right' }}
+              style={{ position: 'fixed', top: position.top, bottom: position.bottom, right: position.right, '--popover-origin': position.origin }}
               className="popover z-[var(--z-popover)] w-max min-w-[11rem] p-1.5"
               onClick={(event) => event.stopPropagation()}
             >

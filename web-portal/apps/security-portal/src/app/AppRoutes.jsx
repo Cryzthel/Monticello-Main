@@ -1,5 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import RequireAuth from '@shared/auth/RequireAuth'
+import FirstPasswordGate from '@shared/auth/FirstPasswordGate'
+import { AppShellLayout } from '@/layouts/AppShell'
 import { useAuth } from '@shared/auth/AuthContext'
 import { ROUTES } from '@/config/portal'
 
@@ -52,13 +54,24 @@ export default function AppRoutes() {
       />
 
       <Route element={<RequireAuth loginPath={ROUTES.login} />}>
+        {/* A guard on a TEMPORARY password sets their own before any page of
+            the console opens — see FirstPasswordGate. */}
+        <Route element={<FirstPasswordGate illustration={<LoginHero />} />}>
+        {/* The shell mounts ONCE for every page below — see AppShellLayout. */}
+        <Route element={<AppShellLayout />}>
         <Route path={ROUTES.dashboard} element={<DashboardPage />} />
         <Route path={ROUTES.tickets} element={<TicketsPage />} />
         <Route path={ROUTES.sos} element={<PanicAlertsPage />} />
         <Route path={ROUTES.report} element={<ReportPage />} />
         <Route path={ROUTES.history} element={<HistoryPage />} />
         <Route path={ROUTES.performance} element={<PerformancePage />} />
+        {/* The hub, and one route per category. `:category` rather than a
+            route each, so adding a category is a line in CATEGORIES and not
+            a line here as well — an unknown slug is redirected by the page. */}
         <Route path={ROUTES.settings} element={<SettingsPage />} />
+        <Route path={`${ROUTES.settings}/:category`} element={<SettingsPage />} />
+        </Route>
+        </Route>
       </Route>
 
       <Route path="*" element={<UnmatchedRoute />} />

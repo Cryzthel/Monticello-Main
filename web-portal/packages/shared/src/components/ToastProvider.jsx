@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import IncidentNotificationToast from '@shared/components/IncidentNotificationToast'
+import ActionToaster from '@shared/components/ActionToaster'
 
 const ToastContext = createContext(null)
 
@@ -103,6 +104,9 @@ export default function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
+      {/* Action feedback (toast.success / toast.error) — a separate stack.
+          See lib/toast.js for why it is not these incident cards. */}
+      <ActionToaster />
       {createPortal(
         <div className="pointer-events-none fixed right-4 top-20 z-[var(--z-toast)] flex flex-col gap-2.5">
           {alerts.map((alert) => (

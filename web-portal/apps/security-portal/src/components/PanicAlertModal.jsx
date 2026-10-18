@@ -1,3 +1,4 @@
+import { toast, describeError } from '@shared/lib/toast'
 import { useEffect, useRef, useState } from 'react'
 import { X, Siren, ShieldCheck, MapPin, MapPinOff, Clock, Navigation } from '@shared/icons'
 import { minutesWaiting } from '@shared/lib/wpda'
@@ -118,11 +119,12 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
    */
   const canNavigate = Number.isFinite(alert.lat) && Number.isFinite(alert.lng)
 
-  async function run(action) {
+  async function run(action, success) {
     setBusy(true)
     setError('')
     try {
       await action()
+      if (success) toast.success(success)
       // The modal STAYS OPEN. It used to close on success, which meant the
       // guard's only confirmation was the popup vanishing — indistinguishable
       // from a mis-tap on the scrim, on the one action where "did that go
@@ -130,7 +132,7 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
       // state and the guard closes the modal themselves.
     } catch (err) {
       console.error('Panic alert action failed', err)
-      setError(err.message ?? 'Could not update the alert. Try again.')
+      setError(describeError(err))
     } finally {
       setBusy(false)
     }
@@ -302,7 +304,7 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
                 run(async () => {
                   await resolvePanicAlert(alert.id, { notes, photoUrls: photos.urls })
                   onClose?.()
-                })
+                }, 'SOS alert resolved')
               }
               className="btn btn-sm btn-brand mt-3 w-full"
             >

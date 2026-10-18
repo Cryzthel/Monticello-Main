@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import AppShell from '@/layouts/AppShell'
 import PanicAlertsTable from '@shared/components/PanicAlertsTable'
 import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
@@ -29,6 +30,9 @@ import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
  */
 export default function PanicAlertsPage() {
   const { alerts, loading, error } = usePanicAlerts()
+  // `?alert=SOS-XXXXXX` from the Hazard Map's SOS modal pre-filters the log.
+  const [searchParams] = useSearchParams()
+  const linkedAlert = searchParams.get('alert') ?? ''
 
   return (
     <AppShell
@@ -36,7 +40,13 @@ export default function PanicAlertsPage() {
       scroll={false}
     >
       <div className="min-h-0 lg:h-full">
-        <PanicAlertsTable alerts={alerts} loading={loading} error={error} />
+        <PanicAlertsTable
+          key={linkedAlert}
+          alerts={alerts}
+          loading={loading}
+          error={error}
+          initialQuery={linkedAlert}
+        />
       </div>
     </AppShell>
   )

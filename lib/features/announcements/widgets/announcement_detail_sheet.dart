@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +8,7 @@ import 'package:monticello_villas_app/core/widgets/modern_close_button.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/skeleton.dart';
 import 'package:monticello_villas_app/core/widgets/app_card.dart';
+import 'package:monticello_villas_app/core/widgets/blur_modal.dart';
 import 'package:monticello_villas_app/features/incidents/models/incident.dart';
 import 'package:monticello_villas_app/features/media/widgets/media_viewer.dart';
 
@@ -188,24 +187,12 @@ Future<void> showFocusModal(
     barrierDismissible: true,
     barrierLabel: barrierLabel,
     barrierColor: Colors.transparent, // the blur layer paints its own scrim
-    transitionDuration: Duration(milliseconds: reduceMotion ? 0 : 220),
+    transitionDuration: Duration(milliseconds: reduceMotion ? 0 : 260),
     pageBuilder: (context, __, ___) => builder(context),
-    transitionBuilder: (context, animation, _, child) {
-      final curved =
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      return FadeTransition(
-        opacity: curved,
-        // A short rise rather than a scale: scaling a full-width card reads as
-        // the whole page zooming, which fights the backdrop staying still.
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.03),
-            end: Offset.zero,
-          ).animate(curved),
-          child: child,
-        ),
-      );
-    },
+    // Untouched on purpose: [FocusModalFrame] animates its backdrop and its
+    // card separately off the route. A fade around the whole page kept the
+    // blur from rendering until the last frame; see blur_modal.dart.
+    transitionBuilder: (context, animation, _, child) => child,
   );
 }
 
@@ -229,15 +216,9 @@ class FocusModalFrame extends StatelessWidget {
       children: [
         // ── Backdrop: blur + 50% scrim, dismissing on tap ──────────────────
         Positioned.fill(
-          child: GestureDetector(
+          child: BlurModalBackdrop(
             onTap: () => Navigator.of(context).pop(),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-              child: ColoredBox(
-                color: Colors.black.withValues(alpha: 0.5),
-                child: const SizedBox.expand(),
-              ),
-            ),
+            scrimOpacity: 0.5,
           ),
         ),
 
@@ -258,7 +239,11 @@ class FocusModalFrame extends StatelessWidget {
                 maxHeight: media.size.height * 0.88,
                 maxWidth: 560,
               ),
-              child: GestureDetector(
+              // A short rise rather than a scale: scaling a near-full-width
+              // card reads as the whole page zooming.
+              child: ModalCardEntrance(
+                slideFrom: const Offset(0, 0.04),
+                child: GestureDetector(
                 // Swallows taps so a press inside the card never reaches the
                 // dismiss handler on the backdrop behind it.
                 onTap: () {},
@@ -303,6 +288,7 @@ class FocusModalFrame extends StatelessWidget {
                     ],
                   ),
                 ),
+              ),
               ),
             ),
           ),

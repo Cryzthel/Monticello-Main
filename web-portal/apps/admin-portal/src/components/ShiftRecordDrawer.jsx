@@ -13,10 +13,12 @@ import {
 } from '@shared/icons'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import StatusBadge from '@shared/components/StatusBadge'
-import IncidentDetailModal from '@shared/components/IncidentDetailModal'
+import IncidentTicketDetailsModal from '@/components/IncidentTicketDetailsModal'
 import { formatMinutes } from '@shared/lib/incidents'
 import { shiftActivity } from '@shared/lib/shifts'
 import { categoryLabel } from '@shared/lib/incidentCategories'
+import { formatTime } from '@shared/lib/dates'
+import Pill from '@shared/components/Pill'
 
 function Stat({ icon: Icon, label, value, tone = 'text-text-primary' }) {
   return (
@@ -71,7 +73,7 @@ function IncidentRow({ incident, at, onOpen }) {
         </span>
         <StatusBadge status={incident.status ?? 'Pending'} size="sm" />
         <span className="shrink-0 font-mono text-2xs text-text-muted">
-          {at ? new Date(at).toLocaleTimeString() : '—'}
+          {formatTime(at)}
         </span>
         <ChevronRight size="sm" className="shrink-0 text-text-muted" />
       </button>
@@ -159,14 +161,11 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="truncate text-base font-semibold text-text-primary">{shift.name}</h2>
                 {shift.open ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2 py-0.5 text-2xs font-semibold text-success ring-1 ring-inset ring-success/30">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+                  <Pill tone="success" pulse>
                     On duty
-                  </span>
+                  </Pill>
                 ) : (
-                  <span className="rounded-lg bg-tint/10 px-2 py-0.5 text-2xs font-semibold text-text-secondary">
-                    Shift ended
-                  </span>
+                  <Pill>Shift ended</Pill>
                 )}
               </div>
               <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-text-secondary">
@@ -188,12 +187,12 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
               <Stat
                 icon={Clock}
                 label="Time in"
-                value={shift.timeIn ? shift.timeIn.toLocaleTimeString() : '—'}
+                value={formatTime(shift.timeIn)}
               />
               <Stat
                 icon={Clock}
                 label="Time out"
-                value={shift.timeOut ? shift.timeOut.toLocaleTimeString() : 'Open'}
+                value={formatTime(shift.timeOut, 'Open')}
                 tone={shift.open ? 'text-success' : 'text-text-primary'}
               />
               <Stat
@@ -283,9 +282,9 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
               <Section icon={LogOut} title="After clock-out" count={offShift.length}>
                 <p className="mb-2 text-caption leading-relaxed text-text-muted">
                   Worked by this guard between clocking out
-                  {shift.timeOut ? ` at ${shift.timeOut.toLocaleTimeString()}` : ''} and
+                  {shift.timeOut ? ` at ${formatTime(shift.timeOut)}` : ''} and
                   {nextShiftStart
-                    ? ` clocking back in at ${new Date(nextShiftStart).toLocaleTimeString()}`
+                    ? ` clocking back in at ${formatTime(nextShiftStart)}`
                     : ' now'}
                   . Counted in neither the totals above nor another shift.
                 </p>
@@ -313,7 +312,7 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
 
       {/* Sibling, not child — see the fragment note above. Rendered after
           the drawer so it stacks over it at the same z-index. */}
-      <IncidentDetailModal report={openIncident} onClose={() => setOpenId(null)} />
+      <IncidentTicketDetailsModal report={openIncident} onClose={() => setOpenId(null)} />
     </>
   )
 }

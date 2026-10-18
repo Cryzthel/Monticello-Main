@@ -2,7 +2,7 @@ import { useState } from 'react'
 import AppShell from '@/layouts/AppShell'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
 import IncidentsTable from '@shared/components/IncidentsTable'
-import IncidentDetailModal from '@shared/components/IncidentDetailModal'
+import IncidentTicketDetailsModal from '@/components/IncidentTicketDetailsModal'
 import { useIncidentStreams } from '@shared/hooks/useIncidentStreams'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
 
@@ -89,7 +89,7 @@ export default function TicketsPage() {
         />
       </div>
 
-      <IncidentDetailModal report={selected} onClose={() => setSelectedId(null)} />
+      <IncidentTicketDetailsModal report={selected} onClose={() => setSelectedId(null)} />
     </AppShell>
   )
 }

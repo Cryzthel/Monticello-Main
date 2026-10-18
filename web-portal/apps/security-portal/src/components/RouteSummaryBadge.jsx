@@ -110,7 +110,12 @@ export default function RouteSummaryBadge({
 
   if (!route || route.phase === 'idle') return null
 
-  const unitName = staffLabel(route.unit?.name, 'Unit')
+  // "You" when the route starts from THIS console's officer. Their display
+  // name is often just the sign-in email, which `staffLabel` rightly refuses
+  // to print, and the generic fallback then read "Unit → Noise" — naming
+  // nobody, on the one card where the reader is the person routed.
+  const unitName =
+    route.originSource === 'self' ? 'You' : staffLabel(route.unit?.name, 'Unit')
   const failed = route.phase === 'error' || route.phase === 'no-origin'
   const pending = route.phase === 'routing'
   const result = route.phase === 'ready' ? route.route : null

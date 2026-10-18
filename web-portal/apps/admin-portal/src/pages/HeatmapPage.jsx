@@ -7,7 +7,6 @@ import IncidentInspectorDrawer, { DRAWER_WIDTH_PX } from '@/components/IncidentI
 import PanicAlertDetailModal from '@/components/PanicAlertDetailModal'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
-import { useGuardFleet } from '@shared/hooks/useGuardFleet'
 import { db } from '@shared/lib/firebase'
 import { mapIncidentDoc, isResolvedExpired } from '@shared/lib/incidents'
 import { isPanicLive } from '@shared/lib/panicStatus'
@@ -23,10 +22,12 @@ import { isPanicLive } from '@shared/lib/panicStatus'
 const DETAIL_PANEL_INSET = { right: DRAWER_WIDTH_PX }
 
 export default function HeatmapPage() {
-  // Live units and the routes their own consoles published. Read, never
-  // recomputed — see the hook for why the admin draws the officer's line
-  // rather than asking the Directions API for a second opinion.
-  const { units: guardUnits, routes: guardRoutes } = useGuardFleet()
+  // ── INCIDENTS ONLY (2026-10-19) ──────────────────────────────────────────
+  // Guard positions and their published routes are no longer drawn here, by
+  // request: this map shows resident reports and the pulse rings of live SOS
+  // alerts, nothing else. Officer movement is the Guardhouse dispatch map's
+  // job. Leaving `units` and `route` off IncidentMap also drops its
+  // "Units and routes" legend, and `guard_telemetry` is no longer read here.
 
   const [selectedId, setSelectedId] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -93,23 +94,38 @@ export default function HeatmapPage() {
   )
 
   const focusId = searchParams.get('panic')
+  // `?incident=<id>` — from a ticket's "Track on Hazard Map". Selects the
+  // report (opening its drawer) and flies the camera to it.
+  const incidentFocusId = searchParams.get('incident')
   const focus = useMemo(() => {
-    if (!focusId) return null
-    const alert = alerts.find((a) => a.id === focusId)
-    if (!alert || typeof alert.lat !== 'number' || typeof alert.lng !== 'number') return null
-    return { id: alert.id, lat: alert.lat, lng: alert.lng }
-  }, [focusId, alerts])
+    if (focusId) {
+      const alert = alerts.find((a) => a.id === focusId)
+      if (!alert || typeof alert.lat !== 'number' || typeof alert.lng !== 'number') return null
+      return { id: alert.id, lat: alert.lat, lng: alert.lng }
+    }
+    if (incidentFocusId) {
+      const incident = incidents.find((i) => i.id === incidentFocusId)
+      if (!incident || typeof incident.lat !== 'number' || typeof incident.lng !== 'number') return null
+      return { id: `incident:${incident.id}`, lat: incident.lat, lng: incident.lng }
+    }
+    return null
+  }, [focusId, incidentFocusId, alerts, incidents])
+
+  useEffect(() => {
+    if (!incidentFocusId) return
+    if (incidents.some((i) => i.id === incidentFocusId)) setSelectedId(incidentFocusId)
+  }, [incidentFocusId, incidents])
 
   // Consumed once the flight has been requested, so panning away and back does
   // not snap the camera again — same contract as the `?incident=` deep link.
   useEffect(() => {
-    if (focus) setSearchParams({}, { replace: true })
-  }, [focus, setSearchParams])
+    if (focus || (incidentFocusId && selectedId === incidentFocusId)) setSearchParams({}, { replace: true })
+  }, [focus, incidentFocusId, selectedId, setSearchParams])
 
   return (
     <AppShell
       title="Hazard map"
-      subtitle="Live incident density, status pins, and response coverage."
+      subtitle="Live resident reports and active SOS alerts."
       scroll={false}
       bleed
       inlineTitle
@@ -151,26 +167,13 @@ export default function HeatmapPage() {
           onSelectIncident={(incident) => setSelectedId(incident.id)}
           panicAlerts={livePanicAlerts}
           onSelectPanicAlert={(alert) => setSelectedPanicId(alert.id)}
-          units={guardUnits}
-          route={guardRoutes}
-          /* Re-frames the camera only when the SET of routed units changes,
-             not on every refresh as a moving unit re-plots its line. */
-          routeKey={guardRoutes ? guardRoutes.features.map((f) => f.properties.uid).join(',') : null}
           focus={focus}
           centerOnSelect
           focusInset={DETAIL_PANEL_INSET}
         />
       </div>
 
-      {/* `units` is the live fleet, read-only: the panel needs it to name the
-          assigned officer by badge rather than by whatever is in
-          `staff_accounts.name` — frequently the address the account was
-          provisioned with. Same derivation the Guardhouse uses. */}
-      <IncidentInspectorDrawer
-        report={selected}
-        units={guardUnits}
-        onClose={() => setSelectedId(null)}
-      />
+      <IncidentInspectorDrawer report={selected} onClose={() => setSelectedId(null)} />
       <PanicAlertDetailModal alert={selectedPanic} onClose={() => setSelectedPanicId(null)} />
     </AppShell>
   )

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:monticello_villas_app/features/auth/widgets/verification_lock.dart';
 import 'package:monticello_villas_app/features/panic_button/models/sos_payload.dart';
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
 import 'package:monticello_villas_app/features/panic_button/services/sos_alert_status.dart';
@@ -75,7 +76,7 @@ Future<void> _advance(WidgetTester tester,
 }
 
 Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
-    {_StatusFeed? feed}) async {
+    {_StatusFeed? feed, ResidentVerification Function()? verification}) async {
   // Always a fake feed: the real one needs a Firebase app.
   final statusFeed = feed ?? _StatusFeed();
   await tester.pumpWidget(
@@ -88,6 +89,10 @@ Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
                 context,
                 dispatcher: dispatcher.call,
                 statusStream: statusFeed.call,
+                // Verified unless a test says otherwise: the lock has its own
+                // tests below, and the rest are about the countdown.
+                verification:
+                    verification ?? () => ResidentVerification.verified,
               ),
               child: const Text('SOS'),
             ),
@@ -396,6 +401,141 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
+    await feed.close();
+  });
+
+  testWidgets('a feed that ends is asked again, and the queued alert lands',
+      (tester) async {
+    // A fresh stream per subscription: the first is refused and closes (the
+    // rules deny a listen on a document that does not exist yet); the second
+    // arrives once the alert has landed.
+    final streams = <StreamController<SosAlertStatus>>[];
+    Stream<SosAlertStatus> feed(String _) {
+      final c = StreamController<SosAlertStatus>();
+      streams.add(c);
+      return c.stream;
+    }
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showSosCountdown(
+              context,
+              dispatcher: (_Dispatcher()..outcome = SosDispatchOutcome.queued)
+                  .call,
+              statusStream: feed,
+            ),
+            child: const Text('SOS'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('SOS'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 6));
+    await _advance(tester);
+    expect(streams, hasLength(1));
+    expect(find.text('SAVED — NO SIGNAL'), findsOneWidget);
+
+    await streams.first.close();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 5));
+    expect(streams, hasLength(2), reason: 'a closed feed must be retried');
+
+    streams.last.add(const SosAlertStatus(serverAcknowledged: true));
+    await _advance(tester, frames: 3);
+    expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
+
+    for (final c in streams) {
+      await c.close();
+    }
+  });
+
+  // ── LOCKED FOR AN UNVERIFIED ACCOUNT ─────────────────────────────────────
+
+  testWidgets('a pending account gets the locked sheet, and nothing is sent',
+      (tester) async {
+    final dispatcher = _Dispatcher();
+    await _open(tester, dispatcher,
+        verification: () => ResidentVerification.pending);
+
+    expect(find.text('SOS UNAVAILABLE'), findsOneWidget);
+    expect(find.text('Verification Pending'), findsOneWidget);
+    expect(find.textContaining('under review'), findsOneWidget);
+    expect(find.textContaining('Call main gate'), findsOneWidget);
+    // No countdown, no cancel control.
+    expect(find.text('EMERGENCY ALERT'), findsNothing);
+    expect(find.text('Hold to cancel'), findsNothing);
+
+    // Long past when the alert would have fired.
+    await tester.pump(const Duration(seconds: 8));
+    await _advance(tester);
+    expect(dispatcher.calls, 0);
+
+    await tester.tap(find.text('Close'));
+    await _advance(tester);
+    expect(find.text('SOS UNAVAILABLE'), findsNothing);
+  });
+
+  testWidgets('a rejected account is told it was not approved',
+      (tester) async {
+    await _open(tester, _Dispatcher(),
+        verification: () => ResidentVerification.rejected);
+
+    expect(find.text('Account Not Approved'), findsOneWidget);
+    expect(find.textContaining('did not approve'), findsOneWidget);
+  });
+
+  testWidgets('an unknown standing does not lock', (tester) async {
+    final dispatcher = _Dispatcher();
+    await _open(tester, dispatcher,
+        verification: () => ResidentVerification.unknown);
+
+    expect(find.text('EMERGENCY ALERT'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 6));
+    await _advance(tester);
+    expect(dispatcher.calls, 1,
+        reason: 'a check that could not be made is not "not verified"');
+  });
+
+  testWidgets('a pending status that lands mid-countdown stops the alert',
+      (tester) async {
+    final dispatcher = _Dispatcher();
+    var standing = ResidentVerification.unknown;
+    await _open(tester, dispatcher, verification: () => standing);
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('EMERGENCY ALERT'), findsOneWidget);
+
+    standing = ResidentVerification.pending;
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(find.text('SOS UNAVAILABLE'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 6));
+    await _advance(tester);
+    expect(dispatcher.calls, 0);
+  });
+
+  testWidgets('a dispatch the server refuses opens the locked sheet',
+      (tester) async {
+    // The standing was unknown, so the app could not lock up front; the
+    // server then refused the alert. It must never read as queued.
+    final feed = _StatusFeed();
+    final dispatcher = _Dispatcher()..outcome = SosDispatchOutcome.refused;
+    await _open(tester, dispatcher,
+        feed: feed, verification: () => ResidentVerification.unknown);
+    await tester.pump(const Duration(seconds: 6));
+    await _advance(tester);
+
+    expect(dispatcher.calls, 1);
+    expect(find.text('SOS UNAVAILABLE'), findsOneWidget);
+    expect(find.text('Verification Pending'), findsOneWidget);
+    expect(find.text('SAVED — NO SIGNAL'), findsNothing);
+    expect(find.textContaining('send itself'), findsNothing);
+    expect(feed.watched, isEmpty,
+        reason: 'a refused alert has no document to follow');
     await feed.close();
   });
 }

@@ -9,6 +9,7 @@ import { buildMediaItems } from '@shared/lib/incidents'
 import { formatCategory } from '@shared/lib/wpda'
 import { incidentReference } from '@/lib/dispatch'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
+import { formatDateTime } from '@shared/lib/dates'
 
 /**
  * The Incident History review pop-up.
@@ -92,7 +93,7 @@ export default function IncidentReviewModal({ report, onClose }) {
   const watermark = {
     name: report.reportedByName ?? 'Unknown resident',
     address: address || 'Location not recorded',
-    timestamp: report.reportedAt ? new Date(report.reportedAt).toLocaleString() : 'Timestamp unavailable',
+    timestamp: formatDateTime(report.reportedAt, 'Timestamp unavailable'),
   }
 
   return (

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { confirmPasswordReset, sendPasswordResetEmail } from 'firebase/auth'
+import { confirmPasswordReset } from 'firebase/auth'
 import { getFunctions, httpsCallable } from 'firebase/functions'
-import { CheckCircle2, Mail, MailCheck, ShieldCheck } from '@shared/icons'
+import { CheckCircle2, ShieldCheck } from '@shared/icons'
 
 import { auth } from '@shared/lib/firebase'
+import { PORTAL } from '@shared/config/portal'
 import AuthAlert from '@shared/auth/AuthAlert'
 import BackToSignIn from '@shared/auth/BackToSignIn'
+import CtaLabel from '@shared/auth/CtaLabel'
 import FloatingField from '@shared/auth/FloatingField'
 import NewPasswordFields from '@shared/auth/NewPasswordFields'
 import { passwordReady } from '@shared/auth/passwordPolicy'
@@ -15,26 +17,25 @@ import { CTA } from '@shared/auth/authStyles'
 /**
  * Password recovery, all four steps, in place of the sign-in form.
  *
- *   email  ──►  6-digit code  ──►  new password  ──►  done
+ *   email  ──►  4-digit code  ──►  new password  ──►  done
  *
- * ── IT DEGRADES INSTEAD OF BREAKING ──────────────────────────────────────────
+ * ── ONE CHANNEL: THE CODE ────────────────────────────────────────────────────
  * The code path runs on two Cloud Functions, `sendPasswordOtp` and
- * `verifyPasswordOtp`, which already existed for the mobile app. Cloud
- * Functions need billing enabled, and this project's is currently off — every
- * call returns a bare `functions/internal`.
+ * `verifyPasswordOtp`, shared with the mobile app. There is no second channel.
  *
- * So step 1 tries the callable and, if the BACKEND ITSELF is unreachable, falls
- * back to `sendPasswordResetEmail` — Firebase Auth's own link mail, which is
- * free-tier and unaffected — and shows the link screen instead. Recovery keeps
- * working today, and the code flow lights up on its own the moment billing is
- * restored, with no deploy and no flag to remember.
+ * This used to fall back to `sendPasswordResetEmail` — a link mail — whenever
+ * the functions could not run, which is every call while the project's
+ * billing is off. Mobile dropped the same fallback on 2026-10-16 by the
+ * owner's decision, and the two clients now behave identically: when the
+ * backend is down, step 1 says so under the field ("Password reset is
+ * unavailable right now…", mobile's words) instead of quietly switching to a
+ * different flow with a different email in it. Re-adding the link reverses
+ * that decision on one client only.
  *
- * The fallback is narrow on purpose: only "the function did not run" triggers
- * it. A wrong code, an expired code or a rate limit are answers FROM a working
- * backend and must be shown, not silently routed around. The two paths also
- * converge — `verifyPasswordOtp` hands back a Firebase reset link, whose
- * `oobCode` is the same credential the emailed link carries — so this is one
- * mechanism with two ways of delivering the proof, not two auth systems.
+ * `verifyPasswordOtp` hands back a Firebase reset link, and only its `oobCode`
+ * is used, by `confirmPasswordReset` — the same credential the emailed link
+ * carries, so `/reset-password` still works for links issued elsewhere (the
+ * staff-invite mail, the Firebase console).
  *
  * ── WHY IN PLACE RATHER THAN A DIALOG ────────────────────────────────────────
  * The brief calls it a modal. It replaces the form instead: a sign-in screen
@@ -44,12 +45,38 @@ import { CTA } from '@shared/auth/authStyles'
  * back.
  */
 
-/** Seconds before the code can be sent again. */
-const RESEND_COOLDOWN = 45
+/**
+ * Seconds before the code can be sent again. 60, the function's own cooldown
+ * and mobile's: this was 45, so for fifteen seconds the web offered a resend
+ * the backend was certain to refuse as rate-limited.
+ */
+const RESEND_COOLDOWN = 60
+
+/**
+ * Who a STAFF member turns to when recovery itself is broken.
+ *
+ * Mobile's copy says "contact the HOA office", and for a resident that is
+ * right. These consoles are the HOA office: an administrator told to contact
+ * the HOA office is being told to contact themselves, and a guard's office is
+ * the admin office. So the sentence is mobile's, and only its last clause is
+ * per console.
+ */
+const SUPPORT = PORTAL === 'security' ? 'the admin office' : 'system administration'
+
+const UNAVAILABLE = `Password reset is unavailable right now. Try again later, or contact ${SUPPORT}.`
+
+/**
+ * Digits in a reset code. Must equal OTP_LENGTH in functions/index.js and
+ * kOtpLength in the mobile app — the function rejects any other length.
+ */
+const RESET_CODE_LENGTH = 4
+
+/** The function's answer for an address with no account (see sendPasswordOtp). */
+const isNotRegistered = (err) => err?.details?.reason === 'not-registered'
 
 /**
  * Callable failures that mean "the backend did not run", as opposed to "the
- * backend said no". Only these fall back to the link flow.
+ * backend said no". These, and only these, are reported as UNAVAILABLE.
  *
  * `internal` is what a function that cannot start returns — exactly what a
  * billing-disabled project produces. `unavailable` and `deadline-exceeded` are
@@ -75,6 +102,24 @@ function oobCodeFrom(resetLink) {
   }
 }
 
+/**
+ * Each step's title and instruction, left-aligned, in the sign-in heading's
+ * face. While recovery is open the shell's centred "Welcome back" greeting is
+ * hidden (see `data-auth-recovery` in LoginSplitLayout), so this IS the page
+ * heading — the same arrangement as mobile's Forgot Password screen, whose
+ * title and body are both `TextAlign.start`.
+ */
+function StepHeading({ title, children }) {
+  return (
+    <div>
+      <h2 className="font-display text-2xl font-extrabold leading-[1.15] tracking-[-0.025em] text-text-primary">
+        {title}
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-text-muted">{children}</p>
+    </div>
+  )
+}
+
 export default function PasswordRecovery({ initialEmail = '', onClose }) {
   const [step, setStep] = useState('email')
   const [email, setEmail] = useState(initialEmail)
@@ -85,6 +130,12 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
   const [reveal, setReveal] = useState(false)
 
   const [error, setError] = useState('')
+  // Whether `error` is about the ADDRESS (not registered, malformed) and so
+  // belongs on the field, or about the SYSTEM (mail could not be sent, rate
+  // limit, backend down) and belongs in the alert under it. A red field says
+  // "fix what you typed"; when the fault is the server's, that sends someone
+  // retyping a correct address.
+  const [errorOnField, setErrorOnField] = useState(false)
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   const [cooldown, setCooldown] = useState(0)
@@ -96,32 +147,10 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
     return () => clearTimeout(timer)
   }, [cooldown])
 
-  /** The link flow, used when the code backend is unreachable. */
-  const sendResetLink = useCallback(async (address) => {
-    await sendPasswordResetEmail(auth, address, {
-      // This portal's own sign-in page, so a reset started here returns here
-      // even though one action URL serves both consoles.
-      url: `${window.location.origin}${window.location.pathname}`,
-      handleCodeInApp: false,
-    })
+  const requestCode = useCallback(async (address) => {
+    const send = httpsCallable(getFunctions(auth.app, 'us-central1'), 'sendPasswordOtp')
+    await send({ email: address })
   }, [])
-
-  const requestCode = useCallback(
-    async (address) => {
-      const send = httpsCallable(getFunctions(auth.app, 'us-central1'), 'sendPasswordOtp')
-      try {
-        await send({ email: address })
-        return 'code'
-      } catch (err) {
-        if (!BACKEND_DOWN.has(err?.code)) throw err
-        // The function could not run. Fall back rather than stranding someone
-        // who genuinely cannot sign in.
-        await sendResetLink(address)
-        return 'link'
-      }
-    },
-    [sendResetLink],
-  )
 
   async function handleEmailSubmit(event) {
     event.preventDefault()
@@ -132,12 +161,14 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
     setNotice('')
     setBusy(true)
     try {
-      const outcome = await requestCode(address)
+      await requestCode(address)
       setCode('')
       setCooldown(RESEND_COOLDOWN)
-      setStep(outcome)
+      setStep('code')
     } catch (err) {
-      setError(describeSendError(err))
+      const fault = describeSendError(err)
+      setError(fault.message)
+      setErrorOnField(fault.field)
     } finally {
       setBusy(false)
     }
@@ -153,7 +184,7 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
       setCooldown(RESEND_COOLDOWN)
       setNotice('A new code is on its way.')
     } catch (err) {
-      setError(describeSendError(err))
+      setError(describeSendError(err).message)
     } finally {
       setBusy(false)
     }
@@ -162,7 +193,7 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
   const verify = useCallback(
     async (value) => {
       const digits = String(value).replace(/\D/g, '')
-      if (digits.length !== 6 || busy) return
+      if (digits.length !== RESET_CODE_LENGTH || busy) return
 
       setError('')
       setBusy(true)
@@ -199,21 +230,26 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
     }
   }
 
+  // `data-auth-recovery` on every step's root is what LoginSplitLayout reads to
+  // hide its centred greeting — see StepHeading.
+
   // ── Step 1 ────────────────────────────────────────────────────────────────
   if (step === 'email') {
     return (
-      <form className="step-enter flex flex-col gap-6" onSubmit={handleEmailSubmit} noValidate>
-        <div>
-          <p className="text-base font-semibold text-text-primary">Reset your password</p>
-          <p className="mt-1.5 text-sm leading-relaxed text-text-muted">
-            Enter the address on your account and we will send a 6-digit code to it.
-          </p>
-        </div>
+      <form
+        data-auth-recovery
+        className="step-enter flex flex-col gap-6"
+        onSubmit={handleEmailSubmit}
+        noValidate
+      >
+        <StepHeading title="Reset password">
+          Enter your email and we will send a {RESET_CODE_LENGTH}-digit code to reset your
+          password.
+        </StepHeading>
 
         <FloatingField
           id="recovery-email"
           label="Email address"
-          icon={Mail}
           type="email"
           required
           autoComplete="email"
@@ -225,15 +261,19 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
             // An error about the previous address is wrong the instant it is
             // edited; leaving it up makes the correction feel rejected before
             // it has been submitted.
+            // Cleared on the first keystroke, whichever kind it was: the red
+            // edge goes the moment the address changes, not on resubmit.
             if (error) setError('')
           }}
-          placeholder="you@monticellovillas.ph"
-          error={error}
+          placeholder="Enter your email address"
+          error={errorOnField ? error : ''}
         />
+
+        <AuthAlert tone="error">{errorOnField ? '' : error}</AuthAlert>
 
         <div className="flex flex-col gap-3">
           <button type="submit" disabled={busy || !email.trim()} className={CTA}>
-            {busy ? 'Sending…' : 'Send reset code'}
+            <CtaLabel busy={busy} label="Send code" busyLabel="Sending…" />
           </button>
           <BackToSignIn onClick={onClose} disabled={busy} />
         </div>
@@ -244,18 +284,16 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
   // ── Step 2 ────────────────────────────────────────────────────────────────
   if (step === 'code') {
     return (
-      <div className="step-enter flex flex-col gap-6">
-        <div>
-          <p className="text-base font-semibold text-text-primary">Enter your code</p>
-          <p className="mt-1.5 text-sm leading-relaxed text-text-muted">
-            We sent a 6-digit code to{' '}
-            <span className="font-medium text-text-primary">{email.trim()}</span>. It expires in 10
-            minutes.
-          </p>
-        </div>
+      <div data-auth-recovery className="step-enter flex flex-col gap-6">
+        <StepHeading title="Enter code">
+          We sent a {RESET_CODE_LENGTH}-digit code to{' '}
+          <span className="font-medium text-text-primary">{email.trim()}</span>. It expires in 10
+          minutes.
+        </StepHeading>
 
         <OtpInput
           id="recovery-otp"
+          length={RESET_CODE_LENGTH}
           value={code}
           invalid={Boolean(error)}
           disabled={busy}
@@ -292,10 +330,10 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
           <button
             type="button"
             onClick={() => verify(code)}
-            disabled={busy || code.replace(/\D/g, '').length !== 6}
+            disabled={busy || code.replace(/\D/g, '').length !== RESET_CODE_LENGTH}
             className={CTA}
           >
-            {busy ? 'Verifying…' : 'Verify code'}
+            <CtaLabel busy={busy} label="Verify code" busyLabel="Verifying…" />
           </button>
           <BackToSignIn onClick={onClose} disabled={busy} />
         </div>
@@ -303,58 +341,23 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
     )
   }
 
-  // ── Step 2, fallback: the backend is down, a link was mailed instead ──────
-  if (step === 'link') {
-    return (
-      <div className="step-enter flex flex-col gap-6">
-        <div className="flex flex-col gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-500/10 text-brand-400">
-            <MailCheck size="md" />
-          </span>
-          <div>
-            <p className="text-base font-semibold text-text-primary">Check your email</p>
-            <p className="mt-1.5 text-sm leading-relaxed text-text-muted">
-              A link to set a new password is on its way to{' '}
-              <span className="font-medium text-text-primary">{email.trim()}</span>. It expires in
-              an hour.
-            </p>
-          </div>
-        </div>
-
-        <p className="text-xs leading-relaxed text-text-muted">
-          Nothing arrived? Check spam, then{' '}
-          <button
-            type="button"
-            onClick={() => setStep('email')}
-            className="font-medium text-text-primary underline decoration-slate-300 underline-offset-2 transition-colors hover:decoration-text-primary"
-          >
-            try a different address
-          </button>
-          .
-        </p>
-
-        <button type="button" onClick={onClose} className={CTA}>
-          Return to sign in
-        </button>
-      </div>
-    )
-  }
-
   // ── Step 3 ────────────────────────────────────────────────────────────────
   if (step === 'password') {
     return (
-      <form className="step-enter flex flex-col gap-6" onSubmit={handlePasswordSubmit} noValidate>
-        <div className="flex flex-col gap-3">
+      <form
+        data-auth-recovery
+        className="step-enter flex flex-col gap-6"
+        onSubmit={handlePasswordSubmit}
+        noValidate
+      >
+        <div className="flex flex-col gap-4">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-500/10 text-brand-400">
             <ShieldCheck size="md" />
           </span>
-          <div>
-            <p className="text-base font-semibold text-text-primary">Code verified</p>
-            <p className="mt-1.5 text-sm leading-relaxed text-text-muted">
-              Choose a new password for{' '}
-              <span className="font-medium text-text-primary">{email.trim()}</span>.
-            </p>
-          </div>
+          <StepHeading title="New password">
+            Create a strong new password for{' '}
+            <span className="font-medium text-text-primary">{email.trim()}</span>.
+          </StepHeading>
         </div>
 
         <NewPasswordFields
@@ -375,7 +378,7 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
             disabled={busy || !passwordReady(password, confirmation)}
             className={CTA}
           >
-            {busy ? 'Setting password…' : 'Set new password'}
+            <CtaLabel busy={busy} label="Set new password" busyLabel="Setting password…" />
           </button>
           <BackToSignIn onClick={onClose} disabled={busy} />
         </div>
@@ -385,18 +388,15 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
 
   // ── Step 4 ────────────────────────────────────────────────────────────────
   return (
-    <div className="step-enter flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
+    <div data-auth-recovery className="step-enter flex flex-col gap-6">
+      <div className="flex flex-col gap-4">
         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-500/10 text-brand-400">
           <CheckCircle2 size="md" />
         </span>
-        <div>
-          <p className="text-base font-semibold text-text-primary">Password updated</p>
-          <p className="mt-1.5 text-sm leading-relaxed text-text-muted">
-            Sign in with your new password. Any other device signed in to this account will need it
-            too.
-          </p>
-        </div>
+        <StepHeading title="Password updated">
+          Sign in with your new password. Any other device signed in to this account will need it
+          too.
+        </StepHeading>
       </div>
 
       <button type="button" onClick={onClose} className={CTA}>
@@ -412,19 +412,40 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
    or a bare "internal", and neither belongs in front of someone who cannot get
    into their account. */
 
+/**
+ * `{ message, field }`. `field` is true only when the ADDRESS is the problem,
+ * which is what decides whether the email field turns red (see errorOnField).
+ */
 function describeSendError(err) {
+  const onField = (message) => ({ message, field: true })
+  const system = (message) => ({ message, field: false })
+
+  // Before the code switch: the function sends this as failed-precondition,
+  // which would otherwise fall through to the generic message.
+  if (isNotRegistered(err)) return onField('This email address is not registered.')
+  // The function ran and the address is fine, but the mail provider refused —
+  // on 2026-10-16 Gmail rejected the SMTP login. Checked BEFORE BACKEND_DOWN:
+  // it arrives as `internal`, and calling it "unavailable" sent the diagnosis
+  // looking for a billing or deploy problem that was not there.
+  if (err?.details?.reason === 'mail-failed') {
+    return system(
+      `We could not send the code email just now. Try again in a few minutes, or contact ${SUPPORT}.`,
+    )
+  }
+  // The function never ran. There is no other channel to fall back to.
+  if (BACKEND_DOWN.has(err?.code)) return system(UNAVAILABLE)
   switch (err?.code) {
     case 'functions/invalid-argument':
     case 'auth/invalid-email':
-      return 'That does not look like an email address.'
+      return onField('That does not look like an email address.')
     case 'functions/resource-exhausted':
-      return 'Too many requests for this address. Wait a few minutes and try again.'
+      return system('Too many requests for this address. Wait a few minutes and try again.')
     case 'auth/too-many-requests':
-      return 'Too many attempts from this device. Wait a few minutes and try again.'
+      return system('Too many attempts from this device. Wait a few minutes and try again.')
     case 'auth/network-request-failed':
-      return 'Could not reach the server. Check your connection and try again.'
+      return system('Could not reach the server. Check your connection and try again.')
     default:
-      return 'Could not send a code. Try again, or contact system administration.'
+      return system('Could not send a code. Try again, or contact system administration.')
   }
 }
 
@@ -441,7 +462,12 @@ function describeVerifyError(err) {
     case 'functions/not-found':
       return 'No active code for this address. Send a new one.'
     case 'functions/invalid-argument':
-      return 'Enter all six digits.'
+      return `Enter all ${RESET_CODE_LENGTH} digits.`
+    // Not BACKEND_DOWN wholesale: from verifyPasswordOtp, `not-found` and
+    // `deadline-exceeded` are answers about the CODE, handled above.
+    case 'functions/internal':
+    case 'functions/unavailable':
+      return UNAVAILABLE
     default:
       return 'Could not verify that code. Try again, or send a new one.'
   }

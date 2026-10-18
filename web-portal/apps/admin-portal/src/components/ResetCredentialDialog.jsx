@@ -48,7 +48,13 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
     setError('')
     setIssued(null)
     confirmRef.current?.focus()
-  }, [open, account])
+    // Keyed on the account's UID, not the object. `account` comes from the
+    // live staff_accounts listener, and issuing a password writes
+    // `mustChangePassword` — so the very next snapshot handed this dialog a
+    // new object, this effect re-ran, and `setIssued(null)` wiped the
+    // one-time handoff screen before the password could be read out.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, account?.uid])
 
   // Escape closes the confirm step, never the handoff — the password on that
   // screen is the only copy that exists. Same rule as ProvisionAccountModal.

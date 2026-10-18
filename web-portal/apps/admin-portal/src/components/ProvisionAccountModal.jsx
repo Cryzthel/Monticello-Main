@@ -2,188 +2,144 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   AlertTriangle,
-  ArrowLeft,
   ArrowRight,
   Check,
+  Copy,
   Eye,
   EyeOff,
   IdCard,
+  Info,
   KeyRound,
   Loader2,
+  Lock,
   Mail,
+  Phone,
   RefreshCw,
   ShieldCheck,
-  UserPlus,
   UserRound,
-  X,
 } from '@shared/icons'
-import { MetaItem, MetaList } from '@shared/components/MetaList'
-import Switch from '@shared/components/Switch'
 import CredentialHandoff from '@/components/CredentialHandoff'
-import {
+import { DEFAULT_POST, PATROL_ACCESS_ROLE, ROSTER_SHIFT,
   createSecurityAccount,
   describeCallableError,
   generateTempPassword,
-  resolveAccessRole,
-  updateSecurityAssignment,
   validateAccountForm,
 } from '@/lib/securityAccounts'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
+import { toast } from '@shared/lib/toast'
+import Tooltip from '@shared/components/Tooltip'
 
 /**
- * Add a guardhouse account, or edit an existing one — as three steps.
+ * Add a guardhouse account — two steps (user's reference, 2026-10-18).
+ * CREATE ONLY: changing an existing account is EditSecurityAccountModal, a
+ * one-screen dialog (split out 2026-10-18).
  *
- * -- THREE STEPS, IN THE ORDER A ROSTER IS READ ----------------------------
- *   1. Guard details    who they are: full name, badge ID
- *   2. Role and post    what they can do, where they stand, when
- *   3. Credentials      how they first sign in — and a review of 1 and 2
+ *   ┌ [shield] Create security account                                      ┐
+ *   │ ✓ Step 1: Guard details ─────── 2 Step 2: Credentials & access          │
+ *   ├─────────────────────────────────────────────────────────────────────────┤
+ *   │ STEP 1  [amber banner if Continue is pressed with fields missing]       │
+ *   │         Full name (i) · Badge ID (i) · Official contact number (i)      │
+ *   │ STEP 2  System credentials: login email · temporary password            │
+ *   │         (Generate) [copy] [show]                                        │
+ *   ├─────────────────────────────────────────────────────────────────────────┤
+ *   │ Step 1 of 2                                   (Cancel) (Continue →)     │
+ *   └─────────────────────────────────────────────────────────────────────────┘
  *
- * It was one scrolling form of seven fields under three eyebrow headings, with
- * the only "Create account" at the bottom of the scroll. As steps, each screen
- * asks one question, each is validated before it can be left, and the last one
- * shows everything that is about to be written before the button that writes
- * it. A final validation failure jumps back to the step that holds the error.
+ * ── THE LOCK ───────────────────────────────────────────────────────────────
+ * Step 2 stays locked until step 1 validates, and pressing it (or Continue)
+ * early shows which fields are missing instead of moving.
  *
- * Editing uses the same steps as tabs: every step is reachable from the
- * stepper, and "Save changes" is on every step — an admin fixing a shift should
- * not have to page through a badge number to reach the button.
- *
- * -- WHAT IS DELIBERATELY NOT A FIELD --------------------------------------
+ * ── WHAT IS DELIBERATELY NOT A FIELD ───────────────────────────────────────
+ *   • NO ROLE PICKER. Every account is a Patrol Guard. That is said where it
+ *     matters — in the full-name field's tooltip and hint — rather than in a
+ *     static banner (removed 2026-10-18).
+ *   • ONE CANCEL. The header × was a second Cancel; Escape and the backdrop
+ *     still close the form.
+ *   • NO USERNAME. The reference shows one, but a guard signs in with their
+ *     email; a username would be a second identifier nothing reads.
  *   • THE PASSWORD IS NOT TYPEABLE. It is generated on this device by a CSPRNG
- *     (see generateTempPassword) and shown read-only with a New password
- *     control. An admin-invented password is the weakest credential the
- *     guardhouse would ever issue.
- *   • THERE IS NO "FORCE A PASSWORD CHANGE" SWITCH. New accounts always
- *     require one; its only other setting produced a permanent shared password
- *     that had been read aloud at a handover.
+ *     (generateTempPassword); "Generate" makes another. The guard must replace
+ *     it at first sign-in (forcePasswordReset is always sent).
  *
- * -- ONE HEIGHT FOR EVERY CONTROL ------------------------------------------
- * Text inputs were `.field` (38px) beside `Select size="touch"` (36px), so the
- * text box and the dropdown next to it never shared a baseline, and the "New
- * password" button beside the password field was a third height. All three are
- * now 44px on touch and 36px from `sm:`.
+ * ── THE HANDOFF IS NOT A CONFIRMATION ──────────────────────────────────────
+ * After Create the dialog swaps to CredentialHandoff — the only time the
+ * temporary password exists anywhere an admin can read it — and refuses to
+ * close on a backdrop click or Escape while it is showing.
  *
- * -- THE HANDOFF IS NOT A CONFIRMATION -------------------------------------
- * After Create, the dialog swaps to CredentialHandoff: the ONLY time the
- * temporary password exists anywhere an admin can read it. The callable
- * returns it, this panel shows it, and nothing writes it down. So the dialog
- * refuses to close on a backdrop click or Escape while the handoff is showing —
- * the reflex click that dismisses a toast would here destroy the credential the
- * new hire has not been given yet.
+ * The new contact number is saved by the provisioning functions
+ * (functions/securityProvisioning.js, `phone`), which must be deployed for it
+ * to persist.
  */
 
-const EMPTY_FORM = {
-  fullName: '',
-  email: '',
-  badgeNumber: '',
-  isSupervisor: false,
-  password: '',
-}
+const EMPTY_FORM = { fullName: '', badgeNumber: '', phone: '', email: '', password: '' }
 
-// ── WHAT THIS FORM NO LONGER ASKS, AND WHAT IT STILL SENDS ─────────────────
-//
-// The access-role, post and shift selectors are gone. Every security
-// credential is a Security Officer, because every officer patrols and answers
-// emergencies — the three job titles the dropdown offered described posts, not
-// privilege. Supervisors are the one real exception (a DIFFERENT RBAC role,
-// `security_head`, which firestore.rules grants powers an officer does not
-// have) and they survive as the single toggle below rather than as a
-// four-option select.
-//
-// THE CALLABLE STILL REQUIRES ALL THREE FIELDS. `readAssignment` in
-// functions/securityProvisioning.js fails `invalid-argument` the moment
-// `accessRole`, `assignedPost` or `shift` is undefined on a CREATE — they are
-// optional only on the `partial` path an edit takes. Relaxing that needs a
-// functions deploy, and this project is on the Spark plan where functions
-// deploys are blocked, so the client keeps satisfying the contract with
-// constants instead of shipping a form that fails on every submit.
-//
-// `assignedPost` is the patrol post because universal patrolling is the very
-// responsibility this simplification asserts every officer shares. `shift` is
-// now vestigial: it is a per-SHIFT fact, chosen at clock-in and written onto
-// the guard_shifts row, so the account-level value is no longer shown anywhere
-// — the directory's shift filter went with it. The constant exists only to
-// satisfy the validator.
-const OFFICER_ACCESS_ROLE = 'gate_guard'
-const SUPERVISOR_ACCESS_ROLE = 'security_supervisor'
-const DEFAULT_POST = 'perimeter_patrol'
-const ROSTER_SHIFT = 'morning'
-
-const accessRoleFor = (isSupervisor) => (isSupervisor ? SUPERVISOR_ACCESS_ROLE : OFFICER_ACCESS_ROLE)
+// Every account is a Patrol Guard. Creating sends the patrol access role (RBAC
+// `security_officer`, derived server-side); the callable also requires a post
+// and shift, which are constants now — see functions/securityProvisioning.js.
 
 const STEPS = [
-  {
-    key: 'guard',
-    label: 'Guard details',
-    description: 'Who is being added to the roster, and what they can do.',
-    icon: UserRound,
-    fields: ['fullName', 'badgeNumber'],
-  },
-  {
-    key: 'credentials',
-    label: 'Credentials',
-    description: 'How they sign in the first time. Check the details above before creating.',
-    icon: KeyRound,
-    fields: ['email', 'password'],
-  },
+  { key: 'guard', label: 'Guard details', fields: ['fullName', 'badgeNumber', 'phone'] },
+  { key: 'credentials', label: 'Credentials & access', fields: ['email', 'password'] },
 ]
-
 const LAST_STEP = STEPS.length - 1
 
-/** The errors that belong to one step, out of a whole-form validation. */
-function errorsForStep(all, index) {
-  return Object.fromEntries(Object.entries(all).filter(([key]) => STEPS[index].fields.includes(key)))
-}
+const errorsForStep = (all, index) =>
+  Object.fromEntries(Object.entries(all).filter(([key]) => STEPS[index].fields.includes(key)))
 
-// -- FORM PRIMITIVES ---------------------------------------------------------
+// ── FORM PRIMITIVES ─────────────────────────────────────────────────────────
 
-/**
- * One labelled control, with a sentence-case `.meta-label` label.
- *
- * The message slot under it is always present (`min-h-5`), not conditionally
- * inserted. A message that appears by pushing the next field down moves the
- * control the operator is about to click at the moment they reach for it.
- */
-function Field({ label, htmlFor, error, hint, required, className = '', children }) {
+/** Label, control, and an always-present message slot (so nothing jumps). */
+function Field({ label, htmlFor, error, hint, required, tip = null, action = null, children }) {
   return (
-    <div className={`min-w-0 ${className}`}>
-      <label htmlFor={htmlFor} className="meta-label mb-1.5 flex items-center gap-1">
-        {label}
-        {required ? (
-          <span aria-hidden="true" className="text-danger">
-            *
-          </span>
-        ) : null}
-      </label>
+    <div className="min-w-0 space-y-1.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5">
+          <label htmlFor={htmlFor} className="block text-xs font-medium text-text-secondary">
+            {label}
+            {required ? (
+              <span aria-hidden="true" className="ml-0.5 text-brand-500">
+                *
+              </span>
+            ) : null}
+          </label>
+          {tip ? (
+            <Tooltip label={label} hint={tip} side="top">
+              <button
+                type="button"
+                aria-label={`About ${label.toLowerCase()}: ${tip}`}
+                className="flex h-5 w-5 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              >
+                <Info size={14} />
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
+        {action}
+      </div>
       {children}
-      <div className="min-h-5 pt-1">
+      <div className="min-h-4">
         {error ? (
-          <p id={`${htmlFor}-error`} className="text-xs font-medium leading-snug text-danger">
+          <p id={`${htmlFor}-error`} className="text-[11px] font-medium leading-snug text-danger">
             {error}
           </p>
         ) : hint ? (
-          <p className="text-xs leading-snug text-text-muted">{hint}</p>
+          <p className="text-[11px] leading-snug text-text-muted">{hint}</p>
         ) : null}
       </div>
     </div>
   )
 }
 
-/**
- * A text input wired to its own error state, so `aria-invalid` cannot drift.
- * `h-11 sm:h-9 py-0` matches `Select size="touch"` exactly — see the header.
- */
-function TextInput({ id, error, icon: Icon, className = '', ...rest }) {
+/** An input with a leading glyph, wired to its own error state. */
+function TextInput({ id, error, icon: Icon, mono = false, className = '', ...rest }) {
   return (
     <div className="relative">
-      {Icon ? (
-        <Icon size="sm" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-      ) : null}
+      <Icon size="sm" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
       <input
         id={id}
         aria-invalid={error ? 'true' : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
-        className={`field h-11 py-0 sm:h-9 ${Icon ? 'pl-9' : ''} ${
+        className={`field h-11 rounded-xl py-0 pl-9 text-sm sm:h-10 sm:text-xs ${mono ? 'font-mono' : ''} ${
           error ? 'border-danger focus:border-danger focus:ring-danger/20' : ''
         } ${className}`}
         {...rest}
@@ -192,133 +148,126 @@ function TextInput({ id, error, icon: Icon, className = '', ...rest }) {
   )
 }
 
-/** The progress rail. Done steps carry a check; the current one is filled. */
-function Stepper({ step, editing, busy, onJump }) {
+/**
+ * The step indicator: both steps named ("Step 1: Guard details"), a check on a
+ * finished step, and a lock on one not yet reachable. Each step label is a
+ * button. (The percentage bar under it was removed at the user's request,
+ * 2026-10-18.)
+ */
+function ProgressSteps({ step, unlocked, busy, onJump }) {
   return (
-    <ol className="flex items-center gap-2 px-6 pb-4" aria-label="Steps">
-      {STEPS.map((item, index) => {
-        const state = index === step ? 'current' : index < step ? 'done' : 'todo'
-        // Creating: back to any finished step, forward only through Next, so a
-        // step is never skipped unvalidated. Editing: every step, every time.
-        const reachable = index !== step && (editing || index < step)
-        return (
-          <li key={item.key} className="flex min-w-0 flex-1 items-center gap-2 last:flex-none">
-            <button
-              type="button"
-              disabled={!reachable || busy}
-              onClick={() => onJump(index)}
-              aria-current={state === 'current' ? 'step' : undefined}
-              className="flex min-w-0 items-center gap-2 rounded-lg py-1 pr-1 text-left disabled:cursor-default"
-            >
-              <span
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1 ring-inset transition-colors duration-150 ${
-                  state === 'current'
-                    ? 'surface-brand ring-transparent'
-                    : state === 'done'
-                      ? 'bg-brand-100 text-brand-400 ring-brand-500/30'
-                      : 'bg-base-800 text-text-muted ring-slate-200'
+    <div>
+      <ol className="flex items-center gap-3" aria-label="Progress">
+        {STEPS.map((item, index) => {
+          const current = index === step
+          const done = !current && (index === 0 ? unlocked : false)
+          const locked = index > 0 && !unlocked
+          return (
+            <li key={item.key} className="flex min-w-0 flex-1 items-center gap-3 last:flex-none">
+              <button
+                type="button"
+                disabled={busy}
+                aria-current={current ? 'step' : undefined}
+                aria-disabled={locked || undefined}
+                onClick={() => onJump(index)}
+                className={`group flex min-w-0 items-center gap-2 rounded-full py-1 pr-2 text-left transition-opacity ${
+                  locked ? 'cursor-not-allowed opacity-60' : ''
                 }`}
               >
-                {state === 'done' ? <Check size="sm" /> : index + 1}
-              </span>
-              <span
-                className={`hidden truncate text-sm sm:block ${
-                  state === 'current' ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'
-                }`}
-              >
-                {item.label}
-              </span>
-            </button>
-            {index < LAST_STEP ? (
-              <span
-                aria-hidden="true"
-                className={`h-px min-w-4 flex-1 transition-colors duration-200 ${
-                  index < step ? 'bg-brand-500' : 'bg-slate-200'
-                }`}
-              />
-            ) : null}
-          </li>
-        )
-      })}
-    </ol>
+                <span
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ring-inset transition-colors duration-200 ${
+                    current
+                      ? 'bg-[var(--color-segment-active)] text-[var(--color-segment-active-fg)] ring-transparent'
+                      : done
+                        ? 'bg-brand-500/15 text-brand-500 ring-brand-500/30'
+                        : 'bg-tint/[0.06] text-text-muted ring-hairline'
+                  }`}
+                >
+                  {done ? <Check size={14} /> : locked ? <Lock size={12} /> : index + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                    Step {index + 1}
+                  </span>
+                  <span
+                    className={`block truncate text-xs ${
+                      current ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary group-hover:text-text-primary'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </span>
+              </button>
+              {index < LAST_STEP ? (
+                <span aria-hidden="true" className={`h-px min-w-4 flex-1 ${unlocked ? 'bg-brand-500/60' : 'bg-hairline'}`} />
+              ) : null}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }
 
-// -- DIALOG ------------------------------------------------------------------
+// ── DIALOG ──────────────────────────────────────────────────────────────────
 
-export default function ProvisionAccountModal({ open, account = null, onClose, onSaved }) {
+export default function ProvisionAccountModal({ open, onClose, onSaved }) {
   const panelRef = useRef(null)
   useDialogFocus({ open, containerRef: panelRef })
-  const editing = Boolean(account)
 
   const [form, setForm] = useState(EMPTY_FORM)
   const [step, setStep] = useState(0)
   const [errors, setErrors] = useState({})
+  const [showStepWarning, setShowStepWarning] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [busy, setBusy] = useState(false)
   const [revealed, setRevealed] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [credentials, setCredentials] = useState(null)
-
   const stepBodyRef = useRef(null)
 
-  // Reset every time the dialog opens. Without this, closing a half-filled
-  // "New account" form and reopening it hands the next officer the previous
-  // one's badge number — and on an edit, the previously selected row's values.
+  // Reset on every open, so a half-filled form never carries into the next.
   useEffect(() => {
     if (!open) return
     setStep(0)
     setErrors({})
+    setShowStepWarning(false)
     setSubmitError('')
     setCredentials(null)
     setRevealed(false)
-    setForm(
-      account
-        ? {
-            fullName: account.name ?? '',
-            email: account.email ?? '',
-            badgeNumber: account.badgeNumber ?? '',
-            // Derived rather than read straight off the document, so an account
-            // provisioned before this field existed still opens with its role
-            // selected instead of an empty dropdown.
-            isSupervisor: resolveAccessRole(account) === SUPERVISOR_ACCESS_ROLE,
-            password: '',
-          }
-        : { ...EMPTY_FORM, password: generateTempPassword() },
-    )
-  }, [open, account])
+    setCopied(false)
+    setForm({ ...EMPTY_FORM, password: generateTempPassword() })
+  }, [open])
 
   // Focus the first editable control of each step as it arrives.
-  //
-  // `preventScroll` is what keeps the page behind the dialog still. This used
-  // to wait a requestAnimationFrame for the same reason, which made focus
-  // depend on a frame being produced — and it measurably did not land on
-  // every step. Focusing in the commit that shows the step, without scrolling,
-  // gets the same protection with no timing dependency.
-  //
-  // `button[aria-expanded]` is how a Select trigger is found — it carries
-  // aria-expanded and no aria-haspopup — so the Role and post step, whose
-  // first control is a dropdown, still receives focus.
   useEffect(() => {
     if (!open || credentials) return
-    stepBodyRef.current
-      ?.querySelector('input:not([disabled]):not([readonly]), button[aria-expanded]')
-      ?.focus({ preventScroll: true })
+    stepBodyRef.current?.querySelector('input:not([disabled]):not([readonly])')?.focus({ preventScroll: true })
   }, [open, step, credentials])
 
-  // Escape closes the FORM but never the handoff — see the file header.
+  useEffect(() => {
+    if (!copied) return undefined
+    const timer = setTimeout(() => setCopied(false), 1600)
+    return () => clearTimeout(timer)
+  }, [copied])
+
+  // Escape closes the FORM but never the handoff.
   useEffect(() => {
     if (!open) return undefined
-    function handleKeydown(event) {
+    const onKey = (event) => {
       if (event.key === 'Escape' && !busy && !credentials) onClose?.()
     }
-    document.addEventListener('keydown', handleKeydown)
-    return () => document.removeEventListener('keydown', handleKeydown)
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [open, busy, credentials, onClose])
+
+  const validateAll = () => validateAccountForm(form, { requireCredentials: true })
+  const allErrors = validateAll()
+  const step1Valid = Object.keys(errorsForStep(allErrors, 0)).length === 0
 
   function update(patch) {
     setForm((prev) => ({ ...prev, ...patch }))
-    // Clear only the errors for the fields being edited. Clearing all of them
-    // would make a form with three problems look solved after fixing one.
+    // Clear only the edited fields' errors.
     setErrors((prev) => {
       const next = { ...prev }
       Object.keys(patch).forEach((key) => delete next[key])
@@ -326,23 +275,35 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
     })
   }
 
-  function validateAll() {
-    return validateAccountForm(form, { requireCredentials: !editing })
+  /** Move to a step. Forward only once the current step validates. */
+  function goTo(target) {
+    if (target === step) return
+    if (target > step) {
+      const found = errorsForStep(validateAll(), step)
+      if (Object.keys(found).length > 0) {
+        setErrors(found)
+        setShowStepWarning(true)
+        return
+      }
+    }
+    setShowStepWarning(false)
+    setStep(target)
   }
 
-  function goNext() {
-    const found = errorsForStep(validateAll(), step)
-    setErrors(found)
-    if (Object.keys(found).length > 0) return
-    setStep((current) => Math.min(current + 1, LAST_STEP))
+  async function copyPassword() {
+    try {
+      await navigator.clipboard.writeText(form.password)
+      setCopied(true)
+    } catch {
+      toast.error('Could not copy the password', { description: 'Show it and read it out instead.' })
+    }
   }
 
   async function handleSubmit(event) {
     event.preventDefault()
-    // Enter on an intermediate step means "next", not "create" — creating
-    // mode only. Editing saves from any step.
-    if (!editing && step < LAST_STEP) {
-      goNext()
+    // Enter on step 1 means "continue", not "create".
+    if (step < LAST_STEP) {
+      goTo(step + 1)
       return
     }
 
@@ -351,54 +312,36 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
     if (Object.keys(found).length > 0) {
       const firstBad = STEPS.findIndex((item) => item.fields.some((field) => found[field]))
       if (firstBad >= 0) setStep(firstBad)
+      if (firstBad === 0) setShowStepWarning(true)
       return
     }
 
     setBusy(true)
     setSubmitError('')
     try {
-      if (editing) {
-        // `accessRole` goes over the wire; the RBAC role and the duty list are
-        // derived SERVER-SIDE from it (functions/securityProvisioning.js).
-        // Sending a role the client picked would make the browser the
-        // authority on its own privilege level.
-        await updateSecurityAssignment({
-          uid: account.uid,
-          fullName: form.fullName.trim(),
-          badgeNumber: form.badgeNumber.trim(),
-          accessRole: accessRoleFor(form.isSupervisor),
-          assignedPost: DEFAULT_POST,
-          shift: ROSTER_SHIFT,
-        })
-        onSaved?.({ kind: 'updated', name: form.fullName.trim() })
-        onClose?.()
-      } else {
-        const result = await createSecurityAccount({
-          fullName: form.fullName.trim(),
-          email: form.email.trim().toLowerCase(),
-          badgeNumber: form.badgeNumber.trim(),
-          accessRole: accessRoleFor(form.isSupervisor),
-          assignedPost: DEFAULT_POST,
-          shift: ROSTER_SHIFT,
-          password: form.password,
-          // Not a form value. Every new guardhouse credential is one-time by
-          // construction — see the file header.
-          forcePasswordReset: true,
-        })
-        // Swap to the handoff rather than closing. The password came back in
-        // this response and exists nowhere else.
-        setCredentials({
-          fullName: form.fullName.trim(),
-          email: result?.email ?? form.email.trim().toLowerCase(),
-          badgeNumber: form.badgeNumber.trim(),
-          password: form.password,
-          forcePasswordReset: true,
-        })
-        onSaved?.({ kind: 'created', name: form.fullName.trim() })
-      }
+      const result = await createSecurityAccount({
+        fullName: form.fullName.trim(),
+        email: form.email.trim().toLowerCase(),
+        badgeNumber: form.badgeNumber.trim(),
+        phone: form.phone.trim(),
+        accessRole: PATROL_ACCESS_ROLE,
+        assignedPost: DEFAULT_POST,
+        shift: ROSTER_SHIFT,
+        password: form.password,
+        forcePasswordReset: true,
+      })
+      // Swap to the handoff: the password exists nowhere else.
+      setCredentials({
+        fullName: form.fullName.trim(),
+        email: result?.email ?? form.email.trim().toLowerCase(),
+        badgeNumber: form.badgeNumber.trim(),
+        password: form.password,
+        forcePasswordReset: true,
+      })
+      onSaved?.({ kind: 'created', name: form.fullName.trim() })
     } catch (err) {
       console.error('Security account write failed', err)
-      setSubmitError(describeCallableError(err, editing ? 'save those changes' : 'create that account'))
+      setSubmitError(describeCallableError(err, 'create that account'))
     } finally {
       setBusy(false)
     }
@@ -406,13 +349,14 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
 
   if (!open) return null
 
-  const current = STEPS[step]
-  const StepIcon = current.icon
+  const primaryBtn =
+    'inline-flex items-center gap-1.5 rounded-full bg-[var(--color-segment-active)] px-5 py-2.5 text-xs font-semibold text-[var(--color-segment-active-fg)] shadow-md transition-[filter,transform] hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50'
+  const secondaryBtn =
+    'inline-flex items-center gap-1.5 rounded-full border border-hairline bg-tint/[0.05] px-5 py-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50'
 
   return createPortal(
     <div
-      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-scrim sm:items-center sm:p-4"
-      // A backdrop click closes the form and is INERT over the handoff.
+      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/70 backdrop-blur-md sm:items-center sm:p-4"
       onClick={() => !busy && !credentials && onClose?.()}
       role="presentation"
     >
@@ -420,267 +364,231 @@ export default function ProvisionAccountModal({ open, account = null, onClose, o
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={
-          credentials ? 'Account credentials' : editing ? 'Edit security account' : 'Create security account'
-        }
+        aria-label={credentials ? 'Account credentials' : 'Create security account'}
         onClick={(event) => event.stopPropagation()}
-        className="custom-scrollbar max-h-[80dvh] w-full max-w-2xl dialog-panel overflow-y-auto rounded-xl rounded-b-none border border-hairline bg-base-850 shadow-modal sm:max-h-[88vh] sm:rounded-b-xl"
+        className="dialog-panel flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl shadow-black/60 sm:rounded-2xl"
       >
         {credentials ? (
-          <CredentialHandoff credentials={credentials} onDone={onClose} />
+          <div className="custom-scrollbar overflow-y-auto">
+            <CredentialHandoff credentials={credentials} onDone={onClose} />
+          </div>
         ) : (
-          <form onSubmit={handleSubmit} noValidate>
-            {/* Sticky, so the step rail stays in view on a laptop viewport
-                where a step can scroll. */}
-            <header className="sticky top-0 z-10 border-b border-hairline bg-base-850">
-              <div className="flex items-start gap-4 px-6 pb-4 pt-5">
-                <span className="icon-tile icon-tile-md">
-                  {editing ? <IdCard size="md" /> : <UserPlus size="md" />}
+          <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-col">
+            {/* ── Header ── */}
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-hairline px-6 py-5">
+              <div className="flex min-w-0 items-start gap-3.5">
+                <span className="mt-0.5 flex shrink-0 items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 p-2.5 text-brand-500">
+                  <ShieldCheck size="md" aria-hidden="true" />
                 </span>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-base font-semibold leading-tight text-text-primary">
-                    {editing ? 'Edit security account' : 'Create security account'}
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold tracking-tight text-text-primary">
+                    Create security account
                   </h2>
-                  <p className="mt-1 text-sm leading-snug text-text-secondary">
-                    {editing
-                      ? 'Update this guard’s details and where they are posted.'
-                      : 'Creates a Guardhouse Portal login and a one-time password to hand over.'}
+                  <p className="mt-0.5 text-xs text-text-secondary">
+                    Fill out guard details before configuring account credentials.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={busy}
-                  aria-label="Close"
-                  className="icon-btn icon-btn-sm -mr-1 shrink-0 text-text-secondary hover:text-text-primary"
-                >
-                  <X size="sm" />
-                </button>
               </div>
-              <Stepper step={step} editing={editing} busy={busy} onJump={setStep} />
             </header>
 
-            {/* Keyed on the step, so each arrival replays `.step-enter`. The
-                minimum height keeps the dialog from jumping between a
-                two-field step and a three-field one. */}
-            <div ref={stepBodyRef} key={current.key} className="step-enter space-y-5 px-6 py-5 sm:min-h-[18rem]">
-              <div className="flex items-start gap-3">
-                <StepIcon size="md" className="mt-0.5 shrink-0 text-brand-400" />
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-text-primary">{current.label}</h3>
-                  <p className="mt-0.5 text-sm text-text-secondary">{current.description}</p>
-                </div>
-              </div>
+            {/* ── Progress ── */}
+            <div className="shrink-0 border-b border-hairline px-6 pb-4 pt-4">
+              <ProgressSteps step={step} unlocked={step1Valid} busy={busy} onJump={goTo} />
+            </div>
 
-              {current.key === 'guard' ? (
-                <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-                  <Field
-                    label="Guard full name"
-                    htmlFor="sa-name"
-                    required
-                    error={errors.fullName}
-                    hint="As printed on their company ID."
-                  >
-                    <TextInput
-                      id="sa-name"
-                      value={form.fullName}
-                      error={errors.fullName}
-                      autoComplete="off"
-                      placeholder="e.g. Roberto D. Santos"
-                      onChange={(e) => update({ fullName: e.target.value })}
-                    />
-                  </Field>
-
-                  <Field
-                    label="Badge ID"
-                    htmlFor="sa-badge"
-                    required
-                    error={errors.badgeNumber}
-                    hint="Shown on the roster and on every report they file."
-                  >
-                    <TextInput
-                      id="sa-badge"
-                      icon={ShieldCheck}
-                      value={form.badgeNumber}
-                      error={errors.badgeNumber}
-                      autoComplete="off"
-                      placeholder="e.g. MV-0142"
-                      onChange={(e) => update({ badgeNumber: e.target.value.toUpperCase() })}
-                    />
-                  </Field>
-
-                  {/* ── THE ONE PRIVILEGE CONTROL ──────────────────────────
-                      Off by default and deliberately a single switch rather
-                      than a role select: the other three options the select
-                      carried were POSTS wearing a role's clothes, and all of
-                      them resolved to the same RBAC role. This one does not —
-                      it provisions `security_head`, which firestore.rules
-                      checks directly — so it is the only choice on this form
-                      that changes what the credential can do. */}
-                  <div className="sm:col-span-2">
-                    <div className="flex items-start justify-between gap-4 rounded-xl border border-hairline bg-base-800 p-4">
-                      <label htmlFor="sa-supervisor" className="min-w-0 cursor-pointer">
-                        <span className="block text-sm font-medium text-text-primary">
-                          Shift supervisor
-                        </span>
-                        <span id="sa-supervisor-hint" className="mt-0.5 block text-xs text-text-secondary">
-                          Oversees the officer roster. Leave off for a standard security officer —
-                          which is every other account.
-                        </span>
-                      </label>
-                      <Switch
-                        id="sa-supervisor"
-                        checked={form.isSupervisor}
-                        onChange={(next) => update({ isSupervisor: next })}
-                        ariaLabel="Shift supervisor"
-                        describedBy="sa-supervisor-hint"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              {current.key === 'credentials' ? (
+            {/* ── Step body ── keyed so each arrival replays `.step-enter`. */}
+            <div ref={stepBodyRef} key={STEPS[step].key} className="step-enter custom-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto p-6 sm:min-h-[20rem]">
+              {step === 0 ? (
                 <>
-                  {/* The review. Everything steps 1 and 2 are about to write,
-                      in one place, directly above the button that writes it. */}
-                  <div className="rounded-xl border border-hairline bg-base-800 p-4">
-                    <MetaList>
-                      <MetaItem label="Guard">{form.fullName.trim()}</MetaItem>
-                      <MetaItem label="Badge ID" mono>{form.badgeNumber.trim()}</MetaItem>
-                      <MetaItem label="Role">
-                        {form.isSupervisor ? 'Shift supervisor' : 'Security officer'}
-                      </MetaItem>
-                    </MetaList>
-                  </div>
+                  {showStepWarning && !step1Valid ? (
+                    <p role="alert" className="flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                      <AlertTriangle size="sm" className="shrink-0" aria-hidden="true" />
+                      <span>
+                        Complete the required fields below to unlock step 2: full name, badge ID and
+                        contact number.
+                      </span>
+                    </p>
+                  ) : null}
 
-                  <Field
-                    label="Login email"
-                    htmlFor="sa-email"
-                    required
-                    error={errors.email}
-                    hint={
-                      editing
-                        ? 'Cannot be changed — it is what this account signs in with.'
-                        : 'They sign in with this. It cannot be changed later.'
-                    }
-                  >
-                    <TextInput
-                      id="sa-email"
-                      type="email"
-                      icon={Mail}
-                      value={form.email}
-                      error={errors.email}
-                      // Read-only rather than absent on an edit: the email IS
-                      // the account, and hiding it makes an admin verify they
-                      // have the right row somewhere else.
-                      readOnly={editing}
-                      disabled={editing}
-                      autoComplete="off"
-                      placeholder="officer@monticellovillas.ph"
-                      onChange={(e) => update({ email: e.target.value })}
-                    />
-                  </Field>
-
-                  {editing ? (
-                    <div className="flex items-start gap-3 rounded-xl border border-hairline bg-base-800 p-4">
-                      <KeyRound size="sm" className="mt-0.5 shrink-0 text-text-secondary" />
-                      <p className="text-sm leading-relaxed text-text-secondary">
-                        Passwords cannot be changed here. Use{' '}
-                        <strong className="font-semibold text-text-primary">Reset password</strong> in the
-                        directory — that re-issues and re-flags the account in one recorded step.
-                      </p>
-                    </div>
-                  ) : (
+                  <div className="space-y-2">
                     <Field
-                      label="Temporary password"
-                      htmlFor="sa-password"
-                      error={errors.password}
-                      hint="Made on this device. They set their own the first time they sign in."
+                      label="Guard full name"
+                      htmlFor="sa-name"
+                      required
+                      error={errors.fullName}
+                      tip="Every security account is created as a Patrol Guard — the role and patrol posting are assigned automatically."
+                      hint="As printed on their company ID. Joins as a Patrol Guard."
                     >
-                      <div className="flex items-stretch gap-2">
-                        <div className="relative min-w-0 flex-1">
+                      <TextInput
+                        id="sa-name"
+                        icon={UserRound}
+                        value={form.fullName}
+                        error={errors.fullName}
+                        autoComplete="off"
+                        placeholder="e.g. Juan Dela Cruz"
+                        onChange={(e) => update({ fullName: e.target.value })}
+                      />
+                    </Field>
+                    <Field
+                      label="Badge ID"
+                      htmlFor="sa-badge"
+                      required
+                      error={errors.badgeNumber}
+                      tip="Letters, numbers and dashes, 2–16 characters. Must be unique — the server refuses a badge already in use."
+                      hint="Shown on the roster and on every report they file."
+                    >
+                      <TextInput
+                        id="sa-badge"
+                        icon={IdCard}
+                        mono
+                        value={form.badgeNumber}
+                        error={errors.badgeNumber}
+                        autoComplete="off"
+                        placeholder="e.g. MV-0142"
+                        onChange={(e) => update({ badgeNumber: e.target.value.toUpperCase() })}
+                      />
+                    </Field>
+                    <Field
+                      label="Official contact number"
+                      htmlFor="sa-phone"
+                      required
+                      error={errors.phone}
+                      tip="7–20 digits; spaces, +, - and () are fine. Used by the guardhouse to reach them on shift." 
+                      hint="The number the guardhouse calls them on."
+                    >
+                      <TextInput
+                        id="sa-phone"
+                        type="tel"
+                        icon={Phone}
+                        mono
+                        inputMode="tel"
+                        value={form.phone}
+                        error={errors.phone}
+                        autoComplete="off"
+                        placeholder="+63 9XX XXX XXXX"
+                        onChange={(e) => update({ phone: e.target.value })}
+                      />
+                    </Field>
+                  </div>
+                </>
+              ) : null}
+              {step === 1 ? (
+                <div className="space-y-5">
+                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
+                    <KeyRound size="sm" aria-hidden="true" />
+                    System credentials
+                  </p>
+
+                  <div className="space-y-2">
+                    <Field
+                      label="Login email"
+                      htmlFor="sa-email"
+                      required
+                      error={errors.email}
+                      tip="The guard's sign-in for the Guardhouse portal. Fixed once the account exists; it doubles as the account's identity in the change log."
+                      hint="They sign in with this. It cannot be changed later."
+                    >
+                      <TextInput
+                        id="sa-email"
+                        type="email"
+                        icon={Mail}
+                        value={form.email}
+                        error={errors.email}
+                        autoComplete="off"
+                        placeholder="guard@monticellovillas.ph"
+                        onChange={(e) => update({ email: e.target.value })}
+                      />
+                    </Field>
+
+                    <div className="border-t border-hairline pt-3">
+                      <Field
+                        label="Temporary password"
+                        htmlFor="sa-password"
+                        required
+                        error={errors.password}
+                        tip="Generated on this device. Shown once more after saving so you can hand it over; it is never stored where an admin can read it again."
+                        hint="The guard is prompted to replace this the first time they sign in."
+                        action={
+                          <button
+                            type="button"
+                            onClick={() => update({ password: generateTempPassword() })}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-500 transition-colors hover:bg-brand-500/20"
+                          >
+                            <RefreshCw size={12} aria-hidden="true" />
+                            Generate random password
+                          </button>
+                        }
+                      >
+                        <div className="relative">
+                          <Lock size="sm" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
                           <input
                             id="sa-password"
                             type={revealed ? 'text' : 'password'}
                             value={form.password}
-                            // Read-only, not disabled: a disabled input leaves the
-                            // tab order and some engines hide it from screen
-                            // readers, and this is the one value the operator
-                            // has to be able to read out loud.
                             readOnly
                             aria-invalid={errors.password ? 'true' : undefined}
                             aria-describedby={errors.password ? 'sa-password-error' : undefined}
-                            className={`field h-11 cursor-default py-0 pr-11 font-mono sm:h-9 ${
-                              errors.password ? 'border-danger' : ''
-                            }`}
+                            className={`field h-11 cursor-default rounded-xl py-0 pl-9 pr-20 font-mono text-sm sm:h-10 sm:text-xs ${errors.password ? 'border-danger' : ''}`}
                           />
-                          <button
-                            type="button"
-                            onClick={() => setRevealed((v) => !v)}
-                            aria-label={revealed ? 'Hide password' : 'Show password'}
-                            className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-text-muted transition-colors duration-150 hover:text-text-primary sm:h-7 sm:w-7"
-                          >
-                            {revealed ? <EyeOff size="sm" /> : <Eye size="sm" />}
-                          </button>
+                          <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={copyPassword}
+                              aria-label={copied ? 'Password copied' : 'Copy password'}
+                              title={copied ? 'Copied' : 'Copy password'}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary"
+                            >
+                              {copied ? <Check size="sm" className="text-success" /> : <Copy size="sm" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRevealed((v) => !v)}
+                              aria-label={revealed ? 'Hide password' : 'Show password'}
+                              title={revealed ? 'Hide password' : 'Show password'}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary"
+                            >
+                              {revealed ? <EyeOff size="sm" /> : <Eye size="sm" />}
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => update({ password: generateTempPassword() })}
-                          className="btn btn-sm btn-outline h-11 shrink-0 sm:h-9"
-                        >
-                          <RefreshCw size="sm" />
-                          New password
-                        </button>
-                      </div>
-                    </Field>
-                  )}
-                </>
+                      </Field>
+                    </div>
+                  </div>
+                </div>
               ) : null}
 
               {submitError ? (
-                <p className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
-                  <AlertTriangle size="sm" className="mt-0.5 shrink-0" />
+                <p role="alert" className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
+                  <AlertTriangle size="sm" className="mt-0.5 shrink-0" aria-hidden="true" />
                   <span className="min-w-0">{submitError}</span>
                 </p>
               ) : null}
             </div>
 
-            {/* Compact actions: the standard `btn-sm`, never the 44px tier. The
-                loudest thing on a data-entry dialog should not be the pair of
-                controls pressed once. */}
-            <footer className="sticky bottom-0 flex items-center gap-2 border-t border-hairline bg-base-850 px-6 py-3.5">
-              <p className="mr-auto text-sm text-text-muted">
-                Step {step + 1} of {STEPS.length}
+            {/* ── Footer ── */}
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950/40 px-6 py-4">
+              <p className="text-xs font-medium text-text-muted">
+                Step <span className="font-bold text-text-primary">{step + 1}</span> of {STEPS.length}
               </p>
-
-              {step === 0 ? (
-                <button type="button" onClick={onClose} disabled={busy} className="btn btn-sm btn-outline">
+              {/* ONE Cancel and ONE primary, on every step (2026-10-18). Going
+                  back to step 1 is the progress indicator's job; the header ×
+                  that duplicated Cancel is gone. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={onClose} disabled={busy} className={secondaryBtn}>
                   Cancel
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setStep((s) => Math.max(0, s - 1))}
-                  disabled={busy}
-                  className="btn btn-sm btn-outline"
-                >
-                  <ArrowLeft size="sm" />
-                  Back
-                </button>
-              )}
-
-              {editing || step === LAST_STEP ? (
-                <button type="submit" disabled={busy} className="btn btn-sm btn-brand">
-                  {busy ? <Loader2 size="sm" className="animate-spin" /> : <Check size="sm" />}
-                  {editing ? 'Save changes' : 'Create account'}
-                </button>
-              ) : (
-                <button type="submit" disabled={busy} className="btn btn-sm btn-brand">
-                  Next
-                  <ArrowRight size="sm" />
-                </button>
-              )}
+                {step === 0 ? (
+                  <button type="submit" disabled={busy} className={`${primaryBtn} ${step1Valid ? '' : 'opacity-60'}`}>
+                    Continue
+                    <ArrowRight size="sm" />
+                  </button>
+                ) : (
+                  <button type="submit" disabled={busy} className={primaryBtn}>
+                    {busy ? <Loader2 size="sm" className="animate-spin" /> : <Check size="sm" />}
+                    Save account details
+                  </button>
+                )}
+              </div>
             </footer>
           </form>
         )}

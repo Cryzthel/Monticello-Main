@@ -415,13 +415,13 @@ export function formatTimestamp(value) {
   startOfToday.setHours(0, 0, 0, 0)
   const dayDelta = Math.round((startOfToday - new Date(date).setHours(0, 0, 0, 0)) / 86400000)
 
-  const time = date.toLocaleTimeString(undefined, TIME)
+  const time = date.toLocaleTimeString('en-US', TIME)
   if (dayDelta === 0) return `Today, ${time}`
   if (dayDelta === 1) return `Yesterday, ${time}`
   if (dayDelta === -1) return `Tomorrow, ${time}`
 
   const sameYear = date.getFullYear() === new Date().getFullYear()
-  const day = date.toLocaleDateString(undefined, {
+  const day = date.toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'short',
     ...(sameYear ? {} : { year: 'numeric' }),

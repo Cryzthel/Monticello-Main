@@ -13,6 +13,7 @@ import {
 } from '@shared/lib/incidents'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import { CHART_MARGIN, yAxisWidth } from '@shared/theme/chartAxis'
+import { formatShortDate } from '@shared/lib/dates'
 
 const TREND_WEEKS = 8
 
@@ -38,7 +39,7 @@ function computeWeeklyResolutionTrend(incidents) {
   })
 
   return weeks.map((w) => ({
-    label: w.start.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
+    label: formatShortDate(w.start),
     Reported: w.reported,
     Resolved: w.resolved,
   }))

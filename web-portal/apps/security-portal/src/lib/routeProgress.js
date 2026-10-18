@@ -142,6 +142,47 @@ export function bearingAt(coords, index) {
   return (Math.atan2(y, x) / DEG + 360) % 360
 }
 
+/** Metres of road behind and ahead of the unit that [bearingAlong] reads. */
+export const BEARING_BEHIND_M = 5
+export const BEARING_AHEAD_M = 15
+
+/**
+ * The direction of travel at `alongM` metres down the line, read over a short
+ * stretch of road rather than off the single segment underneath.
+ *
+ * ── WHY NOT JUST THE SEGMENT ───────────────────────────────────────────────
+ * `bearingAt(coords, hit.index)` was the arrow's source, and it failed in two
+ * ways a guard could see:
+ *
+ *   • ZERO-LENGTH SEGMENTS. Mapbox emits a duplicate coordinate at every
+ *     maneuver. A fix that projected onto one got `atan2(0, 0)` — due north —
+ *     so the arrow flicked to point up the screen at exactly the corners it
+ *     mattered most, and on a southbound street that read as inverted.
+ *   • CORNERS. The bearing switched in one frame as the snapped point crossed
+ *     a vertex, so the arrow jumped 90° instead of turning.
+ *
+ * Measuring from a point a few metres behind to one further ahead (the Turf
+ * `bearing(along(-5), along(+15))` idea) skips degenerate segments by
+ * construction and rotates progressively through a bend, starting just
+ * before it. Weighted ahead because the arrow should show where the road is
+ * GOING. Both points are on the plotted line, so nothing is extrapolated.
+ */
+export function bearingAlong(coords, alongM) {
+  if (!Array.isArray(coords) || coords.length < 2) return 0
+  const from = interpolateAlong(coords, alongM - BEARING_BEHIND_M)
+  const to = interpolateAlong(coords, alongM + BEARING_AHEAD_M)
+  if (from && to && (from[0] !== to[0] || from[1] !== to[1])) {
+    return bearingAt([from, to], 0)
+  }
+  // Degenerate (a route shorter than the window, every point identical):
+  // the first segment that actually has a direction.
+  for (let i = 0; i < coords.length - 1; i += 1) {
+    const [a, b] = [coords[i], coords[i + 1]]
+    if (a[0] !== b[0] || a[1] !== b[1]) return bearingAt(coords, i)
+  }
+  return 0
+}
+
 /**
  * Where each step ends, in metres from the start of the route.
  *
@@ -424,7 +465,13 @@ export function routeProgress(
     offsetM: hit.offset,
     /** The unit snapped onto the road, which is where the marker belongs. */
     snapped: hit.point,
-    bearing: bearingAt(coords, hit.index),
+    bearing: bearingAlong(coords, along),
+    /**
+     * How far off the line this fix may sit and still be snapped onto it —
+     * see [offRouteLimit]. Carried on the result so every reader of
+     * `isOffRoute` judges the same fix by the same yardstick.
+     */
+    offRouteLimitM: offRouteLimit(position?.accuracy),
     step,
     /**
      * Metres from the unit to the CURRENT step's corner, in a straight line —
@@ -485,6 +532,32 @@ export function interpolateAlong(coords, distanceM) {
  */
 export const OFF_ROUTE_METERS = 45
 
+/**
+ * The most the tolerance ever widens to, however rough the fix.
+ *
+ * ── WHY THE TOLERANCE FOLLOWS THE FIX ──────────────────────────────────────
+ * A fixed 45 m was tuned for a phone's GPS. A console on Wi-Fi positioning
+ * reports ±120 m or worse (the screenshot that prompted this said ±126 m), and
+ * a fix that rough lands 60–90 m off the road while the officer is on it —
+ * so the marker was drawn through back gardens, labelled off route, and
+ * jumped about as each reading wandered. A fix whose own error circle still
+ * contains the road is consistent with being ON it, so the tolerance is the
+ * reported accuracy, floored at the GPS-tuned 45 m.
+ *
+ * Capped, because past ~100 m a position cannot tell one street from the next
+ * in this subdivision, and snapping a genuinely wrong-way officer onto the
+ * line would hide exactly the mistake off-route detection exists to catch.
+ */
+export const OFF_ROUTE_MAX_METERS = 100
+
+/** The off-route tolerance for a fix that reports `accuracyM`. */
+export function offRouteLimit(accuracyM) {
+  if (!Number.isFinite(accuracyM) || accuracyM <= OFF_ROUTE_METERS) return OFF_ROUTE_METERS
+  return Math.min(OFF_ROUTE_MAX_METERS, accuracyM)
+}
+
 export function isOffRoute(progress) {
-  return Boolean(progress) && progress.offsetM > OFF_ROUTE_METERS
+  if (!progress) return false
+  const limit = Number.isFinite(progress.offRouteLimitM) ? progress.offRouteLimitM : OFF_ROUTE_METERS
+  return progress.offsetM > limit
 }

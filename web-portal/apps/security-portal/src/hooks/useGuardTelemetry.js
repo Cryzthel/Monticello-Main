@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { collection, doc, getDoc, query, where } from 'firebase/firestore'
+import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
@@ -10,12 +10,14 @@ import { distanceMeters } from '@/lib/directions'
 import {
   TELEMETRY_CADENCE,
   describeDevice,
+  deviceId,
   publishTelemetry,
   readBattery,
   rememberFix,
 } from '@/lib/guardTelemetry'
 import { getSettings } from '@shared/lib/systemSettingsStore'
 import { isUsableFix } from '@shared/lib/geolocation'
+import { shouldDeferPublish } from '@/lib/bestFix'
 
 /** Every call a unit is committed to. Shared with DispatchWatchdog. */
 export function activeCallsQuery() {
@@ -109,7 +111,12 @@ export function useGuardTelemetry() {
   const { data: openCalls } = useLiveCollection(openCallsQuery)
   const active =
     openCalls.find(
-      (incident) => incident.assignedGuardUid === uid && isActiveStage(deriveDispatchStage(incident)),
+      (incident) =>
+        // A deleted call is not one this officer is still on, so it must not
+        // hold the GPS in high-precision mode.
+        !incident.deletedAt &&
+        incident.assignedGuardUid === uid &&
+        isActiveStage(deriveDispatchStage(incident)),
     ) ?? null
   const activeStage = active ? deriveDispatchStage(active) : null
   const activeIncidentId = active?.id ?? null
@@ -124,6 +131,39 @@ export function useGuardTelemetry() {
   )
 
   const lastSentRef = useRef({ at: 0, fix: null })
+
+  /**
+   * ── WHAT THE OFFICER'S OTHER DEVICE IS PUBLISHING ─────────────────────────
+   * The officer's own telemetry document, live, so this device can see when
+   * their PHONE is already publishing a better position and stop overwriting
+   * it with a laptop's Wi-Fi estimate (see shouldDeferPublish). `deferring` is
+   * surfaced so the dispatch map can say where the position is coming from.
+   */
+  const remoteRef = useRef(null)
+  const [deferring, setDeferring] = useState(false)
+  useEffect(() => {
+    if (!uid) return undefined
+    return onSnapshot(
+      doc(db, 'guard_telemetry', uid),
+      (snap) => {
+        const data = snap.data()
+        const position = data?.position ?? null
+        const capturedAt = position?.capturedAt?.toMillis?.() ?? position?.capturedAt
+        remoteRef.current = data
+          ? {
+              position: position ? { ...position, capturedAt } : null,
+              deviceId: data.device?.deviceId ?? null,
+              mobile: Boolean(data.device?.mobile),
+            }
+          : null
+      },
+      // A read failure only means this device cannot see the other one: it
+      // then publishes as it always did, which is the safe direction.
+      () => {
+        remoteRef.current = null
+      },
+    )
+  }, [uid])
   /**
    * Has this device ever produced a fix in this session?
    *
@@ -202,6 +242,12 @@ export function useGuardTelemetry() {
       lastSentRef.current = { at: Date.now(), fix }
       // Local first, and regardless of whether the write below lands.
       if (fix) setFix(fix)
+      // Another of this officer's devices (their phone) is publishing a
+      // better, fresh fix: writing ours would replace it in the shared
+      // document. Stand aside until that fix goes stale.
+      const defer = shouldDeferPublish(remoteRef.current, fix, deviceId())
+      setDeferring(defer)
+      if (defer) return
       publishTelemetry(state.uid, {
         ...state.identity,
         onDuty: true,
@@ -404,5 +450,5 @@ export function useGuardTelemetry() {
     }
   }, [uid, mode, sharing])
 
-  return { mode, sharing, locationError, activeIncidentId, fix }
+  return { mode, sharing, locationError, activeIncidentId, fix, deferring }
 }

@@ -13,6 +13,8 @@ import { db } from '@shared/lib/firebase'
 import { mapShiftDoc } from '@shared/lib/shifts'
 import { useGuardProfile } from '@/hooks/useGuardProfile'
 import { exportDutyLogPdf } from '@/lib/dutyLogPdf'
+import { formatDate } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 /**
  * The officer's own duty history, with a PDF export.
@@ -66,7 +68,7 @@ function timeCell(value) {
   if (!value) return '—'
   return (
     <span className="whitespace-nowrap">
-      {value.toLocaleDateString()}{' '}
+      {formatDate(value)}{' '}
       <span className="font-mono text-xs text-text-muted">
         {value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </span>
@@ -84,6 +86,26 @@ export default function DutyLogTable() {
     [uid],
   )
   const { data, loading, error } = useLiveCollection(shiftsQuery)
+
+  /**
+   * Calls booked to this officer — for the one figure on the export that the
+   * shift rows cannot prove.
+   *
+   * ── WHY A SECOND QUERY AND NOT A FIELD ON THE SHIFT ────────────────
+   * A shift document records when an officer clocked in and out; nothing
+   * increments a counter on it when a call is dispatched to them, and adding
+   * one would mean a write to the shift on every dispatch — a second place for
+   * the same fact to be wrong, on the hot path of an emergency.
+   *
+   * Counting the incidents instead means the number is always the incidents
+   * collection's own answer. It is scoped by `assignedGuardUid`, which the
+   * rules already let staff read.
+   */
+  const incidentsQuery = useMemo(
+    () => (uid ? query(collection(db, 'incidents'), where('assignedGuardUid', '==', uid)) : null),
+    [uid],
+  )
+  const { data: incidentData } = useLiveCollection(incidentsQuery)
 
   const [search, setSearch] = useState('')
   const [state, setState] = useState('all')
@@ -122,6 +144,22 @@ export default function DutyLogTable() {
     setPage(1)
   }, [search, state, range])
 
+  /**
+   * Incidents inside the SAME window the rows are filtered to, so the figure
+   * and the table describe one period. `reportedAt` is the clock the window is
+   * measured on — the same field the range filter uses for a shift's `timeIn`
+   * — rather than `resolvedAt`, which would drop a call still open at the end
+   * of the range and make a busy week look quiet.
+   */
+  const incidentsHandled = useMemo(() => {
+    if (!incidentData) return null
+    const cutoff = range === 'all' ? 0 : Date.now() - Number(range) * 86400000
+    return incidentData.filter((d) => {
+      const at = d.reportedAt?.toDate ? d.reportedAt.toDate() : d.reportedAt
+      return at ? new Date(at).getTime() >= cutoff : false
+    }).length
+  }, [incidentData, range])
+
   const pageRows = rows.slice((page - 1) * rowsPerPage, page * rowsPerPage)
   const filtersActive = Boolean(search) || state !== 'all' || range !== 'all'
   const totalMinutes = rows.reduce((sum, s) => sum + (s.durationMinutes ?? 0), 0)
@@ -134,6 +172,7 @@ export default function DutyLogTable() {
       // document when the screen in front of them showed seven days.
       shifts: rows,
       filterLabel: RANGES.find((r) => r.value === range)?.label ?? 'All time',
+      incidentsHandled,
     })
   }
 
@@ -172,22 +211,18 @@ export default function DutyLogTable() {
       </div>
 
       <Card className="overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            {/* Not sticky, for the reason OnDutyHistoryTable sets out at
-                length: pagination caps the height, the card no longer scrolls
-                on its own, and a sticky header with no scrolling ancestor
-                unpins from the table and floats down the page. */}
-            <thead className="bg-slate-50">
-              <tr className="table-head">
-                <th className="px-4 py-3 font-medium">Shift</th>
-                <th className="px-4 py-3 font-medium">Time in</th>
-                <th className="px-4 py-3 font-medium">Time out</th>
-                <th className="px-4 py-3 font-medium">Duration</th>
-                <th className="px-4 py-3 font-medium">Handover</th>
-              </tr>
-            </thead>
-            <tbody>
+        <DataTable
+          scroll="x"
+          sticky={false}
+          minWidth="40rem"
+          columns={[
+            { header: <>Shift</> },
+            { header: <>Time in</> },
+            { header: <>Time out</> },
+            { header: <>Duration</> },
+            { header: <>Handover</> },
+          ]}
+        >
               {error ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center">
@@ -253,9 +288,7 @@ export default function DutyLogTable() {
                   </tr>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
+        </DataTable>
       </Card>
 
       <TablePagination

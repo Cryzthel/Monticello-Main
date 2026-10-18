@@ -1,3 +1,4 @@
+import { toast, describeError } from '@shared/lib/toast'
 import { useEffect, useState } from 'react'
 import {
   CheckCircle2,
@@ -13,7 +14,8 @@ import {
   User,
 } from '@shared/icons'
 import { incidentDurations, formatMinutes, saveResponderNotes } from '@shared/lib/incidents'
-import { computePriorityScore, formatCategory, categoryWeightOf } from '@shared/lib/wpda'
+import { computePriorityScore, formatCategory } from '@shared/lib/wpda'
+import { formatDateTime } from '@shared/lib/dates'
 
 /**
  * The full forensic breakdown of one incident report.
@@ -89,7 +91,7 @@ function TimelineRow({ icon: Icon, label, at, duration, pendingLabel, isLast = f
       <div className={`min-w-0 flex-1 ${isLast ? '' : 'pb-4'}`}>
         <p className="meta-label">{label}</p>
         <p className={`mt-0.5 text-sm font-medium ${done ? 'text-text-primary' : 'text-text-muted'}`}>
-          {done ? new Date(at).toLocaleString() : pendingLabel}
+          {done ? formatDateTime(at) : pendingLabel}
         </p>
         {done && duration != null ? (
           <p className="mt-0.5 text-xs text-brand-400">+{formatMinutes(duration)} elapsed</p>
@@ -123,8 +125,9 @@ function NotesEditor({ report, canEdit = true }) {
     try {
       await saveResponderNotes(report.id, { responderNotes: notes, resolutionSummary: summary })
       setEditing(false)
+      toast.success('Responder notes saved')
     } catch (err) {
-      setError(err.message ?? 'Could not save these notes.')
+      setError(describeError(err))
     } finally {
       setBusy(false)
     }
@@ -152,7 +155,7 @@ function NotesEditor({ report, canEdit = true }) {
             {report.notesUpdatedByName ? (
               <p className="text-xs text-text-secondary">
                 Logged by {report.notesUpdatedByName}
-                {report.notesUpdatedAt ? ` • ${new Date(report.notesUpdatedAt).toLocaleString()}` : ''}
+                {report.notesUpdatedAt ? ` • ${formatDateTime(report.notesUpdatedAt)}` : ''}
               </p>
             ) : null}
           </>
@@ -283,7 +286,7 @@ export default function IncidentBreakdown({ report, mediaCount = 0, canEditNotes
           <Field
             icon={Clock}
             label="Reported"
-            value={report.reportedAt ? new Date(report.reportedAt).toLocaleString() : ''}
+            value={formatDateTime(report.reportedAt, '')}
           />
           <Field
             icon={MapPin}
@@ -326,11 +329,6 @@ export default function IncidentBreakdown({ report, mediaCount = 0, canEditNotes
           />
         </ol>
         <div className="grid grid-cols-2 gap-4 border-t border-hairline pt-3">
-          <Field
-            label="Total response duration"
-            value={durations.total != null ? formatMinutes(durations.total) : ''}
-            tone={durations.total != null ? 'text-brand-400' : 'text-text-primary'}
-          />
           <Field label="Responding officer" value={report.assignedGuardName} />
         </div>
       </Section>

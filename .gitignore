@@ -45,3 +45,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Firebase Admin SDK service account keys — never commit these
+scripts/serviceAccountKey.json
+*serviceAccountKey*.json
+crash.txt
+# Agent tooling installed locally by the skills CLI / impeccable
+.agents/
+.codex/
+.github/skills/
+.github/agents/
+.github/hooks/
+
+# PGlite, installed --no-save to run db/test/*.test.mjs
+db/test/node_modules/

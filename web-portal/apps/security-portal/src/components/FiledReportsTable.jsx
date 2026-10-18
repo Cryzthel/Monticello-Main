@@ -5,7 +5,6 @@ import {
   Loader2,
   MapPin,
   RotateCcw,
-  Search,
   ShieldAlert,
   Trash2,
   X,
@@ -21,6 +20,8 @@ import { describeFirestoreError } from '@shared/lib/audit'
 import { formatCategory } from '@shared/lib/wpda'
 import { Skeleton } from '@shared/components/Skeleton'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTime } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 const TABS = [
   { key: 'active', label: 'Active' },
@@ -29,9 +30,8 @@ const TABS = [
 
 // Fixed-width form so the column aligns on its separators without a hack —
 // same treatment the incident queue's Reported column uses.
-const LOG_TIME = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }
 const formatFiledAt = (value) =>
-  value ? new Date(value).toLocaleString('en-GB', LOG_TIME).replace(',', '') : '—'
+  formatDateTime(value)
 
 /**
  * Officer identifier.
@@ -470,28 +470,27 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
       </div>
 
       {/* ══ TABLE — md and up ══ */}
-      <div className="custom-scrollbar hidden min-h-0 overflow-x-auto md:block lg:flex-1 lg:overflow-y-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            <tr className="table-head">
-              <th className="w-10 px-4 py-3">
-                <input
+      <DataTable
+        scroll="x"
+        sticky={false}
+        minWidth="56rem"
+        scrollClassName="hidden md:block lg:flex-1 lg:overflow-y-auto"
+        columns={[
+          { header: <><input
                   type="checkbox"
                   aria-label="Select all reports"
                   checked={allSelected}
                   onChange={() => setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
                   className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
-                />
-              </th>
-              <th className="px-4 py-3">Submitted by</th>
-              <th className="w-[10rem] px-4 py-3">Date &amp; time</th>
-              <th className="px-4 py-3">Location</th>
-              <th className="w-[11rem] px-4 py-3">Category</th>
-              <th className="w-[9.5rem] px-4 py-3">Status</th>
-              <th className="w-[9rem] px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
+                /></>, className: 'w-10' },
+          { header: <>Submitted by</> },
+          { header: <>Date &amp; time</>, className: 'w-[10rem]' },
+          { header: <>Location</> },
+          { header: <>Category</>, className: 'w-[11rem]' },
+          { header: <>Status</>, className: 'w-[9.5rem]' },
+          { header: <>Actions</>, className: 'w-[9rem]', align: 'right' },
+        ]}
+      >
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={`sk-${i}`} className="border-t border-divider">
@@ -564,9 +563,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
                 )
               })
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
 
       <ConfirmDialog
         open={Boolean(confirming)}

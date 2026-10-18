@@ -3,6 +3,8 @@ import StatusBadge from '@shared/components/StatusBadge'
 import { clockTime, relativeTime } from '@shared/lib/notifications'
 import { notificationIcon } from '@shared/theme/categoryIcons'
 
+const FULL_STAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeStyle: 'short' })
+
 // Circular outline glyphs, one per tone — the feed's leading indicator.
 // Outline rather than filled: four solid dots in a vertical list read as a
 // status column and compete with the text, whereas rings sit behind it.
@@ -32,35 +34,17 @@ export function ToneGlyph({ tone, size = 'md' }) {
 }
 
 /**
- * One notification card.
+ * One notification card, after the reference panel (2026-10-17).
  *
- * -- THE GRID IS THE DESIGN ------------------------------------------------
- * Three columns, declared once and identical on every row:
- *
- *     [ 1.75rem glyph ][ minmax(0,1fr) content ][ auto timestamp ]
- *
- * Everything else follows from that. Because the glyph column has a FIXED
- * width rather than being a flex item sized by its own content, every card's
- * text starts at exactly the same x — and because the timestamp is its own
- * grid column rather than a floated span inside the paragraph, the times line
- * up as a readable right-hand column down the whole feed. The previous card
- * was a flex row with the time inlined above the text, so neither edge was
- * shared between two rows and the panel read as a stack of paragraphs.
- *
- * -- READING ORDER ---------------------------------------------------------
- * Badges, then headline, then supporting detail, then place, then the action.
- * A reader scanning for one category never has to read a sentence to find it,
- * and the one interactive element sits at the end of the card where it cannot
- * be hit on the way to reading it.
- *
- * `unread` is a faint brand wash plus a 6px dot at the glyph's shoulder. The
- * wash marks where new becomes seen down the list; the dot is the cue that
- * survives for a reader who cannot tell a pale green wash from white.
+ * Reading order: unread dot and icon tile on the left; badges, then the time
+ * opposite them; the headline; the detail; the place; the one action, last,
+ * where it cannot be hit on the way to reading the card. The action is a real
+ * button rather than the whole card being clickable, so a keyboard user gets
+ * a labelled stop and the card can be read without the pointer implying one.
  */
 export default function NotificationRow({ notification, unread = false, onSelect }) {
   const interactive = Boolean(onSelect)
   const {
-    tone,
     categoryLabel,
     categoryTone,
     priority,
@@ -71,89 +55,87 @@ export default function NotificationRow({ notification, unread = false, onSelect
     actionLabel,
   } = notification
 
+  const sos = notification.kind === 'panic'
+  const Icon = notificationIcon(notification)
+  const valid = at instanceof Date && !Number.isNaN(at.getTime())
+
+  /*
+   * ── THE CARD (2026-10-17, after the reference panel) ─────────────────────
+   * A card on the list's darker well rather than a row on the panel: a left
+   * column holding the unread dot over a tinted icon tile, then badges with
+   * the time opposite, the headline, the detail, the place, and the action.
+   *
+   * One accent: the brand emerald, on the tile, the dot and the link. The
+   * reference's indigo tiles are gone. SOS is the exception and keeps a red
+   * card, tile and link, because an emergency must not look like a report.
+   */
+  const surface = sos
+    ? 'border-danger/30 bg-danger/[0.07] hover:border-danger/55'
+    : 'border-hairline bg-base-900 hover:border-tint/25'
+  const tile = sos
+    ? 'border-danger/35 bg-danger/15 text-danger'
+    : 'border-brand-500/25 bg-brand-500/10 text-brand-400'
+  const link = sos ? 'text-danger hover:text-danger/80' : 'text-brand-400 hover:text-brand-300'
+
   return (
     <li>
-      <div
-        className={`grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 rounded-lg py-3 pl-3 pr-3.5 transition-colors duration-150 ${
-          unread ? 'bg-brand-50' : 'hover:bg-tint/[0.04]'
-        }`}
-      >
-        {/* Column 1 — tone. Spans nothing: it anchors the first row and the
-            rest of the card hangs off column 2, which is what keeps the
-            headline and the detail on one left edge. */}
-        <div className="relative pt-px">
-          <ToneGlyph tone={tone} />
-          {unread ? (
+      <div className={`rounded-xl border p-4 transition-colors duration-200 ${surface}`}>
+        <div className="flex items-start gap-4">
+          <div className="flex shrink-0 flex-col items-center gap-2.5 pt-1">
+            {/* The unread dot keeps its column when read, so cards do not
+                shift sideways as they are marked read. */}
             <span
               aria-hidden="true"
-              className="absolute -left-2 top-3 h-1.5 w-1.5 rounded-full bg-brand-500"
+              className={`h-2 w-2 rounded-full ${unread ? 'bg-brand-500' : 'bg-transparent'}`}
             />
-          ) : null}
-        </div>
-
-        {/* Column 2, row 1 — classification. */}
-        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-          <StatusBadge tone={categoryTone} icon={notificationIcon(notification)}>
-            {categoryLabel}
-          </StatusBadge>
-          {/* Severity only where it changes what someone does. A `medium`
-              badge on every second row is a column of noise, and `low` is not
-              a thing anyone is being asked to act on. */}
-          {priority === 'critical' || priority === 'high' ? (
-            <StatusBadge severity={priority} />
-          ) : null}
-        </div>
-
-        {/* Column 3, row 1 — the timestamp column. `tabular-nums` is what puts
-            the digits on a shared vertical rhythm, and it was already here; the
-            mono FACE sitting on top of it was doing nothing but looking
-            technical, which this codebase rules out. `text-right` so it is the
-            panel's right edge that aligns, not the start of a variable-length
-            word. */}
-        <div className="text-right">
-          <p className="text-caption leading-none tabular-nums text-text-secondary">
-            {clockTime(at)}
-          </p>
-          <p className="mt-1 whitespace-nowrap text-2xs leading-none text-text-muted">
-            {relativeTime(at)}
-          </p>
-        </div>
-
-        {/* Everything below spans columns 2-3: the glyph column stays empty so
-            the body of the card reads as one block against a single gutter. */}
-        <div className="col-start-2 col-end-4 min-w-0">
-          <p className="text-label font-semibold leading-snug text-text-primary">{title}</p>
-          {detail ? (
-            <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-text-secondary">
-              {detail}
-            </p>
-          ) : null}
-          {propertyLabel ? (
-            <p className="mt-1.5 flex min-w-0">
-              <StatusBadge tone="neutral" size="sm" icon={MapPin} className="max-w-full">
-                <span className="truncate">{propertyLabel}</span>
-              </StatusBadge>
-            </p>
-          ) : null}
-        </div>
-
-        {interactive ? (
-          <div className="col-start-2 col-end-4">
-            {/* An explicit link trigger rather than a click target covering the
-                whole card. A card that is entirely clickable cannot be read
-                without the pointer implying an action, and it gives a keyboard
-                user one enormous tab stop whose behaviour is unstated. This is
-                a real button with a real label. */}
-            <button
-              type="button"
-              onClick={onSelect}
-              className="-ml-1 inline-flex items-center gap-1 rounded-lg px-1 py-0.5 text-caption font-semibold text-brand-400 transition-colors hover:text-brand-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
-            >
-              {actionLabel ?? 'View details'}
-              <ArrowRight size="sm" />
-            </button>
+            <span className={`flex h-10 w-10 items-center justify-center rounded-lg border ${tile}`}>
+              {Icon ? <Icon size="md" aria-hidden="true" /> : null}
+            </span>
           </div>
-        ) : null}
+
+          <div className="min-w-0 flex-1">
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <StatusBadge tone={categoryTone} icon={Icon}>
+                  {categoryLabel}
+                </StatusBadge>
+                {/* Severity only where it changes what someone does. */}
+                {priority === 'critical' || priority === 'high' ? <StatusBadge severity={priority} /> : null}
+              </div>
+              <time
+                dateTime={valid ? at.toISOString() : undefined}
+                title={valid ? FULL_STAMP.format(at) : undefined}
+                className="flex shrink-0 flex-col items-end text-right"
+              >
+                <span className="text-sm font-medium tabular-nums text-text-primary">{clockTime(at)}</span>
+                <span className="mt-0.5 whitespace-nowrap text-xs text-text-muted">{relativeTime(at)}</span>
+              </time>
+            </div>
+
+            <h4 className={`text-base font-semibold leading-snug ${sos ? 'text-danger' : 'text-text-primary'}`}>{title}</h4>
+            {detail ? <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{detail}</p> : null}
+
+            {propertyLabel ? (
+              <p className="mt-3 flex min-w-0">
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-hairline bg-base-850 px-3 py-1 text-xs font-semibold text-text-secondary">
+                  <MapPin size="sm" aria-hidden="true" className="shrink-0 text-text-muted" />
+                  <span className="truncate">{propertyLabel}</span>
+                </span>
+              </p>
+            ) : null}
+
+            {interactive ? (
+              <button
+                type="button"
+                onClick={onSelect}
+                className={`mt-3 inline-flex items-center gap-1.5 rounded-md text-sm font-semibold transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${link}`}
+              >
+                {actionLabel ?? 'View details'}
+                <ArrowRight size="sm" aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
     </li>
   )

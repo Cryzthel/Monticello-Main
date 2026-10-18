@@ -1,1 +1,18 @@
-{"flutter":{"platforms":{"android":{"buildConfigurations":{".":{"projectId":"monticello-villas-f600e","appId":"1:787092385070:android:ab380b50bfe5a02bea9ebf","fileOutput":"android/app/google-services.json"}}},"dart":{"lib/firebase_options.dart":{"projectId":"monticello-villas-f600e","configurations":{"ios":"1:787092385070:ios:45f2d68833a297d4ea9ebf"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "database": {
+    "rules": "database.rules.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default"
+    }
+  ],
+  "flutter":{"platforms":{"android":{"buildConfigurations":{".":{"projectId":"monticello-villas-f600e","appId":"1:787092385070:android:ab380b50bfe5a02bea9ebf","fileOutput":"android/app/google-services.json"}}},"dart":{"lib/firebase_options.dart":{"projectId":"monticello-villas-f600e","configurations":{"ios":"1:787092385070:ios:45f2d68833a297d4ea9ebf"}}}}}}

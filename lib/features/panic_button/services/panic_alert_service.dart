@@ -10,10 +10,11 @@ import 'package:monticello_villas_app/features/property/services/property_storag
 /// What actually happened to an alert, as far as the app can honestly tell.
 ///
 /// There is no `failed`. Once the payload is on disk the emergency is recorded
-/// and will be retried until it lands, so "we could not send it" stopped being
-/// a truthful thing to display — the only remaining distinction is whether the
-/// guardhouse has it NOW or has it PENDING. The one genuine failure left is
-/// being unable to build a payload at all, which throws.
+/// and will be retried until it lands, so "we could not send it" is not a
+/// truthful thing to display for a network problem — the distinction there is
+/// only whether the guardhouse has it NOW or has it PENDING. The two genuine
+/// failures are being unable to build a payload at all, which throws, and
+/// [refused].
 enum SosDispatchOutcome {
   /// The server acknowledged the write. Security can see it.
   delivered,
@@ -21,6 +22,13 @@ enum SosDispatchOutcome {
   /// Held in the encrypted queue. Firestore's own cache may also be holding a
   /// copy; either way delivery is automatic once there is a route out.
   queued,
+
+  /// The server REFUSED it: firestore.rules accepts an alert only from a
+  /// verified resident. Final, so it is not queued — retrying would never
+  /// succeed, and telling the resident it "will send itself" would be the
+  /// one thing this sheet must never say. The sheet shows its locked form,
+  /// which gives the main gate's number instead.
+  refused,
 }
 
 /// What [PanicAlertService.dispatch] reports: the outcome, plus the payload
@@ -90,22 +98,25 @@ class PanicAlertService {
 
   /// [dispatch] with the payload supplied.
   ///
-  /// Split out so a caller can keep the payload it just sent. The panic screen
-  /// needs it: if the outcome is [SosDispatchOutcome.queued] it has to be able
-  /// to render that same emergency into an SMS, and rebuilding it afterwards
-  /// would take a second GPS fix and produce a second alertId — a different
-  /// emergency, as far as every duplicate guard in this feature is concerned.
+  /// Split out so a caller can keep the payload it just sent: rebuilding it
+  /// afterwards would take a second GPS fix and produce a second alertId — a
+  /// different emergency, as far as every duplicate guard in this feature is
+  /// concerned.
   static Future<SosDispatchOutcome> dispatchPayload(SosPayload payload) async {
     // Durability first. If the process dies on the next line, the alert is
     // still on disk and the sync service will deliver it.
     await SosQueue.enqueue(payload);
 
-    final delivered = await SosSyncService.deliverFirst(payload);
-    if (delivered) {
-      await SosQueue.remove(payload.alertId);
-      return SosDispatchOutcome.delivered;
+    switch (await SosSyncService.deliverFirst(payload)) {
+      case SosDelivery.delivered:
+        await SosQueue.remove(payload.alertId);
+        return SosDispatchOutcome.delivered;
+      case SosDelivery.refused:
+        await SosQueue.remove(payload.alertId);
+        return SosDispatchOutcome.refused;
+      case SosDelivery.pending:
+        return SosDispatchOutcome.queued;
     }
-    return SosDispatchOutcome.queued;
   }
 
   /// Assembles the emergency from whatever is known right now.

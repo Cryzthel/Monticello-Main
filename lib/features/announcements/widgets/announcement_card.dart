@@ -86,44 +86,149 @@ bool isFreshAnnouncement(Announcement a, {DateTime? now}) {
   return !age.isNegative && age < const Duration(hours: 24);
 }
 
-/// A small labelled status capsule in the card's top-right corner.
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
+/// One badge on an announcement card.
+@immutable
+class AnnouncementBadge {
+  const AnnouncementBadge({
     required this.label,
-    required this.icon,
+    this.icon,
     required this.ink,
     required this.fill,
     required this.edge,
   });
 
   final String label;
-  final IconData icon;
+
+  /// The category pill's glyph. Pinned and New carry none: the word is the
+  /// whole message, and measured with a real font the two icons cost the
+  /// row 32pt, enough to cut "Maintenance" short on a 320pt phone.
+  final IconData? icon;
+
+  /// Glyph and label colour.
   final Color ink;
   final Color fill;
   final Color edge;
+}
+
+/// The card's badges, in order, each at most once: category, then Pinned,
+/// then New.
+///
+/// ── ONE SOURCE FOR EVERY BADGE ────────────────────────────────────────────
+/// The card used to draw its labels in three places: the category on the
+/// photo, the category again as the badge at the foot, and Pinned / New in a
+/// column beside the title. A photo post therefore showed its category twice,
+/// and the two did not even agree (the photo printed the raw stored string).
+/// Everything now comes from this list and renders in one row. The category
+/// label is canonical (one of four words), so today it can never collide with
+/// Pinned or New; the case-insensitive de-duplication below is the guarantee
+/// that holds if a fifth category or another status badge is ever added.
+List<AnnouncementBadge> announcementBadges(Announcement a, {DateTime? now}) {
+  final color = announcementCategoryColor(a.category);
+  final candidates = <AnnouncementBadge>[
+    AnnouncementBadge(
+      // The canonical label: a legacy "Utilities" post reads "Maintenance".
+      label: announcementCategoryKey(a.category),
+      icon: announcementCategoryIcon(a.category),
+      // Ink on a 14% wash. The bare category hue measured as low as 1.85:1
+      // as a label; the inks clear 5.7:1 on the same wash.
+      ink: AppColors.inkFor(color),
+      fill: color.withValues(alpha: 0.14),
+      edge: color.withValues(alpha: 0.32),
+    ),
+    if (a.pinned)
+      AnnouncementBadge(
+        label: 'Pinned',
+        ink: _pinnedInk,
+        fill: AppColors.primarySoft,
+        edge: AppColors.primary.withValues(alpha: 0.28),
+      ),
+    if (isFreshAnnouncement(a, now: now))
+      const AnnouncementBadge(
+        label: 'New',
+        ink: AppColors.onAccent,
+        fill: AppColors.accentPrimary,
+        edge: AppColors.accentPrimary,
+      ),
+  ];
+
+  final seen = <String>{};
+  return [
+    for (final badge in candidates)
+      if (badge.label.trim().isNotEmpty &&
+          seen.add(badge.label.trim().toLowerCase()))
+        badge,
+  ];
+}
+
+/// The card's badges in a single row, 8pt apart.
+///
+/// Never wraps. At most three short labels fit any phone this app runs on,
+/// and if a category name is long enough not to, the category pill gives way
+/// (ellipsis) rather than pushing Pinned / New onto a second line under it.
+/// Each pill is keyed by its label, so a badge appearing or disappearing on
+/// a live update never hands one pill's element to another.
+class _BadgeRow extends StatelessWidget {
+  const _BadgeRow({required this.badges});
+
+  final List<AnnouncementBadge> badges;
+
+  @override
+  Widget build(BuildContext context) {
+    if (badges.isEmpty) return const SizedBox.shrink();
+    return Row(
+      children: [
+        for (var i = 0; i < badges.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          // Only the first pill (the category) may shrink; the status pills
+          // are one word each and keep their full width.
+          if (i == 0)
+            Flexible(
+              key: ValueKey('badge-${badges[i].label}'),
+              child: _Pill(badge: badges[i]),
+            )
+          else
+            _Pill(key: ValueKey('badge-${badges[i].label}'), badge: badges[i]),
+        ],
+      ],
+    );
+  }
+}
+
+/// The standard badge pill: fully rounded, 10 x 4 padding, 12pt medium label.
+/// One recipe for every badge on the card, which is what keeps three of them
+/// in a row from looking like three different components.
+class _Pill extends StatelessWidget {
+  const _Pill({super.key, required this.badge});
+
+  final AnnouncementBadge badge;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: fill,
+        color: badge.fill,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: edge.withValues(alpha: 0.28)),
+        border: Border.all(color: badge.edge),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 10, color: ink),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: _t(
-              size: 10,
-              weight: FontWeight.w700,
-              color: ink,
-              letterSpacing: 0.2,
-              height: 1.1,
+          if (badge.icon != null) ...[
+            Icon(badge.icon, size: 12, color: badge.ink),
+            const SizedBox(width: 4),
+          ],
+          Flexible(
+            child: Text(
+              badge.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _t(
+                size: 12,
+                weight: FontWeight.w500,
+                color: badge.ink,
+                height: 1.2,
+              ),
             ),
           ),
         ],
@@ -257,8 +362,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
           if (hasImage) ...[
             _AnnouncementMedia(
               imageUrl: announcement.imageUrl!,
-              caption: announcement.category,
-              captionColor: catColor,
               stamp: announcementTimeAgo(announcement.postedAt),
               aspectRatio: widget.mediaAspectRatio,
             ),
@@ -369,47 +472,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                   ],
                 ),
               ),
-              // A LABELLED BADGE, not the bare pin glyph this replaces.
-              //
-              // At 14px a pushpin silhouette is close enough to a location pin
-              // or a paperclip to be read as either, and it was tinted by
-              // CATEGORY — so the one mark meant to say "this is pinned"
-              // changed colour post to post and blended into the category
-              // system around it. A word cannot be misread, and it earns the
-              // width now that pinned posts sort to the top and a reader needs
-              // to know WHY the newest notice is not first.
-              //
-              // "New" joins it for anything posted in the last day: the feed
-              // is sorted pinned-first, so recency is otherwise only legible
-              // by reading every timestamp.
-              if (announcement.pinned || isFreshAnnouncement(announcement))
-                Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 1),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      if (announcement.pinned)
-                        const _StatusBadge(
-                          label: 'Pinned',
-                          icon: PhosphorIconsFill.pushPin,
-                          ink: _pinnedInk,
-                          fill: AppColors.primarySoft,
-                          edge: AppColors.primary,
-                        ),
-                      if (announcement.pinned &&
-                          isFreshAnnouncement(announcement))
-                        const SizedBox(height: 4),
-                      if (isFreshAnnouncement(announcement))
-                        const _StatusBadge(
-                          label: 'New',
-                          icon: PhosphorIconsFill.sparkle,
-                          ink: AppColors.onAccent,
-                          fill: AppColors.accentPrimary,
-                          edge: AppColors.accentPrimary,
-                        ),
-                    ],
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: 12),
@@ -497,8 +559,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
             },
           ),
           const SizedBox(height: 12),
-          AnnouncementCategoryBadge(
-              category: announcement.category, dense: true),
+          _BadgeRow(badges: announcementBadges(announcement)),
         ],
       ),
     );
@@ -530,15 +591,11 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
 class _AnnouncementMedia extends StatelessWidget {
   const _AnnouncementMedia({
     required this.imageUrl,
-    required this.caption,
-    required this.captionColor,
     required this.stamp,
     required this.aspectRatio,
   });
 
   final String imageUrl;
-  final String caption;
-  final Color captionColor;
   final String stamp;
   final double aspectRatio;
 
@@ -618,39 +675,12 @@ class _AnnouncementMedia extends StatelessWidget {
               right: 10,
               bottom: 8,
               child: IgnorePointer(
+                // Age only. The category plate that sat here repeated the
+                // badge at the card's foot (and printed the RAW stored value,
+                // so a legacy "Utilities" post said "Utilities" on the photo
+                // and "Maintenance" on the badge).
                 child: Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(
-                        // The category's INK, opaque enough to hold its hue
-                        // against an arbitrary photo behind it.
-                        //
-                        // This is the inverse of the badge problem and the
-                        // only place white type sits on a solid category
-                        // fill. At 10px it needs 4.5:1 and no category paid
-                        // it: bounded across a white and a black photo behind
-                        // the 8% that shows through, Maintenance measured
-                        // 2.02:1, General 2.57:1, Event 3.01:1, and even
-                        // Security only 4.43:1. Dropping the plate to the ink
-                        // keeps white as the label and lands every category
-                        // between 5.93:1 and 6.99:1.
-                        color: AppColors.inkFor(captionColor)
-                            .withValues(alpha: 0.92),
-                        borderRadius: AppCard.borderRadius,
-                      ),
-                      child: Text(
-                        caption,
-                        style: _t(
-                          size: 10,
-                          weight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: 0.2,
-                          height: 1.1,
-                        ),
-                      ),
-                    ),
                     const Spacer(),
                     Text(
                       stamp,

@@ -2,33 +2,17 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { collection, query, orderBy, limit } from 'firebase/firestore'
-import { Bell, BellOff, BellRinging, CheckCheck, Clock } from '@shared/icons'
-import NotificationRow from '@shared/components/NotificationRow'
+import { Bell, BellRinging } from '@shared/icons'
+import NotificationPanel from '@shared/components/NotificationPanel'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
-import { portalKey } from '@shared/config/portal'
-import { buildNotificationFeed, groupNotificationsByDay } from '@shared/lib/notifications'
+import { buildNotificationFeed, groupNotificationsByDay, notificationHref } from '@shared/lib/notifications'
+import { useNotificationReads } from '@shared/hooks/useNotificationReads'
 import { PORTAL } from '@shared/config/portal'
 import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
 import { useAuth } from '@shared/auth/AuthContext'
 
-// Namespaced per portal, and this one is a genuine bug fix rather than tidiness:
-// on a shared key the admin console and the guardhouse overwrite each other's
-// read-cursor, so acknowledging notifications in one silently marks the other's
-// unrelated feed as seen. No portal argument — the bell is rendered by both
-// shells, so it takes the portal of whichever console mounted it.
-const LAST_SEEN_KEY = portalKey('notifications-last-seen')
 
-// The panel's filter vocabulary. `unread` is first because it is the one an
-// operator returning to a console actually reaches for; the two kind filters
-// exist because incidents and announcements are read for different reasons and
-// at different moments.
-const FILTERS = [
-  { id: 'all', label: 'All' },
-  { id: 'unread', label: 'Unread' },
-  { id: 'incident', label: 'Incidents' },
-  { id: 'announcement', label: 'Announcements' },
-]
 
 /**
  * Notification hub shared by both portals.
@@ -62,14 +46,13 @@ const FILTERS = [
  *   particular portal's routes, which is what the old '/admin/history' default
  *   did: the guardhouse bell silently pointed at a console its users cannot open.
  */
-export default function NotificationBell({ detailPath, historyPath = '/history' }) {
+export default function NotificationBell({ detailPath, historyPath = '/history', routes = null }) {
   const buttonRef = useRef(null)
   const panelRef = useRef(null)
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [position, setPosition] = useState(null)
   const [filter, setFilter] = useState('all')
-  const [lastSeen, setLastSeen] = useState(() => Number(localStorage.getItem(LAST_SEEN_KEY) ?? 0))
 
   const incidentsQuery = useMemo(
     () => query(collection(db, 'incidents'), orderBy('reportedAt', 'desc'), limit(25)),
@@ -101,30 +84,20 @@ export default function NotificationBell({ detailPath, historyPath = '/history' 
     [incidents, announcements, panicAlerts, user?.uid],
   )
 
-  const unreadIds = useMemo(() => {
-    const ids = new Set()
-    feed.forEach((item) => {
-      if ((item.at?.getTime() ?? 0) > lastSeen) ids.add(item.id)
-    })
-    return ids
-  }, [feed, lastSeen])
+  // Live, per user and per console, in Firestore — see useNotificationReads.
+  const reads = useNotificationReads(user?.uid ?? null)
+  const unreadIds = useMemo(
+    () => new Set(feed.filter((item) => reads.isUnread(item)).map((item) => item.id)),
+    [feed, reads],
+  )
 
   // Counts come off the FULL feed, not the filtered view — a tab has to be
   // able to say how many rows it holds while you are looking at another one.
-  const counts = useMemo(
-    () => ({
-      all: feed.length,
-      unread: unreadIds.size,
-      incident: feed.filter((item) => item.kind === 'incident').length,
-      announcement: feed.filter((item) => item.kind === 'announcement').length,
-    }),
-    [feed, unreadIds],
-  )
+  const counts = useMemo(() => ({ all: feed.length, unread: unreadIds.size }), [feed, unreadIds])
 
   const visible = useMemo(() => {
     if (filter === 'all') return feed
-    if (filter === 'unread') return feed.filter((item) => unreadIds.has(item.id))
-    return feed.filter((item) => item.kind === filter)
+    return feed.filter((item) => unreadIds.has(item.id))
   }, [feed, filter, unreadIds])
 
   const sections = useMemo(() => groupNotificationsByDay(visible), [visible])
@@ -141,10 +114,23 @@ export default function NotificationBell({ detailPath, historyPath = '/history' 
     setOpen(next)
   }
 
-  function markAllRead() {
-    const now = Date.now()
-    localStorage.setItem(LAST_SEEN_KEY, String(now))
-    setLastSeen(now)
+  /**
+   * Where each kind opens. The app's own map wins; without one, incidents
+   * fall back to `detailPath` so an app that has not passed routes keeps the
+   * behaviour it had.
+   */
+  const effectiveRoutes = useMemo(
+    () => routes ?? (detailPath ? { incident: `${detailPath}?incident=` } : {}),
+    [routes, detailPath],
+  )
+
+  /** Read first (instant), then go — a row with no destination just reads. */
+  function openNotification(item) {
+    reads.markRead(item.id)
+    const href = notificationHref(item, effectiveRoutes)
+    if (!href) return
+    setOpen(false)
+    navigate(href)
   }
 
   useEffect(() => {
@@ -208,118 +194,23 @@ export default function NotificationBell({ detailPath, historyPath = '/history' 
               role="dialog"
               aria-label="Notifications"
               style={{ position: 'fixed', top: position.top, right: position.right, '--popover-origin': 'top right' }}
-              className="popover z-[var(--z-popover)] flex max-h-[min(34rem,calc(100vh-6rem))] w-[27rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden bg-base-900"
+              // SOLID, after the reference panel: the list inside is its own
+              // darker well, and blur behind a solid card buys nothing.
+              className="popover z-[var(--z-popover)] flex max-h-[min(40rem,calc(100vh-6rem))] w-[28rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-hairline bg-base-950 shadow-2xl"
             >
-              {/* ── HEADER ───────────────────────────────────────────────── */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-3">
-                <div className="flex min-w-0 items-baseline gap-2">
-                  <h2 className="text-sm font-semibold text-text-primary">Notifications</h2>
-                  <span className="font-mono text-caption tabular-nums text-text-muted">
-                    {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={markAllRead}
-                  disabled={unreadCount === 0}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  <CheckCheck size="sm" />
-                  Mark all read
-                </button>
-              </div>
-
-              {/* ── FILTERS ──────────────────────────────────────────────────
-                  Counts live on the tabs so the panel answers "is there
-                  anything new" before a single row has been read. A tab with
-                  nothing behind it is disabled rather than hidden, so the bar
-                  does not reflow as reports arrive. */}
-              <div
-                role="tablist"
-                aria-label="Filter notifications"
-                className="flex shrink-0 items-center gap-1 border-b border-hairline px-2.5 py-2"
-              >
-                {FILTERS.map((tab) => {
-                  const count = counts[tab.id]
-                  const selected = filter === tab.id
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      disabled={count === 0 && !selected}
-                      onClick={() => setFilter(tab.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
-                        selected
-                          ? 'bg-brand-100 text-brand-400'
-                          : 'text-text-secondary hover:bg-tint/[0.06] hover:text-text-primary'
-                      }`}
-                    >
-                      {tab.label}
-                      <span className="font-mono text-2xs tabular-nums opacity-70">{count}</span>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* ── FEED ─────────────────────────────────────────────────── */}
-              {sections.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 py-14 text-center">
-                  <BellOff size="lg" className="text-text-muted" />
-                  <p className="text-sm text-text-secondary">
-                    {filter === 'all' ? 'No activity yet.' : 'Nothing in this view.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-6">
-                  {sections.map((section) => (
-                    <section key={section.key}>
-                      {/* Sticky, so the day a row belongs to is still on screen
-                          after scrolling into the middle of a long group. */}
-                      <h3 className="sticky top-0 z-10 bg-base-900 px-4 py-1.5 text-2xs font-semibold text-text-muted">
-                        {section.label}
-                      </h3>
-                      <ul className="space-y-0.5 px-1.5 pb-1.5">
-                        {section.items.map((item) => (
-                          <NotificationRow
-                            key={item.id}
-                            notification={item}
-                            unread={unreadIds.has(item.id)}
-                            onSelect={
-                              item.kind === 'incident' && detailPath
-                                ? () => {
-                                    navigate(`${detailPath}?incident=${item.sourceId}`)
-                                    setOpen(false)
-                                  }
-                                : undefined
-                            }
-                          />
-                        ))}
-                      </ul>
-                    </section>
-                  ))}
-                </div>
-              )}
-
-              {/* ── FOOTER ───────────────────────────────────────────────────
-                  Pinned outside the scroll area. It used to sit in the header
-                  beside "Mark all read", where two controls of very different
-                  weight — a per-panel toggle and a route change — read as one
-                  run-on label. */}
-              <button
-                type="button"
-                onClick={() => {
-                  // Only the admin portal has an audit archive; the guard
-                  // portal's own History page is its equivalent.
+              <NotificationPanel
+                sections={sections}
+                counts={counts}
+                filter={filter}
+                onFilterChange={setFilter}
+                isUnread={(item) => unreadIds.has(item.id)}
+                onMarkAllRead={reads.markAllRead}
+                onOpen={openNotification}
+                onViewAll={() => {
                   navigate(historyPath)
                   setOpen(false)
                 }}
-                className="flex shrink-0 items-center justify-center gap-1.5 border-t border-hairline px-4 py-2.5 text-xs font-semibold text-brand-400 transition-colors hover:bg-tint/[0.04] hover:text-brand-300"
-              >
-                <Clock size="sm" />
-                Notification history
-              </button>
+              />
             </div>,
             document.body,
           )

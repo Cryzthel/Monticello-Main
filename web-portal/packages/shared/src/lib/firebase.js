@@ -6,6 +6,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
 } from 'firebase/firestore'
+import { getDatabase } from 'firebase/database'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 import { getMessaging, isSupported as isMessagingSupported } from 'firebase/messaging'
@@ -103,6 +104,20 @@ function createFirestore() {
 
 export const db = createFirestore()
 export const storage = getStorage(app)
+
+/**
+ * The Realtime Database, used for ONE thing: officer presence (lib/presence.js).
+ * Firestore cannot tell a server that a client vanished; RTDB's
+ * `.info/connected` and `onDisconnect` can, which is what lets the admin
+ * roster flip a guard to Offline when their tab closes or their signal drops.
+ *
+ * Optional. Without VITE_FIREBASE_DATABASE_URL this is null, presence is
+ * simply not published, and the Security Accounts roster falls back to the
+ * last time each officer was on post.
+ */
+export const rtdb = import.meta.env.VITE_FIREBASE_DATABASE_URL
+  ? getDatabase(app, import.meta.env.VITE_FIREBASE_DATABASE_URL)
+  : null
 export const functions = getFunctions(app)
 
 // FCM requires a secure context + browser support; guard the getter accordingly.

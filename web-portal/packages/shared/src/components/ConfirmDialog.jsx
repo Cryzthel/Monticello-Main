@@ -59,12 +59,25 @@ export default function ConfirmDialog({
    * bespoke dialog the moment it needs to show one number.
    */
   children,
+  /**
+   * The centred layout, for decisions about the SESSION rather than about a
+   * record — signing out, clocking out first. Icon on top, title and message
+   * centred, two equal capsule buttons. The default left-aligned layout stays
+   * for record actions (delete, archive), where the message is often long and
+   * a summary sits under it, and centred paragraphs would read badly.
+   */
+  centered = false,
+  /** Replaces the tone's icon, e.g. a door for sign-out instead of a warning. */
+  icon = null,
+  /** One-button dialogs ("you can't do that yet — here is why"). */
+  hideCancel = false,
 }) {
   const cancelRef = useRef(null)
+  const confirmRef = useRef(null)
 
   useEffect(() => {
     if (!open) return undefined
-    cancelRef.current?.focus()
+    ;(cancelRef.current ?? confirmRef.current)?.focus()
 
     function handleKeydown(event) {
       if (event.key === 'Escape' && !busy) onCancel?.()
@@ -75,7 +88,74 @@ export default function ConfirmDialog({
 
   if (!open) return null
 
-  const { icon: Icon, ring, confirm } = TONES[tone] ?? TONES.danger
+  const { icon: ToneIcon, ring, confirm } = TONES[tone] ?? TONES.danger
+  const Icon = icon ?? ToneIcon
+
+  const cancelButton = hideCancel ? null : (
+    <button
+      ref={cancelRef}
+      type="button"
+      disabled={busy}
+      onClick={onCancel}
+      className={
+        centered
+          ? 'btn btn-outline h-11 flex-1 rounded-full px-4 text-sm'
+          : 'btn btn-outline h-11 w-full px-4 text-xs sm:h-9 sm:w-auto'
+      }
+    >
+      {cancelLabel}
+    </button>
+  )
+  const confirmButton = (
+    <button
+      ref={confirmRef}
+      type="button"
+      disabled={busy}
+      onClick={onConfirm}
+      className={
+        centered
+          ? `btn h-11 flex-1 rounded-full px-4 text-sm font-semibold ${confirm}`
+          : `btn h-11 w-full px-4 text-xs sm:h-9 sm:w-auto ${confirm}`
+      }
+    >
+      {busy ? <Loader2 size="sm" className="animate-spin" /> : null}
+      {confirmLabel}
+    </button>
+  )
+
+  if (centered) {
+    return createPortal(
+      <div
+        className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-scrim sm:items-center sm:p-4"
+        onClick={() => !busy && onCancel?.()}
+        role="presentation"
+      >
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-label={title}
+          onClick={(event) => event.stopPropagation()}
+          className="dialog-panel w-full max-w-sm rounded-2xl rounded-b-none border border-hairline bg-base-850 px-6 pb-6 pt-7 text-center shadow-modal sm:rounded-b-2xl"
+        >
+          <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ring-1 ring-inset ${ring}`}>
+            <Icon size="md" />
+          </span>
+          <h2 className="mt-4 text-lg font-semibold leading-snug tracking-[-0.01em] text-text-primary">{title}</h2>
+          {message ? (
+            <p className="mx-auto mt-2 max-w-[34ch] text-sm leading-relaxed text-text-secondary">{message}</p>
+          ) : null}
+          {children ? <div className="mt-4 text-left">{children}</div> : null}
+          {/* Cancel first in the DOM, so focus and Tab land on the safe choice;
+              equal widths so neither reads as the afterthought. */}
+          <div className="mt-6 flex gap-2.5">
+            {cancelButton}
+            {confirmButton}
+          </div>
+        </div>
+      </div>,
+      document.body,
+    )
+  }
 
   return createPortal(
     <div
@@ -106,24 +186,8 @@ export default function ConfirmDialog({
         </div>
 
         <div className="mt-6 flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
-          <button
-            ref={cancelRef}
-            type="button"
-            disabled={busy}
-            onClick={onCancel}
-            className="btn btn-outline h-11 w-full px-4 text-xs sm:h-9 sm:w-auto"
-          >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onConfirm}
-            className={`btn h-11 w-full px-4 text-xs sm:h-9 sm:w-auto ${confirm}`}
-          >
-            {busy ? <Loader2 size="sm" className="animate-spin" /> : null}
-            {confirmLabel}
-          </button>
+          {cancelButton}
+          {confirmButton}
         </div>
       </div>
     </div>,

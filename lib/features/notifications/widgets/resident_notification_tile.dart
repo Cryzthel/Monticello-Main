@@ -62,12 +62,24 @@ class _OverflowMenu extends StatelessWidget {
       // The tile is a dense row; the button's own 48px minimum would push the
       // stamp column out. Constrained tight and given its own hit padding via
       // the icon's box instead.
-      constraints: const BoxConstraints(minWidth: 184),
       splashRadius: 18,
+      // ── A POPOVER, NOT A PANEL ──────────────────────────────────────────
+      // One action, so the menu is sized to it: no 184pt minimum width, 4pt
+      // of vertical inset instead of Material's 8, a 36pt row, a hairline
+      // border and a small shadow. It opens just under the dots (instead of
+      // over them) so the row it acts on stays visible.
+      constraints: const BoxConstraints(minWidth: 0),
+      menuPadding: const EdgeInsets.symmetric(vertical: 4),
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 2),
+      elevation: 3,
+      shadowColor: AppColors.textPrimary.withValues(alpha: 0.18),
       color: AppColors.backgroundElevated,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        side: const BorderSide(color: AppColors.borderNeutral),
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(
+            color: AppColors.borderNeutral, width: AppStroke.hairline),
       ),
       icon: const Icon(PhosphorIconsBold.dotsThreeVertical,
           size: 16, color: AppColors.textMuted),
@@ -76,13 +88,15 @@ class _OverflowMenu extends StatelessWidget {
       },
       itemBuilder: (context) => [
         PopupMenuItem<_TileAction>(
-          height: 42,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           value: _TileAction.delete,
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(PhosphorIconsFill.trash,
                   size: 15, color: AppColors.danger),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Text(
                 'Delete Notification',
                 style: _t(

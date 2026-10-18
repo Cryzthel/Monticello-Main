@@ -1,191 +1,211 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { doc, onSnapshot } from 'firebase/firestore'
 import {
   Archive,
   ArchiveRestore,
+  Camera,
   CheckCircle2,
-  ClipboardCheck,
+  Clock,
+  FileDown,
   FileType,
+  Fingerprint,
   Images,
   Loader2,
-  Printer,
   Trash2,
+  UserCircle,
   X,
 } from '@shared/icons'
-import StatusBadge from '@shared/components/StatusBadge'
-import PriorityBadge from '@shared/components/PriorityBadge'
 import EvidenceImage from '@shared/components/EvidenceImage'
 import Lightbox from '@shared/components/Lightbox'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
-import IncidentBreakdown from '@shared/components/IncidentBreakdown'
-import { MetaItem, MetaList, MetaSection } from '@shared/components/MetaList'
-import { categoryTone } from '@shared/theme/badgeStyles'
-import {
-  buildMediaItems, reviewState, REVIEW_TONES, isArchived,
-  markReportsReviewed, archiveIncidents, unarchiveIncidents, softDeleteIncidents,
-} from '@shared/lib/incidents'
-import { describeFirestoreError } from '@shared/lib/audit'
-import { formatCategory } from '@shared/lib/wpda'
 import { Skeleton } from '@shared/components/Skeleton'
+import { SEVERITY_TONES, categoryTone } from '@shared/theme/badgeStyles'
+import {
+  REVIEW_TONES,
+  archiveIncidents,
+  buildMediaItems,
+  formatMinutes,
+  incidentDurations,
+  isArchived,
+  isDeleted,
+  mapIncidentDoc,
+  reviewState,
+  softDeleteIncidents,
+  unarchiveIncidents,
+} from '@shared/lib/incidents'
+import { computePriorityScore, formatCategory } from '@shared/lib/wpda'
+import { db } from '@shared/lib/firebase'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
+import { formatDateTime } from '@shared/lib/dates'
+import { toast } from '@shared/lib/toast'
 import { exportReportPdf } from '@/lib/reportPdf'
+import Pill from '@shared/components/Pill'
 
-const STAMP = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
-const stamp = (value) => (value ? new Date(value).toLocaleString('en-GB', STAMP).replace(',', '') : '')
+const stamp = (value) => formatDateTime(value, '')
 
 /** Human-quotable code, derived from the document id — the one the table prints. */
 const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : '')
 
 /**
- * The sheet's contents while the report is being resolved: the same two
- * columns, the same sections, at roughly the same heights. A centred spinner
- * would make the sheet appear to rebuild itself when the data lands; matching
- * the layout means the skeleton is replaced in place.
+ * The admin's view of one officer-filed report — opened from Audit History and
+ * from Security Reports.
+ *
+ *   ┌ [SECURITY] [HIGH] [● PENDING]                                [×] ┐  sticky
+ *   │ Security Report                                                   │
+ *   │ MV-QUITBNLA · Aug 27, 2026, 10:15 PM · Filed by …                 │
+ *   ├───────────────────────────────────────────────────────────────────┤
+ *   │ CLASSIFICATION & PRIORITY   category · severity · WPDA · files    │
+ *   │ RESIDENT DATA               name · reported · coordinates         │
+ *   │                             [ PHASE | BLOCK | LOT ]               │
+ *   │ TIMELINE                    ● Submitted ○ Dispatched ● Resolved   │
+ *   │                             ● Reviewed                            │
+ *   │ RESPONDER NOTES             (only when recorded)                  │
+ *   │ EVIDENCE                    preview · thumbnails · documents      │
+ *   ├───────────────────────────────────────────────────────────────────┤
+ *   │ [✓ Approve] [Export PDF] [Archive]                      [Delete]  │  sticky
+ *   └───────────────────────────────────────────────────────────────────┘
+ *
+ * ── LIVE ON ITS OWN ────────────────────────────────────────────────────────
+ * The sheet subscribes to `incidents/{id}` itself while open. The page's
+ * `report` (resolved from its own live list) is used until the document
+ * listener reports, so the sheet paints immediately; after that the document
+ * listener wins. That keeps it live even when the report is not in the page's
+ * current list, and it can tell "still loading" (skeleton) from "deleted by
+ * someone else" (a notice), which a `.find()` over a list cannot.
+ *
+ * Approve writes `reviewedAt`, which lands back through the same listener: the
+ * header pill turns Reviewed and the timeline gains its fourth step without the
+ * sheet doing anything itself.
+ *
+ * ── THE REFERENCE, ON TOKENS ───────────────────────────────────────────────
+ * `#09090b` and the zinc borders are dark `base-950` and `hairline`; tag
+ * colours come from the same tone table as every badge in the console, on the
+ * reference's square-cornered tag shape.
+ *
+ * EXPORT PDF builds the document itself (lib/reportPdf.js) rather than calling
+ * window.print(), which printed the dark modal as grey.
  */
-function SkeletonSection({ title, rows = 2 }) {
+
+// Header tags are the shared oblong Pill (rounded-full), as on every
+// Admin page since the 2026-10-18 badge standardisation.
+const Tag = Pill
+
+function SectionTitle({ icon: Icon, children, action = null, className = 'mb-6' }) {
   return (
-    <section aria-label={title} className="rounded-xl border border-hairline bg-base-800">
-      <header className="flex min-h-11 items-center gap-2 border-b border-hairline px-4 py-2">
-        <Skeleton className="h-4 w-4 shrink-0 rounded-full" />
-        <Skeleton className="h-3.5 w-36" />
-      </header>
-      <div className="space-y-2.5 p-4">
-        {Array.from({ length: rows }, (_, i) => (
-          <Skeleton key={i} className={`h-3.5 ${i % 2 ? 'w-3/5' : 'w-full'}`} />
-        ))}
+    <div className={`flex items-center justify-between gap-3 ${className}`}>
+      <div className="flex items-center gap-2">
+        <Icon size="sm" className="text-text-muted" />
+        <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{children}</h3>
       </div>
-    </section>
+      {action}
+    </div>
+  )
+}
+
+function Field({ label, value, tone = 'text-text-primary', mono = false, className = '' }) {
+  return (
+    <div className={`flex min-w-0 flex-col gap-2 ${className}`}>
+      <span className="text-[11px] font-semibold uppercase tracking-widest text-text-muted">{label}</span>
+      <span className={`break-words text-[14px] font-medium ${mono ? 'font-mono' : ''} ${value ? tone : 'text-text-muted'}`}>
+        {value || '—'}
+      </span>
+    </div>
+  )
+}
+
+/** One step of the vertical stepper: a filled check when done, a hollow ring when not. */
+function Step({ label, at, pendingLabel, detail }) {
+  const done = Boolean(at)
+  return (
+    <li className="relative">
+      {done ? (
+        <span className="absolute -left-[41px] top-0 rounded-full border-4 border-base-900 bg-base-900 text-success dark:border-base-950 dark:bg-base-950">
+          <CheckCircle2 size={20} />
+        </span>
+      ) : (
+        <span className="absolute -left-[37px] top-1.5 h-3 w-3 rounded-full border-2 border-text-muted bg-base-900 ring-4 ring-base-900 dark:bg-base-950 dark:ring-base-950" />
+      )}
+      <div className="flex flex-col gap-1.5 pt-0.5">
+        <span className={`text-[14px] font-medium ${done ? 'text-text-primary' : 'text-text-secondary'}`}>{label}</span>
+        <span className={`text-[13px] ${done ? 'text-text-muted' : 'text-text-muted/70'}`}>
+          {done ? stamp(at) : pendingLabel}
+          {done && detail ? <span className="text-success"> · {detail}</span> : null}
+        </span>
+      </div>
+    </li>
   )
 }
 
 function SkeletonBody() {
   return (
-    // Mirrors the loaded body's single column exactly. A skeleton in a shape
-    // the real content does not take is worse than no skeleton: it promises a
-    // two-column panel, then reflows the moment the data lands, which reads as
-    // the page breaking rather than as it loading.
-    <div className="flex flex-col gap-6">
-      <div className="space-y-3">
-        <SkeletonSection title="Classification & priority" rows={3} />
-        <SkeletonSection title="Resident data" rows={3} />
-        <SkeletonSection title="Timeline" rows={4} />
-        <SkeletonSection title="Responder notes & resolution" />
-      </div>
-      <div className="space-y-3">
-        <section className="rounded-xl border border-hairline bg-base-800 p-4">
-          <Skeleton variant="surface" className="aspect-video w-full max-w-2xl" />
+    <div className="space-y-12" aria-hidden="true">
+      {[4, 3, 3].map((cols, i) => (
+        <section key={i} className="space-y-6">
+          <Skeleton className="h-3 w-40" />
+          <div className={`grid gap-8 ${cols === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
+            {Array.from({ length: cols }, (_, j) => (
+              <div key={j} className="space-y-2">
+                <Skeleton className="h-2.5 w-16" />
+                <Skeleton className="h-3.5 w-24" />
+              </div>
+            ))}
+          </div>
         </section>
-        <SkeletonSection title="Review" rows={4} />
-      </div>
+      ))}
+      <Skeleton variant="surface" className="aspect-video w-full rounded-xl" />
     </div>
   )
 }
 
-/**
- * The admin's view of one officer-filed report.
- *
- * ── A WIDE, TWO-COLUMN RECORD ─────────────────────────────────────────────
- * This was a 42rem slide-over, one long column: the breakdown, then the
- * attachments, then a one-line "reviewed by" note at the very bottom. The
- * drawer's argument was that it kept the table visible beside it — but the
- * evidence, the part an auditor most needs to SEE, was the last thing in the
- * scroll, and the review record was a sentence below that.
- *
- * It is now a centred 64rem dialog from `sm:` up, and from `lg:` a two-column
- * grid on one baseline:
- *
- *   ┌───────────────────────────────┬───────────────────────┐
- *   │ Classification & priority     │ Evidence (sticky)      │
- *   │ Resident data                 │   large preview        │
- *   │ Timeline                      │   thumbnails · files   │
- *   │ Responder notes & resolution  │ Review record          │
- *   └───────────────────────────────┴───────────────────────┘
- *
- * The left column is the shared IncidentBreakdown — the same four sections the
- * Guardhouse sees, so the two consoles never describe one incident with
- * different amounts of it. The right column is sticky, so the photo stays in
- * view while the timeline is read. Below `lg` the two collapse to one column.
- *
- * ON A PHONE IT IS A BOTTOM SHEET, at 92dvh, dismissed by the backdrop, Escape,
- * or dragging the grab handle down. The handle is `sm:hidden`, so the drag
- * gesture simply does not exist on a pointer device.
- *
- * EXPORT PDF is `window.print()` against a print stylesheet, not a bundled PDF
- * library: every browser's print dialog offers "Save as PDF", and the output is
- * selectable text rather than a canvas raster, which matters for a document
- * that may end up in an incident file.
- */
-export default function SecurityReportDetailModal({ reportId, report, onClose, onDeleted }) {
+/** `incidents/{id}`, live while the sheet is open. `undefined` = not reported yet, `null` = gone. */
+function useLiveReport(id) {
+  const [state, setState] = useState({ id: null, report: undefined })
+  useEffect(() => {
+    if (!id) return undefined
+    setState({ id, report: undefined })
+    return onSnapshot(
+      doc(db, 'incidents', id),
+      (snap) => setState({ id, report: snap.exists() ? mapIncidentDoc({ id: snap.id, ...snap.data() }) : null }),
+      // A denied read falls back to whatever the page resolved.
+      () => setState({ id, report: undefined }),
+    )
+  }, [id])
+  return state.id === id ? state.report : undefined
+}
+
+export default function SecurityReportDetailModal({ reportId, report: pageReport, onClose, onDeleted }) {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
-  const [confirming, setConfirming] = useState(null)
+  const [confirming, setConfirming] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(null)
   const [previewIndex, setPreviewIndex] = useState(0)
-  const sheetRef = useRef(null)
-  const dragRef = useRef(null)
 
   /*
-   * OPENNESS AND CONTENT ARE TWO DIFFERENT QUESTIONS.
-   *
-   * `report` is resolved by a `.find()` over a LIVE Firestore snapshot, so it
-   * is legitimately absent while the snapshot that contains it is still
-   * landing, or after another admin archived or deleted it in the same second.
-   * `reportId` is what the operator asked for and is set synchronously by the
-   * click, so it — not the resolved object — decides whether the sheet is up.
-   * Missing content then renders as a skeleton rather than as an empty box.
+   * OPENNESS AND CONTENT ARE TWO DIFFERENT QUESTIONS. `reportId` is set
+   * synchronously by the click and decides whether the sheet is up; the
+   * report itself may still be landing.
    */
-  const openedId = reportId ?? report?.id ?? null
+  const openedId = reportId ?? pageReport?.id ?? null
   const visible = Boolean(openedId)
-  const pending = !report
+  const live = useLiveReport(openedId)
+  const report = live === undefined ? (pageReport?.id === openedId ? pageReport : null) : live
+  const gone = live === null
+  const pending = !report && !gone
 
-  // Per-report UI state, keyed on the REQUESTED id: keying on the resolved
-  // report would fire again the moment a pending sheet's data arrives, wiping
-  // an error the operator has not read yet.
   useEffect(() => {
     setError('')
-    setConfirming(null)
+    setConfirming(false)
     setLightboxIndex(null)
     setPreviewIndex(0)
   }, [openedId])
 
   useEffect(() => {
-    if (!visible || lightboxIndex !== null) return undefined
+    if (!visible || lightboxIndex !== null || confirming) return undefined
     const onKey = (event) => event.key === 'Escape' && onClose?.()
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [visible, lightboxIndex, onClose])
-
-  /*
-   * Drag-to-dismiss, confined to the grab handle. Not the whole sheet: the body
-   * is a scroll region, and a sheet that also listened for downward drags
-   * anywhere would steal the first flick of a scroll. Pointer capture rather
-   * than window listeners, so a finger that leaves the handle mid-drag still
-   * reports to this element and the drag cannot be left half-finished.
-   */
-  function startDrag(event) {
-    if (!sheetRef.current) return
-    dragRef.current = event.clientY
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      /* capture is an optimisation; the drag still works without it */
-    }
-    sheetRef.current.style.transition = 'none'
-  }
-
-  function moveDrag(event) {
-    if (dragRef.current == null || !sheetRef.current) return
-    const dy = Math.max(0, event.clientY - dragRef.current)
-    sheetRef.current.style.transform = `translateY(${dy}px)`
-  }
-
-  function endDrag(event) {
-    if (dragRef.current == null || !sheetRef.current) return
-    const dy = Math.max(0, event.clientY - dragRef.current)
-    dragRef.current = null
-    sheetRef.current.style.transition = 'transform 180ms cubic-bezier(0.32, 0.72, 0, 1)'
-    sheetRef.current.style.transform = ''
-    if (dy > 120) onClose?.()
-  }
+  }, [visible, lightboxIndex, confirming, onClose])
 
   const panelRef = useRef(null)
   useDialogFocus({ open: visible, containerRef: panelRef })
@@ -194,309 +214,333 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
 
   const media = report ? buildMediaItems(report) : []
   const documents = report?.attachmentUrls ?? []
+  const attachmentCount = media.length + documents.length
   const review = report ? reviewState(report) : null
   const archived = report ? isArchived(report) : false
+  // Opened from Audit History → Deleted reports. The record is read-only
+  // there: it is restored or purged from that table, not acted on here.
+  const deleted = report ? isDeleted(report) : false
   const preview = media[previewIndex] ?? media[0]
+  const durations = report ? incidentDurations(report) : {}
+  const wpda = report
+    ? Math.round(typeof report.wpdaScore === 'number' && report.wpdaScore > 0 ? report.wpdaScore : computePriorityScore(report))
+    : null
+  const coordinates =
+    typeof report?.lat === 'number' && typeof report?.lng === 'number'
+      ? `${report.lat.toFixed(5)}, ${report.lng.toFixed(5)}`
+      : ''
+  const severity = String(report?.severity ?? '').toLowerCase()
 
-  async function run(label, action, { close = false } = {}) {
+  async function run(kind, action, messages, { close = false } = {}) {
     if (!report) return
-    setBusy(label)
+    setBusy(kind)
     setError('')
-    try {
-      await action([report.id])
-      setConfirming(null)
-      if (close) {
-        onDeleted?.(report.id)
-        onClose?.()
-      }
-    } catch (err) {
-      console.error('Report action failed', err)
-      setConfirming(null)
-      setError(describeFirestoreError(err, 'update this report'))
-    } finally {
-      setBusy('')
+    const id = report.id
+    const ok = await toast.run(() => action([id]), messages)
+    setBusy('')
+    setConfirming(false)
+    if (!ok) {
+      setError(`${messages.error}. Check the connection and try again.`)
+      return
+    }
+    if (close) {
+      onDeleted?.(id)
+      onClose?.()
     }
   }
 
-  return (
+  return createPortal(
     <>
       <div
-        className="dialog-scrim fixed inset-0 z-50 flex items-end justify-center bg-scrim sm:items-center sm:p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-md sm:p-6"
         onClick={onClose}
+        role="presentation"
       >
         <div
-          ref={sheetRef}
           ref={panelRef}
-        role="dialog"
+          role="dialog"
           aria-modal="true"
-          aria-label={`Report ${report ? ticketCode(report.id) : ''}`}
+          aria-labelledby="report-sheet-title"
           aria-busy={pending}
           onClick={(event) => event.stopPropagation()}
-          className="card flex max-h-[80dvh] w-full flex-col overflow-hidden rounded-b-none rounded-t-xl border-x-0 border-b-0 bg-base-900 shadow-modal sm:h-[88vh] sm:max-w-5xl sm:rounded-lg sm:border"
+          className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-hairline bg-base-900 shadow-2xl dark:bg-base-950"
         >
-          {/* Grab handle — the sheet's drag target on a phone. */}
-          <div
-            className="flex shrink-0 cursor-grab touch-none justify-center pb-1 pt-3 active:cursor-grabbing sm:hidden"
-            onPointerDown={startDrag}
-            onPointerMove={moveDrag}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          >
-            <span aria-hidden="true" className="h-1 w-10 rounded-full bg-tint/25" />
-          </div>
-
-          {/* ── Header: what the report is, then the three facts that identify it ── */}
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-hairline px-4 py-4 sm:px-6">
-            <div className="min-w-0">
-              {pending ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Skeleton className="h-7 w-24 rounded-full" />
-                    <Skeleton className="h-7 w-20 rounded-full" />
-                  </div>
-                  <Skeleton className="mt-3 h-5 w-56" />
-                  <Skeleton className="mt-2 h-3.5 w-72 max-w-full" />
-                </>
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge tone={categoryTone(report.category)}>
-                      {formatCategory(report.category)}
-                    </StatusBadge>
-                    <PriorityBadge severity={report.severity} />
-                    <StatusBadge tone={REVIEW_TONES[review] ?? 'neutral'}>{review}</StatusBadge>
-                    {archived ? <StatusBadge tone="neutral">Archived</StatusBadge> : null}
-                  </div>
-                  <h2 className="mt-2.5 truncate text-base font-semibold leading-tight text-text-primary">
-                    {report.title || `${formatCategory(report.category)} report`}
-                  </h2>
-                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-text-secondary">
-                    <span className="font-mono text-xs">{ticketCode(report.id)}</span>
-                    <span aria-hidden="true" className="text-text-muted">·</span>
-                    <span>{stamp(report.reportedAt) || 'No filing time'}</span>
-                    <span aria-hidden="true" className="text-text-muted">·</span>
-                    <span>Filed by {report.reportedByName || 'an officer'}</span>
-                  </p>
-                </>
-              )}
-            </div>
-            {/* 44px on touch, back to the dense 32px header button from `sm:`. */}
+          {/* ── Sticky header ── */}
+          <header className="relative z-10 shrink-0 border-b border-hairline bg-base-900/95 px-6 pb-6 pt-8 backdrop-blur sm:px-8 dark:bg-base-950/95">
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
-              className="icon-btn h-11 w-11 shrink-0 sm:h-8 sm:w-8"
+              aria-label="Close report"
+              className="absolute right-6 top-7 rounded-md p-1.5 text-text-muted transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:right-8"
             >
-              <X size="sm" />
+              <X size="md" />
             </button>
-          </div>
 
-          {/* ── Body (the printed region) ── */}
-          <div
-            id="report-print-area"
-            className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6"
-          >
+            {pending ? (
+              <div aria-hidden="true">
+                <div className="mb-5 flex gap-2.5">
+                  <Skeleton className="h-6 w-20 rounded-md" />
+                  <Skeleton className="h-6 w-14 rounded-md" />
+                </div>
+                <Skeleton className="h-7 w-56" />
+                <Skeleton className="mt-3 h-3.5 w-80 max-w-full" />
+              </div>
+            ) : gone ? (
+              <h2 id="report-sheet-title" className="pr-10 text-2xl font-semibold tracking-tight text-text-primary">
+                Report removed
+              </h2>
+            ) : (
+              <>
+                <div className="mb-5 flex flex-wrap items-center gap-2.5 pr-10">
+                  <Tag tone={categoryTone(report.category)}>{formatCategory(report.category)}</Tag>
+                  {severity ? <Tag tone={SEVERITY_TONES[severity] ?? 'neutral'}>{severity}</Tag> : null}
+                  <Tag tone={REVIEW_TONES[review] ?? 'neutral'} pulse={!report.reviewedAt}>
+                    {review}
+                  </Tag>
+                  {archived ? <Tag>Archived</Tag> : null}
+                  {deleted ? <Tag tone="danger">Deleted</Tag> : null}
+                </div>
+                <h2 id="report-sheet-title" className="pr-10 text-2xl font-semibold tracking-tight text-text-primary">
+                  {report.title || `${formatCategory(report.category)} report`}
+                </h2>
+                <p className="mt-2 text-[13px] font-medium text-text-secondary">
+                  <span className="font-mono">{ticketCode(report.id)}</span>
+                  {' • '}
+                  {stamp(report.reportedAt) || 'No filing time'}
+                  {' • '}
+                  Filed by {report.reportedByName || 'an officer'}
+                </p>
+              </>
+            )}
+          </header>
+
+          {/* ── Body ── */}
+          <div className="hide-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-10 sm:px-8">
             {pending ? (
               <SkeletonBody />
+            ) : gone ? (
+              <p className="text-sm text-text-secondary">
+                This report was deleted while it was open. It may be in Audit History → Deleted
+                reports, where it can be restored.
+              </p>
             ) : (
-              /* ── ONE COLUMN, TOP TO BOTTOM ───────────────────────────────
-                 This was a two-column split: the narrative on the left and a
-                 20rem evidence rail on the right, stuck to the top so it
-                 stayed beside whatever was being read.
+              <div className="space-y-12">
+                <section>
+                  <SectionTitle icon={Fingerprint}>Classification &amp; priority</SectionTitle>
+                  <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+                    <Field label="Category" value={formatCategory(report.category)} />
+                    <Field label="Severity" value={severity ? severity[0].toUpperCase() + severity.slice(1) : ''} />
+                    <Field label="WPDA urgency" value={wpda != null ? String(wpda) : ''} tone="text-success" />
+                    <Field label="Evidence files" value={`${attachmentCount} file${attachmentCount === 1 ? '' : 's'}`} />
+                  </div>
+                  {report.description ? (
+                    <div className="mt-8 flex flex-col gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-widest text-text-muted">
+                        Reported description
+                      </span>
+                      <p className="whitespace-pre-wrap break-words text-[14px] font-medium leading-relaxed text-text-primary">
+                        {report.description}
+                      </p>
+                    </div>
+                  ) : null}
+                </section>
 
-                 The rail is gone because the two halves were not peers. A
-                 report is read in one order — what happened, where, then what
-                 was photographed — and a fixed sidebar cut the narrative to
-                 about 60% of the panel, so the one piece of prose anyone
-                 actually reads got the narrowest measure on screen. Sticky
-                 made it worse rather than better: evidence pinned beside a
-                 paragraph it does not illustrate is just a thing that will not
-                 scroll away.
+                <section>
+                  <SectionTitle icon={UserCircle}>Resident data</SectionTitle>
+                  <div className="mb-8 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-3">
+                    <Field label="Full name" value={report.reportedByName} />
+                    <Field label="Reported" value={stamp(report.reportedAt)} />
+                    <Field label="Coordinates" value={coordinates} mono />
+                  </div>
+                  <dl className="grid grid-cols-3 divide-x divide-hairline rounded-lg border border-hairline bg-base-800/60 dark:bg-base-900/60">
+                    {[
+                      ['Phase', report.phase],
+                      ['Block', report.block],
+                      ['Lot', report.lot],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex flex-col items-center justify-center gap-1.5 py-4">
+                        <dt className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{label}</dt>
+                        <dd className="text-[15px] font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
 
-                 Stacked, the narrative gets the full width and evidence lands
-                 where it belongs — after the account it supports.
+                <section>
+                  <SectionTitle icon={Clock} className="mb-8">Timeline</SectionTitle>
+                  <ol className="relative ml-2 space-y-10 border-l border-hairline pl-8">
+                    <Step label="Submitted" at={report.reportedAt} pendingLabel="No submission time" />
+                    <Step
+                      label="Dispatched"
+                      at={report.dispatchedAt}
+                      pendingLabel="Not yet dispatched"
+                      detail={durations.toDispatch != null ? `+${formatMinutes(durations.toDispatch)}` : ''}
+                    />
+                    <Step
+                      label="Resolved"
+                      at={report.resolvedAt}
+                      pendingLabel="Not yet resolved"
+                      detail={durations.onScene != null ? `+${formatMinutes(durations.onScene)}` : ''}
+                    />
+                    <Step
+                      label={report.reviewedAt ? `Reviewed by ${report.reviewedByName || 'an admin'}` : 'Reviewed'}
+                      at={report.reviewedAt}
+                      pendingLabel="Awaiting admin review"
+                    />
+                  </ol>
+                  <div className="ml-2 mt-10 grid grid-cols-2 gap-8">
+                    <Field label="Responding officer" value={report.assignedGuardName} />
+                  </div>
+                </section>
 
-                 This is a plain block comment rather than a braced JSX one,
-                 because a ternary branch holds exactly one expression. A braced
-                 comment here is a second expression and the build fails with
-                 "Expected `,` or `)`". */
-              <div className="flex flex-col gap-6">
-                <div className="min-w-0">
-                  <IncidentBreakdown report={report} mediaCount={media.length} canEditNotes={false} />
-                </div>
+                {report.responderNotes || report.resolutionSummary ? (
+                  <section>
+                    <SectionTitle icon={FileType}>Responder notes</SectionTitle>
+                    <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
+                      <Field label="Responder notes" value={report.responderNotes} />
+                      <Field label="Final resolution summary" value={report.resolutionSummary} />
+                    </div>
+                  </section>
+                ) : null}
 
-                <div className="space-y-3">
-                  <MetaSection
+                <section>
+                  <SectionTitle
                     icon={Images}
-                    title="Evidence"
                     action={
-                      media.length + documents.length > 0 ? (
-                        <span className="text-xs font-medium text-text-secondary">
-                          {media.length + documents.length} attached
-                        </span>
+                      attachmentCount > 0 ? (
+                        <span className="text-[12px] font-medium text-text-muted">{attachmentCount} attached</span>
                       ) : null
                     }
                   >
-                    {media.length === 0 && documents.length === 0 ? (
-                      <p className="text-sm text-text-secondary">Nothing attached to this report.</p>
-                    ) : (
-                      <div className="space-y-3">
-                        {preview ? (
-                          <button
-                            type="button"
-                            onClick={() => setLightboxIndex(media.indexOf(preview))}
-                            aria-label="Open evidence full screen"
-                            className="relative block aspect-video w-full max-w-2xl overflow-hidden rounded-lg border border-slate-200 bg-black"
-                          >
-                            {preview.type === 'video' ? (
-                              <video src={preview.url} className="h-full w-full object-contain" muted />
-                            ) : (
-                              <EvidenceImage src={preview.url} fit="contain" />
-                            )}
-                          </button>
-                        ) : null}
+                    Evidence
+                  </SectionTitle>
 
-                        {media.length > 1 ? (
-                          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
-                            {media.map((item, index) => (
-                              <button
-                                key={item.url}
-                                type="button"
-                                onClick={() => setPreviewIndex(index)}
-                                aria-label={`Show evidence ${index + 1} of ${media.length}`}
-                                aria-pressed={item === preview}
-                                /* `border-hairline`, not `border-transparent`:
-                                   unselected thumbnails had no edge at all, so
-                                   a dark photo — a night shot, which is most of
-                                   them — bled into the panel and the grid lost
-                                   its gutters. The selected ring still reads
-                                   because it is a brand colour against a
-                                   neutral, not because it is the only border. */
-                                className={`relative aspect-square overflow-hidden rounded-xl border-2 transition-[border-color,opacity] duration-150 ${
-                                  item === preview
-                                    ? 'border-brand-500'
-                                    : 'border-hairline opacity-70 hover:opacity-100'
-                                }`}
+                  {attachmentCount === 0 ? (
+                    <div className="flex aspect-video w-full flex-col items-center justify-center rounded-xl border border-hairline bg-base-800/60 text-text-muted dark:bg-base-900/50">
+                      <Camera size={32} className="mb-3 opacity-40" />
+                      <span className="text-sm font-medium opacity-60">No evidence attached</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {preview ? (
+                        <button
+                          type="button"
+                          onClick={() => setLightboxIndex(media.indexOf(preview))}
+                          aria-label="Open evidence full screen"
+                          className="relative block aspect-video w-full overflow-hidden rounded-xl border border-hairline bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                        >
+                          {preview.type === 'video' ? (
+                            <video src={preview.url} className="h-full w-full object-contain" muted />
+                          ) : (
+                            <EvidenceImage src={preview.url} fit="contain" />
+                          )}
+                        </button>
+                      ) : null}
+
+                      {media.length > 1 ? (
+                        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
+                          {media.map((item, index) => (
+                            <button
+                              key={item.url}
+                              type="button"
+                              onClick={() => setPreviewIndex(index)}
+                              aria-label={`Show evidence ${index + 1} of ${media.length}`}
+                              aria-pressed={item === preview}
+                              className={`relative aspect-square overflow-hidden rounded-lg border-2 transition-[border-color,opacity] duration-150 ${
+                                item === preview ? 'border-brand-500' : 'border-hairline opacity-70 hover:opacity-100'
+                              }`}
+                            >
+                              {item.type === 'video' ? (
+                                <video src={item.url} className="h-full w-full object-cover" muted />
+                              ) : (
+                                <EvidenceImage src={item.url} />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {documents.length > 0 ? (
+                        <ul className="space-y-2">
+                          {documents.map((url) => (
+                            <li key={url}>
+                              <a
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex min-h-11 items-center gap-2.5 rounded-lg border border-hairline px-3 py-2 transition-colors hover:bg-tint/[0.04]"
                               >
-                                {item.type === 'video' ? (
-                                  <video src={item.url} className="h-full w-full object-cover" muted />
-                                ) : (
-                                  <EvidenceImage src={item.url} />
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                        ) : null}
-
-                        {/* Documents can't be thumbnailed, so they get a row
-                            each with an explicit open-in-new-tab. */}
-                        {documents.length > 0 ? (
-                          <ul className="space-y-2">
-                            {documents.map((url) => (
-                              <li key={url}>
-                                <a
-                                  href={url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="flex min-h-11 items-center gap-2.5 rounded-xl border border-hairline bg-base-900 px-3 py-2 transition-colors duration-150 hover:border-slate-300"
-                                >
-                                  <FileType size="sm" className="shrink-0 text-text-muted" />
-                                  <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary">
-                                    {decodeURIComponent(url.split('/').pop().split('?')[0])}
-                                  </span>
-                                  <span className="shrink-0 text-xs font-medium text-brand-400">Open</span>
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                      </div>
-                    )}
-                  </MetaSection>
-
-                  <MetaSection icon={ClipboardCheck} title="Review">
-                    <MetaList>
-                      <MetaItem label="Status">
-                        <StatusBadge tone={REVIEW_TONES[review] ?? 'neutral'} size="sm">{review}</StatusBadge>
-                      </MetaItem>
-                      <MetaItem label="Reviewed by">{report.reviewedAt ? report.reviewedByName || 'An admin' : ''}</MetaItem>
-                      <MetaItem label="Reviewed">{stamp(report.reviewedAt)}</MetaItem>
-                    </MetaList>
-                  </MetaSection>
-                </div>
+                                <FileType size="sm" className="shrink-0 text-text-muted" />
+                                <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary">
+                                  {decodeURIComponent(url.split('/').pop().split('?')[0])}
+                                </span>
+                                <span className="shrink-0 text-xs font-medium text-brand-400">Open</span>
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  )}
+                </section>
               </div>
             )}
           </div>
 
-          {/* ── Admin actions ── */}
-          <div className="shrink-0 border-t border-hairline px-4 py-3.5 sm:px-6">
+          {/* ── Sticky footer ── */}
+          <footer className="relative z-10 shrink-0 border-t border-hairline bg-base-900/95 px-6 py-5 backdrop-blur sm:px-8 dark:bg-base-950/95">
             {error ? (
-              <p className="mb-3 rounded-xl border border-danger/25 bg-danger/10 p-2.5 text-sm text-danger">
+              <p role="alert" className="mb-4 rounded-lg border border-danger/25 bg-danger/10 p-2.5 text-[13px] text-danger">
                 {error}
               </p>
             ) : null}
-
-            {/* A 2×2 grid on a phone rather than a wrapping row: four buttons of
-                different label widths wrap into a ragged three-then-one block
-                that puts Delete directly under a thumb resting on Archive. */}
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                {/* The Approve / Approved button was removed at the user's request
+                    (2026-10-18). Review still shows on the timeline ("Reviewed by
+                    …") from `reviewedAt`, and a resolved call is still signed off
+                    from the Hazard Map drawer's "Verify resolution". */}
+                <button
+                  type="button"
+                  disabled={!report}
+                  onClick={() => exportReportPdf(report, { attachmentCount })}
+                  className="sheet-btn sheet-btn-ghost flex-1 sm:flex-none"
+                >
+                  <FileDown size="sm" className="opacity-70" />
+                  Export PDF
+                </button>
+                <button
+                  type="button"
+                  disabled={!report || deleted || Boolean(busy)}
+                  onClick={() =>
+                    run('archive', archived ? unarchiveIncidents : archiveIncidents, {
+                      success: archived ? 'Report restored to the active list' : 'Report archived',
+                      error: archived ? 'Could not unarchive the report' : 'Could not archive the report',
+                    })
+                  }
+                  className="sheet-btn sheet-btn-ghost flex-1 sm:flex-none"
+                >
+                  {busy === 'archive' ? (
+                    <Loader2 size="sm" className="animate-spin" />
+                  ) : archived ? (
+                    <ArchiveRestore size="sm" className="opacity-70" />
+                  ) : (
+                    <Archive size="sm" className="opacity-70" />
+                  )}
+                  {archived ? 'Unarchive' : 'Archive'}
+                </button>
+              </div>
               <button
                 type="button"
-                disabled={pending || Boolean(busy) || Boolean(report?.reviewedAt)}
-                onClick={() => run('review', markReportsReviewed)}
-                className="btn btn-sm btn-success min-h-11 sm:min-h-0"
-              >
-                {busy === 'review' ? (
-                  <Loader2 size="sm" className="animate-spin" />
-                ) : (
-                  <CheckCircle2 size="sm" />
-                )}
-                {report?.reviewedAt ? 'Reviewed' : 'Mark as reviewed'}
-              </button>
-
-              {/* Was `window.print()`, which is not an export: it opened the
-                  browser's print dialog on the whole page, printed the dark
-                  modal as grey, and left whether a FILE appeared entirely up to
-                  whichever printer the admin picked. This builds the document
-                  itself and downloads it — see lib/reportPdf.js for why it is
-                  drawn as text rather than screenshotted. */}
-              <button
-                type="button"
-                disabled={pending || !report}
-                onClick={() => exportReportPdf(report, { attachmentCount: media.length + documents.length })}
-                className="btn btn-sm btn-outline min-h-11 sm:min-h-0"
-              >
-                <Printer size="sm" />
-                Export PDF
-              </button>
-
-              <button
-                type="button"
-                disabled={pending || Boolean(busy)}
-                onClick={() => run('archive', archived ? unarchiveIncidents : archiveIncidents)}
-                className="btn btn-sm btn-outline min-h-11 sm:min-h-0"
-              >
-                {busy === 'archive' ? (
-                  <Loader2 size="sm" className="animate-spin" />
-                ) : archived ? (
-                  <ArchiveRestore size="sm" />
-                ) : (
-                  <Archive size="sm" />
-                )}
-                {archived ? 'Unarchive' : 'Archive'}
-              </button>
-
-              <button
-                type="button"
-                disabled={pending || Boolean(busy)}
+                disabled={!report || deleted || Boolean(busy)}
                 onClick={() => setConfirming(true)}
-                className="btn btn-sm btn-danger min-h-11 sm:ml-auto sm:min-h-0"
+                className="sheet-btn sheet-btn-danger w-full sm:w-auto"
               >
-                <Trash2 size="sm" />
+                <Trash2 size="sm" className="opacity-80" />
                 Delete
               </button>
             </div>
-          </div>
+          </footer>
         </div>
       </div>
 
@@ -505,15 +549,23 @@ export default function SecurityReportDetailModal({ reportId, report, onClose, o
       ) : null}
 
       <ConfirmDialog
-        open={Boolean(confirming)}
+        open={confirming}
         busy={busy === 'delete'}
         tone="danger"
         title="Delete this report?"
         message="It moves to Audit History → Deleted Reports, where it can be restored. Archive instead if you only want it off the working list."
         confirmLabel="Delete"
-        onConfirm={() => run('delete', softDeleteIncidents, { close: true })}
-        onCancel={() => setConfirming(null)}
+        onConfirm={() =>
+          run(
+            'delete',
+            softDeleteIncidents,
+            { success: 'Report moved to Deleted reports', error: 'Could not delete the report' },
+            { close: true },
+          )
+        }
+        onCancel={() => setConfirming(false)}
       />
-    </>
+    </>,
+    document.body,
   )
 }

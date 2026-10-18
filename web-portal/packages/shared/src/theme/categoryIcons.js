@@ -10,6 +10,7 @@ import {
   Megaphone,
   Radio,
   RefreshCw,
+  SlidersHorizontal,
   ShieldAlert,
   ShieldCheck,
   ShieldX,
@@ -63,6 +64,7 @@ const AUDIT_EVENT_ICONS = {
   Resolved: CheckCircle2,
   Published: Megaphone,
   Deleted: Trash2,
+  Settings: SlidersHorizontal,
 }
 
 /** The icon component for an audit event category. Never returns undefined. */

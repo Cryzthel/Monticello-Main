@@ -22,9 +22,10 @@ extension ResidentVerificationX on ResidentVerification {
   /// TRUE ONLY FOR A STATUS WE HAVE ACTUALLY OBSERVED. [unknown] does not lock,
   /// deliberately: defaulting an unreadable status to "locked" would put a lock
   /// badge on every verified resident's screen on every cold start, and would
-  /// turn a connectivity problem into an accusation. The real boundary is
-  /// `firestore.rules`, which rejects the write regardless of what this client
-  /// believes; everything here is a courtesy that explains the refusal early.
+  /// turn a connectivity problem into an accusation. That is safe because
+  /// firestore.rules is the real boundary: since 2026-10-19 an incidents or
+  /// panic_alerts create needs a verified resident (isVerifiedResident), so a
+  /// write let through on an unknown status is refused there if it should be.
   bool get locksReporting =>
       this == ResidentVerification.pending ||
       this == ResidentVerification.rejected;
@@ -54,6 +55,19 @@ extension ResidentVerificationX on ResidentVerification {
             'verified.',
       };
 
+  /// Why the SOS sheet is locked. Separate from [lockBody], which talks about
+  /// incident reports, and it points somewhere a resident can act NOW:
+  /// someone stopped in an emergency needs a number, not a status update.
+  String get sosLockBody => switch (this) {
+        ResidentVerification.rejected =>
+          'The HOA office did not approve this account, so SOS alerts cannot '
+              'be sent from it. In an emergency, call the main gate guard or '
+              '911 directly.',
+        _ => 'Your account is still under review by the HOA, so SOS alerts '
+            'can be sent once it is verified. In an emergency, call the main '
+            'gate guard or 911 directly.',
+      };
+
   /// The read-only status badge for the profile and settings screens.
   String get badgeLabel => switch (this) {
         ResidentVerification.verified => 'HOA Verified',
@@ -63,6 +77,30 @@ extension ResidentVerificationX on ResidentVerification {
         // lock, which must not act on a status it has not actually read.
         _ => 'Pending HOA Approval',
       };
+}
+
+/// A stored `verificationStatus` string as a [ResidentVerification]. Anything
+/// unrecognised, including null, is [ResidentVerification.unknown].
+ResidentVerification residentVerificationFrom(String? raw) => switch (raw) {
+      ResidentStatus.verified => ResidentVerification.verified,
+      ResidentStatus.pending => ResidentVerification.pending,
+      ResidentStatus.rejected => ResidentVerification.rejected,
+      _ => ResidentVerification.unknown,
+    };
+
+/// The signed-in resident's standing as last OBSERVED, without waiting.
+///
+/// Reads the cache [AccountApprovalService] keeps current from its live
+/// listener (the dashboard holds one open). [ResidentVerification.unknown]
+/// with no one signed in, no Firebase app, or nothing read yet.
+ResidentVerification cachedResidentVerification() {
+  try {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return ResidentVerification.unknown;
+    return residentVerificationFrom(AccountApprovalService.cachedStatusFor(uid));
+  } catch (_) {
+    return ResidentVerification.unknown;
+  }
 }
 
 /// Feeds the resident's verification status to [builder] WITHOUT ever holding
@@ -101,12 +139,7 @@ class _VerificationStatusBuilderState extends State<VerificationStatusBuilder> {
     if (uid != null) _stream = AccountApprovalService.statusStream(uid);
   }
 
-  static ResidentVerification _map(String? raw) => switch (raw) {
-        ResidentStatus.verified => ResidentVerification.verified,
-        ResidentStatus.pending => ResidentVerification.pending,
-        ResidentStatus.rejected => ResidentVerification.rejected,
-        _ => ResidentVerification.unknown,
-      };
+  static ResidentVerification _map(String? raw) => residentVerificationFrom(raw);
 
   @override
   Widget build(BuildContext context) {

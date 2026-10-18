@@ -275,9 +275,16 @@ class _SignedInRouterState extends State<_SignedInRouter> {
         //
         // This does NOT weaken anything. Reporting and panic are gated on
         // ACCOUNT verification, which is a different fact living in
-        // `residents/{uid}.verificationStatus` and enforced independently — at
-        // the route level for '/panic', in-context on the report screen, and by
-        // firestore.rules on the write itself.
+        // `residents/{uid}.verificationStatus` and checked in context: on the
+        // report screen, and in the SOS countdown sheet (showSosCountdown),
+        // which opens locked — reason plus the main gate's number — for an
+        // account observed as pending or rejected (the user's decision,
+        // 2026-10-18).
+        //
+        // The BOUNDARY is firestore.rules: since 2026-10-19 an incidents or
+        // panic_alerts create needs isVerifiedResident() (security staff may
+        // still file incidents). The checks here explain the refusal before
+        // the write; a refused SOS still lands on the locked sheet.
 
         // HomeScreen is reached by BEING built here, not by navigating to it.
         // The shell is NOT wrapped in AccountVerificationGate.
@@ -289,13 +296,11 @@ class _SignedInRouterState extends State<_SignedInRouter> {
         // seeded by hand (see functions/index.js), a fresh deployment had
         // literally no way for anyone to get in.
         //
-        // Letting them in is safe because the two actions that actually need
-        // verification are gated INDEPENDENTLY at the route level — '/report'
-        // and '/panic' are each wrapped in AccountVerificationGate in
-        // app.dart. So a pending resident can browse the dashboard, see the
-        // map, read announcements and watch their own status badge flip to
-        // Verified live, but still cannot file a report or trigger a panic
-        // alert until staff approve them.
+        // Letting them in is fine because the two privileged actions are
+        // gated where they happen (see the note above). A pending resident can
+        // browse the dashboard, see the map, read announcements and watch
+        // their own status badge flip to Verified live, but cannot file a
+        // report or raise an SOS until staff approve them.
         return const HomeScreen(key: ValueKey('home'));
   }
 }

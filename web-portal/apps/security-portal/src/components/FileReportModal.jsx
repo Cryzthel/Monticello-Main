@@ -1,3 +1,4 @@
+import { describeError } from '@shared/lib/toast'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { FilePlus2, Loader2, Send, ShieldAlert, X } from '@shared/icons'
@@ -309,7 +310,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
       // one thing that would confirm the filing worked.
       onFiled()
     } catch (err) {
-      setError(err.message ?? 'Unable to submit the report. Please try again.')
+      setError(describeError(err))
     } finally {
       setSubmitting(false)
     }

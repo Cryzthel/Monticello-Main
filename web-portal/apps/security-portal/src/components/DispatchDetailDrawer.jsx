@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertOctagon,
+  Check,
   CheckCircle2,
   ClipboardList,
+  Copy,
   FileText,
   History,
   Loader2,
@@ -50,6 +52,7 @@ import EvidenceGrid, { forensicCoordinates, forensicTimestamp } from '@shared/co
 import UnitPicker from '@/components/dispatch/UnitPicker'
 import ResolveIncidentModal from '@/components/dispatch/ResolveIncidentModal'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
+import { formatTime } from '@shared/lib/dates'
 
 /**
  * Width of the desktop rail, in px, exported so the dispatch page can tell the
@@ -66,8 +69,45 @@ const SEVERITY_LABELS = {
   low: 'Low',
 }
 
-const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
-const clock = (at) => (at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—')
+// 12-hour, from the shared date module, so "Reported 1:25 AM" here matches
+// the "Aug 13, 2026, 1:25 AM" stamped on the same report's photos. This was a
+// 24-hour en-GB clock, the one time format in the drawer that disagreed.
+const clock = (at) => formatTime(at)
+
+/**
+ * "Copy" beside a value, for the coordinates an officer pastes into another
+ * map app or reads out over the radio. Confirms in place for two seconds; a
+ * browser that refuses the clipboard (insecure origin, denied permission)
+ * says so instead of pretending.
+ */
+function CopyButton({ value, label }) {
+  const [state, setState] = useState('idle')
+  useEffect(() => {
+    if (state === 'idle') return undefined
+    const id = setTimeout(() => setState('idle'), 2000)
+    return () => clearTimeout(id)
+  }, [state])
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setState('copied')
+    } catch {
+      setState('failed')
+    }
+  }
+  const text = state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy blocked' : 'Copy'
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={state === 'idle' ? label : text}
+      className="ml-2 inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-hairline px-2 align-middle text-2xs font-semibold text-text-secondary transition-colors duration-150 hover:border-brand-500/50 hover:text-text-primary active:bg-tint/10"
+    >
+      {state === 'copied' ? <Check size="sm" aria-hidden="true" /> : <Copy size="sm" aria-hidden="true" />}
+      <span aria-live="polite">{text}</span>
+    </button>
+  )
+}
 
 
 /** A label/value row on a fixed gutter, so every value in the drawer starts on one edge. */
@@ -76,7 +116,7 @@ function Row({ label, mono = false, children }) {
     <div className="flex items-baseline gap-3 py-1">
       <dt className="w-20 shrink-0 text-caption font-medium text-text-muted">{label}</dt>
       <dd className={`m-0 min-w-0 flex-1 break-words text-label font-medium text-text-primary ${mono ? 'font-mono' : ''}`}>
-        {children || <span className="text-text-muted">—</span>}
+        {children || <span className="font-sans font-normal text-text-muted">Not provided</span>}
       </dd>
     </div>
   )
@@ -508,10 +548,13 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
                 Unassigned — awaiting dispatch
               </StatusBadge>
             ) : null}
-            <StatusBadge tone={categoryTone(report.category)} size="sm">
+            {/* `md`: h-6 px-3 text-xs, the pill geometry the brief names. At
+                `sm` (20px, caption text) these were the smallest type in the
+                header while answering two of its three questions. */}
+            <StatusBadge tone={categoryTone(report.category)} size="md">
               {categoryLabel(report.category)}
             </StatusBadge>
-            <StatusBadge severity={report.severity} size="sm">
+            <StatusBadge severity={report.severity} size="md">
               {SEVERITY_LABELS[report.severity] ?? 'Medium'} priority
             </StatusBadge>
             {ack?.expired ? (
@@ -565,7 +608,15 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               <dl className="min-w-0 flex-1">
                 <Row label="Address">{address || report.location}</Row>
                 <Row label="GPS" mono>
-                  {typeof report.lat === 'number' ? forensicCoordinates(report.lat, report.lng) : null}
+                  {typeof report.lat === 'number' ? (
+                    <>
+                      {forensicCoordinates(report.lat, report.lng)}
+                      <CopyButton
+                        value={forensicCoordinates(report.lat, report.lng)}
+                        label="Copy coordinates"
+                      />
+                    </>
+                  ) : null}
                 </Row>
                 <Row label="Resident">{report.reportedByName}</Row>
                 <Row label="Contact" mono>
@@ -604,7 +655,12 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
             meta={media.length ? `${media.length} file${media.length === 1 ? '' : 's'}` : null}
           >
             {report.description ? (
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary">{report.description}</p>
+              // `[overflow-wrap:anywhere]`: a resident's text can be one
+              // unbroken string ("jakajjJsjsjsksksk…"), and pre-wrap alone
+              // only breaks at spaces, so it ran out of the card.
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary [overflow-wrap:anywhere]">
+                {report.description}
+              </p>
             ) : (
               <p className="text-sm text-text-muted">The resident submitted no written description.</p>
             )}
@@ -690,7 +746,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               <div className="mt-3">
                 <EvidenceGrid
                   media={resolutionMedia}
-                  stamp={{ ...stamp, at: report.resolvedAt, lat: report.arrival?.lat ?? report.lat, lng: report.arrival?.lng ?? report.lng }}
+                  stamp={{ ...stamp, label: 'Resolved', at: report.resolvedAt, lat: report.arrival?.lat ?? report.lat, lng: report.arrival?.lng ?? report.lng }}
                   onOpen={setResolutionLightbox}
                   emptyText=""
                 />
@@ -739,7 +795,10 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               Close stays LAST for the reason the X is top-right: the
               control that takes your place away should never be where the
               thumb lands for the thing you meant to do. */}
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+          {/* Equal halves: the commit action and Close share the row at the
+              same size, so neither reads as the afterthought, and Close alone
+              (no stage action available) spans the width. */}
+          <div className="mt-2 flex flex-wrap items-center gap-2 [&>*]:min-w-[8.5rem] [&>*]:flex-1">
             {footer}
             <button type="button" onClick={onClose} className="btn btn-action btn-outline">
               <X size="sm" aria-hidden="true" />

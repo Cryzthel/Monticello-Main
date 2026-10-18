@@ -1,16 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { reconcilePasswordResetFlags } from '@shared/lib/passwordFlags'
+import { useSearchParams } from 'react-router-dom'
+import { toast } from '@shared/lib/toast'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle,
-  CheckCircle2,
   ClipboardList,
   FileClock,
-  Search,
   UserPlus,
   Users,
-  X,
 } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
-import Card from '@shared/components/Card'
 import Select from '@shared/components/Select'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
@@ -19,12 +17,12 @@ import OnDutyHistoryTable from '@/components/OnDutyHistoryTable'
 import SecurityDirectoryTable from '@/components/SecurityDirectoryTable'
 import SecurityAuditLog from '@/components/SecurityAuditLog'
 import ProvisionAccountModal from '@/components/ProvisionAccountModal'
+import EditSecurityAccountModal from '@/components/EditSecurityAccountModal'
+import SecurityOfficerDetailsModal from '@/components/SecurityOfficerDetailsModal'
 import ResetCredentialDialog from '@/components/ResetCredentialDialog'
 import { useSecurityAccounts } from '@/hooks/useSecurityAccounts'
 import {
   ACCOUNT_STATUS,
-  ACCESS_ROLES,
-  resolveAccessRole,
   STATUS_LABELS,
   deleteSecurityAccount,
   describeCallableError,
@@ -67,10 +65,9 @@ const STATUS_OPTIONS = [
   { value: ACCOUNT_STATUS.revoked, label: STATUS_LABELS[ACCOUNT_STATUS.revoked] },
 ]
 
-const ROLE_OPTIONS = [
-  { value: ANY, label: 'All roles' },
-  ...ACCESS_ROLES.map((r) => ({ value: r.value, label: r.label })),
-]
+// NO ROLE FILTER (2026-10-17). Every security account is a Patrol Guard, so
+// "All roles" could only ever return everybody; the dropdown, its state and
+// its filter step were removed together.
 
 // NO SHIFT FILTER. A shift stopped being an account attribute when guards
 // began choosing one at clock-in: every credential now carries the same
@@ -79,79 +76,68 @@ const ROLE_OPTIONS = [
 // the Shift history tab beside this one already answers it.
 
 
-/**
- * Inline result strip.
- *
- * ── WHY NOT THE SHARED TOAST ────────────────────────────────────────────────
- * `ToastProvider` is available on every page and would have been one line. Its
- * card is `IncidentNotificationToast`, which is incident-shaped all the way
- * down: it renders a priority chip, a category glyph and a Phase/Block/Lot pin
- * beside a map marker. Pushing "Account provisioned" through it produces a card
- * labelled **Medium** with an empty address next to a location pin — a
- * confident statement about severity and place that the event does not have.
- *
- * A shared component is worth reusing when the meaning matches. Here it does
- * not, so this is fifteen lines of its own rather than a misuse of ninety.
- */
-function ResultStrip({ feedback, onDismiss }) {
-  if (!feedback) return null
-  const bad = feedback.tone === 'danger'
-  const Icon = bad ? AlertTriangle : CheckCircle2
-  return (
-    <div
-      role="status"
-      className={`flex shrink-0 items-start gap-2.5 rounded-xl border p-3 text-sm ${
-        bad
-          ? 'border-danger/25 bg-danger/10 text-danger'
-          : 'border-success/25 bg-success/10 text-success'
-      }`}
-    >
-      <Icon size="sm" className="mt-0.5 shrink-0" />
-      <span className="min-w-0 flex-1">{feedback.message}</span>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss"
-        className="-mr-1 -mt-0.5 shrink-0 rounded-lg p-1 opacity-70 transition hover:bg-tint/10 hover:opacity-100"
-      >
-        <X size="sm" />
-      </button>
-    </div>
-  )
-}
-
 export default function SecurityAccountsPage() {
   const { role } = useAuth()
   const canProvision = role === 'super_admin'
 
-  const [tab, setTab] = useState('directory')
+  // `?tab=log` (from Settings › Activity audit log) opens straight on a tab.
+  const [searchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const [tab, setTab] = useState(() => (TABS.some((t) => t.key === requestedTab) ? requestedTab : 'directory'))
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(ANY)
-  const [roleFilter, setRoleFilter] = useState(ANY)
 
   const [modal, setModal] = useState(null) // { account } | { account: null }
+  const [viewingUid, setViewingUid] = useState(null)
   const [resetting, setResetting] = useState(null)
   const [pendingAction, setPendingAction] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [feedback, setFeedback] = useState(null)
 
-  const { accounts, counts, loading, error } = useSecurityAccounts()
+  const { accounts, loading, error } = useSecurityAccounts()
 
-  // Success messages clear themselves; failures do not. An operator who missed
-  // "New password issued" loses nothing — the directory already shows the new
-  // state. An operator who missed "Permission denied" is left believing the
-  // action worked.
-  const dismissTimer = useRef(null)
-  useEffect(() => () => clearTimeout(dismissTimer.current), [])
+  // ── "RESET PENDING" THAT IS NO LONGER TRUE ─────────────────────────────
+  // Nothing used to clear the flag after an officer changed a temporary
+  // password, so the badge stuck. Opening this page asks the server to check
+  // the flagged accounts against Firebase Auth's record of their last password
+  // change; a cleared flag comes back through the live listener above and the
+  // badge goes on its own. Keyed on the SET of flagged accounts, so it runs
+  // once per change in that set, not on every snapshot.
+  const flaggedKey = useMemo(
+    () =>
+      accounts
+        .filter((a) => a.mustChangePassword)
+        .map((a) => a.uid)
+        .sort()
+        .join(','),
+    [accounts],
+  )
+  useEffect(() => {
+    if (canProvision && flaggedKey) reconcilePasswordResetFlags(flaggedKey.split(','))
+  }, [canProvision, flaggedKey])
+
+
+  // ── ANOTHER ADMIN DELETED IT ───────────────────────────────────────────
+  // Every dialog here resolves its account from the live roster by uid. When
+  // that account leaves the roster (deleted in another tab or by another
+  // admin), its dialogs close with a note rather than offering edits that
+  // can only fail with "no longer exists".
+  const liveUids = useMemo(() => new Set(accounts.map((a) => a.uid)), [accounts])
+  useEffect(() => {
+    if (loading) return
+    const gone = (uid) => uid && !liveUids.has(uid)
+    const stale = [modal?.account?.uid, viewingUid, resetting?.uid, pendingAction?.account?.uid].find(gone)
+    if (!stale || busy) return
+    if (gone(modal?.account?.uid)) setModal(null)
+    if (gone(viewingUid)) setViewingUid(null)
+    if (gone(resetting?.uid)) setResetting(null)
+    if (gone(pendingAction?.account?.uid)) setPendingAction(null)
+    toast.info('That account was just removed by another administrator.', { id: 'account-removed' })
+  }, [liveUids, loading, busy, modal, viewingUid, resetting, pendingAction])
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase()
     return accounts
       .filter((a) => (statusFilter === ANY ? true : a.status === statusFilter))
-      // Compared against the DERIVED access role, not the stored RBAC role:
-      // "Gate Guard" and "Roving Patrol" are both `security_officer`, so
-      // filtering on `a.role` would make those two options select the same set.
-      .filter((a) => (roleFilter === ANY ? true : resolveAccessRole(a) === roleFilter))
       .filter((a) => {
         if (!term) return true
         // Badge number is in the haystack because it is what an admin has in
@@ -163,24 +149,16 @@ export default function SecurityAccountsPage() {
           .toLowerCase()
           .includes(term)
       })
-  }, [accounts, search, statusFilter, roleFilter])
+  }, [accounts, search, statusFilter])
 
-  const filtersActive =
-    Boolean(search.trim()) || statusFilter !== ANY || roleFilter !== ANY
+  const filtersActive = Boolean(search.trim()) || statusFilter !== ANY
 
-  // Clicking a tile that is already applied clears it, so the strip is a
-  // toggle rather than a one-way trip that needs the Select to undo.
-  function filterByStatus(value) {
-    setTab('directory')
-    setStatusFilter((current) => (current === value ? ANY : value))
-  }
-
+  // Results are action toasts (@shared/lib/toast). Failures stay up longer
+  // than successes: an operator who missed "New password issued" loses
+  // nothing, one who missed "Permission denied" believes the action worked.
   function report(message, tone = 'success') {
-    clearTimeout(dismissTimer.current)
-    setFeedback({ message, tone })
-    if (tone === 'success') {
-      dismissTimer.current = setTimeout(() => setFeedback(null), 6000)
-    }
+    if (tone === 'danger') toast.error('That change did not go through', { description: message })
+    else toast.success(message)
   }
 
   async function runPendingAction() {
@@ -296,8 +274,6 @@ export default function SecurityAccountsPage() {
           </button>
         </div>
 
-        <ResultStrip feedback={feedback} onDismiss={() => setFeedback(null)} />
-
         {/* ── PANELS ───────────────────────────────────────────────────── */}
         {tab === 'directory' ? (
           <>
@@ -315,13 +291,6 @@ export default function SecurityAccountsPage() {
                 options={STATUS_OPTIONS}
                 className="min-w-[10rem]"
               />
-              <Select
-                ariaLabel="Filter by role"
-                value={roleFilter}
-                onChange={setRoleFilter}
-                options={ROLE_OPTIONS}
-                className="min-w-[11rem]"
-              />
             </div>
 
             <SecurityDirectoryTable
@@ -329,6 +298,8 @@ export default function SecurityAccountsPage() {
               loading={loading}
               error={error}
               filtered={filtersActive}
+              canManage={canProvision}
+              onView={(account) => setViewingUid(account.uid)}
               onEdit={(account) => canProvision && setModal({ account })}
               onReset={(account) => canProvision && setResetting(account)}
               onStatusChange={(account, status) =>
@@ -348,17 +319,25 @@ export default function SecurityAccountsPage() {
         )}
       </div>
 
+      {/* Resolved from the live list by uid, so it updates while open. */}
+      <SecurityOfficerDetailsModal
+        account={accounts.find((a) => a.uid === viewingUid) ?? null}
+        onClose={() => setViewingUid(null)}
+      />
+
+      {/* Create keeps the two-step flow with its one-time password handoff. */}
       <ProvisionAccountModal
-        open={Boolean(modal)}
-        account={modal?.account ?? null}
+        open={Boolean(modal) && !modal.account}
         onClose={() => setModal(null)}
-        onSaved={({ kind, name }) =>
-          report(
-            kind === 'created'
-              ? `${name} was added. The password is on screen and shown only once.`
-              : `${name}'s details were updated.`,
-          )
-        }
+        onSaved={({ name }) => report(`${name} was added. The password is on screen and shown only once.`)}
+      />
+
+      {/* Edit is its own one-screen dialog. Resolved from the LIVE list by uid,
+          so another admin's change, or a status flip, is current while open. */}
+      <EditSecurityAccountModal
+        account={modal?.account ? accounts.find((a) => a.uid === modal.account.uid) ?? modal.account : null}
+        onClose={() => setModal(null)}
+        onSaved={({ name }) => report(`${name}'s details were updated.`)}
       />
 
       <ResetCredentialDialog

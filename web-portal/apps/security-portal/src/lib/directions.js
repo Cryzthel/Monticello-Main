@@ -315,24 +315,46 @@ const CONNECTOR_MIN_METERS = 3
  * which reads as "the route does not go there". The dashed leg shows the last
  * metres — and dashed, because they are not a road and must not look like one.
  */
-export function routeToGeojson(route, { tone = 'live', withOrigin = true, progress = null } = {}) {
+export function routeToGeojson(
+  route,
+  { tone = 'live', withOrigin = true, progress = null, unitPosition = null, offRoute = false } = {},
+) {
   // With a live fix on the line, the route is drawn in two pieces so the
   // travelled part can recede. Without one it stays a single line, which is
   // also what a preview should look like.
+  //
+  // ── ONE FIXED LINE, TRIMMED — NOT TWO LINES RE-CUT EVERY FIX ─────────────
+  // The live line used to be the REMAINING coordinates, re-split at each fix.
+  // The marker glides to a new fix over ~900 ms, but the split jumped there at
+  // once, so the line's live end leapt ahead and the arrow visibly chased it.
+  // Now the route keeps its full geometry and carries `trim`, the fraction
+  // already travelled; the map hides that much with `line-trim-offset` and
+  // animates it on the marker's own clock, so line and arrow move as one.
+  // `covered` is the same full line drawn faintly underneath, showing through
+  // where the live line is trimmed. `ahead` carries the direction chevrons,
+  // which a trim cannot hide, so they never sit on road already driven.
   const features = progress
     ? [
         {
           type: 'Feature',
-          properties: { kind: 'route', tone },
-          geometry: { type: 'LineString', coordinates: progress.remainingCoords },
+          properties: { kind: 'route', tone, trim: progress.fraction },
+          geometry: route.geometry,
         },
         {
           type: 'Feature',
           properties: { kind: 'covered', tone },
-          geometry: { type: 'LineString', coordinates: progress.coveredCoords },
+          geometry: route.geometry,
+        },
+        {
+          type: 'Feature',
+          properties: { kind: 'ahead', tone },
+          geometry: { type: 'LineString', coordinates: progress.remainingCoords },
         },
       ]
-    : [{ type: 'Feature', properties: { kind: 'route', tone }, geometry: route.geometry }]
+    : [
+        { type: 'Feature', properties: { kind: 'route', tone, trim: 0 }, geometry: route.geometry },
+        { type: 'Feature', properties: { kind: 'ahead', tone }, geometry: route.geometry },
+      ]
 
   const connect = (from, to) => {
     if (!from || !to || distanceMeters(from, to) < CONNECTOR_MIN_METERS) return
@@ -342,7 +364,26 @@ export function routeToGeojson(route, { tone = 'live', withOrigin = true, progre
       geometry: { type: 'LineString', coordinates: [from, to] },
     })
   }
-  connect(route.origin, route.snappedOrigin)
+  /**
+   * ── THE ORIGIN LEG STARTS AT THE GUARD, NOT WHERE THE ROUTE WAS PLOTTED ──
+   * `route.origin` is the fix at the moment Directions was asked, and the
+   * route is only re-asked after 25 m and 10 s. So once the guard moved, the
+   * dashed origin leg stayed pinned to where they USED to stand, and a guard
+   * drawn off the road (> OFF_ROUTE_METERS, where the marker is not snapped)
+   * had nothing joining them to the line at all: the route visibly began
+   * somewhere other than the responder.
+   *
+   * With a live fix the leg is redrawn from the guard's CURRENT position to
+   * where they rejoin the route — and only when they are off it, because
+   * on-route the marker is snapped onto the line and is already its start.
+   * Without a live fix (a dispatcher preview, no telemetry), the plotted
+   * origin is still the best statement available, so the old leg stands.
+   */
+  if (progress && unitPosition) {
+    if (offRoute) connect(unitPosition, progress.snapped)
+  } else {
+    connect(route.origin, route.snappedOrigin)
+  }
   connect(route.snappedDestination, route.destination)
 
   if (withOrigin) {

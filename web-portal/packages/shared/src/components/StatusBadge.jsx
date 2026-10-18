@@ -87,7 +87,7 @@ export default function StatusBadge({
 
   return (
     <Component
-      className={`inline-flex shrink-0 select-none items-center whitespace-nowrap rounded-full font-medium leading-none ring-1 ring-inset ${sizeClass} ${toneClass} ${capitalize} ${interactive} ${className}`}
+      className={`inline-flex shrink-0 select-none items-center whitespace-nowrap rounded-full font-semibold leading-none ring-1 ring-inset ${sizeClass} ${toneClass} ${capitalize} ${interactive} ${className}`}
       {...rest}
     >
       {dot ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" /> : null}

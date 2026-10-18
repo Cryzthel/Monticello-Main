@@ -790,8 +790,44 @@ function transportGlyphImage(kind) {
   return { image: ctx.getImageData(0, 0, size, size), ratio }
 }
 
+/** The live-route layers the travelled-part trim applies to. */
+/** How long a unit glides between fixes. The route trim runs on the same clock. */
+const UNIT_TWEEN_MS = 900
+
+const ROUTE_TRIMMED_LAYERS = ['route-glow', 'route-casing', 'route-line']
+
+/**
+ * Hide the first `fraction` of the live route — the part already travelled.
+ *
+ * `line-trim-offset` is a paint property, so moving it is a GPU uniform
+ * update: no `setData`, no re-tiling in the worker. That is what lets the
+ * travelled part advance every animation frame in step with the marker
+ * instead of jumping once per fix. Clamped and guarded, because it runs from
+ * an animation frame that can outlive a style swap.
+ */
+function applyRouteTrim(map, fraction) {
+  const f = Math.min(1, Math.max(0, Number.isFinite(fraction) ? fraction : 0))
+  ROUTE_TRIMMED_LAYERS.forEach((id) => {
+    if (map.getLayer(id)) map.setPaintProperty(id, 'line-trim-offset', [0, f])
+  })
+}
+
+/** The `trim` the route collection carries — the travelled fraction — or 0. */
+function routeTrimOf(collection) {
+  const feature = collection?.features?.find(
+    (f) => f.properties?.kind === 'route' && Number.isFinite(f.properties?.trim),
+  )
+  return feature ? feature.properties.trim : 0
+}
+
 function setupRouteLayers(map, initialData) {
-  map.addSource(ROUTE_SOURCE_ID, { type: 'geojson', data: initialData ?? EMPTY_COLLECTION })
+  // lineMetrics: the live route is trimmed by `line-trim-offset` (see
+  // applyRouteTrim), which reads `line-progress` and needs this to exist.
+  map.addSource(ROUTE_SOURCE_ID, {
+    type: 'geojson',
+    data: initialData ?? EMPTY_COLLECTION,
+    lineMetrics: true,
+  })
   if (!map.hasImage(ROUTE_ARROW_IMAGE)) {
     const { image, ratio } = routeArrowImage()
     map.addImage(ROUTE_ARROW_IMAGE, image, { pixelRatio: ratio })
@@ -882,7 +918,10 @@ function setupRouteLayers(map, initialData) {
       id: 'route-arrows',
       type: 'symbol',
       source: ROUTE_SOURCE_ID,
-      filter: ofKind('route'),
+      // On the part still AHEAD only — a trim cannot hide symbols, so the
+      // chevrons get their own feature. A route with no `trim` (the admin
+      // heat map's fleet lines) has no 'ahead' feature and keeps them all.
+      filter: ['any', ofKind('ahead'), ['all', ofKind('route'), ['!', ['has', 'trim']]]],
       layout: {
         'symbol-placement': 'line',
         'symbol-spacing': byZoom(48, 72),
@@ -951,6 +990,8 @@ function setupRouteLayers(map, initialData) {
     },
     beforeId,
   )
+  // A style swap rebuilds these layers untrimmed; put the travelled part back.
+  applyRouteTrim(map, routeTrimOf(initialData))
 }
 
 // ── GUARD UNITS ───────────────────────────────────────────────────────────
@@ -959,22 +1000,23 @@ function setupRouteLayers(map, initialData) {
 // coloured by what they are doing:
 //   available   green-500   on duty, no call (also while a call waits for
 //                           their acknowledgement)
-//   responding  orange-500  flashing — accepted and moving
+//   responding  emerald-600 pulsing — accepted and moving
 //   on_scene    blue-500    arrived, through investigation
 // ── ONE MARKER, NOT THREE SHAPES ────────────────────────────────────────────
 //
 // Units were drawn as a shield inside a disc, the route origin as a plain dot,
 // and a unit under way as a separate arrow image — three silhouettes for one
 // thing, which is what made a dispatcher check the legend to read their own
-// map. There is now a single marker: a white-ringed coloured dot, with a
-// translucent beam added under it when the unit's heading is known.
+// map. There is now a single marker: a white-edged coloured SHIELD (a dot
+// until 2026-10-17 — see unitImage), with a translucent beam under it when the
+// unit's heading is known.
 //
 // That is the shape every navigation app converges on, and for a good reason:
 // the dot says WHERE and the beam says WHICH WAY, so a unit with no heading
 // degrades to exactly the dot rather than to a different icon. State stays in
 // the COLOUR, never in the shape:
 //   available   green-500   on duty, no call (also while a call awaits their ack)
-//   responding  orange-500  pulsing — accepted and moving
+//   responding  emerald-600 pulsing — accepted and moving
 //   on_scene    blue-500    arrived, through investigation
 const UNITS_SOURCE_ID = 'guard-units'
 const UNIT_IMAGE = {
@@ -993,31 +1035,81 @@ function hexToRgb(hex) {
   return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
-/** The dot. Sized against the incident pins so neither reads as the other. */
+/**
+ * The unit marker: a white-edged SHIELD in the state colour, with a white star
+ * badge on it.
+ *
+ * ── A SHIELD, NOT A DOT (2026-10-17) ──────────────────────────────────────
+ * Units were white-ringed dots, and every incident pin is a ringed dot too.
+ * With a responding unit in orange and a two-hour-old report also orange, a
+ * report 28 m from a guard was taken for the guard. Colour alone cannot carry
+ * "this is a person who responds" against pins whose colour already means age
+ * and kind, so the SHAPE now does: nothing else on this map is a shield, and a
+ * shield with a badge reads as security without a legend. State still lives in
+ * the colour (see UNIT_COLORS), never in the shape, so every unit is the same
+ * silhouette.
+ *
+ * Drawn centred, like the dot it replaced, so `icon-anchor` defaults, the hit
+ * layer and the tween all stay as they were.
+ */
 function unitImage(color) {
   const ratio = 2
-  const size = 22 * ratio
+  const size = 26 * ratio
   const canvas = document.createElement('canvas')
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext('2d')
   const c = size / 2
 
-  // A shadow rather than a glow: this has to separate from satellite tiles
-  // without the coloured halo that would put it in the same visual family as
-  // the pulsing emergency rings, which mean something else entirely.
-  ctx.shadowColor = 'rgba(15, 23, 42, 0.38)'
+  // Shield outline: flat top with rounded shoulders, sides tapering to a point.
+  const shield = (inset) => {
+    const top = 2.5 * ratio + inset
+    const bottom = size - 2 * ratio - inset
+    const left = 4 * ratio + inset
+    const right = size - 4 * ratio - inset
+    const shoulder = 3 * ratio
+    ctx.beginPath()
+    ctx.moveTo(left + shoulder, top)
+    ctx.lineTo(right - shoulder, top)
+    ctx.quadraticCurveTo(right, top, right, top + shoulder)
+    ctx.lineTo(right, c)
+    ctx.quadraticCurveTo(right, bottom - 4 * ratio, c, bottom)
+    ctx.quadraticCurveTo(left, bottom - 4 * ratio, left, c)
+    ctx.lineTo(left, top + shoulder)
+    ctx.quadraticCurveTo(left, top, left + shoulder, top)
+    ctx.closePath()
+  }
+
+  // A shadow rather than a glow, so it separates from satellite tiles without
+  // joining the pulsing emergency rings' visual family.
+  ctx.shadowColor = 'rgba(15, 23, 42, 0.4)'
   ctx.shadowBlur = 3.5 * ratio
   ctx.shadowOffsetY = 1 * ratio
-  ctx.beginPath()
-  ctx.arc(c, c, c - 4 * ratio, 0, Math.PI * 2)
+  shield(0)
   ctx.fillStyle = '#FFFFFF'
   ctx.fill()
 
   ctx.shadowColor = 'transparent'
-  ctx.beginPath()
-  ctx.arc(c, c, c - 6.5 * ratio, 0, Math.PI * 2)
+  shield(2.25 * ratio)
   ctx.fillStyle = color
+  ctx.fill()
+
+  // The badge: a five-point star, white, slightly above centre where the
+  // shield is widest.
+  const cy = c - 1 * ratio
+  const outer = 5 * ratio
+  const inner = outer * 0.45
+  ctx.beginPath()
+  for (let i = 0; i < 10; i += 1) {
+    const r = i % 2 === 0 ? outer : inner
+    const a = -Math.PI / 2 + (i * Math.PI) / 5
+    const x = c + r * Math.cos(a)
+    const y = cy + r * Math.sin(a)
+    if (i === 0) ctx.moveTo(x, y)
+    else ctx.lineTo(x, y)
+  }
+  ctx.closePath()
+  ctx.fillStyle = '#FFFFFF'
   ctx.fill()
   return { image: ctx.getImageData(0, 0, size, size), ratio }
 }
@@ -1325,20 +1417,22 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
   const notNavigating = ['!=', ['get', 'navState'], NAV_STATE.navigating]
 
   map.addSource(UNITS_SOURCE_ID, { type: 'geojson', data: initialData })
-  // The responding unit's flash: an orange ring pulsed by the same timer as
+  // The responding unit's flash: an emerald ring pulsed by the same timer as
   // the incident rings, but faster, so a moving unit draws the eye.
   map.addLayer({
     id: 'unit-pulse',
     type: 'circle',
     source: UNITS_SOURCE_ID,
-    // Not under the navigation arrow. An orange ring radiating out from a blue
-    // emblem is two markers' worth of signal on one unit, and the colours
+    // Not under the navigation arrow. A second ring radiating out from the
+    // emblem is two markers' worth of signal on one unit, and the two
     // fight: the flash says "responding" to a dispatcher reading the map,
     // which the arrow has already said louder to the officer reading the road.
     filter: ['all', ['==', ['get', 'state'], 'responding'], notNavigating],
     paint: {
       'circle-radius': 13,
-      'circle-color': UNIT_COLORS.responding,
+      // The bright emerald, not the shield's own fill: the ring is what has to
+      // carry "live, moving" on the dark basemap.
+      'circle-color': NAV_MARKER_COLORS.standby,
       'circle-opacity': 0.5,
     },
   })
@@ -1442,12 +1536,14 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
      */
     filter: ['all', ['==', ['get', 'isSelf'], true], ['==', ['get', 'navState'], NAV_STATE.none]],
     paint: {
+      // Emerald, the responder's colour (see NAV_MARKER_COLORS): this halo is
+      // the officer's own "you are here", and blue made it read as route.
       'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 14, 18, 26],
-      'circle-color': '#4285F4',
+      'circle-color': NAV_MARKER_COLORS.standby,
       'circle-opacity': 0.16,
       'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#4285F4',
-      'circle-stroke-opacity': 0.5,
+      'circle-stroke-color': NAV_MARKER_COLORS.standby,
+      'circle-stroke-opacity': 0.55,
     },
   })
   // Under the dot, and only for a unit whose heading is known.
@@ -2321,7 +2417,7 @@ export default function IncidentMap({
       return undefined
     }
 
-    const DURATION_MS = 900
+    const DURATION_MS = UNIT_TWEEN_MS
     const startedAt = performance.now()
 
     /**
@@ -2415,6 +2511,48 @@ export default function IncidentMap({
     }
     map.fitBounds(bounds, { padding, maxZoom: 18, duration: 700 })
   }, [barClearance, controlsOpen, isCompact])
+
+  /**
+   * The travelled part of the route, advancing on the marker's clock.
+   *
+   * Each fix moves the trim from where it is now to the new fraction over
+   * UNIT_TWEEN_MS with the marker tween's easeOutQuad, so the live line's
+   * start and the arrow arrive together. A different route (new call, unit or
+   * profile) starts from its own value rather than sweeping from the old one,
+   * and reduced motion jumps — the same rules the marker follows.
+   */
+  const routeTrimRef = useRef({ frame: 0, value: 0, key: null })
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return undefined
+    const anim = routeTrimRef.current
+    const target = routeTrimOf(route)
+    const key = routeKey ?? null
+    cancelAnimationFrame(anim.frame)
+
+    const jump =
+      anim.key !== key ||
+      target < anim.value || // a re-plot or a step back: never animate backwards
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    anim.key = key
+    if (jump) {
+      anim.value = target
+      applyRouteTrim(map, target)
+      return undefined
+    }
+
+    const from = anim.value
+    const startedAt = performance.now()
+    const step = (now) => {
+      const t = Math.min(1, (now - startedAt) / UNIT_TWEEN_MS)
+      const eased = 1 - (1 - t) * (1 - t) // easeOutQuad, as the marker
+      anim.value = from + (target - from) * eased
+      applyRouteTrim(map, anim.value)
+      if (t < 1) anim.frame = requestAnimationFrame(step)
+    }
+    anim.frame = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(anim.frame)
+  }, [route, routeKey, ready])
 
   const fittedRouteRef = useRef(null)
   useEffect(() => {
@@ -2766,16 +2904,39 @@ export default function IncidentMap({
       write(layer, 'circle-opacity', peak * (1 - t) ** 2)
     }
 
+    /*
+     * ── WHY THE RING VANISHED ON ZOOM-OUT ─────────────────────────────────
+     * This loop used to bail out on `!map.isStyleLoaded()`. That reads as
+     * "the style is being swapped", but Mapbox's Style.loaded() is also false
+     * while ANY source still has tiles in flight. Zooming out requests a ring
+     * of new tiles, so for the whole fetch the pulse stopped where it was —
+     * and with the squared falloff below, about a third of every cycle sits
+     * under 10% opacity. An SOS ring zoomed out mid-fade froze invisible,
+     * and stayed that way until the last tile landed. It also emptied the
+     * write cache every frame, so the parked ring re-wrote itself once
+     * the fetch ended.
+     *
+     * Tiles loading is no reason to stop: setPaintProperty is legal the moment
+     * the style JSON is parsed, and `pulse()` already skips a layer that does
+     * not exist yet. The only real hazard is a style SWAP, which rebuilds the
+     * layers at their defaults behind the cache's back — so the cache is
+     * cleared on `style.load`, the one event that marks it, and a write that
+     * races the swap is caught rather than allowed to kill the loop.
+     */
+    const resetCache = () => written.clear()
+    map.on('style.load', resetCache)
+
     function step() {
       frame = requestAnimationFrame(step)
-      // A style reload rebuilds every layer from setupLayers' defaults, so the
-      // cache above would happily skip restoring them. Cleared while the style
-      // is in flight, which is exactly the window in which that happens.
-      if (!map.isStyleLoaded()) {
+      try {
+        tick(Date.now())
+      } catch {
+        // "Style is not done loading" between setStyle() and its style.load.
         written.clear()
-        return
       }
-      const now = Date.now()
+    }
+
+    function tick(now) {
 
       // INCIDENT_PULSE_REACH, not a literal 18: `incident-hit` is sized from
       // the same constant, so the disc a dispatcher can click and the ring they
@@ -2816,7 +2977,10 @@ export default function IncidentMap({
     }
 
     frame = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(frame)
+    return () => {
+      cancelAnimationFrame(frame)
+      map.off('style.load', resetCache)
+    }
   }, [pinRadius])
 
   // Custom sources/layers don't survive a setStyle() call, so the pins and the

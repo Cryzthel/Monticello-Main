@@ -1,8 +1,9 @@
+import { toast } from '@shared/lib/toast'
 import { useMemo, useState } from 'react'
-import { Search, UserCheck, UserPlus, Info } from '@shared/icons'
+import { UserCheck, UserPlus, Info } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
-import ResidentReviewDrawer from '@/components/ResidentReviewDrawer'
+import ResidentDetailsDrawer from '@/components/ResidentDetailsDrawer'
 import Card from '@shared/components/Card'
 import ResidentAvatar from '@/components/ResidentAvatar'
 import RowActionMenu from '@shared/components/RowActionMenu'
@@ -26,6 +27,8 @@ import {
   matchesAddress,
   parseAddressQuery,
 } from '@shared/lib/addressQuery'
+import { formatDate } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 // `all` is the default and is deliberately first: the table's job is to show
 // every registered account, and the status tabs are a filter on top of that
@@ -84,13 +87,12 @@ export default function ResidentsPage() {
 
   async function backfillProfileOnly() {
     setBackfilling(true)
-    try {
-      await Promise.all(profileOnly.map((r) => importResidentFromUser(r)))
-    } catch (err) {
-      console.error('Backfill failed', err)
-    } finally {
-      setBackfilling(false)
-    }
+    const total = profileOnly.length
+    await toast.run(() => Promise.all(profileOnly.map((r) => importResidentFromUser(r))), {
+      success: `Imported ${total} account${total === 1 ? '' : 's'} into the directory`,
+      error: 'Could not import every account',
+    })
+    setBackfilling(false)
   }
 
   /*
@@ -133,12 +135,8 @@ export default function ResidentsPage() {
   // the instant onSnapshot echoes it back.
   const selected = residents.find((r) => r.id === selectedId) ?? null
 
-  async function runAction(action) {
-    try {
-      await action()
-    } catch (err) {
-      console.error('Resident verification action failed', err)
-    }
+  function runAction(action, messages) {
+    return toast.run(action, messages)
   }
 
   return (
@@ -198,19 +196,18 @@ export default function ResidentsPage() {
         </div>
 
         <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto pb-6">
-            <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50">
-                <tr className="table-head">
-                  <th className="px-4 py-3 font-medium">Homeowner</th>
-                  <th className="px-4 py-3 font-medium">Property</th>
-                  <th className="px-4 py-3 font-medium">Type</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Registered</th>
-                  <th className="px-4 py-3 font-medium" />
-                </tr>
-              </thead>
-              <tbody>
+          <DataTable
+            minWidth="52rem"
+            scrollClassName="pb-6"
+            columns={[
+              { header: <>Homeowner</> },
+              { header: <>Property</> },
+              { header: <>Type</> },
+              { header: <>Status</> },
+              { header: <>Registered</> },
+              {},
+            ]}
+          >
                 {error ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center">
@@ -280,13 +277,13 @@ export default function ResidentsPage() {
                         <ResidentStatusBadge status={resident.status} />
                       </td>
                       <td className="px-4 py-3.5 text-text-secondary">
-                        {resident.createdAt ? new Date(resident.createdAt).toLocaleDateString() : '—'}
+                        {formatDate(resident.createdAt)}
                       </td>
                       <td className="px-4 py-3.5 text-right" onClick={(event) => event.stopPropagation()}>
                         <RowActionMenu
                           onView={() => setSelectedId(resident.id)}
-                          onDispatch={() => runAction(() => approveResident(resident))}
-                          onResolve={() => runAction(() => rejectResident(resident, ''))}
+                          onDispatch={() => runAction(() => approveResident(resident), { success: 'Resident approved', error: 'Could not approve the resident' })}
+                          onResolve={() => runAction(() => rejectResident(resident, ''), { success: 'Application rejected', error: 'Could not reject the application' })}
                           dispatchLabel="Approve"
                           resolveLabel="Reject"
                           dispatchDisabled={resident.status === RESIDENT_STATUS.verified}
@@ -296,13 +293,17 @@ export default function ResidentsPage() {
                     </tr>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+          </DataTable>
         </Card>
       </div>
 
-      <ResidentReviewDrawer resident={selected} onClose={() => setSelectedId(null)} />
+      {/* isOpen follows the LIVE row: if the resident is deleted while the
+          drawer is open, it closes rather than showing a stale record. */}
+      <ResidentDetailsDrawer
+        isOpen={Boolean(selected)}
+        resident={selected}
+        onClose={() => setSelectedId(null)}
+      />
     </AppShell>
   )
 }

@@ -1,3 +1,4 @@
+import { toast, describeError } from '@shared/lib/toast'
 import { useMemo, useState } from 'react'
 import { collection, query, where } from 'firebase/firestore'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
@@ -81,6 +82,7 @@ export function useDutyStatus() {
 
       if (openShift) {
         await clockOut(openShift.id, handover, { location: fix })
+        toast.success('Clocked out', { description: 'Your shift and handover are recorded.' })
       } else {
         await clockIn({
           name: auth.currentUser?.displayName || auth.currentUser?.email || 'Guard',
@@ -92,9 +94,12 @@ export function useDutyStatus() {
           shift: shift ?? shiftForTime(),
           location: fix,
         })
+        toast.success('Clocked in — you are on duty')
       }
+      return true
     } catch (err) {
-      setError(err.message ?? 'Could not update your shift.')
+      setError(describeError(err))
+      return false
     } finally {
       setBusy(false)
     }

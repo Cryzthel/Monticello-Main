@@ -1,17 +1,53 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import Card from '@shared/components/Card'
 import { Skeleton, SkeletonChart, SkeletonDonut } from '@shared/components/Skeleton'
 import { computeDailyCounts } from '@shared/lib/incidents'
 import { categoryColor, categoryLabel } from '@shared/lib/incidentCategories'
 import { CHART_MARGIN, yAxisWidth } from '@shared/theme/chartAxis'
+import { formatChartTick } from '@shared/lib/dates'
+
+/*
+  ── THREE DATE FORMATS, ONE PER JOB ─────────────────────────────────────────
+  The axis used to print `10/16`: numeric month-first, which a reader outside
+  the US parses as the tenth of a sixteenth month, and which says nothing about
+  the year on the 1yr view. Each place a date appears now gets the shape its
+  space allows:
+
+    tick     "Oct 16"              — the axis has ~6 slots and needs width-stable
+                                     labels; the year lives in the header range.
+    tooltip  "Mon, Oct 16, 2026"   — one day under the cursor, room for all of it.
+    range    "Sep 17 – Oct 16, 2026" — the whole window, year stated once, or
+                                     twice when the window crosses New Year.
+
+  The data key is the bucket's epoch ms, not a pre-formatted string, so the
+  tick and the tooltip can format the same day differently.
+*/
+const TICK_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
+const TOOLTIP_FORMAT = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+})
+const RANGE_FULL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+
+function formatRange(first, last) {
+  if (!first || !last) return ''
+  return first.getFullYear() === last.getFullYear()
+    ? `${TICK_FORMAT.format(first)} – ${RANGE_FULL.format(last)}`
+    : `${RANGE_FULL.format(first)} – ${RANGE_FULL.format(last)}`
+}
 
 function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
+  const count = payload[0].value
   return (
     <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-xs shadow-overlay">
-      <p className="text-text-secondary">{label}</p>
-      <p className="font-medium text-text-primary">{payload[0].value} incidents</p>
+      <p className="text-text-secondary">{TOOLTIP_FORMAT.format(label)}</p>
+      <p className="font-medium tabular-nums text-text-primary">
+        {count} {count === 1 ? 'incident' : 'incidents'}
+      </p>
     </div>
   )
 }
@@ -61,18 +97,36 @@ export default function AnalyticsPanel({
   const trendData = useMemo(
     () =>
       dailyCounts.map((d) => ({
-        date: d.date.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }),
+        day: d.date.getTime(),
         count: d.count,
       })),
     [dailyCounts],
   )
-  const totalCategorized = categoryBreakdown.reduce((sum, c) => sum + c.count, 0)
+  /*
+   * ── WHY THE DONUT LAGGED ────────────────────────────────────────────────
+   * The breakdown is recomputed on EVERY live incidents snapshot, including
+   * the ones that change no category count (a telemetry backfill, a status
+   * write). Each produced a new array, and Recharts restarts its 1.5 s sweep
+   * whenever `data` changes identity — so the donut kept re-drawing itself
+   * from zero while the dashboard was live. The array is now held until its
+   * CONTENT changes, so an unrelated write costs nothing on screen.
+   */
+  const breakdownKey = categoryBreakdown.map((c) => `${c.category}:${c.count}`).join('|')
+  const stableBreakdownRef = useRef({ key: null, data: [] })
+  if (stableBreakdownRef.current.key !== breakdownKey) {
+    stableBreakdownRef.current = { key: breakdownKey, data: categoryBreakdown }
+  }
+  const stableBreakdown = stableBreakdownRef.current.data
+  const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+  const totalCategorized = stableBreakdown.reduce((sum, c) => sum + c.count, 0)
   const totalInRange = dailyCounts.reduce((sum, d) => sum + d.count, 0)
   // Busiest single day, which is what the axis has to scale to — not the
   // range total, which is an order of magnitude larger and would reserve a
   // gutter for digits the axis never draws.
   const peakDay = dailyCounts.reduce((max, d) => Math.max(max, d.count), 0)
   const tickEvery = Math.max(1, Math.floor(trendData.length / 6))
+  const rangeLabel = formatRange(dailyCounts[0]?.date, dailyCounts[dailyCounts.length - 1]?.date)
 
   return (
     // 6+6 on the shared 12-column track, from `xl`.
@@ -90,8 +144,12 @@ export default function AnalyticsPanel({
     // See .page-grid in the shared stylesheet for why splits wait for `xl`.
     <div className="page-grid">
       <Card className="col-span-12 flex h-72 flex-col p-5 xl:col-span-6">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-text-primary">Incident volume</p>
+        <div className="mb-2 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-text-primary">Incident volume</p>
+            {/* The window in words, so the ticks can stay short. */}
+            <p className="mt-0.5 truncate text-caption tabular-nums text-text-muted">{rangeLabel}</p>
+          </div>
           {/* The count is withheld rather than shown as 0 while the feed opens,
               for the same reason the donut's empty state is — a confident
               "0 in range" that becomes "312 in range" is a misstatement, not a
@@ -99,7 +157,7 @@ export default function AnalyticsPanel({
           {loading ? (
             <Skeleton variant="muted" className="h-3 w-20" />
           ) : (
-            <span className="text-xs text-text-secondary">{totalInRange} in range</span>
+            <span className="shrink-0 text-xs tabular-nums text-text-secondary">{totalInRange} in range</span>
           )}
         </div>
         {loading ? (
@@ -118,8 +176,10 @@ export default function AnalyticsPanel({
             </defs>
             <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} />
             <XAxis
-              dataKey="date"
+              dataKey="day"
+              tickFormatter={(ms) => formatChartTick(ms)}
               interval={tickEvery - 1}
+              minTickGap={12}
               tick={{ fill: 'var(--color-chart-axis)', fontSize: 10 }}
               axisLine={{ stroke: 'var(--color-chart-grid)' }}
               tickLine={false}
@@ -142,14 +202,17 @@ export default function AnalyticsPanel({
         <p className="mb-2 text-sm font-semibold text-text-primary">Category breakdown</p>
         {loading ? (
           <SkeletonDonut className="min-h-0 flex-1" size="h-32 w-32" legendRows={4} />
-        ) : categoryBreakdown.length === 0 ? (
+        ) : stableBreakdown.length === 0 ? (
           <p className="text-sm text-text-secondary">No data yet.</p>
         ) : (
           <div className="flex flex-1 items-center gap-4">
-            <ResponsiveContainer width="45%" height="100%">
+            <ResponsiveContainer width="45%" height="100%" debounce={120}>
               <PieChart>
                 <Pie
-                  data={categoryBreakdown}
+                  data={stableBreakdown}
+                  isAnimationActive={!reduceMotion}
+                  animationDuration={500}
+                  animationEasing="ease-out"
                   dataKey="count"
                   nameKey="category"
                   innerRadius="60%"
@@ -165,7 +228,7 @@ export default function AnalyticsPanel({
                       just quietly stopped being possible to compare two views.
                       The values are the mobile picker's own accents, so a
                       category reads the same on the resident's phone and here. */}
-                  {categoryBreakdown.map((entry) => (
+                  {stableBreakdown.map((entry) => (
                     <Cell key={entry.category} fill={categoryColor(entry.category)} />
                   ))}
                 </Pie>
@@ -173,7 +236,7 @@ export default function AnalyticsPanel({
               </PieChart>
             </ResponsiveContainer>
             <ul className="flex-1 space-y-2 text-xs">
-              {categoryBreakdown.map((segment) => (
+              {stableBreakdown.map((segment) => (
                 <li key={segment.category} className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 text-text-secondary">
                     <span

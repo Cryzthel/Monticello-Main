@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { collection, query, orderBy, limit } from 'firebase/firestore'
-import { Trash2, Megaphone, ShieldCheck, Activity } from '@shared/icons'
+import { Trash2, Megaphone, ShieldCheck, Activity, SlidersHorizontal } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
 import SectionHeading from '@shared/components/SectionHeading'
@@ -16,6 +16,7 @@ import { db } from '@shared/lib/firebase'
 import { mapIncidentDoc, isDeleted, isArchived } from '@shared/lib/incidents'
 import { formatCategory } from '@shared/lib/wpda'
 import { ROLE_LABELS } from '@shared/auth/roles'
+import { SETTINGS_CHANGES } from '@/lib/settingsChanges'
 
 const VIEWS = [
   { key: 'events', label: 'System events' },
@@ -126,22 +127,54 @@ export default function HistoryPage() {
   )
   const { data: rawAnnouncements } = useLiveCollection(announcementsQuery)
 
-  // Resolves an actor's ROLE. The events carry a display name only, so the role
-  // column joins against the staff directory by name/email rather than storing
-  // a duplicate role on every incident.
+  // Confirmed saves on Admin › Settings — a real append-only log, unlike the
+  // rows above, because a settings document keeps no history of its own.
+  const settingsChangesQuery = useMemo(
+    () => query(collection(db, SETTINGS_CHANGES), orderBy('at', 'desc'), limit(50)),
+    [],
+  )
+  const { data: rawSettingsChanges } = useLiveCollection(settingsChangesQuery)
+
+  /**
+   * Resolves an event's actor to a ROLE, by UID first.
+   *
+   * ── WHY THE COLUMN WAS BLANK ───────────────────────────────────────────
+   * The join was by DISPLAY NAME against staff_accounts name/email. Incidents
+   * store whatever name the workflow had to hand ("Officer Reyes", an email,
+   * a Google display name), staff records often have no `name` at all, and
+   * any mismatch rendered "—". Most rows were dashes.
+   *
+   * Every event now carries the actor's UID where the document records one
+   * (deletedBy, resolvedBy, dispatchedByUid, assignedGuardUid, authorUid),
+   * and staff_accounts is keyed BY uid, so the lookup cannot miss on spelling.
+   * Name/email stays as the fallback for records written before UIDs were
+   * stamped. "System" is a real answer for automated events, not a blank.
+   */
   const staffQuery = useMemo(() => query(collection(db, 'staff_accounts')), [])
   const { data: staff } = useLiveCollection(staffQuery)
-  const roleByActor = useMemo(() => {
-    const map = new Map()
+  const staffIndex = useMemo(() => {
+    const byUid = new Map()
+    const byName = new Map()
     staff.forEach((member) => {
-      const role = ROLE_LABELS[member.role] ?? member.role ?? ''
-      if (member.name) map.set(member.name.toLowerCase(), role)
-      if (member.email) map.set(member.email.toLowerCase(), role)
+      if (!member.role) return
+      byUid.set(member.id, member.role)
+      if (member.name) byName.set(member.name.trim().toLowerCase(), member.role)
+      if (member.email) byName.set(member.email.trim().toLowerCase(), member.role)
     })
-    return map
+    return { byUid, byName }
   }, [staff])
 
-  const resolveRole = (actor) => roleByActor.get((actor ?? '').toLowerCase()) ?? '—'
+  /** `{ key, label }` — key drives the badge tone. */
+  const resolveRole = (event) => {
+    const key =
+      (event.actorUid && staffIndex.byUid.get(event.actorUid)) ||
+      staffIndex.byName.get((event.actor ?? '').trim().toLowerCase())
+    if (key) return { key, label: ROLE_LABELS[key] ?? key }
+    if (!event.actor || event.actor === 'System') return { key: 'system', label: 'System' }
+    // A named actor with no staff record: a resident, or an account since
+    // removed. Said, rather than left blank.
+    return { key: 'unknown', label: 'Not staff' }
+  }
 
   const deletedIncidents = useMemo(
     () => rawIncidents.map(mapIncidentDoc).filter(isDeleted),
@@ -182,6 +215,7 @@ export default function HistoryPage() {
           category: 'Deleted',
           icon: Trash2,
           at: incident.deletedAt,
+          actorUid: incident.deletedBy || null,
           actor: incident.deletedByName || 'System',
           description: `${label} report at ${where} was moved to the recycle bin.`,
         })
@@ -193,7 +227,8 @@ export default function HistoryPage() {
           category: 'Resolved',
           icon: ShieldCheck,
           at: incident.resolvedAt,
-          actor: incident.assignedGuardName || 'System',
+          actorUid: incident.resolvedBy || incident.assignedGuardUid || null,
+          actor: incident.resolvedByName || incident.assignedGuardName || 'System',
           description: `${label} report at ${where} was resolved and closed out.`,
         })
       }
@@ -204,7 +239,8 @@ export default function HistoryPage() {
           category: 'Dispatched',
           icon: Activity,
           at: incident.dispatchedAt,
-          actor: incident.assignedGuardName || 'System',
+          actorUid: incident.dispatchedByUid || incident.assignedGuardUid || null,
+          actor: incident.dispatchedByName || incident.assignedGuardName || 'System',
           description: `${label} report at ${where} was dispatched.`,
         })
       }
@@ -217,15 +253,30 @@ export default function HistoryPage() {
         category: 'Published',
         icon: Megaphone,
         at: at ? new Date(at) : null,
+        actorUid: a.authorUid || null,
         actor: a.authorName || 'System',
         description: `“${a.title || 'Announcement'}” was published to the subdivision bulletin.`,
+      })
+    })
+
+    rawSettingsChanges.forEach((entry) => {
+      const at = entry.at?.toDate ? entry.at.toDate() : entry.at
+      const changes = Array.isArray(entry.changes) ? entry.changes : []
+      out.push({
+        id: `set-${entry.id}`,
+        category: 'Settings',
+        icon: SlidersHorizontal,
+        at: at ? new Date(at) : null,
+        actorUid: entry.actorUid || null,
+        actor: entry.actorName || 'System',
+        description: `Settings changed: ${changes.map((c) => `${c.label} ${c.from} → ${c.to}`).join('; ') || 'no field recorded'}.`,
       })
     })
 
     return out
       .filter((event) => !dismissedIds.has(event.id))
       .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0))
-  }, [rawIncidents, rawAnnouncements, dismissedIds])
+  }, [rawIncidents, rawAnnouncements, rawSettingsChanges, dismissedIds])
 
   /**
    * The System-events view, narrowed by ITS OWN search box.
@@ -315,7 +366,7 @@ export default function HistoryPage() {
         />
 
         {view === 'trash' ? (
-          <DeletedReportsTable incidents={deletedIncidents} loading={loading} />
+          <DeletedReportsTable incidents={deletedIncidents} loading={loading} onOpenReport={setOpenReportId} />
         ) : view === 'archive' ? (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             {/* ── TWO ARCHIVES UNDER ONE TAB ──────────────────────────────

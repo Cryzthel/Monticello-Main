@@ -1,11 +1,6 @@
 import { ACTIVE_STATUSES } from '@shared/theme/statusStyles'
-import {
-  computeMeanResolutionTime,
-  computeMeanTimeToRespond,
-  formatMinutes,
-} from '@shared/lib/incidents'
+import { computeMeanTimeToRespond } from '@shared/lib/incidents'
 import { minutesWaiting } from '@shared/lib/wpda'
-import { responseTargetFor } from '@/lib/dispatch'
 
 /**
  * Every number the Response Metrics page shows, computed in one place.
@@ -26,8 +21,7 @@ import { responseTargetFor } from '@/lib/dispatch'
  * to live.
  *
  * ── EVERY CLOCK-RELATIVE VALUE TAKES THE SAME `now` ───────────────────────
- * Three of these measure against the present: the shift window, the overdue
- * count, and the on-site deadline. Read from `Date.now()` independently they
+ * The overdue count measures against the present. Read from `Date.now()` independently they
  * would each sample a slightly different instant, and — worse — they would
  * only ever be re-read when a Firestore snapshot happened to arrive. A shift
  * with no new reports for twenty minutes would show an Overdue count frozen at
@@ -38,102 +32,46 @@ import { responseTargetFor } from '@/lib/dispatch'
  * `useMetricsClock`), and the whole row advances together.
  */
 
-// A rolling window (not a calendar-day count) is the correct match for a 24/7
-// guardhouse — it also avoids the stat spuriously dropping to 0 right after
-// midnight, which a strict toDateString() comparison would do.
-export const SHIFT_WINDOW_HOURS = 12
-
 // The dispatch SLA the Overdue card counts against. A report that has been
 // Dispatched for longer than this without being closed is the thing a
 // supervisor is looking for on this page.
 export const OVERDUE_SLA_MINUTES = 20
 
 /**
- * How long until the next open call breaches its on-site target.
- *
- * ── A DEADLINE, NOT A PREDICTION ──────────────────────────────────────────
- * Nothing in this system knows where a patrol unit is — no guard location
- * stream, no routing service — so an "ETA" here can only honestly mean "the
- * soonest response window still running". That is the same arithmetic
- * `dispatchEta` does for a single report (see lib/dispatch.js), reduced across
- * every call that has not yet been marked On-Site.
- *
- * The SOONEST rather than the average, deliberately. An average across one
- * call that is four minutes overdue and three that were filed a minute ago
- * reads as comfortable, and the four-minute one is the whole reason anybody
- * looked at the number. A dispatcher wants the next thing due.
+ * Statuses that mean "in the queue, nobody assigned yet". Verified is a report
+ * the guardhouse has looked at but not yet sent a unit to, so it is still
+ * waiting for the one decision this console exists to make.
  */
-function nextOnSiteDeadline(reports, now) {
-  // On-Site is the state this deadline measures TO, so a call already at it
-  // has no window left to run. Resolved is excluded by ACTIVE_STATUSES.
-  const open = reports.filter(
-    (report) => ACTIVE_STATUSES.has(report.status) && report.status !== 'On-Site' && report.reportedAt,
-  )
-  if (!open.length) return null
-
-  return open.reduce((soonest, report) => {
-    const remaining = responseTargetFor(report.severity) - minutesWaiting(report.reportedAt, now)
-    return soonest === null || remaining < soonest ? remaining : soonest
-  }, null)
-}
+const AWAITING_DISPATCH = new Set(['Pending', 'Verified'])
 
 /**
+ * ── WHAT THIS PAGE NO LONGER COMPUTES (2026-10-17) ─────────────────────────
+ * On-Site ETA, Resolution Rate and Avg Resolution Time were removed from the
+ * guardhouse with the Duty Status panel. They are outcome measures — how the
+ * month went — and they belong to the administrator's Metrics page, which
+ * computes its own resolution rate (admin usePortalMetrics). The guard view is
+ * now only what needs acting on: what is open, what is waiting for a unit,
+ * what is late, and how fast units are being assigned.
+ *
  * @param {Array} reports Mapped incident documents (see mapIncidentDoc).
  * @param {number} now Epoch ms every clock-relative metric measures against.
  */
 export function computeResponseMetrics(reports = [], now = Date.now()) {
-  const shiftCutoff = now - SHIFT_WINDOW_HOURS * 3600000
-
-  const resolved = reports.filter((report) => report.status === 'Resolved')
   const activeReports = reports.filter((report) => ACTIVE_STATUSES.has(report.status))
-
-  // ── RESOLUTION RATE ─────────────────────────────────────────────────────
-  // Of every report on file in the queried window, the share that reached
-  // Resolved. Not "of the reports closed today" — that ratio is always 100%.
-  const resolutionRate = reports.length ? resolved.length / reports.length : null
-
-  const onSiteEtaMinutes = nextOnSiteDeadline(reports, now)
 
   return {
     activeReports,
     activeCount: activeReports.length,
+
+    awaitingDispatchCount: reports.filter((report) => AWAITING_DISPATCH.has(report.status)).length,
 
     overdueCount: reports.filter(
       (report) =>
         report.status === 'Dispatched' && minutesWaiting(report.reportedAt, now) > OVERDUE_SLA_MINUTES,
     ).length,
 
-    resolvedThisShift: resolved.filter(
-      (report) => report.resolvedAt && new Date(report.resolvedAt).getTime() >= shiftCutoff,
-    ).length,
-
-    // ── THE TWO DURATIONS COME FROM THE SHARED FORMULAS ───────────────
-    // Report -> dispatch and report -> resolution both already had a single
-    // definition in shared/lib/incidents. Re-deriving them here would have
-    // been a second opinion about the same question, which is the specific
-    // way the two portals' "mean time to respond" drifted apart before those
-    // helpers existed. Both skip reports missing the relevant stamp — an
-    // undispatched call counted as zero would make a backlog look like
-    // instant service.
+    // From the shared formula, so this and the admin's "mean time to respond"
+    // cannot drift apart. Undispatched calls are skipped, not counted as zero.
     avgDispatchTime: computeMeanTimeToRespond(reports),
-    avgResolutionTime: computeMeanResolutionTime(resolved),
-
-    onSiteEtaMinutes,
-    // Rendered here rather than in the card, so the sign convention and the
-    // "no open calls" case are stated once. A negative remainder is a breach,
-    // and it is named as one — "0m left" would be a comfortable way to write
-    // "this is late".
-    onSiteEta:
-      onSiteEtaMinutes == null
-        ? 'No open calls'
-        : onSiteEtaMinutes <= 0
-          ? `Overdue ${formatMinutes(-onSiteEtaMinutes)}`
-          : `${formatMinutes(onSiteEtaMinutes)} left`,
-    onSiteEtaBreached: onSiteEtaMinutes != null && onSiteEtaMinutes <= 0,
-
-    resolutionRate,
-    resolutionRateLabel:
-      resolutionRate == null ? 'No data yet' : `${Math.round(resolutionRate * 100)}%`,
-    resolvedCount: resolved.length,
   }
 }

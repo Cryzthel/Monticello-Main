@@ -3,9 +3,10 @@ import { collection, query } from 'firebase/firestore'
 import {
   Archive,
   ArchiveRestore,
+  ClipboardCheck,
   ClipboardList,
   Eye,
-  Search,
+  FileDown,
   ShieldAlert,
   Trash2,
   X,
@@ -19,20 +20,46 @@ import Select from '@shared/components/Select'
 import StatusBadge from '@shared/components/StatusBadge'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import SecurityReportDetailModal from '@/components/SecurityReportDetailModal'
-import { categoryTone } from '@shared/theme/badgeStyles'
+import OverflowMenu from '@shared/components/OverflowMenu'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
 import { db } from '@shared/lib/firebase'
 import {
-  mapIncidentDoc, isDeleted, isArchived, reviewState, REVIEW_TONES,
-  archiveIncidents, unarchiveIncidents, softDeleteIncidents,
+  mapIncidentDoc, isDeleted, isArchived, reviewState, REVIEW_TONES, REVIEW_PENDING, REVIEW_DONE,
+  archiveIncidents, unarchiveIncidents, softDeleteIncidents, markReportsReviewed,
 } from '@shared/lib/incidents'
-import { describeFirestoreError } from '@shared/lib/audit'
-import { CATEGORY_WEIGHTS, formatCategory } from '@shared/lib/wpda'
+import { exportReportPdf } from '@shared/lib/reportPdf'
+import { toast } from '@shared/lib/toast'
 import { Skeleton } from '@shared/components/Skeleton'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTime } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
-const CATEGORY_FILTERS = ['All categories', ...Object.keys(CATEGORY_WEIGHTS)]
+/*
+ * ── WHY THERE IS NO CATEGORY FILTER ──────────────────────────────────────────
+ * There was one, offering every incident category (fire, medical, security,
+ * hazard, maintenance, noise). But every officer-filed report is saved as
+ * `security` — the Guardhouse form hard-codes it (FileReportModal's
+ * FILED_CATEGORY) — so the filter returned the whole list for "Security" and
+ * nothing for the other five: one output whatever was picked. The filters
+ * below are on facts that actually vary between officer reports.
+ */
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All statuses' },
+  { value: REVIEW_PENDING, label: 'Pending review' },
+  { value: REVIEW_DONE, label: 'Reviewed' },
+]
+
+const PRIORITY_FILTERS = [
+  { value: 'all', label: 'All priorities' },
+  { value: 'critical', label: 'Critical' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+]
+
+const PRIORITY_LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
+const severityOf = (report) => String(report.severity ?? 'medium').toLowerCase()
 
 const DATE_RANGES = [
   { value: 'today', label: 'Today', days: 1 },
@@ -47,8 +74,7 @@ const VIEWS = [
   { key: 'archived', label: 'Archived' },
 ]
 
-const STAMP = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }
-const stamp = (v) => (v ? new Date(v).toLocaleString('en-GB', STAMP).replace(',', '') : '—')
+const stamp = (v) => formatDateTime(v)
 
 /** Human-quotable code, derived from the document id — see IncidentsTable. */
 const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : '—')
@@ -85,7 +111,7 @@ const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : 
  */
 
 /** One report as a stacked card. Below `md` only. */
-function ReportCard({ report, officer, checked, onToggle, onOpen }) {
+function ReportCard({ report, officer, checked, onToggle, onOpen, actions }) {
   const review = reviewState(report)
 
   return (
@@ -125,8 +151,8 @@ function ReportCard({ report, officer, checked, onToggle, onOpen }) {
           </p>
 
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            <StatusBadge tone={categoryTone(report.category)}>
-              {formatCategory(report.category)}
+            <StatusBadge severity={severityOf(report)}>
+              {PRIORITY_LABELS[severityOf(report)] ?? 'Medium'} priority
             </StatusBadge>
             <StatusBadge tone={REVIEW_TONES[review] ?? 'neutral'}>
               {review}
@@ -137,11 +163,8 @@ function ReportCard({ report, officer, checked, onToggle, onOpen }) {
 
       {/* An explicit control, not just a tappable card: touch has no hover, so
           without one there is nothing on screen saying the row opens. */}
-      <div className="flex justify-end border-t border-divider px-4 py-2">
-        <button type="button" onClick={onOpen} className="btn btn-sm btn-outline min-h-11 px-4">
-          <Eye size="sm" />
-          View report
-        </button>
+      <div className="flex items-center justify-end border-t border-divider px-4 py-2">
+        <OverflowMenu ariaLabel={`Actions for ${ticketCode(report.id)}`} items={actions} />
       </div>
     </li>
   )
@@ -150,7 +173,9 @@ function ReportCard({ report, officer, checked, onToggle, onOpen }) {
 export default function SecurityReportsPage() {
   const [view, setView] = useState('active')
   const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('All categories')
+  const [status, setStatus] = useState('all')
+  const [priority, setPriority] = useState('all')
+  const [officerFilter, setOfficerFilter] = useState('all')
   const [range, setRange] = useState('30d')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -178,6 +203,19 @@ export default function SecurityReportsPage() {
 
   useEvidencePrefetch(officerReports)
 
+  // Officers who have filed at least one report, from the live list — so the
+  // filter never offers a name with nothing behind it.
+  const officerOptions = useMemo(() => {
+    const names = new Map()
+    officerReports.forEach((r) => {
+      if (!names.has(r.reporterUid)) names.set(r.reporterUid, r.reportedByName || staffById.get(r.reporterUid)?.name || 'Officer')
+    })
+    return [
+      { value: 'all', label: 'All officers' },
+      ...[...names].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),
+    ]
+  }, [officerReports, staffById])
+
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase()
 
@@ -193,7 +231,9 @@ export default function SecurityReportsPage() {
 
     return officerReports
       .filter((report) => (view === 'archived' ? isArchived(report) : !isArchived(report)))
-      .filter((report) => category === 'All categories' || report.category === category)
+      .filter((report) => status === 'all' || reviewState(report) === status)
+      .filter((report) => priority === 'all' || severityOf(report) === priority)
+      .filter((report) => officerFilter === 'all' || report.reporterUid === officerFilter)
       .filter((report) => {
         if (!report.reportedAt) return !from && !to
         const at = new Date(report.reportedAt).getTime()
@@ -217,7 +257,7 @@ export default function SecurityReportsPage() {
           .includes(term)
       })
       .sort((a, b) => (b.reportedAt?.getTime?.() ?? 0) - (a.reportedAt?.getTime?.() ?? 0))
-  }, [officerReports, view, category, range, customFrom, customTo, search])
+  }, [officerReports, view, status, priority, officerFilter, range, customFrom, customTo, search])
 
   const counts = useMemo(
     () => ({
@@ -240,21 +280,63 @@ export default function SecurityReportsPage() {
     })
   }
 
-  async function run(action, ids) {
+  /** One write over `ids`, reported as a toast. Clears the selection on success. */
+  async function run(action, ids, { success, error: failure }) {
     setBusy(true)
     setError('')
-    try {
-      await action(ids)
-      setSelectedIds(new Set())
-      setConfirming(null)
-    } catch (err) {
-      console.error('Reports action failed', err)
-      setConfirming(null)
-      setError(describeFirestoreError(err, 'update those reports'))
-    } finally {
-      setBusy(false)
-    }
+    const ok = await toast.run(() => action(ids), { success, error: failure })
+    setBusy(false)
+    setConfirming(null)
+    if (ok) setSelectedIds(new Set())
+    else setError(`${failure}. Check the connection and try again.`)
   }
+
+  const noun = (n) => (n === 1 ? 'report' : `${n} reports`)
+
+  /** The per-row action menu — every item acts on THAT row's report. */
+  function rowActions(report) {
+    const archived = isArchived(report)
+    return [
+      { label: 'View details', icon: Eye, onSelect: () => setOpenId(report.id) },
+      {
+        label: 'Export PDF',
+        icon: FileDown,
+        onSelect: () => {
+          try {
+            exportReportPdf(report, { attachmentCount: (report.photoUrls?.length ?? 0) + (report.attachmentUrls?.length ?? 0) })
+            toast.success('Report exported', { description: `${ticketCode(report.id)}.pdf` })
+          } catch (err) {
+            console.error('Export failed', err)
+            toast.error('Could not export the report')
+          }
+        },
+      },
+      report.reviewedAt
+        ? null
+        : {
+            label: 'Mark as reviewed',
+            icon: ClipboardCheck,
+            onSelect: () =>
+              run(markReportsReviewed, [report.id], {
+                success: `${ticketCode(report.id)} marked as reviewed`,
+                error: 'Could not mark the report as reviewed',
+              }),
+          },
+      {
+        label: archived ? 'Unarchive' : 'Archive',
+        icon: archived ? ArchiveRestore : Archive,
+        onSelect: () =>
+          run(archived ? unarchiveIncidents : archiveIncidents, [report.id], {
+            success: archived ? `${ticketCode(report.id)} returned to the inbox` : `${ticketCode(report.id)} archived`,
+            error: archived ? 'Could not unarchive the report' : 'Could not archive the report',
+          }),
+      },
+      { label: 'Delete', icon: Trash2, tone: 'danger', onSelect: () => setConfirming([report]) },
+    ].filter(Boolean)
+  }
+
+  const filtersActive =
+    Boolean(search.trim()) || status !== 'all' || priority !== 'all' || officerFilter !== 'all'
 
   const emptyMessage =
     counts[view] === 0
@@ -311,15 +393,28 @@ export default function SecurityReportsPage() {
               className="sm:flex-1"
             />
             <Select
-              ariaLabel="Filter by category"
+              ariaLabel="Filter by review status"
               size="touch"
-              value={category}
-              onChange={setCategory}
-              options={CATEGORY_FILTERS.map((key) => ({
-                value: key,
-                label: key === 'All categories' ? key : formatCategory(key),
-              }))}
-              className="w-full sm:w-auto sm:min-w-[11rem]"
+              value={status}
+              onChange={setStatus}
+              options={STATUS_FILTERS}
+              className="w-full sm:w-auto sm:min-w-[10rem]"
+            />
+            <Select
+              ariaLabel="Filter by priority"
+              size="touch"
+              value={priority}
+              onChange={setPriority}
+              options={PRIORITY_FILTERS}
+              className="w-full sm:w-auto sm:min-w-[9.5rem]"
+            />
+            <Select
+              ariaLabel="Filter by officer"
+              size="touch"
+              value={officerFilter}
+              onChange={setOfficerFilter}
+              options={officerOptions}
+              className="w-full sm:w-auto sm:min-w-[10rem]"
             />
             <Select
               ariaLabel="Date range"
@@ -347,6 +442,21 @@ export default function SecurityReportsPage() {
                   className="field h-11 py-0 text-base sm:h-9 sm:w-[9.5rem] sm:text-sm"
                 />
               </div>
+            ) : null}
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('')
+                  setStatus('all')
+                  setPriority('all')
+                  setOfficerFilter('all')
+                }}
+                className="chip chip-idle h-9 sm:ml-auto"
+              >
+                <X size="sm" />
+                Clear filters
+              </button>
             ) : null}
           </div>
 
@@ -377,11 +487,34 @@ export default function SecurityReportsPage() {
                 <X size="sm" />
               </button>
               <div className="flex w-full items-center gap-2 sm:order-1 sm:ml-auto sm:w-auto">
+                {selected.some((r) => !r.reviewedAt) ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      const ids = selected.filter((r) => !r.reviewedAt).map((r) => r.id)
+                      run(markReportsReviewed, ids, {
+                        success: `Marked ${noun(ids.length)} as reviewed`,
+                        error: 'Could not mark those reports as reviewed',
+                      })
+                    }}
+                    className="btn btn-sm btn-outline min-h-11 flex-1 sm:min-h-0 sm:flex-none"
+                  >
+                    <ClipboardCheck size="sm" />
+                    Mark reviewed
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() =>
-                    run(view === 'archived' ? unarchiveIncidents : archiveIncidents, selected.map((r) => r.id))
+                    run(view === 'archived' ? unarchiveIncidents : archiveIncidents, selected.map((r) => r.id), {
+                      success:
+                        view === 'archived'
+                          ? `Returned ${noun(selected.length)} to the inbox`
+                          : `Archived ${noun(selected.length)}`,
+                      error: view === 'archived' ? 'Could not unarchive those reports' : 'Could not archive those reports',
+                    })
                   }
                   className="btn btn-sm btn-outline min-h-11 flex-1 sm:min-h-0 sm:flex-none"
                 >
@@ -443,6 +576,7 @@ export default function SecurityReportsPage() {
                     checked={selectedIds.has(report.id)}
                     onToggle={() => toggleRow(report.id)}
                     onOpen={() => setOpenId(report.id)}
+                    actions={rowActions(report)}
                   />
                 ))}
               </ul>
@@ -450,34 +584,29 @@ export default function SecurityReportsPage() {
           </div>
 
           {/* ══ TABLE — md and up, on a horizontal rail ══ */}
-          <div className="custom-scrollbar hidden min-h-0 overflow-x-auto overscroll-x-contain md:block lg:flex-1 lg:overflow-y-auto">
-            <table className="w-full min-w-[54rem] border-separate border-spacing-0 text-left text-sm">
-              <thead className="sticky top-0 z-20 bg-slate-50">
-                <tr className="table-head">
-                  <th className="w-10 px-4 py-3">
-                    <input
+          <DataTable
+            scroll="x"
+            sticky={false}
+            minWidth="56rem"
+            scrollClassName="hidden overscroll-x-contain md:block lg:flex-1 lg:overflow-y-auto"
+            tableClassName="border-separate border-spacing-0"
+            columns={[
+              { header: <><input
                       type="checkbox"
                       aria-label="Select all reports"
                       checked={allSelected}
                       onChange={() => setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
                       className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
-                    />
-                  </th>
-                  <th className="w-[8rem] px-4 py-3">Report ID</th>
-                  <th className="px-4 py-3">Reporting officer</th>
-                  <th className="w-[9.5rem] px-4 py-3">Filed</th>
-                  <th className="px-4 py-3">Location</th>
-                  <th className="w-[9.5rem] px-4 py-3">Status</th>
-                  {/* Pinned, so the row's only action survives the rail being
-                      scrolled to its far left. A solid fill is required —
-                      base-900 and the panel's own surface resolve to the same
-                      colour in both themes, so it reads as one surface. */}
-                  <th className="sticky right-0 z-10 w-[6rem] border-l border-hairline bg-base-900 px-4 py-3 text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                    /></>, className: 'w-10' },
+              { header: <>Report ID</>, className: 'w-[8rem]' },
+              { header: <>Reporting officer</> },
+              { header: <>Filed</>, className: 'w-[9.5rem]' },
+              { header: <>Location</> },
+              { header: <>Priority</>, className: 'w-[8rem]' },
+              { header: <>Status</>, className: 'w-[9.5rem]' },
+              { header: <>Actions</>, className: 'sticky right-0 z-10 w-[5rem] border-l border-hairline bg-base-900', align: 'right' },
+            ]}
+          >
                 {loading ? (
                   Array.from({ length: 6 }).map((_, i) => (
                     <tr key={`sk-${i}`} className="[&>td]:border-t [&>td]:border-divider">
@@ -490,7 +619,7 @@ export default function SecurityReportsPage() {
                   ))
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center">
+                    <td colSpan={8} className="px-4 py-16 text-center">
                       <ClipboardList size="lg" className="mx-auto mb-2 text-text-muted" />
                       <p className="text-sm text-text-secondary">{emptyMessage}</p>
                     </td>
@@ -504,11 +633,20 @@ export default function SecurityReportsPage() {
                       <tr
                         key={report.id}
                         onClick={() => setOpenId(report.id)}
-                        className={`cursor-pointer transition [&>td]:border-t [&>td]:border-divider ${
+                        tabIndex={0}
+                        aria-label={`Open report ${ticketCode(report.id)}`}
+                        onKeyDown={(e) => {
+                          if (e.target !== e.currentTarget) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setOpenId(report.id)
+                          }
+                        }}
+                        className={`cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 [&>td]:border-t [&>td]:border-divider ${
                           checked ? 'bg-brand-50' : 'hover:bg-tint/[0.03]'
                         }`}
                       >
-                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             aria-label={`Select report ${ticketCode(report.id)}`}
@@ -535,6 +673,11 @@ export default function SecurityReportsPage() {
                           {report.location || 'Not provided'}
                         </td>
                         <td className="px-4 py-3.5">
+                          <StatusBadge severity={severityOf(report)}>
+                            {PRIORITY_LABELS[severityOf(report)] ?? 'Medium'}
+                          </StatusBadge>
+                        </td>
+                        <td className="px-4 py-3.5">
                           <StatusBadge tone={REVIEW_TONES[review] ?? 'neutral'}>
                             {review}
                           </StatusBadge>
@@ -542,23 +685,23 @@ export default function SecurityReportsPage() {
                         <td
                           className="sticky right-0 z-10 border-l border-hairline bg-base-900 px-4 py-3.5 text-right"
                           onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
                         >
-                          <button
-                            type="button"
-                            onClick={() => setOpenId(report.id)}
-                            className="btn btn-sm btn-outline"
-                          >
-                            <Eye size="sm" />
-                            View
-                          </button>
+                          {/* No View button: the row itself opens the report
+                              (user's call, 2026-10-18). The menu keeps
+                              "View details" for keyboard users. */}
+                          <div className="flex items-center justify-end">
+                            <OverflowMenu
+                              ariaLabel={`Actions for ${ticketCode(report.id)}`}
+                              items={rowActions(report)}
+                            />
+                          </div>
                         </td>
                       </tr>
                     )
                   })
                 )}
-              </tbody>
-            </table>
-          </div>
+          </DataTable>
         </Card>
       </div>
 
@@ -580,7 +723,12 @@ export default function SecurityReportsPage() {
         title={confirming?.length === 1 ? 'Delete this report?' : `Delete ${confirming?.length ?? 0} reports?`}
         message="They move to Audit History → Deleted Reports, where they can be restored. Archive instead if you only want them off the inbox."
         confirmLabel="Delete"
-        onConfirm={() => run(softDeleteIncidents, confirming.map((r) => r.id))}
+        onConfirm={() =>
+          run(softDeleteIncidents, confirming.map((r) => r.id), {
+            success: `Moved ${noun(confirming.length)} to Deleted reports`,
+            error: 'Could not delete the report',
+          })
+        }
         onCancel={() => setConfirming(null)}
       />
     </AppShell>

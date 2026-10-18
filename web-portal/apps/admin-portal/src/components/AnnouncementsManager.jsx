@@ -2,32 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { collection, orderBy, query } from 'firebase/firestore'
 import {
-  Archive,
-  ArchiveRestore,
   CheckCircle2,
   Eye,
   Loader2,
   Megaphone,
   Pencil,
   Pin,
-  PinOff,
-  Plus,
-  Search,
   Send,
   ShieldAlert,
-  Trash2,
   UserRound,
   X,
-  Zap,
 } from '@shared/icons'
-import Card from '@shared/components/Card'
 import TablePagination from '@shared/components/TablePagination'
 import MediaAttachmentField from '@shared/components/MediaAttachmentField'
-import SectionHeading from '@shared/components/SectionHeading'
 import StatusBadge from '@shared/components/StatusBadge'
-import Select from '@shared/components/Select'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
-import { SkeletonCardGrid } from '@shared/components/Skeleton'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useWaitWhile } from '@/lib/waitState'
 import { db } from '@shared/lib/firebase'
@@ -40,7 +29,6 @@ import {
 import { formatBytes } from '@shared/lib/attachments'
 import {
   ANNOUNCEMENT_CATEGORIES,
-  CATEGORY_OPTIONS,
   CATEGORY_TONES,
   MAX_ANNOUNCEMENT_IMAGES,
   MAX_IMAGE_BYTES,
@@ -59,23 +47,25 @@ import {
   setPinned,
   taxonomyLabel,
   taxonomyTone,
-  timeUntil,
   updateAnnouncement,
   uploadAnnouncementImage,
 } from '@/lib/announcements'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { announcementCategoryIcon } from '@shared/theme/categoryIcons'
-import SearchField from '@shared/components/SearchField'
+import { toast, describeError } from '@shared/lib/toast'
+import AnnouncementsControls from '@/components/AnnouncementsControls'
+import AnnouncementsTable from '@/components/AnnouncementsTable'
 
 /**
- * The Announcements workspace — one feed, with composing on top of it.
+ * The Announcements workspace — one table, with composing on top of it.
  *
- *   Broadcast feed  ·  N active · N archived   [ + Create Announcement ]
- *   ┌─ toolbar: tabs · search · category ──────────────────────────┐
- *   ├─ card ── avatar/author/time · actions ───────────────────────┤
- *   │          title · body · gallery · pills/reach                │
- *   └──────────────────────────────────────────────────────────────┘
+ *   AnnouncementsControls  search          All | Active | Archived   [ + Create announcement ]
+ *   AnnouncementsTable     Announcement · Status · Category · Analytics · Date · Actions
  *                     ↓ Create / Edit          ComposerModal (dialog)
+ *
+ * Both read one onSnapshot listener (useLiveCollection below), so a
+ * publish, delete, archive or view-count change shows up without a refresh.
+ * Row click opens the read-only detail dialog.
  *
  * ── WHY THIS IS NO LONGER TWO PANELS ────────────────────────────────────────
  * It used to be a fixed 27rem composer rail beside the feed, on the reasoning
@@ -789,27 +779,6 @@ function Composer({
 
 // ── Feed ────────────────────────────────────────────────────────────────────
 
-function IconAction({ icon: Icon, label, onClick, active = false, tone = 'default' }) {
-  const tones = {
-    default: 'text-text-secondary hover:bg-tint/[0.06] hover:text-text-primary',
-    danger: 'text-text-secondary hover:bg-danger/15 hover:text-danger',
-    brand: 'text-brand-400 bg-brand-50 hover:bg-brand-100',
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-[color,background-color,transform] duration-150 active:scale-[0.94] ${
-        active ? tones.brand : tones[tone]
-      }`}
-    >
-      <Icon size="sm" />
-    </button>
-  )
-}
-
 /**
  * The media gallery, now used by the DETAIL dialog rather than the feed card.
  *
@@ -1019,135 +988,6 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
   )
 }
 
-function AnnouncementCard({ announcement: a, onView, onEdit, onDelete }) {
-  const state = announcementState(a)
-  const stateMeta = STATE_META[state]
-  const views = announcementViews(a)
-  const goLive = goLiveDate(a)
-  const countdown = state === 'scheduled' ? timeUntil(a.scheduledFor) : null
-  const images = announcementImages(a)
-  const author = a.authorName || 'Admin'
-
-  return (
-    /* ── HORIZONTAL CARD, ON THE REFERENCE'S SHAPE ──────────────────────────
-       Square thumbnail left, content right, actions along the bottom of the
-       content column. `items-stretch` + `self-stretch` on the media is what
-       makes the thumbnail track the card's height instead of the card padding
-       out to a fixed thumbnail — the card is still content-fit, the image just
-       fills whatever height the text asks for.
-
-       `sm:` guards the horizontal split: below that the thumbnail goes
-       full-width above the text, because a 160px image beside a 160px column
-       is two cramped things rather than one card. */
-    <li className="card card-interactive flex flex-col gap-4 p-4 sm:flex-row sm:items-stretch">
-      {images.length > 0 ? (
-        /* A SQUARE thumbnail, per the reference — not one stretched to the
-           card's height. Stretching made the crop a function of how much text
-           happened to sit beside it, so the same photo was a letterbox on a
-           short notice and a portrait on a long one; two cards in one list
-           then cropped their images differently for no reason a reader could
-           see. A fixed 1:1 makes the media column a straight edge down the
-           feed, which is what the reference's alignment depends on. */
-        <div className="relative aspect-square w-full shrink-0 self-start sm:w-36 lg:w-40">
-          <img
-            src={images[0]}
-            alt=""
-            loading="lazy"
-            className="h-full w-full rounded-lg border border-slate-200 object-cover"
-          />
-          {/* The count, only when there IS more than one. The reference has a
-              single image and no badge; this appears solely to answer "is
-              there more media here", which View Details then shows in full. */}
-          {images.length > 1 ? (
-            <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-2xs font-bold tabular-nums text-white">
-              +{images.length - 1}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {/* ── Status pill inline with the timestamp ── */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <StatusBadge tone={stateMeta.tone} dot>
-            {stateMeta.label}
-          </StatusBadge>
-          <span className="text-caption text-text-muted">
-            · {goLive ? formatTimestamp(goLive) : 'not yet published'}
-            {countdown ? ` · ${countdown}` : ''}
-          </span>
-        </div>
-
-        {/* ── Title, at the reference's weight ── */}
-        <div className="flex items-start gap-2">
-          {a.isPinned ? <Pin size="sm" className="mt-1 shrink-0 text-brand-400" /> : null}
-          <h3 className="min-w-0 flex-1 text-base font-semibold leading-snug tracking-tight text-text-primary">
-            {a.title}
-          </h3>
-        </div>
-
-        {/* ── Metadata line ──
-            The reference puts a pin glyph and a barangay here. An announcement
-            has no location — it goes to everyone — so the equivalent facts are
-            who broadcast it, what it was filed under, and how far it reached.
-            Same row, same rank, same glyph-plus-label rhythm. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
-          <span className="inline-flex min-w-0 items-center gap-1.5">
-            <UserRound size="sm" className="shrink-0 text-text-muted" />
-            <span className="truncate">{author}</span>
-          </span>
-          <StatusBadge tone={taxonomyTone(a.priority)}>
-            {taxonomyLabel(a.type, a.priority)}
-          </StatusBadge>
-          {/* Honest by omission: nothing increments viewCount yet, so an
-              untracked notice shows "—" rather than a confident zero. */}
-          <span
-            className="inline-flex items-center gap-1.5 tabular-nums text-text-muted"
-            title={views == null ? 'View tracking not enabled yet' : `${views} resident views`}
-          >
-            <Eye size="sm" className="shrink-0" />
-            {views == null ? '—' : views.toLocaleString()}
-          </span>
-        </div>
-
-        {/* A two-line summary, not the whole notice. The card is now a row in a
-            list rather than a post in a feed, and "View Details" is the
-            reference's own answer to where the rest lives — so clamping here is
-            honest: there is a place to read the full text, and it is one click
-            away. */}
-        {a.body ? (
-          <p className="line-clamp-2 text-label leading-relaxed text-text-secondary">{a.body}</p>
-        ) : null}
-
-        {/* ── Actions, bottom-left, above a hairline ── */}
-        <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-hairline pt-3">
-          <button type="button" onClick={() => onView(a)} className="btn btn-compact btn-outline h-8 py-0">
-            View details
-          </button>
-          {state === 'scheduled' ? (
-            <IconAction icon={Zap} label="Publish now" onClick={() => publishNow(a.id)} />
-          ) : null}
-          <IconAction icon={Pencil} label="Edit" onClick={() => onEdit(a)} />
-          <IconAction
-            icon={a.isPinned ? PinOff : Pin}
-            label={a.isPinned ? 'Unpin' : 'Pin to top'}
-            active={Boolean(a.isPinned)}
-            onClick={() => setPinned(a.id, !a.isPinned)}
-          />
-          {state === 'scheduled' ? null : (
-            <IconAction
-              icon={state === 'archived' ? ArchiveRestore : Archive}
-              label={state === 'archived' ? 'Restore' : 'Archive'}
-              onClick={() => setArchived(a.id, state !== 'archived')}
-            />
-          )}
-          <IconAction icon={Trash2} label="Delete" tone="danger" onClick={() => onDelete(a)} />
-        </div>
-      </div>
-    </li>
-  )
-}
-
 // ── Workspace ───────────────────────────────────────────────────────────────
 
 export default function AnnouncementsManager() {
@@ -1200,12 +1040,6 @@ export default function AnnouncementsManager() {
 
   const [tab, setTab] = useState('all')
   const [search, setSearch] = useState('')
-  // The category dropdown no longer offers "All", so the feed is ALWAYS scoped
-  // to exactly one category and defaults to the first defined one. Note the
-  // consequence: there is no longer any way to view every category at once —
-  // re-adding 'All' to the options array below (and restoring the `!== 'All'`
-  // guard) is the whole revert if that turns out to matter.
-  const [categoryFilter, setCategoryFilter] = useState(ANNOUNCEMENT_CATEGORIES[0])
   // The announcement open in the read-only detail dialog, or null.
   const [viewing, setViewing] = useState(null)
   const [confirming, setConfirming] = useState(null)
@@ -1279,12 +1113,15 @@ export default function AnnouncementsManager() {
   }, [tab, buckets.scheduled.length])
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase()
-    return buckets[tab].filter((a) => {
-      if ((a.type ?? ANNOUNCEMENT_CATEGORIES[0]) !== categoryFilter) return false
-      if (!term) return true
-      return `${a.title ?? ''} ${a.body ?? ''} ${a.authorName ?? ''}`.toLowerCase().includes(term)
-    })
-  }, [buckets, tab, search, categoryFilter])
+    if (!term) return buckets[tab]
+    // Category is searchable by its display name, which is what replaced the
+    // category dropdown: "security" finds the security notices.
+    return buckets[tab].filter((a) =>
+      `${a.title ?? ''} ${a.body ?? ''} ${a.authorName ?? ''} ${categoryLabel(a.type)}`
+        .toLowerCase()
+        .includes(term),
+    )
+  }, [buckets, tab, search])
 
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(10)
@@ -1294,11 +1131,30 @@ export default function AnnouncementsManager() {
     setPage((current) => Math.min(current, totalPages))
   }, [totalPages])
 
-  // Switching tab, searching or changing category is a new list, not a new
-  // page of the old one.
+  // Switching tab or searching is a new list, not a new page of the old one.
   useEffect(() => {
     setPage(1)
-  }, [tab, search, categoryFilter, rowsPerPage])
+  }, [tab, search, rowsPerPage])
+
+  const counts = useMemo(
+    () => ({
+      all: buckets.all.length,
+      published: buckets.published.length,
+      scheduled: buckets.scheduled.length,
+      archived: buckets.archived.length,
+    }),
+    [buckets],
+  )
+
+  const emptyMessage = search.trim()
+    ? 'No announcements match that search.'
+    : tab === 'archived'
+      ? 'Nothing archived yet.'
+      : tab === 'scheduled'
+        ? 'Nothing scheduled.'
+        : tab === 'published'
+          ? 'No active announcements. Create one to reach every resident.'
+          : 'No announcements yet. Create one to reach every resident.'
 
   const pageVisible = useMemo(() => {
     const start = (Math.min(page, totalPages) - 1) * rowsPerPage
@@ -1362,17 +1218,22 @@ export default function AnnouncementsManager() {
       if (editingId) {
         await updateAnnouncement(editingId, draft)
         await setPinned(editingId, draft.isPinned)
-        setFeedback({ tone: 'success', message: 'Changes saved — residents see the update immediately.' })
+        toast.success('Announcement updated', {
+          description: 'Residents see the change immediately.',
+        })
       } else {
         await createAnnouncement({ ...draft, scheduledFor: null })
-        setFeedback({
-          tone: 'success',
-          message: 'Published — residents and guards see it immediately.',
+        toast.success('Announcement published', {
+          description: 'Residents and guards see it immediately.',
         })
       }
+      // Closes the dialog. The table needs no refresh: it reads the same
+      // onSnapshot listener the write just updated.
       resetComposer()
     } catch (err) {
-      setFeedback({ tone: 'danger', message: err?.message ?? 'Unable to save. Please try again.' })
+      // Inline, not a toast: the dialog stays open on failure and the message
+      // belongs beside the button that will retry it.
+      setFeedback({ tone: 'danger', message: describeError(err) })
     } finally {
       setSubmitting(false)
     }
@@ -1381,159 +1242,71 @@ export default function AnnouncementsManager() {
   async function confirmDelete() {
     if (!confirming) return
     setDeleting(true)
-    try {
-      await deleteAnnouncement(confirming.id)
-      if (editingId === confirming.id) resetComposer()
-      setConfirming(null)
-    } catch (err) {
-      console.error('Failed to delete announcement', err)
-    } finally {
-      setDeleting(false)
-    }
+    const target = confirming
+    const ok = await toast.run(() => deleteAnnouncement(target.id), {
+      success: 'Announcement deleted',
+      error: 'Could not delete the announcement',
+    })
+    setDeleting(false)
+    // On failure the dialog stays open, so the operator can retry or cancel.
+    if (!ok) return
+    if (editingId === target.id) resetComposer()
+    setConfirming(null)
   }
 
   return (
-    /* ══ ONE COLUMN, THE FEED ══
-       The page is the broadcast feed now; composing is a dialog on top of it.
-       `max-w-3xl` centred is the readable measure for stacked cards — the old
-       two-up grid at 2xl put two unrelated notices side by side, which reads as
-       a comparison rather than a chronology. */
-    <div className="custom-scrollbar h-full min-h-0 overflow-y-auto pb-6">
-      <div className="flex w-full flex-col gap-5 pb-8">
-        {/* ── Feed header: identity on the left, the one primary action right ──
-            The compose bar that used to sit here — avatar, "Share an
-            announcement…", three quick-action buttons — is gone. It cost a
-            whole card to say what a button says, and its quick actions
-            (Photos / Announcement / Pin) were three doors into one dialog,
-            which is three decisions where the operator had one. A single
-            high-contrast control states the action once and leaves the column
-            to the feed. */}
-        <SectionHeading
-          title="Broadcast feed"
-          description={[
-            buckets.published.length + ' active',
-            buckets.scheduled.length ? buckets.scheduled.length + ' scheduled' : null,
-            buckets.archived.length + ' archived',
-          ]
-            .filter(Boolean)
-            .join(' · ')}
-          action={
-            <button type="button" onClick={() => openComposer()} className="btn btn-sm btn-brand">
-              <Plus size="sm" />
-              Create announcement
-            </button>
-          }
-        />
+    /* Header, controls, then a table that takes the rest of the height and
+       scrolls inside its own frame (AppShell renders this page with
+       scroll={false}), so the column headers stay pinned. */
+    <div className="flex h-full min-h-0 flex-col gap-5 pb-6">
+      <AnnouncementsControls
+        search={search}
+        onSearchChange={setSearch}
+        tabs={visibleTabs}
+        tab={tab}
+        onTabChange={setTab}
+        counts={counts}
+        onCreate={() => openComposer()}
+      />
 
-        <section className="flex flex-col gap-4">
-          {/* ── UTILITY TOOLBAR: search left, filter pills right ─────────────
-              One row, on the reference's shape: the search field takes the
-              slack and the lifecycle filters sit at the far right as discrete
-              pills rather than a segmented control in a bordered tray.
-
-              Pills rather than a tray because there are four of them now and a
-              tray of four reads as one wide object you have to parse; separate
-              pills read as four choices, one of which is on. The count rides
-              inside each pill so the filter states its own size — "Archived 12"
-              answers "is it worth looking?" before the click.
-
-              The category Select stays a dropdown. It has four options that are
-              a different QUESTION (what the notice is about, not where it is in
-              its life), and flattening it into the same pill row would put two
-              unrelated axes in one undifferentiated strip. */}
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <SearchField
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by title, message, or author"
-              className="min-w-0 flex-1"
+      <AnnouncementsTable
+        rows={pageVisible}
+        loading={loading}
+        emptyMessage={emptyMessage}
+        onView={setViewing}
+        onEdit={startEdit}
+        onDelete={setConfirming}
+        onPin={(a, pinned) =>
+          toast.run(() => setPinned(a.id, pinned), {
+            success: pinned ? 'Pinned to the top of the feed' : 'Unpinned',
+            error: pinned ? 'Could not pin the announcement' : 'Could not unpin the announcement',
+          })
+        }
+        onArchive={(a, archived) =>
+          toast.run(() => setArchived(a.id, archived), {
+            success: archived ? 'Announcement archived' : 'Announcement restored',
+            error: archived ? 'Could not archive the announcement' : 'Could not restore the announcement',
+          })
+        }
+        onPublishNow={(a) =>
+          toast.run(() => publishNow(a.id), {
+            success: 'Announcement published',
+            error: 'Could not publish the announcement',
+          })
+        }
+        footer={
+          visible.length > 0 ? (
+            <TablePagination
+              page={page}
+              rowsPerPage={rowsPerPage}
+              totalItems={visible.length}
+              onPageChange={setPage}
+              onRowsPerPageChange={setRowsPerPage}
+              itemLabel="announcement"
             />
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* `.chip` — the shared filter capsule. h-9 keeps these on the
-                  search field's baseline, which is the one deliberate
-                  departure from the chip's standard 28px. */}
-              {visibleTabs.map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  aria-pressed={tab === t.key}
-                  className={`chip h-9 ${tab === t.key ? 'chip-active' : 'chip-idle'}`}
-                >
-                  {t.label}
-                  <span className="count-pill">{buckets[t.key].length}</span>
-                </button>
-              ))}
-
-              <Select
-                ariaLabel="Filter by category"
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                options={CATEGORY_OPTIONS}
-                className="min-w-[9.5rem]"
-              />
-            </div>
-          </div>
-
-        {loading ? (
-          /* Was three bare `h-44` grey boxes. A featureless slab is a loading
-             GRAPHIC — it tells the reader something is coming but nothing about
-             its shape, so the swap still reads as a pop. The structured version
-             draws the announcement card's actual anatomy (author avatar, title,
-             timestamp, three lines of body), which is what makes the arrival a
-             fill-in rather than a replacement. */
-          <SkeletonCardGrid count={3} height="h-44" className="flex flex-col gap-4" />
-        ) : visible.length === 0 ? (
-          <Card className="flex flex-col items-center gap-2 py-20 text-center">
-            <Megaphone size={28} className="text-text-muted" />
-            <p className="text-sm text-text-secondary">
-              {search
-                ? 'No announcements match those filters.'
-                : tab === 'scheduled'
-                  ? `Nothing scheduled under ${categoryLabel(categoryFilter)}.`
-                  : tab === 'archived'
-                    ? `Nothing archived under ${categoryLabel(categoryFilter)}.`
-                    : tab === 'all'
-                      ? // The 'all' tab needed its own line. Without it the new
-                        // default view fell through to the 'published' wording
-                        // and told an operator looking at EVERY state that
-                        // nothing was "published" — which is a different, and
-                        // wrong, claim.
-                        `No announcements under ${categoryLabel(categoryFilter)} yet.`
-                      : `Nothing published under ${categoryLabel(categoryFilter)}.`}
-            </p>
-          </Card>
-        ) : (
-          /* A stacked list, not the 12-column page grid. Cards are a
-             chronology read top to bottom; the old `2xl:col-span-6` put two
-             unrelated notices shoulder to shoulder, which reads as a comparison
-             and breaks the reading order. `gap-4` matches every other gap in
-             this column, so header, toolbar and cards sit on one vertical
-             grid. */
-          <ul className="flex flex-col gap-4">
-            {pageVisible.map((a) => (
-              <AnnouncementCard
-                key={a.id}
-                announcement={a}
-                onView={setViewing}
-                onEdit={startEdit}
-                onDelete={setConfirming}
-              />
-            ))}
-          </ul>
-        )}
-
-        <TablePagination
-          page={page}
-          rowsPerPage={rowsPerPage}
-          totalItems={visible.length}
-          onPageChange={setPage}
-          onRowsPerPageChange={setRowsPerPage}
-          itemLabel="announcement"
-        />
-        </section>
-      </div>
+          ) : null
+        }
+      />
 
       {/* Editing from the detail view closes it first, so the two dialogs are
           never stacked — the composer must be the only thing on top. */}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Search, Siren, MapPin, Phone, Send, CheckCircle2 } from '@shared/icons'
+import { Siren, MapPin, Phone, Send, CheckCircle2 } from '@shared/icons'
 import OverflowMenu from '@shared/components/OverflowMenu'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -12,6 +12,8 @@ import { useSystemSettings } from '@shared/lib/systemSettingsStore'
 import { isOutsideBoundary } from '@shared/lib/panicGeofence'
 import { MapPinOff } from '@shared/icons'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTime } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 /*
  * A dot on Live, and only on Live.
@@ -50,7 +52,7 @@ const FILTERS = [
 function stamp(date) {
   if (!date) return '—'
   const d = new Date(date)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  return formatDateTime(d)
 }
 
 /** Human-quotable alert id, matching how tickets are shortened elsewhere. */
@@ -88,11 +90,14 @@ export default function PanicAlertsTable({
   error = null,
   onDispatch,
   onResolve,
+  // Seeds the search box. The admin Hazard Map's "Open SOS log" links here as
+  // `?alert=SOS-XXXXXX`, so the log opens on the alert that was clicked.
+  initialQuery = '',
 }) {
   const geofenceAlert = useSystemSettings((state) => state.values.sos.geofenceAlert)
 
   const hasActions = Boolean(onDispatch || onResolve)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery)
   const [filter, setFilter] = useState('all')
 
   const rows = useMemo(() => {
@@ -129,21 +134,17 @@ export default function PanicAlertsTable({
         />
       </div>
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-auto pb-6">
-        <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            {/* `meta-label`: these four — Alert, Resident, Received, Signal —
-                were 12px over 14px cell text, so each column title read
-                smaller than what it named. */}
-            <tr className="table-head">
-              <th className="w-[9rem] px-4 py-3 font-medium">Alert</th>
-              <th className="px-4 py-3 font-medium">Resident</th>
-              <th className="w-[12rem] px-4 py-3 font-medium">Received</th>
-              <th className="w-[12rem] px-4 py-3 font-medium">Signal</th>
-              {hasActions ? <th className="w-14 px-4 py-3" /> : null}
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable
+        minWidth="44rem"
+        scrollClassName="pb-6"
+        columns={[
+          { header: 'Alert', className: 'w-[9rem]' },
+          { header: 'Resident', minWidth: '12rem' },
+          { header: 'Received', className: 'w-[12rem]' },
+          { header: 'Signal', className: 'w-[12rem]' },
+          { hidden: !hasActions, className: 'w-14' },
+        ]}
+      >
             {error ? (
               <tr>
                 <td colSpan={hasActions ? 5 : 4} className="px-4 py-14 text-center">
@@ -279,9 +280,7 @@ export default function PanicAlertsTable({
                 )
               })
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
     </Card>
   )
 }

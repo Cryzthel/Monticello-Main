@@ -1,5 +1,7 @@
 import { ArrowLeft } from '@shared/icons'
 
+import { SECONDARY } from '@shared/auth/authStyles'
+
 /**
  * The way back, from anywhere in the authentication flow.
  *
@@ -14,6 +16,11 @@ import { ArrowLeft } from '@shared/icons'
  * secondary navigation action should read as. The accent is still doing its one
  * job elsewhere: marking which console you are on.
  *
+ * ── A SECONDARY BUTTON, NOT A LINK ───────────────────────────────────────────
+ * Drawn as SECONDARY (authStyles.js): the primary CTA's frame with a border
+ * instead of a fill, full width beneath it. Still neutral — the border and ink
+ * are slate, never the accent — for the reason above.
+ *
  * ── WHY A BUTTON AND NOT AN ANCHOR ───────────────────────────────────────────
  * Every use of this moves between STEPS of a flow held in React state, not
  * between URLs. The one place that genuinely navigates — the reset page, which
@@ -26,7 +33,7 @@ export default function BackToSignIn({ onClick, disabled = false, label = 'Back 
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-2 self-center rounded-full px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors duration-150 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50"
+      className={SECONDARY}
     >
       {/* The arrow is the directional cue; `aria-hidden` because the label
           beside it already says where this goes, and a screen reader announcing

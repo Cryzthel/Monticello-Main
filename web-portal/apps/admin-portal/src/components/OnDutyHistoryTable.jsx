@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { collection, query, doc, deleteDoc } from 'firebase/firestore'
-import { ClipboardList, Search, ShieldOff, UserX } from '@shared/icons'
+import { collection, query } from 'firebase/firestore'
+import { ClipboardList, ShieldOff } from '@shared/icons'
 import Card from '@shared/components/Card'
 import SectionHeading from '@shared/components/SectionHeading'
 import Select from '@shared/components/Select'
 import ResidentAvatar from '@/components/ResidentAvatar'
 import ShiftRecordDrawer from './ShiftRecordDrawer'
-import GuardShiftDrawer from './GuardShiftDrawer'
+import GuardShiftRecordModal from './GuardShiftRecordModal'
+import Pill from '@shared/components/Pill'
 import TablePagination from '@shared/components/TablePagination'
-import OverflowMenu from '@shared/components/OverflowMenu'
-import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { isTestIdentity } from '@shared/lib/identity'
 import { db } from '@shared/lib/firebase'
@@ -17,6 +16,8 @@ import { mapShiftDoc } from '@shared/lib/shifts'
 import { mapIncidentDoc, formatMinutes } from '@shared/lib/incidents'
 import { Skeleton } from '@shared/components/Skeleton'
 import SearchField from '@shared/components/SearchField'
+import { formatDate, formatTime } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 const RANGES = [
   { value: 'all', label: 'All time' },
@@ -35,8 +36,8 @@ function timeCell(value) {
   if (!value) return '—'
   return (
     <span className="whitespace-nowrap">
-      {value.toLocaleDateString()}{' '}
-      <span className="font-mono text-xs text-text-muted">{value.toLocaleTimeString()}</span>
+      {formatDate(value)}{' '}
+      <span className="font-mono text-xs text-text-muted">{formatTime(value)}</span>
     </span>
   )
 }
@@ -56,8 +57,6 @@ export default function OnDutyHistoryTable() {
   const [openGuard, setOpenGuard] = useState(null)
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(10)
-  const [deleting, setDeleting] = useState(null)
-  const [busy, setBusy] = useState(false)
 
   const shiftsQuery = useMemo(() => query(collection(db, 'guard_shifts')), [])
   const { data: rawShifts, loading, error } = useLiveCollection(shiftsQuery)
@@ -92,7 +91,7 @@ export default function OnDutyHistoryTable() {
    * "how much has this officer worked, and are they on now?" — could only be
    * answered by reading the whole log and adding it up.
    *
-   * The log is not gone, it moved behind the row. `GuardShiftDrawer` lists that
+   * The log is not gone, it moved behind the row. `GuardShiftRecordModal` lists that
    * officer's shifts; clicking one still opens `ShiftRecordDrawer` for what
    * they dispatched during it. Nothing was removed, it was nested.
    *
@@ -172,27 +171,6 @@ export default function OnDutyHistoryTable() {
       .reduce((earliest, s) => (!earliest || s.timeIn < earliest ? s.timeIn : earliest), null)
   }, [shifts, selected])
 
-  /**
-   * Revokes the guard's dashboard access.
-   *
-   * Deletes `staff_accounts/{uid}` — the single source of truth every
-   * firestore.rules role check reads — so access is cut immediately and for
-   * every collection at once. The SHIFT records are deliberately left intact:
-   * they are the timesheet an incident response was judged against, and
-   * removing them would erase history to tidy up a directory.
-   */
-  async function deleteAccountConfirmed() {
-    if (!deleting) return
-    setBusy(true)
-    try {
-      await deleteDoc(doc(db, 'staff_accounts', deleting.guardUid))
-      setDeleting(null)
-    } catch (err) {
-      console.error('Could not delete staff account', err)
-    } finally {
-      setBusy(false)
-    }
-  }
   const onDutyNow = shifts.filter((s) => s.open).length
 
   return (
@@ -230,38 +208,19 @@ export default function OnDutyHistoryTable() {
             bounded by rows-per-page now, not by a pixel height. The horizontal
             scroll stays, because six columns genuinely do not fit a narrow
             window and the alternative is a squeezed Email column. */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            {/* NOT STICKY, AND THIS TABLE IS THE ONLY ONE THAT IS NOT.
-                Every other table in both portals sets `sticky top-0 z-10` here,
-                so this looks like an oversight. It is not — leave it off.
-
-                Sticky needs a scrolling ancestor and a table tall enough to
-                scroll past it. This table lost both: the card's own
-                `overflow-y-auto` is gone (see the note above) and pagination
-                caps it at a page of rows. What is left is the PAGE's scroll
-                container, which starts above the filters — so the header would
-                not pin to the top of the table, it would unpin from the table
-                and float partway down the page, over the toolbar, for exactly
-                as long as the rows beneath it were still passing.
-
-                The other tables keep theirs because they still scroll inside
-                their own card. If one of them is ever flattened the same way,
-                its header should come off too.
-
-                `bg-slate-50` stays: that is the header's surface shade, not
-                scaffolding for the sticky behaviour. */}
-            <thead className="bg-slate-50">
-              <tr className="table-head">
-                <th className="px-4 py-3 font-medium">Guard officer</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Shifts</th>
-                <th className="px-4 py-3 font-medium">Total hours</th>
-                <th className="px-4 py-3 font-medium">Last shift</th>
-                <th className="px-4 py-3 font-medium" />
-              </tr>
-            </thead>
-            <tbody>
+        <DataTable
+          scroll="x"
+          sticky={false}
+          minWidth="48rem"
+          columns={[
+            { header: <>Guard officer</> },
+            { header: <>Status</> },
+            { header: <>Shifts</> },
+            { header: <>Total hours</> },
+            { header: <>Last shift</> },
+            {},
+          ]}
+        >
               {error ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center">
@@ -312,14 +271,11 @@ export default function OnDutyHistoryTable() {
                     </td>
                     <td className="px-4 py-3.5">
                       {guard.onDuty ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2 py-0.5 text-2xs font-semibold text-success ring-1 ring-inset ring-success/30">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" />
+                        <Pill tone="success" pulse>
                           On duty
-                        </span>
+                        </Pill>
                       ) : (
-                        <span className="rounded-full bg-tint/10 px-2 py-0.5 text-2xs font-semibold text-text-secondary">
-                          Off duty
-                        </span>
+                        <Pill>Off duty</Pill>
                       )}
                     </td>
                     <td className="px-4 py-3.5 tabular-nums text-text-secondary">{guard.shifts.length}</td>
@@ -339,25 +295,12 @@ export default function OnDutyHistoryTable() {
                           <ClipboardList size="sm" />
                           View shift record
                         </button>
-                        <OverflowMenu
-                          ariaLabel={`Actions for ${guard.name}`}
-                          items={[
-                            {
-                              label: 'Delete account',
-                              icon: UserX,
-                              tone: 'danger',
-                              onSelect: () => setDeleting(guard),
-                            },
-                          ]}
-                        />
                       </div>
                     </td>
                   </tr>
                 ))
               )}
-            </tbody>
-          </table>
-        </div>
+        </DataTable>
       </Card>
 
       <TablePagination
@@ -372,10 +315,14 @@ export default function OnDutyHistoryTable() {
       {/* Guard first, then one of their shifts. Both can be open: closing the
           shift record returns to the officer's log rather than to the table,
           which is the order an admin reads them in. */}
-      <GuardShiftDrawer
-        guard={rows.find((g) => g.key === openGuard) ?? null}
+      {/* Looked up in `guards`, NOT the filtered `rows`: with "Currently on
+          duty" selected, a guard clocking out used to drop out of `rows` and
+          take the open record with them. */}
+      <GuardShiftRecordModal
+        guard={guards.find((g) => g.key === openGuard) ?? null}
         onClose={() => setOpenGuard(null)}
         onOpenShift={setSelectedId}
+        suspended={Boolean(selectedId)}
       />
 
       <ShiftRecordDrawer
@@ -385,16 +332,6 @@ export default function OnDutyHistoryTable() {
         onClose={() => setSelectedId(null)}
       />
 
-      <ConfirmDialog
-        open={Boolean(deleting)}
-        busy={busy}
-        tone="danger"
-        title="Delete this staff account?"
-        message={`${deleting?.name ?? 'This guard'} will immediately lose access to the Guardhouse and Admin portals. Their shift history is kept for the audit record.`}
-        confirmLabel="Delete account"
-        onConfirm={deleteAccountConfirmed}
-        onCancel={() => setDeleting(null)}
-      />
     </div>
   )
 }

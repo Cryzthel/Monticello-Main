@@ -6,6 +6,7 @@ import TopHeader from '@shared/layouts/TopHeader'
 import CommandPalette from '@shared/components/CommandPalette'
 import PageHeader from '@shared/components/PageHeader'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
+import { LogOut } from '@shared/icons'
 import { useIncidentAlerts } from '@shared/hooks/useIncidentAlerts'
 
 /**
@@ -58,13 +59,14 @@ import { useIncidentAlerts } from '@shared/hooks/useIncidentAlerts'
  * chrome — the same "content is cut off" symptom by a different route.
  */
 export default function DashboardLayout({
-  roleLabel,
   navGroups,
   /** Optional `{ [navPath]: count }` — renders a live badge on that nav item. */
   badgeCounts,
   collapseKey,
   /** Route a real-time incident toast's "Inspect report" action opens. */
   alertPath,
+  // Where each notification kind opens; see NotificationBell / notificationHref.
+  notificationRoutes,
   /** Route the notification panel's History control opens. */
   historyPath,
   title,
@@ -81,6 +83,11 @@ export default function DashboardLayout({
    * page header, so the header's height is not taken from the map.
    */
   inlineTitle = false,
+  /**
+   * Pins the page header (title, subtitle, actions) to the top of the scroll
+   * column on a blurred band â€” for long forms whose Save lives in the header.
+   */
+  stickyHeader = false,
   topBarSlot,
   /** Optional render prop, `({ collapsed }) => node`, mounted in the sidebar between the nav and the account footer. */
   sidebarSlot,
@@ -106,6 +113,11 @@ export default function DashboardLayout({
    */
   logoutBlocked = false,
   onBlockedLogout,
+  /**
+   * The full name shown over the email in the sidebar's profile block.
+   * Omit it (Admin) and the block shows the email alone.
+   */
+  profileName,
 }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -168,15 +180,14 @@ export default function DashboardLayout({
   }, [])
 
   const sidebarProps = {
-      roleLabel,
     navGroups,
     badgeCounts,
-    user,
     onLogout: () => {
       if (logoutBlocked) onBlockedLogout?.()
       else setConfirmingLogout(true)
     },
     sidebarSlot,
+    profile: user?.email ? { name: profileName, email: user.email } : null,
   }
 
   return (
@@ -216,6 +227,7 @@ export default function DashboardLayout({
           onOpenPalette={() => setPaletteOpen(true)}
           alertPath={alertPath}
           historyPath={historyPath}
+          notificationRoutes={notificationRoutes}
           topBarSlot={topBarSlot}
         />
 
@@ -238,7 +250,20 @@ export default function DashboardLayout({
           } ${scroll ? '' : 'lg:overflow-hidden'}`}
         >
           {!inlineTitle && title ? (
-            <PageHeader className="mb-6 shrink-0" title={title} subtitle={subtitle} actions={headerActions} />
+            <PageHeader
+              className={
+                stickyHeader
+                  ? // From `md` only: on a phone the wrapped title and actions
+                    // would pin a third of the screen. `-top-6`: sticky sticks
+                    // inside main's padding, so the band is pulled up over it
+                    // to sit flush, and the negative margins span it edge to edge.
+                    'mb-6 shrink-0 md:sticky md:-top-6 md:z-20 md:-mx-6 md:-mt-6 md:mb-8 md:border-b md:border-hairline md:bg-base-950/80 md:px-6 md:py-4 md:backdrop-blur-xl'
+                  : 'mb-6 shrink-0'
+              }
+              title={title}
+              subtitle={subtitle}
+              actions={headerActions}
+            />
           ) : null}
           {/*
             The page's own box, and the two modes are NOT the same box.
@@ -289,7 +314,9 @@ export default function DashboardLayout({
         message={logoutMessage}
         confirmLabel="Log out"
         cancelLabel="Stay signed in"
-        tone="warning"
+        tone="danger"
+        icon={LogOut}
+        centered
         onConfirm={logout}
         onCancel={() => setConfirmingLogout(false)}
       />

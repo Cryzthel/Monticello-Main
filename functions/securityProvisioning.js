@@ -38,6 +38,7 @@
 
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { clearPresence } = require("./presence");
 
 const db = admin.firestore();
 
@@ -322,6 +323,23 @@ async function assertBadgeAvailable(badgeNumber, exceptUid) {
  * app to onboard a guard. The two paths are not interchangeable, so this one
  * says so and stops.
  */
+/**
+ * Whether an existing Auth user is a security account that was DELETED here:
+ * it has no staff record, and the audit trail shows it was deleted as one —
+ * through deleteSecurityAccount, or removed from the on-duty history (which
+ * now goes through the same function). Nothing else qualifies.
+ */
+async function isDeletedSecurityAccount(uid) {
+  const staff = await db.collection(STAFF_COLLECTION).doc(uid).get();
+  if (staff.exists) return false;
+  const logs = await db.collection(AUDIT_COLLECTION).where("targetUid", "==", uid).get();
+  let deleted = false;
+  logs.forEach((doc) => {
+    if (doc.data().action === "security.account.deleted") deleted = true;
+  });
+  return deleted;
+}
+
 exports.createSecurityAccount = functions.https.onCall(async (data, context) => {
   const actor = await requireSuperAdmin(context);
 
@@ -339,20 +357,39 @@ exports.createSecurityAccount = functions.https.onCall(async (data, context) => 
   } catch (err) {
     if (err.code !== "auth/user-not-found") throw err;
   }
+  // ── RE-CREATING A DELETED GUARD ─────────────────────────────────────────
+  // Deleting a security account DISABLES its Auth user (so shift history keeps
+  // the same uid) and removes the staff record, so the email stayed taken and
+  // re-adding the guard failed with "already has an account" (2026-10-18).
+  // That user is REACTIVATED instead — but only when it is provably the same
+  // deleted security account: no staff record, and a deletion on the audit
+  // trail. Any other existing user (a resident, an admin, a stranger) is still
+  // refused, so this can never take over someone else's sign-in.
+  let reactivated = false;
   if (existing) {
-    fail(
-        "already-exists",
-        `${email} already has an account. Provision a different address, or grant this one a role from the Firebase console if it is genuinely the same person.`,
-    );
+    const reusable = await isDeletedSecurityAccount(existing.uid);
+    if (!reusable) {
+      fail(
+          "already-exists",
+          `${email} already has an account. Provision a different address, or grant this one a role from the Firebase console if it is genuinely the same person.`,
+      );
+    }
+    reactivated = true;
   }
 
-  const userRecord = await admin.auth().createUser({
-    email,
-    password,
-    displayName: assignment.name,
-    emailVerified: false,
-    disabled: false,
-  });
+  const userRecord = reactivated ?
+    await admin.auth().updateUser(existing.uid, {
+      password,
+      displayName: assignment.name,
+      disabled: false,
+    }) :
+    await admin.auth().createUser({
+      email,
+      password,
+      displayName: assignment.name,
+      emailVerified: false,
+      disabled: false,
+    });
 
   const forcePasswordReset = data.forcePasswordReset !== false;
 
@@ -363,6 +400,9 @@ exports.createSecurityAccount = functions.https.onCall(async (data, context) => 
     // The FLAG is stored; the password is not. A guardhouse client reads this
     // and blocks the console until a new password is set.
     mustChangePassword: forcePasswordReset,
+    // When this temporary password was issued — what reconcilePasswordResetFlags
+    // compares the account's last password change against.
+    passwordIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
     onDuty: false,
     statusReason: "",
     provisionedBy: actor.uid,
@@ -372,14 +412,20 @@ exports.createSecurityAccount = functions.https.onCall(async (data, context) => 
   });
 
   await writeAudit({
+    // "created" either way, so passwordIssuedMillis and every reader of the
+    // log treat a reactivation as the start of a new credential; the flag in
+    // metadata says which it was.
     action: "security.account.created",
     actorUid: actor.uid,
     actorName: actor.name,
     targetUid: userRecord.uid,
     targetName: assignment.name,
     targetEmail: email,
-    summary: `Provisioned ${assignment.name} (badge ${assignment.badgeNumber}) as ${assignment.accessRole.replace(/_/g, " ")}`,
+    summary: reactivated ?
+      `Re-added ${assignment.name} (badge ${assignment.badgeNumber}) as ${assignment.accessRole.replace(/_/g, " ")}, reactivating their previously deleted sign-in` :
+      `Provisioned ${assignment.name} (badge ${assignment.badgeNumber}) as ${assignment.accessRole.replace(/_/g, " ")}`,
     metadata: {
+      reactivated,
       accessRole: assignment.accessRole,
       role: assignment.role,
       assignedPost: assignment.assignedPost,
@@ -425,6 +471,7 @@ exports.resetSecurityCredential = functions.https.onCall(async (data, context) =
   const forcePasswordReset = data.forcePasswordReset !== false;
   await db.collection(STAFF_COLLECTION).doc(uid).set({
     mustChangePassword: forcePasswordReset,
+    passwordIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   }, { merge: true });
 
@@ -477,6 +524,11 @@ exports.setSecurityAccountStatus = functions.https.onCall(async (data, context) 
   const snap = await db.collection(STAFF_COLLECTION).doc(uid).get();
   if (!snap.exists) fail("not-found", "That security account no longer exists.");
   const staff = snap.data();
+  if (!PROVISIONABLE_ROLES.includes(staff.role)) {
+    // Scoped to the guardhouse roster, like reset and delete: these callables
+    // must never suspend, revoke or re-role an administrator.
+    fail("permission-denied", "That account is not a security account.");
+  }
 
   const active = status === STATUS.active;
   await admin.auth().updateUser(uid, { disabled: !active });
@@ -534,6 +586,11 @@ exports.updateSecurityAssignment = functions.https.onCall(async (data, context) 
   const snap = await db.collection(STAFF_COLLECTION).doc(uid).get();
   if (!snap.exists) fail("not-found", "That security account no longer exists.");
   const staff = snap.data();
+  if (!PROVISIONABLE_ROLES.includes(staff.role)) {
+    // Scoped to the guardhouse roster, like reset and delete: these callables
+    // must never suspend, revoke or re-role an administrator.
+    fail("permission-denied", "That account is not a security account.");
+  }
 
   const assignment = readAssignment(data);
   await assertBadgeAvailable(assignment.badgeNumber, uid);
@@ -630,5 +687,139 @@ exports.deleteSecurityAccount = functions.https.onCall(async (data, context) => 
 
   await db.collection(STAFF_COLLECTION).doc(uid).delete();
 
+  // After the staff record, so the presence trigger the RTDB removal fires
+  // finds no account and leaves no mirror behind. Best-effort: a stale
+  // presence row must never fail a completed deletion.
+  await clearPresence(uid).catch((err) => {
+    functions.logger.warn("deleteSecurityAccount: presence not cleared", { uid, error: String(err && err.message || err) });
+  });
+
   return { ok: true };
+});
+
+// ── RESET PENDING, CLEARED WHEN IT IS TRUE THAT IT IS DONE ───────────────────
+
+/** Milliseconds of a Firestore Timestamp / Date / ISO string, or null. */
+function millisOf(value) {
+  if (!value) return null;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * When the account's CURRENT temporary password was issued.
+ *
+ * `passwordIssuedAt` is written by both issuing paths from 2026-10-18. Older
+ * accounts fall back to the latest create/reset entry in the audit log, and,
+ * if that has been pruned, to the later of createdAt/updatedAt — the late end,
+ * so an unknown issue time errs towards KEEPING the badge, never towards
+ * clearing one that is still true.
+ */
+async function passwordIssuedMillis(uid, staff) {
+  const stored = millisOf(staff.passwordIssuedAt);
+  if (stored) return stored;
+
+  // Single-field equality, so no composite index; filtered and maxed here.
+  const logs = await db.collection(AUDIT_COLLECTION).where("targetUid", "==", uid).get();
+  let latest = null;
+  logs.forEach((doc) => {
+    const entry = doc.data();
+    if (entry.action !== "security.account.created" && entry.action !== "security.credential.reset") return;
+    const at = millisOf(entry.at);
+    if (at && (!latest || at > latest)) latest = at;
+  });
+  if (latest) return latest;
+
+  return Math.max(millisOf(staff.createdAt) || 0, millisOf(staff.updatedAt) || 0) || null;
+}
+
+/**
+ * reconcilePasswordResetFlags — clear `mustChangePassword` on accounts whose
+ * officer has since set their own password.
+ *
+ * Nothing used to clear the flag at all: it was set by account creation and by
+ * resetSecurityCredential, and staff_accounts is not client-writable, so the
+ * "Reset pending" badge outlived every successful change. A client cannot be
+ * trusted to say "I changed it", so the server checks the fact itself.
+ *
+ * ── THE EVIDENCE ───────────────────────────────────────────────────────────
+ * Firebase Auth moves `tokensValidAfterTime` forward on any password change
+ * (it revokes the account's other sessions) — the officer's own
+ * `updatePassword` in Settings and the emailed-code reset's
+ * `confirmPasswordReset` alike. The admin's reset moves it too, which is why
+ * the comparison is against `passwordIssuedAt`, stamped AFTER that update: only
+ * a change made later than the temporary password counts.
+ *
+ * ── WHO MAY CALL IT ────────────────────────────────────────────────────────
+ *   • A Super Admin: the given `uids`, or every flagged account. The Security
+ *     Accounts page calls it on open, which also repairs badges left stale
+ *     before this existed.
+ *   • Anyone else signed in: their own account only. The guardhouse calls it
+ *     after a password change and on sign-in.
+ * It can only ever CLEAR the flag, never set it, so a caller gains nothing by
+ * invoking it early.
+ */
+exports.reconcilePasswordResetFlags = functions.https.onCall(async (data, context) => {
+  const callerUid = context.auth && context.auth.uid;
+  if (!callerUid) fail("unauthenticated", "Sign in required.");
+
+  const callerSnap = await db.collection(STAFF_COLLECTION).doc(callerUid).get();
+  const caller = callerSnap.exists ? callerSnap.data() : null;
+  const isSuperAdmin = Boolean(caller && caller.role === "super_admin" && caller.status === STATUS.active);
+
+  let docs;
+  if (isSuperAdmin) {
+    const uids = Array.isArray(data && data.uids) ?
+      data.uids.map((u) => String(u || "").trim()).filter(Boolean).slice(0, 200) :
+      null;
+    if (uids && uids.length) {
+      const snaps = await Promise.all(uids.map((u) => db.collection(STAFF_COLLECTION).doc(u).get()));
+      docs = snaps.filter((snap) => snap.exists);
+    } else {
+      docs = (await db.collection(STAFF_COLLECTION).where("mustChangePassword", "==", true).get()).docs;
+    }
+  } else {
+    docs = callerSnap.exists ? [callerSnap] : [];
+  }
+
+  const cleared = [];
+  for (const snap of docs) {
+    const staff = snap.data();
+    if (!staff.mustChangePassword) continue;
+
+    let user;
+    try {
+      user = await admin.auth().getUser(snap.id);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") continue;
+      throw err;
+    }
+
+    const changedAt = millisOf(user.tokensValidAfterTime);
+    const issuedAt = await passwordIssuedMillis(snap.id, staff);
+    // 2 s of slack: the admin's own updateUser and the issuedAt stamp land a
+    // few hundred ms apart, and that pair must never read as a change.
+    if (!changedAt || !issuedAt || changedAt <= issuedAt + 2000) continue;
+
+    await snap.ref.set({
+      mustChangePassword: false,
+      passwordChangedAt: admin.firestore.Timestamp.fromMillis(changedAt),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await writeAudit({
+      action: "security.credential.changed",
+      actorUid: snap.id,
+      actorName: staff.name || staff.email || "Officer",
+      targetUid: snap.id,
+      targetName: staff.name || "",
+      targetEmail: staff.email || "",
+      summary: `${staff.name || staff.email || "An officer"} replaced their temporary password`,
+      metadata: { changedAt: new Date(changedAt).toISOString() },
+    });
+    cleared.push(snap.id);
+  }
+
+  return { ok: true, cleared };
 });

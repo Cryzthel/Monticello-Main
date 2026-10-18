@@ -159,6 +159,9 @@ class AnnouncementsPanel extends StatelessWidget {
                     itemCount: items.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, i) => RepaintBoundary(
+                      // Keyed by post, so Read More state stays with its card
+                      // when a new post arrives live above it.
+                      key: ValueKey(items[i].id),
                       child: AnnouncementCard(
                         announcement: items[i],
                         // Tighter than the full Announcements screen: this feed

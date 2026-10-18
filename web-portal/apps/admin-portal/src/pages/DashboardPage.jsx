@@ -1,21 +1,20 @@
+import { ROUTES } from '@/config/portal'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import KpiCard from '@shared/components/KpiCard'
 import Card from '@shared/components/Card'
-import CardHeader from '@shared/components/CardHeader'
 import SectionHeading from '@shared/components/SectionHeading'
 import TimeframePills from '@shared/components/TimeframePills'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 import IncidentsTable from '@shared/components/IncidentsTable'
-import IncidentDetailModal from '@shared/components/IncidentDetailModal'
+import IncidentTicketDetailsModal from '@/components/IncidentTicketDetailsModal'
 import { SkeletonKpiRow } from '@shared/components/Skeleton'
 import { usePortalMetrics } from '@/hooks/usePortalMetrics'
 import { useWaitWhile } from '@/lib/waitState'
 import { useStaffAccounts } from '@shared/hooks/useStaffAccounts'
 import { isOfficerFiled } from '@shared/lib/staffFiling'
-import { useAuth } from '@shared/auth/AuthContext'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -83,7 +82,6 @@ export default function DashboardPage() {
   // selected report object) so the open modal reflects a status change the
   // instant Firestore's onSnapshot pushes it back.
   const selected = incidents.find((incident) => incident.id === selectedId) ?? null
-  const { user } = useAuth()
 
   /*
     THE H1 NAMES THE PAGE, not the reader. This carried
@@ -110,7 +108,8 @@ export default function DashboardPage() {
       {/* gap-6: this page scrolls, and a scrolling page takes the rhythm that
           matches .page-grid and .kpi-grid — see "the two vertical rhythms" in
           the shared stylesheet. It was gap-8, a third value no rule names. */}
-      <div className="flex flex-col gap-6">
+      {/* `overview-flat`: border only on this page — see styles/index.css. */}
+      <div className="overview-flat flex flex-col gap-6">
         <section className="flex flex-col gap-3">
           <SectionHeading title="Analytics overview" />
           {/* The KPI strip is the page's worst layout-shift offender and the
@@ -199,7 +198,7 @@ export default function DashboardPage() {
           <SectionHeading
             title="Latest activity"
             action={
-              <button type="button" onClick={() => navigate('/tickets')} className="btn btn-compact btn-outline">
+              <button type="button" onClick={() => navigate(ROUTES.tickets)} className="btn btn-compact btn-outline">
                 View all
                 <ArrowRight size="sm" />
               </button>
@@ -211,11 +210,11 @@ export default function DashboardPage() {
               single 26rem box. See .page-grid for why the split waits for xl. */}
           <div className="page-grid xl:h-[26rem]">
             <Card className="col-span-12 flex h-full min-h-0 flex-col overflow-hidden p-0">
-              {/* Title only. The "Resident-filed · newest first" caption is
-                  gone with the rest of this page's descriptions, and "View all"
-                  moved up to the section header — so this row is now the one
-                  thing a header inside a card has to do: name the card. */}
-              <CardHeader title="Recent incidents" />
+              {/* No card header. It had shrunk to a title alone — "Recent
+                  incidents" — directly under the section heading "Latest
+                  activity", naming the same table twice in 40px. The table's
+                  own column row now opens the card, and the six rows it shows
+                  get the height the header used to take. */}
               <div className="min-h-0 flex-1">
                 <IncidentsTable
                   bare
@@ -236,7 +235,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <IncidentDetailModal report={selected} onClose={() => setSelectedId(null)} />
+      <IncidentTicketDetailsModal report={selected} onClose={() => setSelectedId(null)} />
     </AppShell>
   )
 }

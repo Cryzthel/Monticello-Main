@@ -264,6 +264,13 @@ const MAPPING = {
   Wrench: "wrench",
   X: "x",
   Zap: "lightning",
+  VolumeX: "speaker-slash",
+  BellRing: "bell-ringing",
+  ExternalLink: "arrow-square-out",
+  UserCircle: "user-circle",
+  Fingerprint: "fingerprint",
+  FileDown: "file-arrow-down",
+  ZoomIn: "magnifying-glass-plus",
 }
 
 const missing = Object.entries(MAPPING).filter(([, file]) => !existsSync(join(SVG_DIR, svgFile(file))))

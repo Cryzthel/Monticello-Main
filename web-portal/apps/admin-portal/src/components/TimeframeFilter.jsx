@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import { TIMEFRAME_PRESETS, resolveTimeframe } from '@shared/lib/timeframe'
+import { formatDate } from '@shared/lib/dates'
 
 /**
  * Quick retention filter — 7d / 30d / All, plus an explicit custom range.
@@ -42,7 +43,7 @@ export default function TimeframeFilter({ value, onChange, className = '' }) {
 
       {range.from ? (
         <span className="text-caption text-text-muted">
-          since {range.from.toLocaleDateString()}
+          since {formatDate(range.from)}
         </span>
       ) : null}
     </div>

@@ -6,10 +6,24 @@
  * strings, not CSS variables, and these must match on both basemaps anyway.
  */
 
-/** Unit markers, by what the officer is doing. */
+/**
+ * Unit markers, by what the officer is doing.
+ *
+ * ── NO ORANGE ON A UNIT (2026-10-17) ────────────────────────────────────────
+ * `responding` was orange-500, and incident pins turn orange (#FB923C) once a
+ * report has waited two hours (RESPONSE_PHASE_COLORS.warm). A report filed
+ * 28 m from a responding guard was read as "the guard's real position" beside
+ * the navigation arrow, and the route was reported as starting in the wrong
+ * place when it was not. Responding is now the brand emerald and the marker is
+ * a shield (see unitImage), so a unit differs from a report in shape AND hue:
+ * orange on this map now only ever means a resident's report.
+ */
 export const UNIT_COLORS = {
   available: '#22C55E', // green-500 — on duty, no call
-  responding: '#F97316', // orange-500 — accepted and moving (flashing)
+  // emerald-600, not the brand's 700: on the dark basemap 700 made the one
+  // unit that matters most the dimmest marker on screen. Its live ring is the
+  // brighter emerald-500 (NAV_MARKER_COLORS.standby).
+  responding: '#059669', // emerald-600 — accepted and moving (pulsing ring)
   on_scene: '#3B82F6', // blue-500 — arrived, through investigation
 }
 
@@ -52,22 +66,23 @@ export const ROUTE_TONE_COLORS = {
  * map's symbol layer, the standby ring it replaces, and the panel's own
  * arrow emblem) and they must not drift.
  *
- * `#1A73E8` is a step DEEPER than the `live` route line it sits on. That is
- * deliberate and it is what Google does: the chevron has to read as an object
- * resting ON the line rather than as a swelling of it, and two identical blues
- * stacked at 29px and 9px wide lose that edge entirely — the arrow dissolves
- * into the route exactly when it matters. The white ring does half the work;
- * the extra depth does the other half, and it survives the satellite basemap
- * where a lighter arrow does not.
+ * The arrow used to be `#1A73E8`, a deeper step of the route's own blue, so it
+ * read as an object resting ON the line. That worked as navigation and failed
+ * as identification: blue-on-blue said "part of the route", not "the guard".
+ * Emerald against the blue line keeps the object-on-the-line separation (a
+ * different hue separates better than a deeper one) and ties the arrow to the
+ * responder's shield, ring and halo, which are all emerald.
  *
- * `standby` is the SAME blue as the live route (#4285F4, via ROUTE_TONE_COLORS)
- * and that is also deliberate: a unit on standby is not yet a different kind
- * of thing, it is the same unit before the session starts. The transformation
- * is the shape — a radiating ring becomes an arrow — not the hue.
+ * `standby` is emerald-500, a step lighter than the arrow, for the ring shown
+ * before Start is pressed: the same responder before the session starts.
  */
 export const NAV_MARKER_COLORS = {
-  arrow: '#1A73E8',
-  standby: ROUTE_TONE_COLORS.live,
+  // EMERALD, not Google's deeper blue (2026-10-17). The blue arrow on the blue
+  // line read as part of the route rather than as the responder, which is how
+  // an incident pin beside it came to be taken for the guard. The responder is
+  // emerald in every state that is theirs: shield, ring, arrow, halo.
+  arrow: '#047857',
+  standby: '#10B981', // emerald-500 — the ring before Start is pressed
 }
 
 /**
@@ -89,6 +104,10 @@ export const NAV_MARKER_COLORS = {
  */
 export const GUIDANCE_BANNER = {
   plate: '#004D40',
+  /** The plate at 92%, for the frosted banner over the map (with backdrop-blur). */
+  plateGlass: 'rgba(0, 77, 64, 0.92)',
+  /** The banner's hairline edge, separating it from the route card below. */
+  edge: 'rgba(255, 255, 255, 0.12)',
   ink: '#FFFFFF',
   /** The distance countdown and the sub-line, at the plate's reduced contrast. */
   inkMuted: 'rgba(255, 255, 255, 0.72)',

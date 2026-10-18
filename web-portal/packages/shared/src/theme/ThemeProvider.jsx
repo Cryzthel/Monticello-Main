@@ -1,6 +1,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from 'react'
+import { flushSync } from 'react-dom'
 
 /**
  * Theme state for both portals.
@@ -112,6 +113,9 @@ export default function ThemeProvider({ children }) {
   // below decides, exactly as before.
   const [forcedTheme, setForcedTheme] = useState(null)
   const firstRun = useRef(true)
+  // True while a View Transition is painting the switch, so the per-element
+  // fallback fade below stays off and the two never animate at once.
+  const viewTransitionRef = useRef(false)
 
   const preferred = preference === 'system' ? systemTheme : preference
   const theme = forcedTheme ?? preferred
@@ -136,7 +140,8 @@ export default function ThemeProvider({ children }) {
     // Skip the cross-fade on the very first run: index.html already resolved
     // and applied the theme, so there is nothing to fade FROM, and arming the
     // transition here would animate the entire first paint.
-    if (!firstRun.current) root.classList.add('theme-switching')
+    if (!firstRun.current && !viewTransitionRef.current) root.classList.add('theme-switching')
+    viewTransitionRef.current = false
 
     root.classList.remove('light', 'dark')
     root.classList.add(theme)
@@ -163,10 +168,34 @@ export default function ThemeProvider({ children }) {
 
   // Toggling always writes an explicit preference. Someone who deliberately
   // picks light at midday does not want the OS overriding them at dusk.
+  //
+  // ── ONE CROSS-FADE, NOT A THOUSAND (2026-10-17) ─────────────────────────
+  // The switch used to transition the colours of EVERY element for 200ms
+  // (.theme-switching). Thousands of simultaneous transitions dropped frames,
+  // and whatever cannot transition — gradients, images, the map canvas,
+  // colour-mix() surfaces — snapped instantly while its neighbours faded, so
+  // the page passed through mismatched half-light, half-dark frames.
+  //
+  // The View Transitions API snapshots the page, applies the change, and
+  // cross-fades old frame to new as ONE composited layer (300ms, see
+  // ::view-transition-* in styles/index.css). Nothing is laid out twice and
+  // everything changes together. `flushSync` makes React commit the new class
+  // inside the callback, which is when the API takes its "after" snapshot.
+  // Browsers without the API, and reduced motion, keep the old path.
   const toggle = useCallback(() => {
-    setPreference((current) => {
-      const resolved = current === 'system' ? readSystem() : current
-      return resolved === 'dark' ? 'light' : 'dark'
+    const flip = () =>
+      setPreference((current) => {
+        const resolved = current === 'system' ? readSystem() : current
+        return resolved === 'dark' ? 'light' : 'dark'
+      })
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (typeof document.startViewTransition !== 'function' || reduced) {
+      flip()
+      return
+    }
+    document.startViewTransition(() => {
+      viewTransitionRef.current = true
+      flushSync(flip)
     })
   }, [])
 

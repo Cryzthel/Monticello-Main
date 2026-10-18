@@ -12,6 +12,8 @@ Announcement _post({
   DateTime? postedAt,
   String author = 'HOA Admin',
   String? imageUrl,
+  String category = 'Maintenance',
+  bool pinned = false,
 }) =>
     Announcement(
       id: 'a1',
@@ -19,8 +21,9 @@ Announcement _post({
       body: 'Supply will be cut while the main is repaired.',
       postedAt: postedAt ?? DateTime.now().subtract(const Duration(hours: 3)),
       author: author,
-      category: 'Maintenance',
+      category: category,
       imageUrl: imageUrl,
+      pinned: pinned,
     );
 
 Future<void> _pumpCard(WidgetTester tester, Announcement post) async {
@@ -128,6 +131,78 @@ void main() {
       // And decoded near the width it is drawn at — a feed of 16:9 phone
       // photos is the app's heaviest decode.
       expect(image.memCacheWidth, 720);
+    });
+  });
+
+  group('the badges', () {
+    List<String> labels(Announcement a) =>
+        announcementBadges(a).map((b) => b.label).toList();
+
+    test('category, then Pinned, then New, each once', () {
+      expect(labels(_post(pinned: true)), ['Maintenance', 'Pinned', 'New']);
+      final old = DateTime.now().subtract(const Duration(days: 3));
+      expect(labels(_post(postedAt: old)), ['Maintenance']);
+    });
+
+    test('an unknown or status-like category folds to one General badge', () {
+      // The label is canonical (four words), so a stored "New" or "Pinned"
+      // can never print a second status pill.
+      for (final odd in ['New', 'PINNED', 'Notice ', '']) {
+        expect(labels(_post(category: odd, pinned: true)),
+            ['General', 'Pinned', 'New'],
+            reason: 'category "$odd"');
+      }
+    });
+
+    test('the category badge uses the canonical label', () {
+      expect(labels(_post(category: 'Utilities')).first, 'Maintenance');
+    });
+
+    testWidgets('a photo post shows its category once, not on the image too',
+        (tester) async {
+      await _pumpCard(tester, _post(imageUrl: 'https://example.com/a.jpg'));
+      expect(find.text('Maintenance'), findsOneWidget);
+    });
+
+    testWidgets('all badges sit in one row and stay inside the card',
+        (tester) async {
+      await _pumpCard(tester, _post(pinned: true));
+      final rects = [
+        for (final l in ['Maintenance', 'Pinned', 'New'])
+          tester.getRect(find.text(l)),
+      ];
+      // One row: every label shares a vertical centre.
+      for (final r in rects) {
+        expect(r.center.dy, closeTo(rects.first.center.dy, 0.5));
+      }
+      // Left to right, inside the 360pt card.
+      expect(rects[0].right, lessThan(rects[1].left));
+      expect(rects[1].right, lessThan(rects[2].left));
+      expect(rects.last.right, lessThanOrEqualTo(360));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('three badges still fit one row on a narrow card',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SizedBox(
+              width: 260,
+              child: AnnouncementCard(
+                announcement: _post(pinned: true),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: 'no overflow');
+      final first = tester.getRect(find.text('Maintenance'));
+      for (final l in ['Pinned', 'New']) {
+        expect(tester.getRect(find.text(l)).center.dy,
+            closeTo(first.center.dy, 0.5));
+      }
     });
   });
 }

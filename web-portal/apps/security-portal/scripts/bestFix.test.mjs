@@ -19,7 +19,7 @@ import path from 'path'
 import { fileURLToPath, pathToFileURL } from 'url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const { pickBestFix, MAX_REMOTE_AGE_MS } = await import(
+const { pickBestFix, shouldDeferPublish, fixQuality, MAX_REMOTE_AGE_MS } = await import(
   pathToFileURL(path.join(here, '..', 'src', 'lib', 'bestFix.js')).href
 )
 
@@ -63,11 +63,12 @@ check('a good local fix is kept, even against a better published one', () => {
   assert.strictEqual(pick(fix(14, 0, 'local'), fix(6, 1000, 'published')), 'local')
 })
 
-check('the precision line is where the console already draws it', () => {
-  // 100 m — GPS_ACCURACY_LIMIT_M, the same number that means "approximate"
-  // everywhere else.
-  assert.strictEqual(pick(fix(100, 0, 'local'), fix(5, 0, 'published')), 'local')
-  assert.strictEqual(pick(fix(101, 0, 'local'), fix(5, 0, 'published')), 'published')
+check('the precision line is PRECISE_FIX_M (30 m), the GPS-vs-estimate line', () => {
+  // Was 100 m, which let a ±60 m laptop on good Wi-Fi keep its own estimate
+  // against the officer's ±8 m phone.
+  assert.strictEqual(pick(fix(30, 0, 'local'), fix(5, 0, 'published')), 'local')
+  assert.strictEqual(pick(fix(31, 0, 'local'), fix(5, 0, 'published')), 'published')
+  assert.strictEqual(pick(fix(60, 0, 'laptop'), fix(8, 0, 'phone')), 'phone')
 })
 
 // ── IT MUST NOT FLAP ───────────────────────────────────────────────────────
@@ -114,6 +115,56 @@ check('a coordinate-less object counts as missing, not as a position', () => {
 check('a fix with no stated accuracy loses to one that has it', () => {
   // Unknown is not good. Infinity is the honest reading of "did not say".
   assert.strictEqual(pick({ lat: 1, lng: 2, tag: 'local' }, fix(9, 0, 'published')), 'published')
+})
+
+// ── WHICH DEVICE PUBLISHES ─────────────────────────────────────────────────
+
+const ME = 'laptop-id'
+const remote = (accuracy, ageMs, deviceId = 'phone-id') => ({ position: fix(accuracy, ageMs), deviceId })
+
+check("the laptop stops overwriting the phone's better, fresh fix", () => {
+  assert.strictEqual(shouldDeferPublish(remote(8, 3000), fix(122), ME, NOW), true)
+})
+
+check('…and takes the stream back once the phone goes quiet', () => {
+  assert.strictEqual(shouldDeferPublish(remote(8, MAX_REMOTE_AGE_MS + 1000), fix(122), ME, NOW), false)
+})
+
+check("an idle phone's 120 s heartbeat is not mistaken for silence", () => {
+  // TELEMETRY_CADENCE.idle.heartbeatMs — a stationary idle phone writes this
+  // rarely. If the window were shorter the two devices would take turns.
+  assert.ok(MAX_REMOTE_AGE_MS > 120_000)
+  assert.strictEqual(shouldDeferPublish(remote(8, 125_000), fix(122), ME, NOW), true)
+})
+
+check('a device never defers to its own echo', () => {
+  assert.strictEqual(shouldDeferPublish(remote(8, 0, ME), fix(122), ME, NOW), false)
+})
+
+check('two GPS-grade devices both publish (no defer at or below 30 m)', () => {
+  assert.strictEqual(shouldDeferPublish(remote(5, 0), fix(20), ME, NOW), false)
+})
+
+check('similar estimates do not defer (no flapping)', () => {
+  assert.strictEqual(shouldDeferPublish(remote(90, 0), fix(122), ME, NOW), false)
+})
+
+check('with no fix of its own, a device does not blank out a good remote one', () => {
+  assert.strictEqual(shouldDeferPublish(remote(8, 0), null, ME, NOW), true)
+})
+
+check('a document from an old build with no deviceId is not deferred to', () => {
+  assert.strictEqual(shouldDeferPublish({ position: fix(8, 0), deviceId: null }, fix(122), ME, NOW), false)
+})
+
+// ── THE BADGE TIERS ────────────────────────────────────────────────────────
+
+check('badge: GPS-grade, Wi-Fi estimate, and unknown', () => {
+  assert.deepStrictEqual(fixQuality(fix(8)), { tier: 'precise', accuracy: 8 })
+  assert.deepStrictEqual(fixQuality(fix(30)), { tier: 'precise', accuracy: 30 })
+  assert.deepStrictEqual(fixQuality(fix(122)), { tier: 'coarse', accuracy: 122 })
+  assert.deepStrictEqual(fixQuality({ lat: 10.76, lng: 122.5 }), { tier: 'unknown', accuracy: null })
+  assert.deepStrictEqual(fixQuality(null), { tier: 'unknown', accuracy: null })
 })
 
 console.log(`\n${passed} passed, ${process.exitCode ? 'failures above' : '0 failed'}`)

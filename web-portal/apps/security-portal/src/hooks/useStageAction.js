@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { describeDelivery, describeStageError } from '@/lib/dispatch'
+import { toast } from '@shared/lib/toast'
 
 /**
  * How long to wait for the server before telling an officer their press was
@@ -110,13 +111,23 @@ export function useStageAction(incidentId) {
         }
         clearTimeout(notice)
 
+        // A clean success is a toast, not a receipt: the resolve dialog and
+        // often the drawer close on it, and a receipt inside them would go
+        // with them. Toasts also fire when the officer has already moved to
+        // another call. Warnings and failures stay inline, where they persist.
         if (!handle.notify) {
-          settle(forId, { busy: null, feedback: { tone: 'success', text: `${label}${queued ? ' (synced)' : ''}.` } })
+          settle(forId, { busy: null, feedback: null })
+          toast.success(`${label}${queued ? ' (synced)' : ''}`)
           return true
         }
         settle(forId, { busy: queued ? null : key, feedback: queued ? { tone: 'warning', text: `${label}: synced. Notifying the resident…` } : null })
         const delivery = describeDelivery((await handle.notify())?.reason)
-        settle(forId, { busy: null, feedback: { tone: delivery.tone, text: `${label}. ${delivery.text}` } })
+        if (delivery.tone === 'success') {
+          settle(forId, { busy: null, feedback: null })
+          toast.success(label, { description: delivery.text })
+        } else {
+          settle(forId, { busy: null, feedback: { tone: delivery.tone, text: `${label}. ${delivery.text}` } })
+        }
         return true
       } finally {
         pendingRef.current.delete(forId)

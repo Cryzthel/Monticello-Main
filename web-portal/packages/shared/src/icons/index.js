@@ -200,6 +200,13 @@ import {
   Wrench as WrenchGlyph,
   X as XGlyph,
   Zap as ZapGlyph,
+  VolumeX as VolumeXGlyph,
+  BellRing as BellRingGlyph,
+  ExternalLink as ExternalLinkGlyph,
+  UserCircle as UserCircleGlyph,
+  Fingerprint as FingerprintGlyph,
+  FileDown as FileDownGlyph,
+  ZoomIn as ZoomInGlyph,
 } from './glyphs'
 
 export const Activity = /* @__PURE__ */ createIcon('Activity', ActivityGlyph)
@@ -351,3 +358,10 @@ export const Waves = /* @__PURE__ */ createIcon('Waves', WavesGlyph)
 export const Wrench = /* @__PURE__ */ createIcon('Wrench', WrenchGlyph)
 export const X = /* @__PURE__ */ createIcon('X', XGlyph)
 export const Zap = /* @__PURE__ */ createIcon('Zap', ZapGlyph)
+export const VolumeX = /* @__PURE__ */ createIcon('VolumeX', VolumeXGlyph)
+export const BellRing = /* @__PURE__ */ createIcon('BellRing', BellRingGlyph)
+export const ExternalLink = /* @__PURE__ */ createIcon('ExternalLink', ExternalLinkGlyph)
+export const UserCircle = /* @__PURE__ */ createIcon('UserCircle', UserCircleGlyph)
+export const Fingerprint = /* @__PURE__ */ createIcon('Fingerprint', FingerprintGlyph)
+export const FileDown = /* @__PURE__ */ createIcon('FileDown', FileDownGlyph)
+export const ZoomIn = /* @__PURE__ */ createIcon('ZoomIn', ZoomInGlyph)

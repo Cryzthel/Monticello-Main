@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MoreHorizontal, Eye, Send, CheckCircle2 } from '@shared/icons'
+import { belowTrigger, flipIfOverflowing } from '@shared/lib/menuPosition'
 
 // Portal-based, same reasoning as shared/components/NotificationBell: the
 // table body it lives in scrolls (overflow-y-auto), which would clip an
@@ -26,7 +27,7 @@ export default function RowActionMenu({
     const next = !open
     if (next && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
-      setPosition({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+      setPosition(belowTrigger(rect))
     }
     setOpen(next)
   }
@@ -37,9 +38,35 @@ export default function RowActionMenu({
       if (panelRef.current?.contains(event.target) || buttonRef.current?.contains(event.target)) return
       setOpen(false)
     }
+    // Escape and scroll close it too, as OverflowMenu does. Without the
+    // scroll close, the fixed-position menu stayed put while the row it
+    // belonged to scrolled away underneath it.
+    function handleKeydown(event) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    const closeOnScroll = () => setOpen(false)
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeydown)
+    window.addEventListener('scroll', closeOnScroll, { capture: true, once: true })
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeydown)
+      window.removeEventListener('scroll', closeOnScroll, { capture: true })
+    }
   }, [open])
+
+  // Flip above the trigger when the rendered menu would run off the bottom
+  // of the window — the last rows on a page. Layout effect: measured and
+  // moved before the browser paints, so it never flashes in the wrong place.
+  useLayoutEffect(() => {
+    if (!open || !position || position.bottom != null) return
+    const menu = panelRef.current?.getBoundingClientRect()
+    const trigger = buttonRef.current?.getBoundingClientRect()
+    if (!menu || !trigger) return
+    const flipped = flipIfOverflowing(trigger, menu)
+    if (flipped) setPosition(flipped)
+  }, [open, position])
+
 
   function runAction(action) {
     setOpen(false)
@@ -63,7 +90,7 @@ export default function RowActionMenu({
         ? createPortal(
             <div
               ref={panelRef}
-              style={{ position: 'fixed', top: position.top, right: position.right, '--popover-origin': 'top right' }}
+              style={{ position: 'fixed', top: position.top, bottom: position.bottom, right: position.right, '--popover-origin': position.origin }}
               className="popover z-[var(--z-popover)] w-52 p-1.5"
               onClick={(event) => event.stopPropagation()}
             >

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { OFF_ROUTE_METERS } from '@/lib/routeProgress'
+import { isOffRoute } from '@/lib/routeProgress'
 
 /**
  * Has the unit been off the plotted route long enough to say so?
@@ -49,7 +49,9 @@ export function useOffRoute(progress, { sustainMs = OFF_ROUTE_SUSTAIN_MS } = {})
   // The instant reading, mirrored so the timer below can re-check it when it
   // fires rather than closing over the value it was armed with.
   const strayingRef = useRef(false)
-  const straying = Boolean(progress) && progress.offsetM > OFF_ROUTE_METERS
+  // The same yardstick the marker's snapping uses (accuracy-aware), so the
+  // card can never call a unit off route while it is drawn on the line.
+  const straying = isOffRoute(progress)
   strayingRef.current = straying
 
   useEffect(() => {

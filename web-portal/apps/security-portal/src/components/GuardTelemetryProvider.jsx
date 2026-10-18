@@ -21,6 +21,7 @@ const GuardTelemetryContext = createContext({
   locationError: null,
   activeIncidentId: null,
   fix: null,
+  deferring: false,
 })
 
 export function GuardTelemetryProvider({ children }) {
@@ -31,7 +32,9 @@ export function GuardTelemetryProvider({ children }) {
 }
 
 /**
- * `{ mode, sharing, locationError, activeIncidentId, fix }` for this officer.
+ * `{ mode, sharing, locationError, activeIncidentId, fix, deferring }` for this
+ * officer. `deferring` is true while another of their devices (their phone) is
+ * publishing a better position and this one has stopped overwriting it.
  *
  * `fix` is this device's own last position, `{ lat, lng, accuracy, ... }` or
  * null. It is the same value the telemetry document carries, offered locally

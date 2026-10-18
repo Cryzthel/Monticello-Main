@@ -18,10 +18,12 @@
  *   MOTION     a 1100ms linear turn with the breathing scale layered on top
  *              (see `leafSpin` / `leafBreathe` in index.css).
  *
- * COLOUR. The mark follows `--color-brand-500`, not the phone app's literal
- * #16A34A. Same emerald identity, but the token is the one that moves in dark
- * mode; hardcoding the hex would leave the leaf at its light value on a dark
- * canvas, which is the defect this codebase keeps finding and removing.
+ * COLOUR: NEUTRAL (2026-10-17, user's request). It was the brand emerald, and
+ * a full-screen green spinner on every load and refresh read as a green flash
+ * before each page — the loading state should be quiet, like the skeletons
+ * that follow it. It follows `--color-text-muted` (slate-500 light, zinc-400
+ * dark), the same neutral those skeletons sit in. Still a token rather than a
+ * hex, so it moves with the theme.
  */
 
 /** The bare leaf silhouette. Decorative — callers own the announcement. */
@@ -36,8 +38,8 @@ export function LeafMark({ size = 16, className = '' }) {
           <defs>
             {/* Unique per size so two marks on one page cannot collide on the id. */}
             <linearGradient id={`leaf-${size}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--color-brand-500)" />
-              <stop offset="100%" stopColor="var(--color-brand-500)" stopOpacity="0.55" />
+              <stop offset="0%" stopColor="var(--color-text-muted)" />
+              <stop offset="100%" stopColor="var(--color-text-muted)" stopOpacity="0.55" />
             </linearGradient>
           </defs>
           <path d="M12 0 Q24 4.32 12 24 Q0 4.32 12 0 Z" fill={`url(#leaf-${size})`} />

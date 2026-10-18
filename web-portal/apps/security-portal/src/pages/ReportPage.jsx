@@ -1,9 +1,10 @@
+import { toast } from '@shared/lib/toast'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { collection, query } from 'firebase/firestore'
-import { CheckCircle2, Plus, X } from '@shared/icons'
+import { Plus } from '@shared/icons'
 import SectionHeading from '@shared/components/SectionHeading'
-import IncidentDetailModal from '@shared/components/IncidentDetailModal'
+import IncidentTicketDetailsModal from '@/components/IncidentTicketDetailsModal'
 import ErrorBoundary from '@shared/components/ErrorBoundary'
 import PageErrorFallback from '@/components/PageErrorFallback'
 import AppShell from '@/layouts/AppShell'
@@ -53,10 +54,6 @@ export default function ReportPage() {
   const { user } = useAuth()
   const [composerOpen, setComposerOpen] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
-  // Cleared by hand or by opening the composer again. Not auto-dismissed on a
-  // timer: a guard who filed a report and turned to the gate should still find
-  // the confirmation when they look back.
-  const [filed, setFiled] = useState(false)
 
   const reportsQuery = useMemo(() => query(collection(db, 'incidents')), [])
   // `feedError` was previously destructured away. A snapshot listener that is
@@ -104,7 +101,6 @@ export default function ReportPage() {
   }, [reports, loading, feedError])
 
   function openComposer() {
-    setFiled(false)
     setComposerOpen(true)
   }
 
@@ -114,7 +110,6 @@ export default function ReportPage() {
   const fileRequested = searchParams.get('file') === '1'
   useEffect(() => {
     if (!fileRequested) return
-    setFiled(false)
     setComposerOpen(true)
     setSearchParams({}, { replace: true })
   }, [fileRequested, setSearchParams])
@@ -163,24 +158,6 @@ export default function ReportPage() {
             }
           />
 
-          {/* The dialog closes on a successful write, so the confirmation has to
-              land out here or it is never seen. It sits directly above the
-              table because the row it is talking about is the first one in it. */}
-          {filed ? (
-            <p className="flex shrink-0 items-start gap-2 rounded-xl border border-success/25 bg-success/10 p-3 text-sm text-success">
-              <CheckCircle2 size="sm" className="mt-0.5 shrink-0" />
-              <span className="min-w-0 flex-1">Filed — it is in the dispatch queue now.</span>
-              <button
-                type="button"
-                onClick={() => setFiled(false)}
-                aria-label="Dismiss"
-                className="shrink-0 rounded p-0.5 hover:bg-success/15"
-              >
-                <X size="sm" />
-              </button>
-            </p>
-          ) : null}
-
           <FiledReportsTable
             incidents={reports}
             loading={loading}
@@ -193,12 +170,14 @@ export default function ReportPage() {
           open={composerOpen}
           onClose={() => setComposerOpen(false)}
           onFiled={() => {
+            // The dialog closes on success, so the confirmation is a toast;
+            // the new first row of the table is the lasting proof.
             setComposerOpen(false)
-            setFiled(true)
+            toast.success('Report filed', { description: 'It is in the dispatch queue now.' })
           }}
         />
 
-        <IncidentDetailModal report={selected} onClose={() => setSelectedId(null)} />
+        <IncidentTicketDetailsModal report={selected} onClose={() => setSelectedId(null)} />
       </ErrorBoundary>
     </AppShell>
   )

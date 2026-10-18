@@ -851,6 +851,24 @@ exports.resetSecurityCredential = securityProvisioning.resetSecurityCredential;
 exports.setSecurityAccountStatus = securityProvisioning.setSecurityAccountStatus;
 exports.updateSecurityAssignment = securityProvisioning.updateSecurityAssignment;
 exports.deleteSecurityAccount = securityProvisioning.deleteSecurityAccount;
+exports.reconcilePasswordResetFlags = securityProvisioning.reconcilePasswordResetFlags;
+
+/**
+ * OFFICER PRESENCE. Mirrors the Realtime Database `presence/{uid}` node the
+ * Guardhouse publishes into Firestore `staff_presence/{uid}` for the Admin
+ * roster's Online / Last seen column. See ./presence.js.
+ */
+const presence = require("./presence");
+
+exports.onPresenceWrite = presence.onPresenceWrite;
+
+/**
+ * STAFF EMAIL SYNC. Copies the caller's own Auth email and verified flag onto
+ * their staff record after a verified email change. See ./accountSync.js.
+ */
+const accountSync = require("./accountSync");
+
+exports.syncStaffEmail = accountSync.syncStaffEmail;
 
 /**
  * THE SCHEDULED OPERATIONS SWEEP.

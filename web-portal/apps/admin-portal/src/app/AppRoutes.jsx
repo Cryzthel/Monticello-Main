@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import RequireAuth from '@shared/auth/RequireAuth'
+import { AppShellLayout } from '@/layouts/AppShell'
 import { useAuth } from '@shared/auth/AuthContext'
 import { ROUTES } from '@/config/portal'
 
@@ -77,6 +78,9 @@ export default function AppRoutes() {
       />
 
       <Route element={<RequireAuth loginPath={ROUTES.login} />}>
+        {/* The shell mounts ONCE for every page below, so navigating swaps
+            only the page — see AppShellLayout. */}
+        <Route element={<AppShellLayout />}>
         <Route path={ROUTES.dashboard} element={<DashboardPage />} />
         <Route path={ROUTES.heatmap} element={<HeatmapPage />} />
         <Route path={ROUTES.tickets} element={<TicketsPage />} />
@@ -87,7 +91,13 @@ export default function AppRoutes() {
         <Route path={ROUTES.metrics} element={<MetricsPage />} />
         <Route path={ROUTES.announcements} element={<AnnouncementsPage />} />
         <Route path={ROUTES.history} element={<HistoryPage />} />
-        <Route path={ROUTES.settings} element={<SettingsPage />} />
+        {/* A SPLAT, not two routes. The hub and every category are one
+            matched element, so React Router re-renders rather than
+            remounting as you move between them — which is what keeps the
+            settings draft alive. Two routes would unmount the page on the
+            way to the next category and discard an unsaved edit. */}
+        <Route path={`${ROUTES.settings}/*`} element={<SettingsPage />} />
+        </Route>
       </Route>
 
       <Route path="*" element={<UnmatchedRoute />} />

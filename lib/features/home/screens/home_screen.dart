@@ -21,6 +21,8 @@ import 'package:monticello_villas_app/core/theme/app_icons.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/app_card.dart';
 import 'package:monticello_villas_app/core/widgets/curved_bottom_nav.dart';
+import 'package:monticello_villas_app/core/widgets/kept_tabs.dart';
+import 'package:monticello_villas_app/core/widgets/page_title_bar.dart';
 import 'package:monticello_villas_app/core/widgets/settings_row.dart';
 import 'package:monticello_villas_app/core/widgets/refresh_shell.dart';
 import 'package:monticello_villas_app/features/settings/widgets/settings_skeleton.dart';
@@ -73,6 +75,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _navIndex = 0;
 
+  /// The Settings tab, where the bottom bar steps aside.
+  bool get _onSettings => _navIndex == 2;
+
   StreamSubscription<RemoteMessage>? _pushForegroundSub;
   StreamSubscription<RemoteMessage>? _pushOpenedSub;
 
@@ -123,6 +128,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ..showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
+          // Auto-dismisses even with an action; see the note on persist in
+          // notifications_screen.dart.
+          persist: false,
           duration: const Duration(seconds: 6),
           content: Text([title, body].whereType<String>().join('\n')),
           action: _pointsAtReport(message)
@@ -151,9 +159,9 @@ class _HomeScreenState extends State<HomeScreen> {
       // `onBack` is what makes the History header's back arrow work. As a tab
       // there is no route to pop, so without it the button was inert.
       IncidentsScreen(onBack: () => setState(() => _navIndex = 0)),
-      // No callback here: _SettingsTab has no back arrow of its own — it opens
-      // with a plain "Settings" heading — so there is nothing to wire.
-      const _SettingsTab(),
+      // The bar is hidden on Settings (see below), so its header carries the
+      // way back, wired like History's.
+      _SettingsTab(onBack: () => setState(() => _navIndex = 0)),
     ];
 
     final shell = AnnotatedRegion<SystemUiOverlayStyle>(
@@ -175,34 +183,36 @@ class _HomeScreenState extends State<HomeScreen> {
           // announcements feed and every scrolling screen already pad by.
           child: Stack(
             children: [
+              // Tabs stay mounted between switches (the map, scroll
+              // positions, History's filter). See KeptTabs for why.
               Positioned.fill(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  // Subtle fade + lift so tab changes feel smooth and
-                  // intentional instead of a hard cross-fade flash.
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.014),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    ),
-                  ),
-                  child: KeyedSubtree(
-                    key: ValueKey(_navIndex),
-                    child: pages[_navIndex],
-                  ),
-                ),
+                child: KeptTabs(index: _navIndex, children: pages),
               ),
+              // ── HIDDEN ON SETTINGS ─────────────────────────────────────────
+              // Settings is a destination you go to and come back from, not
+              // a view you switch between, so it gets the full screen and a
+              // back arrow; Home and History keep the bar. It slides down
+              // and fades (200ms ease-out) rather than vanishing, so the
+              // change reads as the bar stepping aside, and stops taking
+              // touches the moment it starts to leave.
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: _buildFixedNavBar(context),
+                child: IgnorePointer(
+                  ignoring: _onSettings,
+                  child: AnimatedSlide(
+                    offset: _onSettings ? const Offset(0, 1) : Offset.zero,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    child: AnimatedOpacity(
+                      opacity: _onSettings ? 0 : 1,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                      child: _buildFixedNavBar(context),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -213,7 +223,17 @@ class _HomeScreenState extends State<HomeScreen> {
     // Asks for a 1-5 star rating when the Guardhouse resolves one of this
     // resident's reports. Mounted on the signed-in shell, so it only ever runs
     // for a resident with a live incident feed.
-    return RatingPromptHost(child: shell);
+    //
+    // System back on History or Settings returns to Home rather than closing
+    // the app. That mattered less while the bar was always on screen; with it
+    // hidden on Settings, back is the only gesture left that leaves.
+    return PopScope(
+      canPop: _navIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) setState(() => _navIndex = 0);
+      },
+      child: RatingPromptHost(child: shell),
+    );
   }
 
   /// The white curved bar: Home and Reports left of the notch, History and
@@ -1145,7 +1165,10 @@ class _HeaderIdentity extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _SettingsTab extends StatefulWidget {
-  const _SettingsTab();
+  const _SettingsTab({required this.onBack});
+
+  /// Back to Home. Settings has no bottom bar, so this is its way out.
+  final VoidCallback onBack;
 
   @override
   State<_SettingsTab> createState() => _SettingsTabState();
@@ -1289,6 +1312,7 @@ class _SettingsTabState extends State<_SettingsTab>
                 behavior: SnackBarBehavior.floating,
                 backgroundColor: AppColors.backgroundElevated,
                 margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                persist: false,
                 action: result == PushPermission.denied
                     ? SnackBarAction(
                         label: 'Settings',
@@ -1362,20 +1386,11 @@ class _SettingsTabState extends State<_SettingsTab>
               // OUTSIDE the swap. The title is not waiting on anything, and a
               // heading that blanks out while the profile loads reads as the
               // screen having failed to open rather than as it filling in.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.screenGutter, 18, AppSpacing.screenGutter, 22),
-                child: Text(
-                  'Settings',
-                  // Centred in the bar. The other tabs are content screens
-                  // whose headings start where their content starts;
-                  // Settings is a destination, and a destination's name
-                  // belongs on the axis of the screen it names.
-                  textAlign: TextAlign.center,
-                  style: _t(
-                      size: 28, weight: FontWeight.w700, letterSpacing: -0.5),
-                ),
-              ),
+              // The app's shared title bar, as on History: a centred title and
+              // a back arrow, which is the way out now that the bottom bar is
+              // hidden on this tab. As a tab there is no route to pop, so the
+              // arrow switches the shell back to Home.
+              PageTitleBar(title: 'Settings', onNothingToPop: widget.onBack),
               Expanded(
                 child: service.hasLoaded
                     ? _body(context, service.profile)
@@ -1408,11 +1423,12 @@ class _SettingsTabState extends State<_SettingsTab>
   Widget _list(BuildContext context, UserProfile? profile) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(
+      // A plain bottom inset, not navClearance: there is no bar to clear here.
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.screenGutter,
-        0,
+        8,
         AppSpacing.screenGutter,
-        AppSpacing.navClearance,
+        24 + MediaQuery.paddingOf(context).bottom,
       ),
       children: [
         _ProfileCard(profile: profile, approval: _approvalStream),
@@ -1576,7 +1592,8 @@ class _SettingsCard extends StatelessWidget {
   }
 }
 
-/// Name, email and verification standing, on the same panel as everything else.
+/// Avatar, name, email and verification standing, centred on one axis,
+/// straight on the screen background.
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({required this.profile, required this.approval});
 
@@ -1588,68 +1605,86 @@ class _ProfileCard extends StatelessWidget {
     final name = profile?.name.trim().isNotEmpty == true
         ? profile!.name.trim()
         : 'Resident';
-    final email = profile?.email ?? '';
+    final email = (profile?.email ?? '').trim();
     final photo = profile?.photoUrl ?? '';
     final initials = name.substring(0, 1).toUpperCase();
 
-    return AppCard(
-      showBorder: false,
-      shadows: AppShadows.sm,
-      cornerRadius: AppRadius.lg,
-      padding: const EdgeInsets.all(18),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              // Emerald wash at 12%, the same tile recipe as the rows below —
-              // and NO ring. The white-at-30% border this carried was drawn for
-              // a dark glass card; on a white panel it is a white line on
-              // white, which is either invisible or, once the panel went solid,
-              // a faint scratch across the avatar's edge.
-              color: AppColors.primary
-                  .withValues(alpha: SettingsIconTile.washOpacity),
-              image: photo.isNotEmpty
-                  ? DecorationImage(
-                      image: NetworkImage(photo), fit: BoxFit.cover)
-                  : null,
-            ),
-            child: photo.isNotEmpty
-                ? null
-                : Center(
-                    child: Text(
-                      initials,
-                      style: _t(
-                          size: 22,
-                          weight: FontWeight.w700,
-                          color: AppColors.primary),
+    // ── CENTRED, STACKED ─────────────────────────────────────────────────────
+    // The page title above is centred, and a card that starts at its left
+    // edge under a centred heading reads as two layouts. Stacking also frees
+    // the name from sharing a line with the badge: it gets the card's full
+    // width and may wrap to a second line rather than ellipsising, which a
+    // long Filipino name on a 360pt phone needed.
+    //
+    // NO CARD. It sat in a white panel with a shadow, which made the header
+    // the heaviest object on the screen and boxed the resident's own name in
+    // like one more setting. On the bare background it reads as whose
+    // settings these are, and the rows below keep their panel.
+    //
+    // The email is back under the name (by request, 2026-10-19; it had been
+    // removed a pass earlier). One line, ellipsised: an address is the one
+    // string here that can be arbitrarily long.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                // Emerald wash at 12%, the same tile recipe as the rows below,
+                // and no ring: on a white panel a light ring is a faint scratch
+                // across the avatar's edge.
+                color: AppColors.primary
+                    .withValues(alpha: SettingsIconTile.washOpacity),
+                image: photo.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(photo), fit: BoxFit.cover)
+                    : null,
+              ),
+              child: photo.isNotEmpty
+                  ? null
+                  : Center(
+                      child: Text(
+                        initials,
+                        style: _t(
+                            size: 28,
+                            weight: FontWeight.w700,
+                            color: AppColors.primary),
+                      ),
                     ),
-                  ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: _t(size: 16, weight: FontWeight.w700)),
-                if (email.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(email,
-                      style: _t(size: 13, color: AppColors.textSecondary)),
-                ],
-                const SizedBox(height: 8),
-                StreamBuilder<String>(
-                  stream: approval,
-                  builder: (context, snap) => _VerificationPill(
-                    status: snap.data ?? ResidentStatus.pending,
-                  ),
-                ),
-              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _t(
+                  size: 19, weight: FontWeight.w700, letterSpacing: -0.3),
+            ),
+            if (email.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text(
+                email,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _t(size: 14, color: AppColors.textSecondary),
+              ),
+            ],
+            const SizedBox(height: 10),
+            StreamBuilder<String>(
+              stream: approval,
+              builder: (context, snap) => _VerificationPill(
+                status: snap.data ?? ResidentStatus.pending,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1669,6 +1704,10 @@ class _VerificationPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final approved = status == ResidentStatus.verified;
     final tone = approved ? AppColors.success : AppColors.warning;
+    // The wash stays the bright hue; glyph and label take its INK. Green-600
+    // at 11pt on its own 14% wash measured under 3:1 — the faintest text on
+    // the card, on the one word that says the account is in good standing.
+    final ink = AppColors.inkFor(tone);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1682,12 +1721,12 @@ class _VerificationPill extends StatelessWidget {
           Icon(
             approved ? PhosphorIconsFill.sealCheck : PhosphorIconsFill.clock,
             size: 14,
-            color: tone,
+            color: ink,
           ),
           const SizedBox(width: 5),
           Text(
             approved ? 'Verified' : 'Pending verification',
-            style: _t(size: 11, weight: FontWeight.w700, color: tone),
+            style: _t(size: 12, weight: FontWeight.w700, color: ink),
           ),
         ],
       ),

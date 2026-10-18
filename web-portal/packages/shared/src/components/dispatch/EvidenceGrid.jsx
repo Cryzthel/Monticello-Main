@@ -20,6 +20,26 @@ export function forensicTimestamp(at) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`
 }
 
+const CAPTURE = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+})
+
+/**
+ * "Oct 16, 2026, 10:14 PM" — the stamp a person reads off a thumbnail.
+ *
+ * forensicTimestamp stays the export and watermark format; this is the one
+ * drawn ON the tile, where the job is to be read at a glance at 200px wide.
+ */
+export function captureTimestamp(at) {
+  if (!at) return 'Time not recorded'
+  const date = new Date(at)
+  return Number.isNaN(date.getTime()) ? 'Time not recorded' : CAPTURE.format(date)
+}
+
 export function forensicCoordinates(lat, lng) {
   return typeof lat === 'number' && typeof lng === 'number'
     ? `${lat.toFixed(5)}, ${lng.toFixed(5)}`
@@ -36,9 +56,13 @@ export function forensicCoordinates(lat, lng) {
  * forensic record needs. The stamp is drawn over it here and in the
  * full-screen viewer, so a screenshot of either carries it.
  *
- * `stamp` is `{ at, lat, lng, reference }`. The time and position are the
- * report's for resident evidence, and the stage's for the guard's own scene
- * photos. Nothing records when each photo was taken.
+ * `stamp` is `{ at, lat, lng, reference, label }`. The time and position are
+ * the report's for resident evidence, and the stage's for the guard's own
+ * scene photos. Nothing records each photo separately — but for resident
+ * evidence the mobile app sets `reportedAt` to the OLDEST attachment's camera
+ * time (report_incident_screen.dart), so "Captured" is true of it. `label`
+ * defaults to that; a resolution grid passes "Resolved", because its time is
+ * the stage's, not the shutter's.
  *
  * ── ONE GRID, BOTH CONSOLES ────────────────────────────────────────────────
  * Shared after the Admin inspection rail was found drawing its own: a
@@ -79,13 +103,33 @@ export default function EvidenceGrid({ media, stamp, onOpen, emptyText }) {
             ) : (
               <EvidenceImage src={item.url} alt="" />
             )}
+            {/* ── THE STAMP HAD TO BE READABLE TO BE A STAMP ─────────────────
+                It was three lines of 9px mono at 90% white over an 80% scrim
+                that only started 20px up — on a bright photo the timestamp,
+                the one line anyone reads, sat on half-transparent sky. Now the
+                time leads at 12px semibold in words ("Oct 16, 2026, 10:14 PM"),
+                over a scrim that is near-opaque where the text sits and fades
+                out above it, and the forensic detail drops to a quieter
+                second line. The machine-sortable form is unchanged where it
+                is exported: the watermark and the PDF.
+
+                `via-70%` plus `pt-14` keep all three lines in the scrim's
+                darker lower half; at the default 50% midpoint the label sat on
+                ~40% black, under 3:1 against a bright sky. */}
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/55 to-transparent px-1.5 pb-1 pt-5 text-left font-mono text-[9px] leading-[1.35] text-white/90"
+              className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 via-70% to-transparent px-2 pb-1.5 pt-10 text-left [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]"
             >
-              <span className="block truncate">{forensicTimestamp(stamp.at)}</span>
-              <span className="block truncate">{forensicCoordinates(stamp.lat, stamp.lng)}</span>
-              <span className="block truncate font-semibold text-white">{stamp.reference}</span>
+              <span className="block text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-white">
+                {stamp.label ?? 'Captured'}
+              </span>
+              <span className="mt-1 block truncate text-xs font-semibold leading-tight tabular-nums text-white">
+                {captureTimestamp(stamp.at)}
+              </span>
+              <span className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 font-mono text-[9.5px] leading-tight text-white/80">
+                <span className="truncate">{forensicCoordinates(stamp.lat, stamp.lng)}</span>
+                <span className="shrink-0 font-semibold text-white/90">{stamp.reference}</span>
+              </span>
             </span>
           </button>
         </li>

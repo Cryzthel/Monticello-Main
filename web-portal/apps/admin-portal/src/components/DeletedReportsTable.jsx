@@ -1,5 +1,6 @@
+import { toast } from '@shared/lib/toast'
 import { useMemo, useState } from 'react'
-import { RotateCcw, Trash2, X, Search, Trash } from '@shared/icons'
+import { RotateCcw, Trash2, X, Trash } from '@shared/icons'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import StatusBadge from '@shared/components/StatusBadge'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
@@ -7,6 +8,8 @@ import { restoreIncidents, purgeIncidents } from '@shared/lib/incidents'
 import { formatCategory } from '@shared/lib/wpda'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTime } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 /**
  * The recycle bin — the only place Restore and Permanent Delete live.
@@ -20,7 +23,7 @@ import SearchField from '@shared/components/SearchField'
  * onSnapshot update reordering the rows can't silently retarget a checked
  * selection at a different report.
  */
-export default function DeletedReportsTable({ incidents = [], loading = false }) {
+export default function DeletedReportsTable({ incidents = [], loading = false, onOpenReport = null }) {
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [confirming, setConfirming] = useState(null)
@@ -59,16 +62,17 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
   async function runConfirmed() {
     if (!confirming) return
     setBusy(true)
-    try {
-      if (confirming.kind === 'purge') await purgeIncidents(confirming.ids)
-      else await restoreIncidents(confirming.ids)
-      setSelectedIds(new Set())
-      setConfirming(null)
-    } catch (err) {
-      console.error(`Bulk ${confirming.kind} failed`, err)
-    } finally {
-      setBusy(false)
-    }
+    const { kind, ids } = confirming
+    const noun = ids.length === 1 ? 'report' : `${ids.length} reports`
+    const ok = await toast.run(() => (kind === 'purge' ? purgeIncidents(ids) : restoreIncidents(ids)), {
+      success: kind === 'purge' ? `Permanently deleted ${noun}` : `Restored ${noun}`,
+      error: kind === 'purge' ? `Could not delete ${noun}` : `Could not restore ${noun}`,
+    })
+    setBusy(false)
+    // A failure keeps the dialog and the selection, so a retry is one click.
+    if (!ok) return
+    setSelectedIds(new Set())
+    setConfirming(null)
   }
 
   const count = selectedIds.size
@@ -121,12 +125,11 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
         </div>
       ) : null}
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto pb-6">
-        <table className="w-full min-w-[40rem] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            <tr className="table-head">
-              <th className="w-10 px-4 py-3">
-                <input
+      <DataTable
+        minWidth="56rem"
+        scrollClassName="pb-6"
+        columns={[
+          { header: <><input
                   type="checkbox"
                   aria-label="Select all deleted reports"
                   checked={allSelected}
@@ -137,17 +140,15 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
                   }}
                   onChange={toggleAll}
                   className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
-                />
-              </th>
-              <th className="px-4 py-3 font-medium">Category</th>
-              <th className="px-4 py-3 font-medium">Location</th>
-              <th className="px-4 py-3 font-medium">Resident</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Deleted</th>
-              <th className="px-4 py-3 font-medium">Deleted by</th>
-            </tr>
-          </thead>
-          <tbody>
+                /></>, className: 'w-10' },
+          { header: <>Category</> },
+          { header: <>Location</> },
+          { header: <>Resident</> },
+          { header: <>Status</> },
+          { header: <>Deleted</> },
+          { header: <>Deleted by</> },
+        ]}
+      >
             {loading ? (
               <SkeletonTableRows
                 rows={6}
@@ -176,21 +177,39 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
               </tr>
             ) : (
               rows.map((incident) => (
+                // Same rule as the Audit History table: the row opens the
+                // report, only the checkbox selects. A row click used to toggle
+                // selection here, staging a report for permanent purge.
                 <tr
                   key={incident.id}
-                  onClick={() => toggleRow(incident.id)}
-                  className={`cursor-pointer border-t border-divider transition ${
-                    selectedIds.has(incident.id) ? 'bg-brand-50' : 'hover:bg-tint/[0.03]'
-                  }`}
+                  onClick={() => onOpenReport?.(incident.id)}
+                  role={onOpenReport ? 'button' : undefined}
+                  tabIndex={onOpenReport ? 0 : undefined}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget || !onOpenReport) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onOpenReport(incident.id)
+                    }
+                  }}
+                  className={`border-t border-divider transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 ${
+                    onOpenReport ? 'cursor-pointer' : ''
+                  } ${selectedIds.has(incident.id) ? 'bg-brand-50' : 'hover:bg-tint/[0.03]'}`}
                 >
-                  <td className="px-4 py-3.5" onClick={(event) => event.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${formatCategory(incident.category)} report`}
-                      checked={selectedIds.has(incident.id)}
-                      onChange={() => toggleRow(incident.id)}
-                      className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
-                    />
+                  <td
+                    className="p-0"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <label className="flex h-full cursor-pointer items-center px-4 py-3.5">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${formatCategory(incident.category)} report`}
+                        checked={selectedIds.has(incident.id)}
+                        onChange={() => toggleRow(incident.id)}
+                        className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
+                      />
+                    </label>
                   </td>
                   <td className="px-4 py-3.5">
                     <PriorityBadge severity={incident.severity}>
@@ -205,7 +224,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
                     <StatusBadge status={incident.status ?? 'Pending'} />
                   </td>
                   <td className="px-4 py-3.5 text-text-secondary">
-                    {incident.deletedAt ? new Date(incident.deletedAt).toLocaleString() : '—'}
+                    {formatDateTime(incident.deletedAt)}
                   </td>
                   <td className="px-4 py-3.5 text-text-secondary">
                     {incident.deletedByName || '—'}
@@ -213,9 +232,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false })
                 </tr>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
 
       <ConfirmDialog
         open={Boolean(confirming)}

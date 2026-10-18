@@ -298,7 +298,19 @@ export default function LoginSplitLayout({ children, illustration, title, descri
 
             `text-center` cascades, which is why the form wrapper below turns
             it back off. */}
-        <div className={`my-auto flex w-full max-w-md flex-col items-center self-center text-center ${ENTRANCE}`}>
+        {/* `group/shell` so the greeting below can hide itself while a
+            password-recovery step is mounted — see the note on it. */}
+        <div className={`group/shell my-auto flex w-full max-w-md flex-col items-center self-center text-center ${ENTRANCE}`}>
+
+          {/* THE GREETING STEPS ASIDE DURING RECOVERY.
+              "Welcome back, Admin — enter your credentials" above a Reset
+              password form is two headings giving two instructions, and the
+              centred one is the wrong one. Each recovery step renders its own
+              left-aligned title (PasswordRecovery's StepHeading), the way
+              mobile's Forgot Password screen does, and marks its root with
+              `data-auth-recovery`; `:has()` reads that marker here, so no
+              state has to be lifted out of LoginForm to say "recovering". */}
+          <div className="flex flex-col items-center group-has-[[data-auth-recovery]]/shell:hidden">
 
           {/* THE HEADING, AND THE ONE PLACE THIS PRODUCT USES A SECOND FACE.
               Plus Jakarta Sans at 800, via `--font-display` — see that token
@@ -343,6 +355,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
               {description}
             </p>
           ) : null}
+          </div>
 
           {/* THE FORM IS CENTRED AS A BLOCK, NOT AS TEXT.
 
@@ -359,7 +372,9 @@ export default function LoginSplitLayout({ children, illustration, title, descri
               makes it read as balanced; it is not a property of the controls
               inside it. The sign-in button is full-width and so is centred by
               construction, label included. */}
-          <div className="mt-9 w-full text-left">{children}</div>
+          <div className="mt-9 w-full text-left group-has-[[data-auth-recovery]]/shell:mt-0">
+            {children}
+          </div>
         </div>
       </div>
     </div>

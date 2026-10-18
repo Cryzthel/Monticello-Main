@@ -442,8 +442,9 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen>
     // the form always opens instantly. Only a status we have actually OBSERVED
     // blocks the write: an unknown status (nothing cached because Firestore has
     // not been reachable) is allowed through to the server, where
-    // firestore.rules is the real authority. Blocking on "we could not check"
-    // would turn a connectivity problem into a permanent lockout.
+    // firestore.rules refuses an unverified account's report
+    // (isVerifiedResident, since 2026-10-19). Blocking on "we could not
+    // check" would turn a connectivity problem into a permanent lockout.
     final known = AccountApprovalService.cachedStatusFor(user.uid);
     if (known != null && known != ResidentStatus.verified) {
       _toast(

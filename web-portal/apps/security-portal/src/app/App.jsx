@@ -1,5 +1,6 @@
 import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from '@shared/auth/AuthContext'
+import TimeZoneBoundary from '@shared/components/TimeZoneBoundary'
 import ErrorBoundary from '@shared/components/ErrorBoundary'
 import ToastProvider from '@shared/components/ToastProvider'
 import SystemSettingsSync from '@shared/components/SystemSettingsSync'
@@ -22,7 +23,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <AuthProvider allowedRoles={ALLOWED_ROLES} unauthorizedMessage={UNAUTHORIZED_MESSAGE}>
+        <AuthProvider allowedRoles={ALLOWED_ROLES} unauthorizedMessage={UNAUTHORIZED_MESSAGE} trackPresence>
           {/* The organisation's SOS siren switch (Admin › Settings), kept live
               so a change reaches this console without a reload. */}
           <SystemSettingsSync />
@@ -47,7 +48,11 @@ export default function App() {
                   SOS channel: they must run on every page. */}
               <GuardTelemetryProvider>
                 <DispatchWatchdog />
-                <AppRoutes />
+                {/* Pages only: the SOS channel and telemetry above must not
+                    remount when an admin changes the time zone. */}
+                <TimeZoneBoundary>
+                  <AppRoutes />
+                </TimeZoneBoundary>
               </GuardTelemetryProvider>
             </PanicAlertProvider>
           </ToastProvider>

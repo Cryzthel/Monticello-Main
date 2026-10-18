@@ -15,12 +15,12 @@ import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
 import { db } from '@shared/lib/firebase'
-import { describeIncidentLocation, mapIncidentDoc, isResolvedExpired } from '@shared/lib/incidents'
+import { describeIncidentLocation, mapIncidentDoc, isDeleted, isResolvedExpired } from '@shared/lib/incidents'
 import { isActiveStage } from '@shared/lib/dispatchStage'
 import { formatCategory } from '@shared/lib/wpda'
 import { useLivePanicAlerts } from '@/components/PanicAlertProvider'
 import { useGuardTelemetryState } from '@/components/GuardTelemetryProvider'
-import { getLastFix } from '@/lib/guardTelemetry'
+import { describeDevice, getLastFix } from '@/lib/guardTelemetry'
 import { useGuardUnits } from '@/hooks/useGuardUnits'
 import { useDispatchRoute } from '@/hooks/useDispatchRoute'
 import { blockLotLabel } from '@/lib/dispatch'
@@ -76,7 +76,13 @@ export default function DashboardPage() {
   )
   const { data: rawIncidents } = useLiveCollection(activeQuery)
   const reports = useMemo(
-    () => rawIncidents.map(mapIncidentDoc).filter((incident) => !isResolvedExpired(incident)),
+    // Deleted reports out, as on every admin surface (see useIncidentFeed):
+    // a soft delete leaves the document matching this status query, so without
+    // this a report the office deleted stayed on the dispatch map as open.
+    () =>
+      rawIncidents
+        .map(mapIncidentDoc)
+        .filter((incident) => !isDeleted(incident) && !isResolvedExpired(incident)),
     [rawIncidents],
   )
   useEvidencePrefetch(reports)
@@ -214,6 +220,9 @@ export default function DashboardPage() {
     () => pickBestFix(deviceFix, publishedSelf),
     [deviceFix, publishedSelf],
   )
+  // Read once: whether this console is itself running on a phone, for the
+  // accuracy badge's "open this on your phone" hint.
+  const onMobile = useMemo(() => describeDevice().mobile, [])
 
   /**
    * This officer's own marker, driven by this device rather than by the
@@ -480,9 +489,13 @@ export default function DashboardPage() {
              */
             withOrigin: route.originSource === 'guardhouse',
             progress,
+            // The guard's live position, so the line visibly starts AT them —
+            // see the origin leg in routeToGeojson.
+            unitPosition: fix && Number.isFinite(fix.lng) ? [fix.lng, fix.lat] : null,
+            offRoute: isOffRoute(progress),
           })
         : null,
-    [route.route, route.tone, route.originSource, progress],
+    [route.route, route.tone, route.originSource, progress, fix],
   )
   /**
    * Off-route, but only once it has HELD for five seconds.
@@ -771,7 +784,16 @@ export default function DashboardPage() {
                   Above the banner, not below: it is one line and the banner
                   is the thing being read at speed, so the plate keeps the
                   position closest to the middle of the screen. */}
-              <GpsLockBadge mode={telemetryMode} locationError={locationError} fix={selfFix} />
+              <GpsLockBadge
+                mode={telemetryMode}
+                locationError={locationError}
+                fix={selfFix}
+                // pickBestFix hands back one of its two inputs, so identity
+                // says which: anything but this device's own fix came from
+                // the officer's other device through the telemetry document.
+                source={selfFix && selfFix !== deviceFix ? 'other-device' : 'this-device'}
+                onMobile={onMobile}
+              />
               {navigating && progress?.step && !offRoute ? (
                 <GuidanceBanner maneuver={progress.step} waypointM={progress.waypointM ?? null} />
               ) : null}

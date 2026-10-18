@@ -205,7 +205,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            duration: const Duration(seconds: 4),
+            // ── 3 SECONDS, AND IT MUST ACTUALLY LEAVE ──────────────────────
+            // `persist: false` is what makes [duration] mean anything. Since
+            // Flutter 3.29 a SnackBar with an action defaults to persisting
+            // until dismissed, so this toast sat on screen forever — and
+            // because the dismissal is written in `closed` below, a toast
+            // that never closed was a delete that never saved.
+            persist: false,
+            duration: const Duration(seconds: 3),
             content: Text(
               'Notification deleted',
               style: _t(
@@ -303,7 +310,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<Widget> _buildSections(List<ResidentNotification> feed) {
     // Until the stored stamp is back, the split cannot be computed. Rendering
     // the feed anyway would flash every row as New and then re-sort it.
-    if (!_ready) return const [_ScopeNote()];
+    if (!_ready) return const [];
 
     final boundary = _lastOpened ?? DateTime.now().subtract(_firstVisitWindow);
 
@@ -317,7 +324,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         : earlier.sublist(0, _earlierPreview);
 
     return [
-      const _ScopeNote(),
       if (fresh.isNotEmpty) ...[
         _SectionHeader(label: 'New', count: fresh.length, accent: true),
         for (final notification in fresh) _row(notification, unread: true),
@@ -464,30 +470,6 @@ class _SeePreviousButton extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// States the feed's scope in one line, at the top of the list.
-///
-/// Worth the row: a drawer that mixes two kinds of alert is ambiguous about
-/// what it covers, and a quiet one is ambiguous about whether it works.
-/// Naming the scope answers both without the resident going looking.
-class _ScopeNote extends StatelessWidget {
-  const _ScopeNote();
-
-  @override
-  Widget build(BuildContext context) {
-    // Plain muted text, no callout box. It used to sit in a mint card, which
-    // is now the colour of an unread row — a scope note dressed as an alert.
-    // Inert: it states scope, it does nothing.
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-      child: Text(
-        'Security updates on your reports, and new subdivision notices. '
-        'Swipe a row left, or use its menu, to remove it.',
-        style: _t(size: 12.5, color: AppColors.textMuted, height: 1.4),
       ),
     );
   }

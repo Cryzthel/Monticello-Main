@@ -96,7 +96,7 @@ export function mapResidentDoc(d) {
     reviewedByName: d.reviewedByName ?? '',
     // Verification documents/IDs, if the signup flow captured any. The
     // mobile registration form does not upload these yet (see the note in
-    // ResidentReviewDrawer) — this reads whichever field a future uploader
+    // ResidentDetailsDrawer) — this reads whichever field a future uploader
     // writes without needing a schema change here.
     documentUrls: d.documentUrls ?? d.idPhotoUrls ?? [],
     createdAt,

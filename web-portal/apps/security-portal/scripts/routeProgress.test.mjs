@@ -282,6 +282,69 @@ check('interpolateAlong survives junk', () => {
   assert.deepStrictEqual(interpolateAlong([[1, 2]], 10), [1, 2])
 })
 
+
+// ── The arrow's bearing, read along the road ───────────────────────────
+
+const { bearingAlong, offRouteLimit, OFF_ROUTE_MAX_METERS } = lib
+
+check('a fix on a duplicate maneuver vertex does not point north', () => {
+  // Mapbox repeats the coordinate at each maneuver: a zero-length segment.
+  // The east leg is the second real segment; a fix right at its start used to
+  // read atan2(0, 0) = 0° (north) off the duplicate.
+  const DUP = [LINE[0], LINE[1], LINE[1], LINE[2], LINE[3]]
+  const atCorner = routeProgress(
+    { geometry: { coordinates: DUP }, duration: 60, steps: [] },
+    { lat: LINE[1][1], lng: LINE[1][0] + 0.0002 }, // ~22 m into the east leg
+  )
+  near(atCorner.bearing, 90, 3, 'bearing just past the corner')
+})
+
+check('the bearing turns through a corner instead of snapping', () => {
+  const total = measureLine(LINE).total
+  const leg = measureLine(LINE.slice(0, 2)).total
+  const before = bearingAlong(LINE, leg - 30) // well before the turn
+  const into = bearingAlong(LINE, leg - 5) // the window spans the corner
+  const after = bearingAlong(LINE, leg + 30)
+  near(before, 0, 2, 'north before the corner')
+  near(after, 90, 2, 'east after it')
+  assert.ok(into > 5 && into < 85, `mid-turn ${into} should be between`)
+  assert.ok(total > 0)
+})
+
+check('bearingAlong never reads a degenerate line as north by accident', () => {
+  const SAME = [LINE[1], LINE[1], LINE[2]]
+  near(bearingAlong(SAME, 0), 90, 2, 'first real segment')
+})
+
+// ── Off-route tolerance follows the fix's own accuracy ─────────────────
+
+check('a GPS-grade fix keeps the 45 m tolerance', () => {
+  assert.strictEqual(offRouteLimit(8), OFF_ROUTE_METERS)
+  assert.strictEqual(offRouteLimit(undefined), OFF_ROUTE_METERS)
+})
+
+check('a rough fix widens it to its own radius, capped', () => {
+  assert.strictEqual(offRouteLimit(70), 70)
+  assert.strictEqual(offRouteLimit(126), OFF_ROUTE_MAX_METERS)
+})
+
+check('a ±126 m Wi-Fi fix 60 m off the road is snapped, not stray', () => {
+  // ~60 m east of the first leg.
+  const rough = routeProgress(ROUTE, { lat: LAT + 0.00045, lng: 121.00056, accuracy: 126 })
+  assert.ok(rough.offsetM > OFF_ROUTE_METERS && rough.offsetM < 80, `offset ${rough.offsetM}`)
+  assert.strictEqual(isOffRoute(rough), false)
+  // The same spot from a precise fix IS off route.
+  const precise = routeProgress(ROUTE, { lat: LAT + 0.00045, lng: 121.00056, accuracy: 6 })
+  assert.strictEqual(isOffRoute(precise), true)
+})
+
+check('even a rough fix is off route past the cap', () => {
+  // ~130 m WEST of the first leg, clear of every other leg.
+  const far = routeProgress(ROUTE, { lat: LAT + 0.00045, lng: 120.9988, accuracy: 300 })
+  assert.ok(far.offsetM > OFF_ROUTE_MAX_METERS, `offset ${far.offsetM}`)
+  assert.strictEqual(isOffRoute(far), true)
+})
+
 console.log(`\n${passed} passed, ${failures.length} failed`)
 if (failures.length) {
   failures.forEach((f) => console.error('  FAIL  ' + f))

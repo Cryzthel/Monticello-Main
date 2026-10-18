@@ -859,6 +859,15 @@ class AppTheme {
         onError: AppColors.onAccent,
       ),
       pageTransitionsTheme: _pageTransitions,
+      // ── NO RIPPLE BURST ────────────────────────────────────────────────
+      // Removed by request with the tap-spark overlay: a ripple spreading out
+      // from the finger is a burst too. Presses still answer, but quietly —
+      // every InkWell and Material button keeps its pressed highlight, a
+      // faint slate wash that appears under the finger and clears on lift,
+      // and AppCard keeps its 0.98 press scale.
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: AppColors.textPrimary.withValues(alpha: 0.06),
       textTheme: textBase.copyWith(
         displaySmall: textBase.displaySmall?.copyWith(
           color: AppColors.textPrimary,

@@ -1,3 +1,7 @@
+import { endSessionAndReload, takeSessionEndReason } from '@shared/lib/sessionTeardown'
+import { startPresence } from '@shared/lib/presence'
+import { reconcilePasswordResetFlags } from '@shared/lib/passwordFlags'
+import { syncStaffEmail } from '@shared/lib/staffEmail'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   browserLocalPersistence,
@@ -7,7 +11,7 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
 } from 'firebase/auth'
-import { doc, getDoc } from 'firebase/firestore'
+import { doc, getDoc, onSnapshot } from 'firebase/firestore'
 import { auth, db } from '@shared/lib/firebase'
 import { STAFF_COLLECTION, APPROVED_STATUS } from '@shared/auth/roles'
 import { resolveWithTotp, secondFactorChallenge } from '@shared/lib/twoFactor'
@@ -117,6 +121,54 @@ const TRANSIENT_CODES = new Set([
 const VERIFY_FAILED =
   'Could not reach the server to verify this account. Check the connection and try again.'
 
+const SESSION_ENDED = 'Your session has ended. Sign in again to continue.'
+
+/**
+ * Why an administrator's change to THIS account ended the session, keyed by
+ * what the live staff record now says. Shown on the login screen after the
+ * teardown reload (see the watch in AuthProvider).
+ */
+const ACCESS_ENDED = {
+  deleted: 'This account was removed by an administrator.',
+  suspended: 'This account was suspended by an administrator. Contact the admin office to restore access.',
+  revoked: 'Access for this account was revoked by an administrator.',
+}
+
+/**
+ * ── A DENIED READ OF YOUR OWN STAFF RECORD IS NEVER "NOT AUTHORISED" ──────
+ * firestore.rules lets every signed-in user read `staff_accounts/{their uid}`
+ * (`isOwner(userId)`), so `permission-denied` on THAT read can only mean the
+ * request reached Firestore without a valid ID token. It used to be treated
+ * as a definitive "no", which told legitimate officers (2026-10-18, a newly
+ * provisioned patrol guard) "This account is not authorized for the
+ * Guardhouse Portal." Two real ways to get there:
+ *
+ *   • A session restored from before a password change. Changing a password
+ *     revokes every older session; the browser still restores the old user,
+ *     and its read is refused.
+ *   • The sign-in race. `login` and the `onAuthStateChanged` listener both
+ *     read the role at the same moment; if the listener's read is sent before
+ *     Firestore has attached the fresh token, it is refused — and the listener
+ *     then signed the officer straight back out, even though `login`'s read
+ *     had succeeded.
+ *
+ * So a denial of the OWN record forces a token refresh and retries. If the
+ * token cannot be refreshed (revoked, expired) or the read is still refused,
+ * the answer is "your session ended", never "not authorised".
+ */
+const CREDENTIAL_CODES = new Set(['permission-denied', 'unauthenticated'])
+
+function isCredentialProblem(error) {
+  return CREDENTIAL_CODES.has(String(error?.code ?? '').replace(/^firestore\//, ''))
+}
+
+class SessionEndedError extends Error {
+  constructor() {
+    super(SESSION_ENDED)
+    this.code = 'session-ended'
+  }
+}
+
 function isTransient(error) {
   const code = String(error?.code ?? '').replace(/^firestore\//, '')
   return TRANSIENT_CODES.has(code) || code === 'auth/network-request-failed'
@@ -136,12 +188,12 @@ const ROLE_READ_ATTEMPTS = 3
  * `null`, which is an answer. A denial stops immediately; only a transient
  * failure is retried, with a short backoff.
  */
-async function resolvePortalRole(uid, allowedRoles) {
+async function resolvePortalRole(firebaseUser, allowedRoles) {
   let lastError = null
 
   for (let attempt = 0; attempt < ROLE_READ_ATTEMPTS; attempt += 1) {
     try {
-      const staffSnap = await getDoc(doc(db, STAFF_COLLECTION, uid))
+      const staffSnap = await getDoc(doc(db, STAFF_COLLECTION, firebaseUser.uid))
       if (!staffSnap.exists()) return null
 
       const staff = staffSnap.data()
@@ -149,18 +201,41 @@ async function resolvePortalRole(uid, allowedRoles) {
       return allowedRoles.includes(staff.role) ? staff.role : null
     } catch (error) {
       lastError = error
-      if (!isTransient(error)) break
+      if (isCredentialProblem(error)) {
+        // See CREDENTIAL_CODES: refresh the token, then read again. A revoked
+        // or expired session cannot refresh — that is a signed-out session,
+        // not a refused account.
+        try {
+          await firebaseUser.getIdToken(true)
+        } catch {
+          throw new SessionEndedError()
+        }
+      } else if (!isTransient(error)) {
+        break
+      }
       await new Promise((resolve) => setTimeout(resolve, 300 * 2 ** attempt))
     }
   }
 
+  if (isCredentialProblem(lastError)) throw new SessionEndedError()
   throw lastError ?? new Error('The account could not be verified.')
+}
+
+/** The message for a role check that threw rather than answered. */
+function describeRoleFailure(error, unauthorizedMessage) {
+  if (error?.code === 'session-ended') return SESSION_ENDED
+  if (isTransient(error)) return VERIFY_FAILED
+  return unauthorizedMessage
 }
 
 export function AuthProvider({
   children,
   allowedRoles,
   unauthorizedMessage = 'This account is not authorised for this portal.',
+  loginPath = '/login',
+  // Publish this user's online/offline presence (lib/presence.js). The
+  // Guardhouse turns it on so the admin roster can show who is connected.
+  trackPresence = false,
 }) {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
@@ -170,7 +245,9 @@ export function AuthProvider({
   // wiped by the `onAuthStateChanged(null)` that our own signOut fires a beat
   // later, and the user is returned to a blank login screen with no
   // explanation of why they bounced.
-  const [rejection, setRejection] = useState('')
+  // Seeded from the reason a forced sign-out left behind (an admin suspended
+  // or deleted this account) — the teardown reload would otherwise lose it.
+  const [rejection, setRejection] = useState(() => takeSessionEndReason())
 
   // `allowedRoles` is a literal array in the app config, so a naive dependency
   // on it would re-subscribe on every render. The ref pins the identity while
@@ -180,6 +257,23 @@ export function AuthProvider({
 
   const unauthorizedMessageRef = useRef(unauthorizedMessage)
   unauthorizedMessageRef.current = unauthorizedMessage
+
+  // Whether THIS page has held an approved session. Only the end of one of
+  // those triggers the teardown — a sign-in that was rejected never put data
+  // on screen, and its message must survive (no reload).
+  const signedInRef = useRef(false)
+  // The uid an INTERACTIVE sign-in (login / second factor) just approved. The
+  // listener's own check runs in parallel; if it fails after this succeeded,
+  // it must not sign the person back out — see the listener.
+  const approvedUidRef = useRef(null)
+  const approvedRoleRef = useRef(null)
+  const loginPathRef = useRef(loginPath)
+  loginPathRef.current = loginPath
+  // Set just before a sign-out that THIS provider forces, so the teardown
+  // can carry the reason across its reload to the login screen.
+  const endReasonRef = useRef('')
+  // Stops this tab's presence; awaited before any sign-out (see presence.js).
+  const stopPresenceRef = useRef(null)
 
   useEffect(() => {
     // Guards against a slow staff-document read resolving after the user has
@@ -191,6 +285,16 @@ export function AuthProvider({
       const current = ++generation
 
       if (!firebaseUser) {
+        // ── SESSION ENDED: WIPE IT ───────────────────────────────────────
+        // Logout here or in another tab, the idle timeout, or a revoked
+        // session all land here. Confidential data (SOS alerts, incident
+        // caches) used to stay on the login screen afterwards; see
+        // lib/sessionTeardown.js for why this reloads rather than resets.
+        if (signedInRef.current) {
+          signedInRef.current = false
+          endSessionAndReload(loginPathRef.current, endReasonRef.current)
+          return
+        }
         setUser(null)
         setRole(null)
         setInitializing(false)
@@ -198,24 +302,41 @@ export function AuthProvider({
       }
 
       let approvedRole = null
-      let unreachable = false
+      let failure = null
       try {
-        approvedRole = await resolvePortalRole(firebaseUser.uid, allowedRolesRef.current)
+        approvedRole = await resolvePortalRole(firebaseUser, allowedRolesRef.current)
       } catch (error) {
         // Neither a denial nor a dropped connection may be read as "allowed" —
-        // but they are reported differently, because one is the account's
-        // answer and the other is the network's.
+        // but they are reported differently: the account's answer, the
+        // network's, and an ended session are three different messages.
         approvedRole = null
-        unreachable = isTransient(error)
+        failure = error
       }
 
       if (current !== generation) return
 
+      // ── THE INTERACTIVE SIGN-IN IS AUTHORITATIVE ─────────────────────────
+      // `login` and this listener check the role at the same moment. If
+      // `login` approved this uid, a failure HERE (a read sent before the new
+      // token was attached) must not sign the person straight back out with
+      // "Your session has ended" — which is what a newly created account saw
+      // on its first sign-in (2026-10-18). Use the role `login` approved.
+      if (!approvedRole && approvedUidRef.current === firebaseUser.uid) {
+        approvedRole = approvedRoleRef.current
+      }
+
       if (!approvedRole) {
         // Restoring a persisted session that this portal does not accept —
-        // e.g. tokens left behind by an earlier build that shared one origin.
-        // Clear it rather than sitting on it.
-        setRejection(unreachable ? VERIFY_FAILED : unauthorizedMessageRef.current)
+        // e.g. tokens left behind by an earlier build that shared one origin,
+        // or a session revoked by a password reset. Clear it rather than
+        // sitting on it. A session that merely ENDED (revoked, expired) is
+        // cleared QUIETLY: the person did not just try to sign in, so a
+        // message on the login screen would read as their sign-in failing.
+        if (failure?.code !== 'session-ended') {
+          setRejection(
+            failure ? describeRoleFailure(failure, unauthorizedMessageRef.current) : unauthorizedMessageRef.current,
+          )
+        }
         setUser(null)
         setRole(null)
         setInitializing(false)
@@ -223,6 +344,7 @@ export function AuthProvider({
         return
       }
 
+      signedInRef.current = true
       setUser(firebaseUser)
       setRole(approvedRole)
       setInitializing(false)
@@ -238,12 +360,12 @@ export function AuthProvider({
   // the password step and the two-factor step.
   const finishSignIn = useCallback(async (credential) => {
     let approvedRole = null
-    let unreachable = false
+    let failure = null
     try {
-      approvedRole = await resolvePortalRole(credential.user.uid, allowedRolesRef.current)
+      approvedRole = await resolvePortalRole(credential.user, allowedRolesRef.current)
     } catch (error) {
       approvedRole = null
-      unreachable = isTransient(error)
+      failure = error
     }
 
     if (!approvedRole) {
@@ -251,10 +373,28 @@ export function AuthProvider({
       // authenticated. Awaited, so the tokens are gone before the caller
       // renders the error.
       await firebaseSignOut(auth).catch(() => {})
-      // The sign-in form prints this verbatim, so it has to say which of the
-      // two failures happened.
-      throw new Error(unreachable ? VERIFY_FAILED : unauthorizedMessageRef.current)
+      // The sign-in form prints this verbatim. The person JUST typed a valid
+      // password, so "your session has ended" would be false here; a
+      // credential hiccup reads as a verification failure to retry.
+      const message =
+        failure?.code === 'session-ended'
+          ? VERIFY_FAILED
+          : failure
+            ? describeRoleFailure(failure, unauthorizedMessageRef.current)
+            : unauthorizedMessageRef.current
+      throw new Error(message)
     }
+
+    approvedUidRef.current = credential.user.uid
+    approvedRoleRef.current = approvedRole
+
+    // A temporary password replaced through the emailed-code reset is only
+    // noticed by the server once someone asks — signing in with the new one
+    // is that moment. Not awaited: sign-in must never wait on it.
+    reconcilePasswordResetFlags()
+    // The first sign-in after a verified email change is when the staff
+    // record learns the new address (see lib/staffEmail.js). Not awaited.
+    syncStaffEmail()
 
     return approvedRole
   }, [])
@@ -314,8 +454,62 @@ export function AuthProvider({
     [finishSignIn],
   )
 
+  const uid = user?.uid ?? null
+  const hasRole = Boolean(role)
+
+  // ── PRESENCE ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!trackPresence || !uid || !hasRole) return undefined
+    const stop = startPresence(uid)
+    stopPresenceRef.current = stop
+    return () => {
+      if (stopPresenceRef.current === stop) stopPresenceRef.current = null
+      stop()
+    }
+  }, [trackPresence, uid, hasRole])
+
+  // ── AN ADMIN'S CHANGE ENDS THIS SESSION AT ONCE ──────────────────────────
+  // The role is checked at sign-in, but suspending, revoking or deleting an
+  // account happens while its holder may be signed in. The server disables
+  // the Auth user and revokes its refresh tokens, yet an ID token already
+  // issued stays valid for up to an hour — and nothing on screen changed in
+  // that hour. So the approved session watches its own staff record (which
+  // every user may read) and signs out the moment it stops approving it.
+  //
+  // Only SERVER-confirmed snapshots count: the Guardhouse's offline cache can
+  // hold a stale copy, and a cached "suspended" from before a reactivation
+  // must not sign anyone out. A listener error is ignored — a revoked session
+  // ends on its own when its token fails to refresh.
+  useEffect(() => {
+    if (!uid || !hasRole) return undefined
+    return onSnapshot(
+      doc(db, STAFF_COLLECTION, uid),
+      { includeMetadataChanges: true },
+      (snap) => {
+        if (snap.metadata.fromCache) return
+        const staff = snap.exists() ? snap.data() : null
+        let reason = ''
+        if (!staff) reason = ACCESS_ENDED.deleted
+        else if (staff.status !== APPROVED_STATUS) reason = ACCESS_ENDED[staff.status] ?? ACCESS_ENDED.suspended
+        else if (!allowedRolesRef.current.includes(staff.role)) reason = unauthorizedMessageRef.current
+        if (!reason) return
+        endReasonRef.current = reason
+        approvedUidRef.current = null
+        approvedRoleRef.current = null
+        Promise.resolve(stopPresenceRef.current?.())
+          .finally(() => firebaseSignOut(auth).catch(() => {}))
+      },
+      () => {},
+    )
+  }, [uid, hasRole])
+
   const logout = useCallback(async () => {
     setRejection('')
+    approvedUidRef.current = null
+    approvedRoleRef.current = null
+    // While the session can still write: an explicit sign-out flips the admin
+    // roster to Offline now, not when this tab is eventually closed.
+    await stopPresenceRef.current?.()
     await firebaseSignOut(auth)
   }, [])
 

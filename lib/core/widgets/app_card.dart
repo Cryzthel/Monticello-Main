@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -142,9 +144,45 @@ class _AppCardState extends State<AppCard> {
 
   bool get _interactive => widget.onTap != null || widget.onLongPress != null;
 
+  /// The shortest a press is held down on screen.
+  ///
+  /// A quick tap delivers tap-down and tap-up within a frame or two of each
+  /// other (inside a scroll view, tap-down is even held back until the
+  /// finger lifts), so the 0.98 press scale was set and cleared before it
+  /// could paint. The card then opened its modal with no visible
+  /// acknowledgement, which reads as the app jumping rather than responding.
+  /// Holding the press this long lets the dip actually show.
+  static const Duration _minPress = Duration(milliseconds: 100);
+
+  DateTime? _pressedAt;
+  Timer? _releaseTimer;
+
   void _setPressed(bool value) {
-    if (!_interactive || _pressed == value) return;
-    setState(() => _pressed = value);
+    if (!_interactive) return;
+    if (value) {
+      _releaseTimer?.cancel();
+      _pressedAt = DateTime.now();
+      if (!_pressed) setState(() => _pressed = true);
+      return;
+    }
+    if (!_pressed) return;
+    final held = _pressedAt == null
+        ? _minPress
+        : DateTime.now().difference(_pressedAt!);
+    if (held >= _minPress) {
+      setState(() => _pressed = false);
+      return;
+    }
+    _releaseTimer?.cancel();
+    _releaseTimer = Timer(_minPress - held, () {
+      if (mounted) setState(() => _pressed = false);
+    });
+  }
+
+  @override
+  void dispose() {
+    _releaseTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -188,7 +226,12 @@ class _AppCardState extends State<AppCard> {
         onTapUp: (_) => _setPressed(false),
         // Fires on drag-off as well as on a genuine cancel, which is what
         // releases the scale when a press turns into a list scroll.
-        onTapCancel: () => _setPressed(false),
+        // Immediately, not after the minimum hold: a cancelled press is a
+        // scroll, and the card should let go the moment the list moves.
+        onTapCancel: () {
+          _releaseTimer?.cancel();
+          if (_pressed) setState(() => _pressed = false);
+        },
         onTap: widget.onTap == null
             ? null
             : () {

@@ -2,6 +2,7 @@ import { STATUS_TO_DISPLAY } from '@shared/lib/incidents'
 import { categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
 import { categoryTone } from '@shared/theme/badgeStyles'
 import { panicSignal } from '@shared/lib/panicStatus'
+import { formatDate, formatShortDate, formatTime } from '@shared/lib/dates'
 
 // Notification tones, matching the four circular status glyphs. `error` is
 // reserved for things demanding action now (a live high-severity incident),
@@ -52,7 +53,7 @@ export function relativeTime(date, now = Date.now()) {
   const dayDelta = Math.round((todayStart - startOfDay(ms)) / DAY)
   if (dayDelta <= 1) return 'Yesterday'
   if (dayDelta < 7) return `${dayDelta} days ago`
-  return new Date(ms).toLocaleDateString()
+  return formatDate(ms)
 }
 
 /**
@@ -72,7 +73,7 @@ export function clockTime(date) {
   if (!date) return '--:--'
   const d = date instanceof Date ? date : new Date(date)
   if (Number.isNaN(d.getTime())) return '--:--'
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })
+  return formatTime(d)
 }
 
 function toDate(value) {
@@ -294,6 +295,9 @@ export function groupNotificationsByDay(items, now = Date.now()) {
 
     if (!groups.has(key)) {
       let label = 'Just received'
+      // The calendar date behind a RELATIVE label, for the panel's divider.
+      // Null where the label already is a date — it would say it twice.
+      let date = null
       if (dated) {
         const dayStart = startOfDay(ms)
         const delta = Math.round((todayStart - dayStart) / DAY)
@@ -302,13 +306,16 @@ export function groupNotificationsByDay(items, now = Date.now()) {
             ? 'Today'
             : delta === 1
               ? 'Yesterday'
-              : new Date(dayStart).toLocaleDateString(undefined, {
+              : new Date(dayStart).toLocaleDateString('en-US', {
                   weekday: 'short',
                   month: 'short',
                   day: 'numeric',
                 })
+        if (delta <= 1) {
+          date = formatShortDate(dayStart)
+        }
       }
-      groups.set(key, { key, label, items: [] })
+      groups.set(key, { key, label, date, items: [] })
     }
     groups.get(key).items.push(item)
   })
@@ -318,4 +325,19 @@ export function groupNotificationsByDay(items, now = Date.now()) {
     ...sections.filter((s) => s.key === 'undated'),
     ...sections.filter((s) => s.key !== 'undated').sort((a, b) => Number(b.key) - Number(a.key)),
   ]
+}
+
+/**
+ * Where a notification opens, from the routes the APP passes in.
+ *
+ * `routes` maps a kind to a path; a path ending in "=" takes the source id
+ * (`'/tickets?incident='` → `/tickets?incident=abc123`), anything else is used
+ * as is (`'/announcements'`). Shared code never names a portal's routes — the
+ * two consoles' pages differ, and a shared default once pointed the guardhouse
+ * at an admin-only URL — so a kind the app did not map simply has no link.
+ */
+export function notificationHref(item, routes = {}) {
+  const path = routes?.[item?.kind]
+  if (!path) return null
+  return path.endsWith('=') ? `${path}${encodeURIComponent(item.sourceId ?? '')}` : path
 }

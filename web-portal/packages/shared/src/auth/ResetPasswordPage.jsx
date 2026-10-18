@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth'
+import { applyActionCode, checkActionCode, confirmPasswordReset, verifyPasswordResetCode } from 'firebase/auth'
 import { CheckCircle2, ShieldAlert } from '@shared/icons'
 
 import { auth } from '@shared/lib/firebase'
 import AuthAlert from '@shared/auth/AuthAlert'
 import BackToSignIn from '@shared/auth/BackToSignIn'
+import CtaLabel from '@shared/auth/CtaLabel'
 import LoginSplitLayout from '@shared/auth/LoginSplitLayout'
 import NewPasswordFields from '@shared/auth/NewPasswordFields'
 import { passwordReady } from '@shared/auth/passwordPolicy'
@@ -57,7 +58,100 @@ import { CTA } from '@shared/auth/authStyles'
  */
 const REDIRECT_SECONDS = 5
 
-export default function ResetPasswordPage({ loginPath, illustration }) {
+/**
+ * Firebase has ONE action URL per project for every emailed link, so if it
+ * points here, email verification and email-change links arrive here too —
+ * and used to be fed to `verifyPasswordResetCode`, which called them an
+ * "expired reset link". They are routed to EmailActionPage instead.
+ */
+const EMAIL_MODES = new Set(['verifyEmail', 'verifyAndChangeEmail', 'recoverEmail'])
+
+// One attempt per code: an action code is single-use, and StrictMode's second
+// effect run would otherwise apply it again and report the success as a failure.
+const applied = new Map()
+function applyOnce(oobCode) {
+  if (!applied.has(oobCode)) {
+    applied.set(
+      oobCode,
+      checkActionCode(auth, oobCode).then(async (info) => {
+        await applyActionCode(auth, oobCode)
+        return info
+      }),
+    )
+  }
+  return applied.get(oobCode)
+}
+
+export default function ResetPasswordPage(props) {
+  const [params] = useSearchParams()
+  return EMAIL_MODES.has(params.get('mode')) ? <EmailActionPage {...props} /> : <PasswordResetForm {...props} />
+}
+
+/**
+ * Applies an email verification, an email change, or an email-change undo.
+ * `checkActionCode` first, so the page can name the address involved, then
+ * `applyActionCode`. After a change the old session is no longer valid, so
+ * the only way on is to sign in with the new address.
+ */
+function EmailActionPage({ loginPath, illustration }) {
+  const [params] = useSearchParams()
+  const navigate = useNavigate()
+  const oobCode = params.get('oobCode') ?? ''
+  const mode = params.get('mode')
+  const [state, setState] = useState({ status: 'checking', email: '' })
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const info = await applyOnce(oobCode)
+        if (!cancelled) setState({ status: 'done', email: info?.data?.email ?? '', previous: info?.data?.previousEmail ?? '' })
+      } catch {
+        if (!cancelled) setState({ status: 'error', email: '' })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [oobCode])
+
+  const copy =
+    mode === 'verifyEmail'
+      ? { title: 'Email verified', body: `${state.email || 'Your address'} is now verified.` }
+      : mode === 'recoverEmail'
+        ? { title: 'Email change undone', body: `Your sign-in address is back to ${state.email || 'its previous value'}. Change your password if you did not request the change.` }
+        : { title: 'Email address updated', body: `Sign in with ${state.email || 'your new address'} from now on. Sessions using the old address have been signed out.` }
+
+  return (
+    <LoginSplitLayout title={state.status === 'done' ? copy.title : 'Confirming your email'} description="Monticello Villas account" illustration={illustration}>
+      {state.status === 'checking' ? (
+        <p className="text-sm text-text-muted">Checking your link…</p>
+      ) : (
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <span
+              className={`flex h-11 w-11 items-center justify-center rounded-full ${
+                state.status === 'done' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
+              }`}
+            >
+              {state.status === 'done' ? <CheckCircle2 size="md" /> : <ShieldAlert size="md" />}
+            </span>
+            <p className="text-sm leading-relaxed text-text-muted">
+              {state.status === 'done'
+                ? copy.body
+                : 'This link has expired or has already been used. Request a new one from Settings.'}
+            </p>
+          </div>
+          <button type="button" onClick={() => navigate(loginPath, { replace: true })} className={CTA}>
+            Go to sign in
+          </button>
+        </div>
+      )}
+    </LoginSplitLayout>
+  )
+}
+
+function PasswordResetForm({ loginPath, illustration }) {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const oobCode = params.get('oobCode') ?? ''
@@ -272,7 +366,7 @@ export default function ResetPasswordPage({ loginPath, illustration }) {
 
         <div className="flex flex-col gap-3">
           <button type="submit" disabled={!ready} className={CTA}>
-            {submitting ? 'Setting password…' : 'Set new password'}
+            <CtaLabel busy={submitting} label="Set new password" busyLabel="Setting password…" />
           </button>
           <BackToSignIn onClick={returnToSignIn} disabled={submitting} />
         </div>

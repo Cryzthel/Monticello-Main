@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { DEFAULT_TIME_ZONE, isValidTimeZone, setPortalTimeZone } from '@shared/lib/dates'
 
 /**
  * Organisation settings: schema, defaults and the in-memory store every
@@ -162,7 +163,7 @@ export const DEFAULTS = Object.freeze({
   }),
 
   /**
-   * contactEmail / officeHours  ENFORCED — the sidebar office block.
+   * contactEmail / officeHours  STORED ONLY — the sidebar office block that showed them was removed 2026-10-18 (it duplicated the signed-in email).
    * logoUrl                     ENFORCED — the sidebar brand tile, with an
    *                             onError fallback to the MV mark.
    * auditRetentionDays          SWEEP — prunes `provisioning_logs`, which is
@@ -172,12 +173,17 @@ export const DEFAULTS = Object.freeze({
    *                             retention policy there would delete the
    *                             records rather than trim a log. 0 means keep
    *                             indefinitely and cannot produce a cutoff.
+   * timeZone                    ENFORCED — every pinned formatter in
+   *                             shared/lib/dates.js, in both consoles, via
+   *                             commitSettings below. Asia/Manila is what was
+   *                             hard-coded before it was a setting.
    */
   organisation: Object.freeze({
     contactEmail: '',
     officeHours: '',
     logoUrl: '',
     auditRetentionDays: 90,
+    timeZone: DEFAULT_TIME_ZONE,
   }),
 
   /**
@@ -408,6 +414,7 @@ export function sanitizeSettings(raw = {}) {
         d.organisation.auditRetentionDays,
         AUDIT_RETENTION_DAYS,
       ),
+      timeZone: isValidTimeZone(raw.organisation?.timeZone) ? raw.organisation.timeZone : d.organisation.timeZone,
     },
 
     security: {
@@ -491,6 +498,8 @@ export function subscribeSettings(listener) {
 /** Internal: the Firestore sync writes through this. */
 export function commitSettings({ values, status, meta = null, error = null }) {
   snapshot = { values: values ?? snapshot.values, status, meta, error }
+  // Before the listeners run, so whatever re-renders formats in the new zone.
+  setPortalTimeZone(snapshot.values.organisation?.timeZone ?? DEFAULT_TIME_ZONE)
   listeners.forEach((listener) => listener())
 }
 

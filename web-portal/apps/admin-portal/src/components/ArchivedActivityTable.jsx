@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, Search } from '@shared/icons'
+import { Activity } from '@shared/icons'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
 import TimeframeFilter from '@/components/TimeframeFilter'
@@ -8,9 +8,10 @@ import { SkeletonTableRows } from '@shared/components/Skeleton'
 import { auditEventIcon } from '@shared/theme/categoryIcons'
 import TablePagination from '@shared/components/TablePagination'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTime } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
-const STAMP = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
-const stamp = (value) => (value ? new Date(value).toLocaleString('en-GB', STAMP).replace(',', '') : '—')
+const stamp = (value) => formatDateTime(value)
 
 const CATEGORY_TONE = {
   Dispatched: 'info',
@@ -93,17 +94,16 @@ export default function ArchivedActivityTable({ events = [], loading = false }) 
         />
       </div>
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-auto pb-6">
-        <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            <tr className="table-head">
-              <th className="px-4 py-3 font-medium">When</th>
-              <th className="px-4 py-3 font-medium">Actor</th>
-              <th className="px-4 py-3 font-medium">Event</th>
-              <th className="px-4 py-3 font-medium">Detail</th>
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable
+        minWidth="40rem"
+        scrollClassName="pb-6"
+        columns={[
+          { header: <>When</> },
+          { header: <>Actor</> },
+          { header: <>Event</> },
+          { header: <>Detail</> },
+        ]}
+      >
             {loading ? (
               /* Was a centred "Loading activity…" in a single merged cell. That
                  collapses the table to one row, so the column widths are
@@ -152,9 +152,7 @@ export default function ArchivedActivityTable({ events = [], loading = false }) 
                 )
               })
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
 
       {/* Sibling of the scroll region, so it stays pinned while the rows move. */}
       <TablePagination

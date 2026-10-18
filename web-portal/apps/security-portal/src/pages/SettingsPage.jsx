@@ -1,11 +1,13 @@
+import { Link, Navigate, useParams } from 'react-router-dom'
+import Card from '@shared/components/Card'
+import { ROUTES } from '@/config/portal'
 import { useEffect, useState } from 'react'
-import { Bell, ClipboardList, IdCard, MapPin, Monitor, Moon, Sun, Play, Volume2 } from '@shared/icons'
+import { ArrowLeft, Bell, ChevronRight, IdCard, Lock, Monitor, Moon, Sun } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import SectionHeading from '@shared/components/SectionHeading'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import StatusBadge from '@shared/components/StatusBadge'
 import Switch from '@shared/components/Switch'
-import SettingsLayout from '@shared/components/settings/SettingsLayout'
 import { SettingsGroup, SettingRow } from '@shared/components/settings/SettingsFields'
 import ChangePasswordPanel from '@shared/components/settings/ChangePasswordPanel'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
@@ -14,17 +16,12 @@ import { useGuardProfile } from '@/hooks/useGuardProfile'
 import { useTheme } from '@shared/theme/ThemeProvider'
 import { playAlert, setMuted, subscribeAlertSound, unlockAlertSound } from '@shared/lib/alertSound'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
-import { GUARD_PREF_DEFAULTS, loadGuardPrefs, saveGuardPrefs } from '@/lib/guardPrefs'
+import { loadGuardPrefs, saveGuardPrefs } from '@/lib/guardPrefs'
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: Sun },
   { value: 'dark', label: 'Dark', icon: Moon },
   { value: 'system', label: 'System', icon: Monitor },
-]
-
-const DENSITY_OPTIONS = [
-  { value: 'comfortable', label: 'Comfortable' },
-  { value: 'compact', label: 'Compact' },
 ]
 
 /**
@@ -45,11 +42,52 @@ const DENSITY_OPTIONS = [
  * so, and an officer editing their own badge number is the kind of thing an
  * audit exists to catch. They are shown, clearly, as read-only.
  */
-const SECTIONS = [
-  { value: 'alerts', label: 'Alerts and sound', icon: Bell },
-  { value: 'logs', label: 'Duty logs', icon: ClipboardList },
-  { value: 'account', label: 'Account', icon: IdCard },
-  { value: 'display', label: 'Display and location', icon: Monitor },
+/**
+ * The settings directory.
+ *
+ * ── A MENU, NOT A PAGE ─────────────────────────────────────
+ * This page has been a tab strip, a sidebar, a scrolling tab row and one
+ * continuous scroll. Each of those put every control on screen at once and
+ * differed only in how you got around them. A directory is the first version
+ * that does not: opening Settings now answers "what can I change" in four
+ * lines instead of two screens of forms, and the forms themselves are one tap
+ * away in a view with nothing else in it.
+ *
+ * ── FOUR, WHERE THE BRIEF NAMED THREE ──────────────────────────
+ * Account & profile, Security & permissions, Alerts & sound — and `device`,
+ * which the brief does not mention and which holds the theme and the
+ * on-duty location switch. Both are live, and the location one decides
+ * whether a dispatcher can see where this officer is. Dropping a category
+ * because a spec listed three rather than four would delete them.
+ *
+ * `slug` is the URL segment. It is part of the address, so renaming one
+ * breaks a bookmark — cheap to change today, not later.
+ */
+const CATEGORIES = [
+  {
+    slug: 'account',
+    label: 'Account & profile',
+    icon: IdCard,
+    description: 'Your name, badge number and role, and every shift you have clocked.',
+  },
+  {
+    slug: 'security',
+    label: 'Security & permissions',
+    icon: Lock,
+    description: 'The password you sign in with.',
+  },
+  {
+    slug: 'alerts',
+    label: 'Alerts & sound',
+    icon: Bell,
+    description: 'What this console does when an SOS or a critical ticket arrives.',
+  },
+  {
+    slug: 'device',
+    label: 'Display & location',
+    icon: Monitor,
+    description: 'Theme, and what this device reports to the dispatch map.',
+  },
 ]
 
 /*
@@ -88,7 +126,6 @@ const SECTIONS = [
  * at 3am.
  */
 export default function SettingsPage() {
-  const [section, setSection] = useState(SECTIONS[0].value)
   const { preference, setPreference } = useTheme()
   const [sound, setSound] = useState({ muted: false, blocked: true })
   const [prefs, setPrefs] = useState(loadGuardPrefs)
@@ -120,38 +157,148 @@ export default function SettingsPage() {
       : 'Panic alerts and critical tickets play a tone on arrival.'
   }
 
+  /**
+   * ── THE VIEW IS THE URL, NOT STATE ───────────────────────────
+   * A `useState` would have been fewer lines and would have broken the three
+   * things people actually do with a sub-page: press the browser's back
+   * button, reload, and send someone a link to the thing they are looking
+   * at. Routing all four costs one param.
+   *
+   * An unknown slug redirects to the hub rather than rendering an empty
+   * shell — a typo'd or renamed URL should land somewhere real.
+   */
+  const { category } = useParams()
+  const active = category ? CATEGORIES.find((c) => c.slug === category) : null
+
+  if (category && !active) return <Navigate to={ROUTES.settings} replace />
+
   return (
     <AppShell
-      title="Settings"
-      subtitle="Alerts, duty logs, your account and this device's display."
+      title={active ? active.label : 'Settings'}
+      subtitle={active ? active.description : 'Your account, alerts, duty logs and this device.'}
       topBarSlot={<GuardHeaderActions />}
       dutyLock={false}
     >
       {/* gap-6. This page scrolls — no `scroll={false}` on the shell, no
           `h-full` on this root — and "the two vertical rhythms" in the shared
           stylesheet name a scrolling page on gap-4 as drift. */}
-      {/* `max-w-6xl`, not `3xl`: the page is two columns now and the nav takes
-          the first of four. It is one step wider than the Admin console's
-          `5xl` for one reason — the duty log is a six-column table with a
-          handover excerpt in the last cell, and at 5xl that cell is a word
-          wide. The nav is identical on both; only the panel column differs,
-          which is the column whose content differs. */}
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <SectionHeading
-          title="Guardhouse preferences"
-          description="Display and location are stored on this device — a different terminal starts from the defaults. Your duty log and password follow your account."
-        />
+      {/* `max-w-6xl`, and now the SAME width the Admin console uses.
+          It was one step wider than Admin's `5xl` because the nav was a
+          sidebar eating a quarter of the page and the duty log — six columns
+          with a handover excerpt in the last cell — had a word-wide cell at
+          `5xl`. With the nav moved to a tab row across the top, the panels
+          get the whole width on both consoles, so the two pages can finally
+          be the same object at the same size rather than differing by the
+          column one of them needed back. */}
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+        {active ? (
+          <>
+            {/* ── SUB-PAGE HEADER ─────────────────────────────────
+                A real <Link>, not a button that calls navigate(-1). Back here
+                means "up to the hub", which is a fixed destination; history
+                back means "wherever you came from", and those differ the
+                moment someone arrives on a sub-page from a deep link or
+                reloads the tab. A link also gets the browser's own
+                affordances free — middle-click, copy address, and a status
+                bar that says where it goes. */}
+            <div>
+              {/* ── NO TITLE HERE. THE SHELL ALREADY DREW IT ───────────────
+                  This block used to render an `<h1>` of the category name and
+                  its description, while `AppShell` above was being handed the
+                  SAME two strings as its title and subtitle. Every sub-page
+                  opened with the category name twice and the sentence under it
+                  twice — two stacked banners saying one thing.
 
-        <SettingsLayout sections={SECTIONS} active={section} onChange={setSection}>
-          {/* ── 1. Alerts ────────────────────────────────────────────────── */}
-          {section === 'alerts' ? (
+                  The shell wins, because it is the page header every other
+                  screen in the console uses and it stays put. What is left
+                  here is the one thing the shell cannot provide: the way
+                  back. */}
+              <Link
+                to={ROUTES.settings}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-base-800 px-4 py-2 text-sm font-medium text-text-secondary shadow-sm transition-[background-color,color,border-color] duration-200 hover:border-slate-300 hover:bg-base-800/60 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              >
+                <ArrowLeft size="sm" aria-hidden="true" />
+                Back to Settings
+              </Link>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {active.slug === 'account' ? (
+                <>
             <SettingsGroup
-              icon={Bell}
+              title="Your security account"
+              description="How you appear on the duty roster and to dispatch."
+            >
+              {/* ── READ-ONLY, ON PURPOSE ────────────────────────────────────
+                  Every field here is an administrator's to set, and the
+                  Firestore rules enforce that — `staff_accounts` is writable
+                  by admin staff only. Rendering them as inputs that always
+                  fail to save would be worse than showing them as facts, and
+                  showing them as facts is most of what the panel is for: an
+                  officer checking the badge number dispatch is calling them by.
+
+                  The row that DOES something is the password panel below,
+                  which is the one credential a person owns outright. */}
+              <SettingRow
+                id="account-name"
+                title="Name"
+                description="As it appears on the duty roster and in dispatch."
+                control={<AccountValue loading={profileLoading} value={officer.name} />}
+              />
+              <SettingRow
+                id="account-badge"
+                title="Badge number"
+                description="What dispatch calls you by on the map and in a ticket's assignment."
+                control={
+                  <AccountValue
+                    loading={profileLoading}
+                    value={officer.badgeNumber}
+                    empty="Not issued"
+                  />
+                }
+              />
+              <SettingRow
+                id="account-role"
+                title="Role"
+                description="Decides which consoles you may hold a session on."
+                control={<AccountValue loading={profileLoading} value={officer.role} empty="—" />}
+              />
+              <SettingRow
+                id="account-email"
+                title="Sign-in email"
+                description="Changing this is an administrator's job — it is the identity the account signs in with."
+                control={<AccountValue loading={profileLoading} value={officer.email} />}
+              />
+              {!profileLoading && !profile ? (
+                <p className="px-4 py-3 text-xs leading-relaxed text-warning">
+                  No staff record was found for this account, so the details above fall back to what
+                  Firebase Auth holds. An administrator can issue one from Security Accounts.
+                </p>
+              ) : null}
+            </SettingsGroup>
+            <SettingsGroup
+              title="Duty log"
+              description="The handover you filed at the end of each one travels with the export."
+            >
+              {/* The table is not wrapped in a SettingRow: a row is a label and
+                  a control on one line, and this is a full-width table with its
+                  own toolbar and pagination. It takes the group's padding
+                  directly so it still reads as the panel's content rather than
+                  as something that escaped it. */}
+              <div className="px-4 py-4">
+                <DutyLogTable />
+              </div>
+            </SettingsGroup>
+                </>
+              ) : null}
+
+              {active.slug === 'security' ? <ChangePasswordPanel /> : null}
+
+              {active.slug === 'alerts' ? (
+            <SettingsGroup
               title="Alert sounds"
-              description="What the console does when an SOS or a critical ticket arrives."
               action={
                 <button type="button" onClick={testSound} className="btn btn-compact btn-outline">
-                  <Play size="sm" aria-hidden="true" />
                   Test tone
                 </button>
               }
@@ -194,7 +341,6 @@ export default function SettingsPage() {
                 description="Set once for every console in Admin › Settings › Dispatch and incidents, so each terminal in the guardhouse is as loud as the next. Mute above silences this device."
                 control={
                   <span className="inline-flex items-center gap-2">
-                    <Volume2 size="sm" aria-hidden="true" className="text-text-muted" />
                     <StatusBadge tone="neutral" size="sm">
                       {Math.round((sirenVolume ?? 0) * 100)}%
                     </StatusBadge>
@@ -202,96 +348,11 @@ export default function SettingsPage() {
                 }
               />
             </SettingsGroup>
-          ) : null}
-
-          {/* ── 2. Duty logs ─────────────────────────────────────────────── */}
-          {section === 'logs' ? (
-            <SettingsGroup
-              icon={ClipboardList}
-              title="Duty log"
-              description="Every shift you have clocked, and the handover you filed at the end of it."
-            >
-              {/* The table is not wrapped in a SettingRow: a row is a label and
-                  a control on one line, and this is a full-width table with its
-                  own toolbar and pagination. It takes the group's padding
-                  directly so it still reads as the panel's content rather than
-                  as something that escaped it. */}
-              <div className="px-4 py-4">
-                <DutyLogTable />
-              </div>
-            </SettingsGroup>
-          ) : null}
-
-          {/* ── 3. Account ───────────────────────────────────────────────── */}
-          {section === 'account' ? (
-            <SettingsGroup
-              icon={IdCard}
-              title="Your security account"
-              description="How you appear on the duty roster and to dispatch."
-            >
-              {/* ── READ-ONLY, ON PURPOSE ────────────────────────────────────
-                  Every field here is an administrator's to set, and the
-                  Firestore rules enforce that — `staff_accounts` is writable
-                  by admin staff only. Rendering them as inputs that always
-                  fail to save would be worse than showing them as facts, and
-                  showing them as facts is most of what the panel is for: an
-                  officer checking the badge number dispatch is calling them by.
-
-                  The row that DOES something is the password panel below,
-                  which is the one credential a person owns outright. */}
-              <SettingRow
-                id="account-name"
-                title="Name"
-                description="As it appears on the duty roster and in dispatch."
-                control={<AccountValue loading={profileLoading} value={officer.name} />}
-              />
-              <SettingRow
-                id="account-badge"
-                title="Badge number"
-                description="What dispatch calls you by on the map and in a ticket's assignment."
-                control={
-                  <AccountValue
-                    loading={profileLoading}
-                    value={officer.badgeNumber}
-                    empty="Not issued"
-                  />
-                }
-              />
-              <SettingRow
-                id="account-role"
-                title="Role"
-                description="Decides which consoles you may hold a session on."
-                control={<AccountValue loading={profileLoading} value={officer.role} empty="—" />}
-              />
-              <SettingRow
-                id="account-shift"
-                title="Assigned shift"
-                description="The roster's answer. Which shift you are actually working is chosen at clock-in and recorded on the shift itself."
-                control={
-                  <AccountValue loading={profileLoading} value={officer.shift} empty="Unassigned" />
-                }
-              />
-              <SettingRow
-                id="account-email"
-                title="Sign-in email"
-                description="Changing this is an administrator's job — it is the identity the account signs in with."
-                control={<AccountValue loading={profileLoading} value={officer.email} />}
-              />
-              {!profileLoading && !profile ? (
-                <p className="px-4 py-3 text-xs leading-relaxed text-warning">
-                  No staff record was found for this account, so the details above fall back to what
-                  Firebase Auth holds. An administrator can issue one from Security Accounts.
-                </p>
               ) : null}
-            </SettingsGroup>
-          ) : null}
 
-          {section === 'account' ? <ChangePasswordPanel /> : null}
-
-          {/* ── 4. Display and location ──────────────────────────────────── */}
-          {section === 'display' ? (
+              {active.slug === 'device' ? (
+                <>
             <SettingsGroup
-              icon={Monitor}
               title="Display"
               description="Applies to this browser and is remembered between sessions."
             >
@@ -308,39 +369,8 @@ export default function SettingsPage() {
                   />
                 }
               />
-              <SettingRow
-                id="guard-density"
-                title="Table density"
-                description="Compact fits more tickets on screen; comfortable is easier to scan at a glance."
-                control={
-                  <SegmentedControl
-                    ariaLabel="Table density"
-                    options={DENSITY_OPTIONS}
-                    value={prefs.density}
-                    onChange={(density) => setPrefs((p) => ({ ...p, density }))}
-                  />
-                }
-              />
-              <SettingRow
-                id="guard-reset"
-                title="Reset layout"
-                description="Returns the layout options above to their defaults."
-                control={
-                  <button
-                    type="button"
-                    onClick={() => setPrefs((p) => ({ ...p, density: GUARD_PREF_DEFAULTS.density }))}
-                    className="btn btn-compact btn-outline"
-                  >
-                    Reset layout
-                  </button>
-                }
-              />
             </SettingsGroup>
-          ) : null}
-
-          {section === 'display' ? (
             <SettingsGroup
-              icon={MapPin}
               title="Location sharing"
               description="What this device reports to the dispatch map while you are clocked in."
             >
@@ -366,8 +396,60 @@ export default function SettingsPage() {
                 dispatcher, and it is not something an officer can turn off mid-response.
               </p>
             </SettingsGroup>
-          ) : null}
-        </SettingsLayout>
+                </>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <>
+            <SectionHeading
+              title="Guardhouse preferences"
+              description="Your account and duty log follow you to any terminal. Alerts, display and location are stored on this device."
+            />
+
+            {/* ── THE CATEGORY HUB ────────────────────────────────
+                One card, one row per category, divided rather than spaced — a
+                list of four separate cards reads as four unrelated things,
+                and these are four parts of one menu.
+
+                Each row is a LINK and the whole row is the target. A chevron
+                you have to hit is a 16px target for a decision the entire
+                56px row is about, and on a guardhouse touchscreen that is the
+                difference between one tap and three. */}
+            <Card className="overflow-hidden p-0">
+              <ul className="divide-y divide-divider">
+                {CATEGORIES.map((category) => {
+                  const Icon = category.icon
+                  return (
+                    <li key={category.slug}>
+                      <Link
+                        to={`${ROUTES.settings}/${category.slug}`}
+                        className="flex items-center gap-4 px-4 py-4 transition-colors duration-150 hover:bg-tint/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+                      >
+                        <span className="icon-tile icon-tile-sm shrink-0" aria-hidden="true">
+                          <Icon size="sm" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-text-primary">
+                            {category.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs leading-relaxed text-text-muted">
+                            {category.description}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          size="sm"
+                          aria-hidden="true"
+                          className="shrink-0 text-text-muted"
+                        />
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </Card>
+          </>
+        )}
       </div>
     </AppShell>
   )

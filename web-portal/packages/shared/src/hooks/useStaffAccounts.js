@@ -23,7 +23,14 @@ export function useStaffAccounts() {
 
   const staffIds = useMemo(() => new Set(data.map((member) => member.id)), [data])
 
-  return { staffIds, loading }
+  // uid -> badge number, for naming an assigned officer by badge without
+  // reading the live telemetry fleet just to find one field.
+  const badgeByUid = useMemo(
+    () => new Map(data.filter((m) => m.badgeNumber).map((m) => [m.id, String(m.badgeNumber)])),
+    [data],
+  )
+
+  return { staffIds, badgeByUid, loading }
 }
 
 // Re-exported for callers that want the hook and the predicate together.

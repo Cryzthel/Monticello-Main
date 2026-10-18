@@ -16,7 +16,7 @@
  * not used here for one reason: the label must also stay floated when the field
  * is FILLED BUT NOT FOCUSED, and `:placeholder-shown` answers that only if the
  * input carries a placeholder it can hide behind. These fields carry real,
- * useful placeholders (the address an administrator should recognise), so the
+ * useful placeholders ("Enter your email address"), so the
  * state is read from the value instead — which the form already tracks — and
  * the focused half comes from `group-focus-within`. CSS for the part CSS knows,
  * a prop for the part it does not.
@@ -34,13 +34,29 @@
  * panel.
  */
 
+/*
+ * ── ONE LEFT EDGE ────────────────────────────────────────────────────────────
+ * There is no leading icon any more, so the typed text, the resting label and
+ * the floated label's GLYPHS all start at the well's 24px (`px-6`) inset. The
+ * floated label sits at `left-4` only because its `px-2` notch padding is
+ * part of its box: 16 + 8 lands its first letter on the same 24px as the text.
+ * Floating then moves the label straight up, not up-and-sideways.
+ */
+
 /** Floated: sitting on the top border, small, in heading ink. */
+/* ── ONE LABEL COLOUR ONCE THE LABEL HAS FLOATED (2026-10-18) ────────────────
+   The floated label was brand green while the field had focus and near-black
+   once the person tabbed away with a value in it, so it changed colour under
+   them as they filled the form. Focused or filled, a floated label is now the
+   same brand green: emerald-600, #059669. The auth screens are always on a
+   white card, so one fixed value is right in both themes. */
+const FLOATED_TONE = 'text-[#059669]'
+
 const FLOATED =
-  '-top-2.5 left-6 translate-y-0 bg-white px-2 text-xs font-medium text-text-primary'
+  `-top-2.5 left-4 translate-y-0 bg-white px-2 text-xs font-medium ${FLOATED_TONE}`
 
-
-/** Resting: inside the field, vertically centred, clear of the leading icon. */
-const RESTING = 'top-1/2 left-[3.25rem] -translate-y-1/2 px-0 text-sm text-text-muted'
+/** Resting: inside the field, vertically centred, on the text's left edge. */
+const RESTING = 'top-1/2 left-6 -translate-y-1/2 px-0 text-sm text-text-muted'
 
 /**
  * The same values as FLOATED, applied while anything inside the wrapper has
@@ -49,26 +65,27 @@ const RESTING = 'top-1/2 left-[3.25rem] -translate-y-1/2 px-0 text-sm text-text-
  */
 const FLOATED_ON_FOCUS = [
   'group-focus-within:-top-2.5',
-  'group-focus-within:left-6',
+  'group-focus-within:left-4',
   'group-focus-within:translate-y-0',
   'group-focus-within:bg-white',
   'group-focus-within:px-2',
   'group-focus-within:text-xs',
   'group-focus-within:font-medium',
-  'group-focus-within:text-brand-500',
+  'group-focus-within:text-[#059669]',
 ].join(' ')
 
 /**
  * @param filled    Whether the field has a value. Keeps the label up once the
  *                  user has typed and moved on — see the note above.
- * @param icon      Leading glyph from @shared/icons. The label's left offset
- *                  assumes one is present.
+ * There is deliberately no `icon` prop. Leading glyphs (an envelope, a
+ * padlock) restated the label beside it, so they were removed from every auth
+ * field at once rather than left as an option one screen might take up again.
+ *
  * @param trailing  Optional control at the right edge, e.g. a reveal toggle.
  */
 export default function FloatingField({
   id,
   label,
-  icon: Icon,
   trailing,
   filled = false,
   /** A validation message for THIS field. Shown under it, and wired to the
@@ -80,9 +97,8 @@ export default function FloatingField({
 }) {
   return (
     <div className="group relative">
-      {/* Focus lands on the WELL, not the input, so the icon, the border and
-          the ring light up as one control rather than a ring appearing around
-          a box that happens to contain a glyph.
+      {/* Focus lands on the WELL, not the input, so the border, the ring and
+          any trailing control light up as one control.
 
           `border-slate-200/80` at rest, near-black on focus: the same two-part
           answer the design system requires — the border moves AND a ring
@@ -95,7 +111,6 @@ export default function FloatingField({
             : 'border-slate-200/80 hover:border-slate-300 group-focus-within:border-brand-500 group-focus-within:ring-2 group-focus-within:ring-brand-500/20'
         }`}
       >
-        <Icon size="sm" className="shrink-0 text-text-muted transition-colors duration-200 group-focus-within:text-brand-500" />
         <input
           id={id}
           aria-invalid={error ? 'true' : undefined}

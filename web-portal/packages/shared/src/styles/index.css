@@ -12,84 +12,28 @@
 @import "tailwindcss" source(none);
 
 
-/* ══ AFFINIK — THE BRAND WORDMARK'S FACE ════════════════════════════════════
-   Self-hosted, because Affinik is a licensed retail font (Pekotype) with no
-   CDN behind it — unlike Chillax, which Fontshare serves, and Inter, which
-   Google does. A licensed font is a file you are entitled to serve, so it
-   ships with the app instead of being linked.
+/* ══ TYPEFACE ═════════════════════════════════════════════════════════════════
+   Every word of text in both consoles is INTER (user's standard, 2026-10-18):
+   body, headings and the "Monticello Villas" wordmark alike, through
+   --font-sans / --font-display / --font-brand in the @theme below. It is
+   requested once, from Google Fonts, by each app's index.html <link> (a
+   <link> starts the download in parallel; a CSS @import would wait for this
+   sheet first). JetBrains Mono stays for codes and coordinates only.
 
-   ONE WEIGHT, the same discipline Chillax kept: 600 is what the wordmark sets
-   and nothing else uses the face. Another weight is another block, not a
-   wider range here — a range would let the browser synthesise a fake bold off
-   this file and call it 700.
+   ONE EXCEPTION: the "Monticello Villas" wordmark is set in GROOTE
+   (Artiveko), restored at the user's request on 2026-10-18 through
+   --font-brand. Self-hosted from each app's public/fonts/. `local()` FIRST, so
+   a machine with Groote installed renders it with no download.
 
-   `local()` FIRST, so anyone with Affinik installed — the designer who owns
-   the licence — renders it with no download at all.
-
-   THE `url()` IS A PUBLIC-DIR PATH, NOT A BUNDLED IMPORT, and that is load
-   bearing. Vite passes `/fonts/…` through untouched, so this file is ALLOWED
-   TO BE MISSING: the build succeeds and the wordmark falls through to Chillax
-   until the licence file is committed. A bundled `url('../assets/…')` would
-   fail the build outright until then, which is the wrong failure mode for an
-   asset the repository cannot legally carry by default.
-
-   Drop it at apps/<app>/public/fonts/affinik-600.woff2 in BOTH apps — the
-   same duplication favicon.svg and icons.svg already live with. There is a
-   README beside it. */
-/* ══ GROOTE — THE BRAND WORDMARK'S FACE ═════════════════════════════════════
-   Groote supersedes Affinik as the wordmark's face. Affinik stays declared
-   below, and stays SECOND in `--font-brand`, for one reason: this file is
-   allowed to be missing (see the note on the url() below), and a missing
-   Groote should fall to the face the lockup was last measured against rather
-   than all the way to the body sans.
-
-   ⚠ THIS IS THE **DEMO** CUT OF GROOTE (Artiveko), AND ITS LICENCE IS
-   PERSONAL / EDUCATIONAL USE ONLY — commercial use, modification and
-   redistribution are all forbidden. The licence text ships beside the file at
-   apps/<app>/public/fonts/groote-LICENSE.txt. A public commercial deployment
-   needs the full cut from artiveko.com; serving this one from a production
-   origin is the thing the licence does not grant.
-
-   400, NOT 600 — and the file is why. The demo is a single Regular master
-   (usWeightClass 400), so the wordmark sets `font-normal`. It used to set
-   `font-semibold`, which against a 400-only family is not a heavier cut, it
-   is the browser smearing the stems of this one to fake a weight that does
-   not exist. Regular is also what the artwork specifies: the Figma wordmark
-   is Affinik **Regular**, so this is the lockup matching the design rather
-   than a concession to the file.
-
-   SERVED AS .otf, UNCONVERTED, which is the one place this file pays a cost
-   on purpose. woff2 would be roughly half the bytes — but the licence
-   forbids modifying the font, and re-compressing it into another container
-   is exactly the kind of thing that argument is had about. The whole face is
-   9,984 bytes, so the saving is ~4 KB on one request; that is not worth
-   buying a licence question. Convert it when the full commercial cut lands.
-
-   BASIC LATIN ONLY: 92 glyphs, A–Z a–z 0–9. It covers "Monticello Villas"
-   exactly and nothing else is set in this face, which is the discipline that
-   keeps that true. Anything else routed through `--font-brand` will fall
-   through to the next family mid-string.
-
-   `local()` FIRST, so anyone with Groote installed renders it with no
-   download at all. */
+   ⚠ The file is Artiveko's DEMO cut: personal, testing and educational use
+   only. Buy the full cut before serving this console publicly — see the
+   README in public/fonts/. */
 @font-face {
   font-family: 'Groote';
   src:
     local('Groote'),
     url('/fonts/groote-400.otf') format('opentype');
   font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Affinik';
-  src:
-    local('Affinik SemiBold'),
-    local('Affinik-SemiBold'),
-    local('Affinik'),
-    url('/fonts/affinik-600.woff2') format('woff2');
-  font-weight: 600;
   font-style: normal;
   font-display: swap;
 }
@@ -877,14 +821,16 @@
      make Effra look like Effra. It is the closer functional match even where
      it is the lower-scoring visual one.
 
-     `font-effra` is the utility this token generates, so the brief's class
-     name works verbatim. `--font-sans` points here, which is what makes it
-     global — revert that one line to the Inter stack below and the whole
-     product goes back without touching a component. */
+     `font-effra` is the utility this token generates. `--font-sans` points
+     here, which is what makes it global. The paragraphs above are the history
+     of the Nunito Sans choice; the stack is Inter now. */
+  /* INTER, EVERYWHERE (user's standard, 2026-10-18). This was Nunito Sans for
+     parity with the mobile app; the web consoles now set every word of text in
+     Inter. `--font-effra` keeps its name only because components use the
+     `font-effra` utility. */
   --font-effra:
-    "Nunito Sans", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   --font-sans: var(--font-effra);
   --font-mono:
     "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
@@ -917,9 +863,8 @@
      It is still a DISPLAY face, not a second body face. One element uses it.
      Anything that reaches for it on a screen full of 14px text is using the
      wrong token; `--font-sans` is the answer there. */
-  --font-display:
-    "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Inter too: the sign-in headings no longer use a separate display face. */
+  --font-display: var(--font-sans);
 
   /* Optical tracking. A geometric sans set at 24px needs meaningfully tighter
      spacing than the same face at 11px; setting one global `tracking-tight`
@@ -1031,16 +976,9 @@
      day the typeface changes, which is the day you least want to be editing
      call sites. `font-brand` survives the next change too.
 
-     THREE DEEP, AND EVERY STEP IS A REAL FALLBACK, not padding:
-       · Affinik is the brand face and arrives as a FILE — see the @font-face
-         at the top of this sheet.
-       · Chillax is what the wordmark set before it, still served by
-         Fontshare. It covers the window before the licence file is
-         committed, so the wordmark looks finished today rather than
-         degraded — which is the whole reason it is still requested in
-         index.html. Drop that <link> once Affinik is in place.
-       · The UI face ends the chain, so a blocked CDN *and* a missing file
-         still render Inter rather than Times.
+     Since 2026-10-18 it resolves to Inter like everything else (see the
+     TYPEFACE note at the top of this sheet); the token stays so the wordmark
+     can be given its own face again in one line.
 
      `--color-brand-logo` is the one that ALTERNATES, and it is the whole
      theme-switch mechanism for the mark: the lockup's ink on white here, the
@@ -1076,7 +1014,9 @@
      emerald on white and cream on black — not the same hue in both. If it
      should be emerald in dark too, delete the override below and this var()
      resolves to #10B981 there on its own. */
-  --font-brand: 'Groote', 'Affinik', 'Chillax', var(--font-sans);
+  /* The "Monticello Villas" wordmark, in Groote (see the @font-face at the
+     top of this sheet), falling back to Inter if the file cannot load. */
+  --font-brand: 'Groote', var(--font-sans);
 
   --color-brand-dark: #05171B;
   --color-brand-cream: #F2F1D6;
@@ -1501,6 +1441,28 @@
   }
 }
 
+/* THE THEME SWITCH, AS ONE CROSS-FADE (2026-10-17). ThemeProvider's toggle
+   runs inside document.startViewTransition, so the browser fades a snapshot of
+   the old page into the new one as a single composited layer — the whole
+   screen changes together, including what `.theme-switching` above cannot
+   animate (gradients, images, the map). `.theme-switching` remains the
+   fallback for browsers without the API. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 300ms;
+  animation-timing-function: ease-in-out;
+  /* The default blend can double-expose bright text over dark mid-fade;
+     a straight cross-fade cannot. */
+  mix-blend-mode: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
+
 /* Shared motion for portalled overlays (status dropdowns) and the toast
    stack. Defined once at the top level — Tailwind v4's `animate-[…]`
    arbitrary value only references a keyframe, it doesn't create one. */
@@ -1550,8 +1512,10 @@
    reflow the table on every arrival, and the row is inside a scroll container
    an operator may be reading. */
 @keyframes rowFlash {
+  /* Neutral, not brand green (2026-10-17, user's request): a new row is a
+     cue to look, and a green wash read as a colour fault across the table. */
   from {
-    background-color: color-mix(in oklab, var(--color-brand-500) 16%, transparent);
+    background-color: color-mix(in oklab, var(--color-tint) 9%, transparent);
   }
   to {
     background-color: transparent;
@@ -1785,6 +1749,18 @@
     height: 100%;
   }
 
+  /* ONE EYE PER PASSWORD FIELD.
+     Edge (and old IE) draw their own reveal eye and clear-x inside every
+     type="password" input, beside the reveal toggle these fields already
+     render — two eyes, and the native one only works until the first blur.
+     Every password field in the portals carries its own toggle, so the
+     browser's is hidden everywhere rather than field by field. Chrome,
+     Firefox and Safari draw nothing here, so this is a no-op for them. */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
+  }
+
   body {
     margin: 0;
     background-color: var(--color-base-950);
@@ -2006,6 +1982,20 @@
   .kpi-face {
     @apply min-w-0 rounded-lg border border-hairline bg-base-900;
     box-shadow: var(--shadow-panel);
+  }
+
+  /* The Overview, minimal (2026-10-18). Its cards drew a hairline AND a
+     two-layer drop shadow, and each KPI tile a bordered shell around a
+     bordered, shadowed face — three edges for one number. On this page a
+     card keeps its hairline and loses the shadow, and the KPI face loses its
+     own border so the shell's single edge is the tile's outline. */
+  .overview-flat .card,
+  .overview-flat .kpi-face {
+    box-shadow: none;
+  }
+
+  .overview-flat .kpi-face {
+    border-color: transparent;
   }
 
   /* ══ ICON TILES ═══════════════════════════════════════════════════════════
@@ -2325,6 +2315,89 @@
 
   .btn-danger {
     @apply border border-danger/25 bg-danger/10 text-danger hover:bg-danger/20;
+  }
+
+  /* The review decision pair (Resident details drawer, refined reference).
+     SIZE: `.btn-decision` is the reference's `py-3 px-4 rounded-xl text-[14px]`
+     — a square-cornered slab rather than the house capsule, by the user's
+     reference for this footer. Declared after `.btn`, so its radius wins.
+     APPROVE is a solid emerald, not .btn-brand: the CTA token is monochrome
+     (slate in light, near-white in dark). It borrows the selected-segment pair
+     because that pair is contrast-checked per theme — white on emerald-700 in
+     light, ink on emerald-500 in dark (the reference's `#10b981` on
+     `emerald-950`). Hover LIGHTENS one step, as the reference's
+     `emerald-500 → emerald-400` does.
+     REJECT is a solid dark red: the reference's `#2a1314` with a rose-900
+     edge and rose-400 text is red at ~12% on the dark canvas, which is what
+     these tokens produce, and a light pink slab with red text in light mode. */
+  .btn-decision {
+    @apply flex-1 rounded-xl px-4 py-3 text-[14px];
+  }
+
+  .btn-approve {
+    background-color: var(--color-segment-active);
+    color: var(--color-segment-active-fg);
+    font-weight: 600;
+    box-shadow: 0 0 20px -5px color-mix(in oklab, var(--color-segment-active) 20%, transparent);
+  }
+
+  .btn-approve:hover:not(:disabled) {
+    background-color: color-mix(in oklab, var(--color-segment-active) 85%, white);
+  }
+
+  .btn-reject {
+    @apply border border-danger/30 bg-danger/[0.12] text-danger hover:bg-danger/20;
+  }
+
+  /* The report sheet's footer (SecurityReportDetailModal), per the user's
+     reference: square-cornered `rounded-lg` slabs at 13px, not the house
+     capsule. Quiet ghosts, and a red ghost for Delete that only gains a fill and an edge on hover. */
+  .sheet-btn {
+    @apply inline-flex items-center justify-center gap-2.5 whitespace-nowrap rounded-lg border border-transparent px-4 py-2.5 text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50;
+    transition-property: color, background-color, border-color, transform;
+    transition-duration: 150ms;
+    transition-timing-function: var(--ease-out-strong);
+  }
+
+  .sheet-btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .sheet-btn-ghost {
+    @apply text-text-secondary hover:bg-tint/[0.08] hover:text-text-primary;
+  }
+
+  .sheet-btn-danger {
+    @apply text-danger hover:border-danger/20 hover:bg-danger/10;
+  }
+
+  /* The Hazard Map drawer's footer pair. PRIMARY is the console's CTA, which
+     in dark mode is exactly the reference's `zinc-100` on `zinc-950` (and
+     slate-900 on white in light). OUTLINE is a hairline-edged ghost. */
+  .sheet-btn-primary {
+    @apply px-5 text-[14px] font-semibold;
+    background-color: var(--color-cta);
+    color: var(--color-cta-fg);
+  }
+
+  .sheet-btn-primary:hover:not(:disabled) {
+    background-color: var(--color-cta-hover);
+  }
+
+  .sheet-btn-outline {
+    @apply border-hairline px-5 text-[14px] text-text-secondary hover:bg-tint/[0.06] hover:text-text-primary;
+  }
+
+  /* Scrolls, without drawing a scrollbar (the report sheet's body, per the
+     reference). Wheel, touch, keyboard and the sticky header/footer still
+     make the region's scrollability plain. */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* The neutral secondary: Export, Archive, Cancel, Discard.
@@ -3100,6 +3173,17 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: var(--color-scrollbar-hover);
   }
+
+  /* The drawer's thinner rail (Resident details): 4px with a 4px radius, per
+     the reference. Layered on .custom-scrollbar, so only the width and corner
+     change; colours stay the theme's scrollbar tokens. */
+  .drawer-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .drawer-scroll::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+  }
 }
 
 /* ══ MAP POPUP ════════════════════════════════════════════════════════════════
@@ -3190,4 +3274,108 @@
 
 .map-popup.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
   border-left-color: var(--color-base-850);
+}
+
+/* ══ ACTION TOASTS: THE SPRING ═══════════════════════════════════════════════
+   The glass toasts (ActionToaster) enter on cubic-bezier(0.34, 1.56, 0.64, 1)
+   over 500 ms: the slide up overshoots its resting place by a few pixels and
+   settles, which is what reads as a spring rather than a slide.
+
+   OUTSIDE EVERY @layer, for the same reason as the map popup above: sonner
+   injects its `transition: transform .4s, opacity .4s …` as an unlayered
+   stylesheet, and an unlayered rule beats any layered one. The extra class
+   out-ranks sonner's attribute selector.
+
+   Only `transform` springs. Opacity takes a plain ease-out: an overshooting
+   curve on opacity clamps at 1 and just looks like a late fade-in.
+
+   Not while swiping (sonner sets `transition: none` there so the toast tracks
+   the finger), and not under reduced motion (sonner's own media query
+   removes every toast transition with !important).
+
+   Exit: sonner unmounts a dismissed toast 200 ms after it starts leaving, so
+   the exit is a quick drop-and-fade on the same curve rather than a full
+   500 ms spring. Exits are meant to be faster than entrances anyway. */
+[data-sonner-toaster] [data-sonner-toast].action-toast:not([data-swiping='true']) {
+  transition:
+    transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 300ms cubic-bezier(0.23, 1, 0.32, 1),
+    height 400ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 200ms ease;
+}
+
+/* ══ OFFICER DETAILS ENTRANCE ═════════════════════════════════════════════════
+   The guard details modal's reference entrance: a 3% scale-up and a 10px rise,
+   400 ms on an ease-out-expo curve. Reduced motion skips it. */
+@keyframes officerModalEnter {
+  from { opacity: 0; transform: scale(0.97) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.officer-modal-enter {
+  animation: officerModalEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .officer-modal-enter { animation: none; }
+}
+
+/* ── RANGE SLIDER (Admin Settings › Alarm volume) ─────────────────────────────
+   A 4px track filled to the value in brand emerald (`--fill`, set inline as a
+   percentage), and a 16px white thumb with a soft shadow. The thumb grows a
+   focus ring for keyboard users; dragging it is never the only way to set the
+   value, since the arrow keys step it. */
+.range-slider {
+  --fill: 0%;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 16px;
+  background: transparent;
+  cursor: pointer;
+}
+.range-slider:disabled { cursor: not-allowed; opacity: 0.5; }
+.range-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--color-brand-500) var(--fill), color-mix(in oklab, var(--color-text-muted) 30%, transparent) var(--fill));
+}
+.range-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--color-text-muted) 30%, transparent);
+}
+.range-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-brand-500);
+}
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 16px;
+  width: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 2px 8px rgb(0 0 0 / 0.3);
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+.range-slider::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.08), 0 2px 8px rgb(0 0 0 / 0.3);
+}
+.range-slider:active::-webkit-slider-thumb { transform: scale(1.1); }
+.range-slider:focus-visible { outline: none; }
+.range-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-brand-500) 30%, transparent), 0 2px 8px rgb(0 0 0 / 0.3);
+}
+.range-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-brand-500) 30%, transparent), 0 2px 8px rgb(0 0 0 / 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .range-slider::-webkit-slider-thumb { transition: none; }
 }

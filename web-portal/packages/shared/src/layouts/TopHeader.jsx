@@ -41,6 +41,7 @@ export default function TopHeader({
   onOpenPalette,
   alertPath,
   historyPath,
+  notificationRoutes,
   topBarSlot,
   primaryAction,
 }) {
@@ -169,7 +170,7 @@ export default function TopHeader({
           </Link>
         ) : null}
         <ThemeToggle />
-        <NotificationBell detailPath={alertPath} historyPath={historyPath} />
+        <NotificationBell detailPath={alertPath} historyPath={historyPath} routes={notificationRoutes} />
       </div>
     </header>
   )

@@ -37,8 +37,18 @@ export default function GuidanceBanner({ maneuver, waypointM = null }) {
       // which clipped "Turn right onto Phase 1 Main Road" mid-word. The
       // countdown keeps its size at every width — it is the number read at
       // speed and it is the last thing that should give way.
-      className="pointer-events-none w-full max-w-md rounded-2xl p-3 shadow-xl sm:p-4"
-      style={{ backgroundColor: GUIDANCE_BANNER.plate, color: GUIDANCE_BANNER.ink }}
+      //
+      // Frosted rather than opaque: at 92% with a blur the map's movement
+      // still reads faintly through, which ties the banner to the view it
+      // describes, while the white type keeps well over 7:1 on the plate.
+      // The hairline edge is what separates it from the route card beneath
+      // on a dark basemap, where two dark surfaces otherwise merge.
+      className="pointer-events-none w-full max-w-md rounded-2xl border p-3 shadow-xl backdrop-blur-md sm:p-4"
+      style={{
+        backgroundColor: GUIDANCE_BANNER.plateGlass,
+        borderColor: GUIDANCE_BANNER.edge,
+        color: GUIDANCE_BANNER.ink,
+      }}
       aria-live="polite"
     >
       <div className="flex items-center gap-3">
@@ -59,7 +69,7 @@ export default function GuidanceBanner({ maneuver, waypointM = null }) {
               top line instead of leaving a hole. */}
           {!maneuver.isLast ? (
             <>
-              <p className="truncate text-2xl font-semibold leading-none tabular-nums">
+              <p className="truncate text-2xl font-semibold leading-none tracking-tight tabular-nums">
                 {formatDistance(maneuver.distanceToManeuver)}
               </p>
               {/* `line-clamp-2` rather than `truncate` below `sm`: a

@@ -121,4 +121,82 @@ check('a driving route in the guardhouse case gets the bike glyph', () => {
   assert.strictEqual(origin?.properties.transport, 'bike')
 })
 
+
+// ── THE LIVE LINE IS TRIMMED, NOT RE-CUT ───────────────────────────────────
+
+check('with progress, the live line keeps its full geometry and carries the trim', () => {
+  const coords = ROUTE.geometry.coordinates
+  const progress = {
+    fraction: 0.4,
+    remainingCoords: coords.slice(1),
+    coveredCoords: coords.slice(0, 2),
+  }
+  const fc = routeToGeojson(ROUTE, { withOrigin: false, progress })
+  const route = fc.features.find((f) => f.properties.kind === 'route')
+  const covered = fc.features.find((f) => f.properties.kind === 'covered')
+  const ahead = fc.features.find((f) => f.properties.kind === 'ahead')
+  // Same geometry every fix: only `trim` moves, so the map animates a paint
+  // property instead of re-uploading a line that jumps ahead of the marker.
+  assert.deepStrictEqual(route.geometry.coordinates, coords)
+  assert.strictEqual(route.properties.trim, 0.4)
+  assert.deepStrictEqual(covered.geometry.coordinates, coords)
+  // Chevrons only on the road still to drive.
+  assert.deepStrictEqual(ahead.geometry.coordinates, progress.remainingCoords)
+})
+
+check('without progress (a preview), nothing is trimmed', () => {
+  const fc = routeToGeojson(ROUTE, { withOrigin: false })
+  const route = fc.features.find((f) => f.properties.kind === 'route')
+  assert.strictEqual(route.properties.trim, 0)
+  assert.ok(fc.features.some((f) => f.properties.kind === 'ahead'))
+})
+
+// ── THE ORIGIN LEG STARTS AT THE GUARD'S CURRENT POSITION ──────────────────
+//
+// The route was plotted from where the guard stood THEN (ROUTE.origin, here
+// 40 m off the road), and they have since moved. The leg must come from where
+// they are NOW, and only when they are off the line.
+
+const PLOTTED_FROM = [122.4999, 10.7598] // the stale plot-time fix, off the road
+const STALE = { ...ROUTE, origin: PLOTTED_FROM }
+const legs = (fc) =>
+  fc.features.filter((f) => f.properties.kind === 'connector').map((f) => f.geometry.coordinates)
+const LIVE_PROGRESS = {
+  fraction: 0.3,
+  remainingCoords: LINE.slice(1),
+  snapped: [122.5010, 10.7604], // where the guard rejoins the line
+}
+
+check('off route with a live fix: one leg, from the guard NOW to where they rejoin', () => {
+  const here = [122.5010, 10.7609]
+  const fc = routeToGeojson(STALE, {
+    withOrigin: false,
+    progress: LIVE_PROGRESS,
+    unitPosition: here,
+    offRoute: true,
+  })
+  const originLegs = legs(fc).filter((c) => c[1] !== ROUTE.destination)
+  assert.deepStrictEqual(originLegs, [[here, LIVE_PROGRESS.snapped]])
+  assert.ok(
+    !legs(fc).some((c) => c[0] === PLOTTED_FROM),
+    'the leg from the stale plot-time origin must be gone',
+  )
+})
+
+check('on route with a live fix: no origin leg — the snapped marker IS the start', () => {
+  const fc = routeToGeojson(STALE, {
+    withOrigin: false,
+    progress: LIVE_PROGRESS,
+    unitPosition: [122.5010, 10.7605],
+    offRoute: false,
+  })
+  assert.ok(!legs(fc).some((c) => c[0] === PLOTTED_FROM))
+  assert.deepStrictEqual(legs(fc).length, 0)
+})
+
+check('no live fix (preview): the plotted-origin leg still stands', () => {
+  const fc = routeToGeojson(STALE, { withOrigin: false })
+  assert.deepStrictEqual(legs(fc), [[PLOTTED_FROM, STALE.snappedOrigin]])
+})
+
 console.log(`\n${passed} passed, ${process.exitCode ? 'failures above' : '0 failed'}`)

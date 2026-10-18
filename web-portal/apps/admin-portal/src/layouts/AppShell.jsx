@@ -13,8 +13,14 @@ import {
 } from '@shared/icons'
 import { useMemo } from 'react'
 import { collection, query, where } from 'firebase/firestore'
+import { Outlet } from 'react-router-dom'
 import DashboardLayout from '@shared/layouts/DashboardLayout'
-import { useAuth } from '@shared/auth/AuthContext'
+import {
+  PageChromeProvider,
+  ReportPageChrome,
+  usePageChrome,
+  usePersistentChrome,
+} from '@shared/layouts/PageChrome'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
 import { portalKey } from '@shared/config/portal'
@@ -59,15 +65,6 @@ const NAV_GROUPS = [
   },
 ]
 
-// Granular role -> the label shown in the sidebar footer, mirroring
-// SecurityShell. "Admin" was a static string here, so a super_admin and an
-// hoa_admin were indistinguishable in the one place the portal states who you
-// are signed in as.
-const ROLE_LABELS = {
-  super_admin: 'Super admin',
-  hoa_admin: 'HOA admin',
-}
-
 /**
  * The Admin console's one primary action, in the top bar on every page.
  * Broadcasting is the task an administrator starts most, and the only one
@@ -82,7 +79,8 @@ function renderSponsorSlot({ collapsed }) {
   return <EarnWhileYouWait collapsed={collapsed} />
 }
 
-export default function AppShell(props) {
+/** Everything the shell needs that does not come from the page. */
+function useShellProps() {
   // Live count of residents awaiting verification, so a new mobile signup
   // raises a badge on the Residents nav item from any admin page — the
   // "notify me when someone registers" half of the workflow.
@@ -91,18 +89,60 @@ export default function AppShell(props) {
     [],
   )
   const { data: pendingResidents } = useLiveCollection(pendingResidentsQuery)
-  const { role } = useAuth()
 
+  return {
+    navGroups: NAV_GROUPS,
+    badgeCounts: { [ROUTES.residents]: pendingResidents.length },
+    collapseKey: portalKey('sidebar-collapsed'),
+    alertPath: ROUTES.tickets,
+    // A notification opens the page it is about: the report in Tickets, the
+    // SOS on the Hazard map, the bulletin in Announcements.
+    notificationRoutes: {
+      incident: `${ROUTES.tickets}?incident=`,
+      panic: `${ROUTES.heatmap}?panic=`,
+      announcement: ROUTES.announcements,
+    },
+    sidebarSlot: renderSponsorSlot,
+  }
+}
 
+/**
+ * The persistent shell — a layout ROUTE wrapping every signed-in page, so the
+ * sidebar, header and their live listeners mount ONCE and survive navigation
+ * (see shared/layouts/PageChrome.jsx for why, and how pages report into it).
+ */
+export function AppShellLayout() {
+  const shell = useShellProps()
+  const { page, value, slotProps } = usePersistentChrome()
   return (
-    <DashboardLayout
-      roleLabel={ROLE_LABELS[role] ?? 'Admin'}
-      navGroups={NAV_GROUPS}
-      badgeCounts={{ [ROUTES.residents]: pendingResidents.length }}
-      collapseKey={portalKey('sidebar-collapsed')}
-      alertPath={ROUTES.tickets}
-      sidebarSlot={renderSponsorSlot}
-      {...props}
-    />
+    <PageChromeProvider value={value}>
+      <DashboardLayout
+        {...shell}
+        title={page.title}
+        subtitle={page.subtitle}
+        scroll={page.scroll}
+        bleed={page.bleed}
+        inlineTitle={page.inlineTitle}
+        stickyHeader={page.stickyHeader}
+        {...slotProps}
+      >
+        <Outlet />
+      </DashboardLayout>
+    </PageChromeProvider>
   )
+}
+
+/**
+ * What a page renders. Inside AppShellLayout it only reports its chrome; on
+ * its own (no layout route above it) it builds the full layout as before.
+ */
+export default function AppShell(props) {
+  const chrome = usePageChrome()
+  if (chrome) return <ReportPageChrome chrome={chrome} {...props} />
+  return <StandaloneShell {...props} />
+}
+
+function StandaloneShell(props) {
+  const shell = useShellProps()
+  return <DashboardLayout {...shell} {...props} />
 }

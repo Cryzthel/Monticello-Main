@@ -1,3 +1,4 @@
+import { toast } from '@shared/lib/toast'
 import { useAuth } from '@shared/auth/AuthContext'
 import AppShell from '@/layouts/AppShell'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
@@ -36,8 +37,20 @@ export default function PanicAlertsPage() {
           // about through onPanicAlertDispatched — the push is a server
           // trigger on the document, not something this click sends, so it
           // fires whichever console did the dispatching.
-          onDispatch={(alert) => acknowledgePanicAlert(alert.id, user?.displayName)}
-          onResolve={(alert) => resolvePanicAlert(alert.id)}
+          // Both were bare promises: a refused write was an unhandled
+          // rejection and the guard saw nothing at all.
+          onDispatch={(alert) =>
+            toast.run(() => acknowledgePanicAlert(alert.id, user?.displayName), {
+              success: 'SOS dispatched — the resident is notified',
+              error: 'Could not dispatch the SOS. It is still open.',
+            })
+          }
+          onResolve={(alert) =>
+            toast.run(() => resolvePanicAlert(alert.id), {
+              success: 'SOS alert resolved',
+              error: 'Could not resolve the SOS alert',
+            })
+          }
         />
       </div>
     </AppShell>

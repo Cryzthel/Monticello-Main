@@ -6,9 +6,20 @@ import {
   Ticket,
   Siren,
   Settings,
+  Clock,
 } from '@shared/icons'
+import { Outlet } from 'react-router-dom'
 import DashboardLayout from '@shared/layouts/DashboardLayout'
-import { useState } from 'react'
+import {
+  PageChromeProvider,
+  ReportPageChrome,
+  usePageChrome,
+  usePersistentChrome,
+} from '@shared/layouts/PageChrome'
+import { useEffect, useState } from 'react'
+import { doc, onSnapshot } from 'firebase/firestore'
+import { db } from '@shared/lib/firebase'
+import { STAFF_COLLECTION } from '@shared/auth/roles'
 import { useAuth } from '@shared/auth/AuthContext'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { useDutyStatus } from '@/hooks/useDutyStatus'
@@ -47,12 +58,6 @@ const NAV_GROUPS = [
   },
 ]
 
-const ROLE_LABELS = {
-  super_admin: 'Super admin',
-  security_head: 'Security head',
-  security_officer: 'Security officer',
-}
-
 /* THE TOP-BAR "FILE INCIDENT REPORT" BUTTON WAS HERE AND IS GONE.
  *
  * It was the third route to the same form on every screen: the sidebar's "File
@@ -87,31 +92,73 @@ function LogoutGate({ open, onCancel }) {
     <ConfirmDialog
       open={open}
       title="Clock out first"
-      message="You must clock out to finalize your active duty session before logging out. Use Clock out on the duty panel — it records your end time, total hours and location."
+      // "on the duty panel" named a panel that was removed on 2026-10-17;
+      // Clock out lives in the page header now.
+      message="Clock out before logging out, so your shift records its end time, total hours and location. Use Clock out at the top of the page."
       confirmLabel="Got it"
-      cancelLabel="Stay signed in"
       tone="warning"
+      icon={Clock}
+      centered
+      // One choice, so one button: both used to do the same thing.
+      hideCancel
       onConfirm={onCancel}
       onCancel={onCancel}
     />
   )
 }
 
-export default function AppShell({ children, dutyLock = true, ...props }) {
-  const { role } = useAuth()
+/**
+ * The signed-in officer's full name, for the sidebar's profile block.
+ *
+ * Read live from their own staff record (which every officer may read), not
+ * from the Auth profile: an admin renaming an officer updates the record at
+ * once, while `user.displayName` in this browser stays as it was at sign-in.
+ * The Auth name is the fallback while the record loads.
+ */
+function useOfficerName() {
+  const { user } = useAuth()
+  const [name, setName] = useState({ uid: null, value: '' })
+
+  useEffect(() => {
+    if (!user?.uid) return undefined
+    return onSnapshot(
+      doc(db, STAFF_COLLECTION, user.uid),
+      (snap) => setName({ uid: user.uid, value: String(snap.data()?.name ?? '').trim() }),
+      () => {},
+    )
+  }, [user?.uid])
+
+  const live = name.uid === user?.uid ? name.value : ''
+  return live || user?.displayName || undefined
+}
+
+/**
+ * The shell's frame: DashboardLayout plus the guardhouse's own furniture —
+ * the logout gate, the location notices and the duty lock — around `children`.
+ * Shared by the persistent layout route and the standalone fallback.
+ */
+function ShellFrame({ children, dutyLock = true, ...props }) {
+  const officerName = useOfficerName()
   const telemetry = useGuardTelemetryState()
   const { onDuty } = useDutyStatus()
   const [logoutGate, setLogoutGate] = useState(false)
 
   return (
     <DashboardLayout
-      roleLabel={ROLE_LABELS[role] ?? 'On duty'}
+      profileName={officerName}
       navGroups={NAV_GROUPS}
       collapseKey={portalKey('sidebar-collapsed')}
       logoutMessage="Are you sure you want to log out of the Security Console?"
       logoutBlocked={onDuty}
       onBlockedLogout={() => setLogoutGate(true)}
       alertPath={ROUTES.history}
+      // Reports and SOS both open on the dispatch map, which focuses them from
+      // ?incident= / ?panic=. The guardhouse has no announcements page, so an
+      // announcement just marks itself read.
+      notificationRoutes={{
+        incident: `${ROUTES.dashboard}?incident=`,
+        panic: `${ROUTES.dashboard}?panic=`,
+      }}
       historyPath={ROUTES.history}
       {...props}
     >
@@ -149,4 +196,38 @@ export default function AppShell({ children, dutyLock = true, ...props }) {
       </div>
     </DashboardLayout>
   )
+}
+
+/**
+ * The persistent shell — a layout ROUTE wrapping every signed-in page, so the
+ * sidebar, header, duty state and their listeners mount ONCE and survive
+ * navigation (see shared/layouts/PageChrome.jsx).
+ */
+export function AppShellLayout() {
+  const { page, value, slotProps } = usePersistentChrome()
+  return (
+    <PageChromeProvider value={value}>
+      <ShellFrame
+        title={page.title}
+        subtitle={page.subtitle}
+        scroll={page.scroll}
+        bleed={page.bleed}
+        inlineTitle={page.inlineTitle}
+        dutyLock={page.dutyLock}
+        {...slotProps}
+      >
+        <Outlet />
+      </ShellFrame>
+    </PageChromeProvider>
+  )
+}
+
+/**
+ * What a page renders. Inside AppShellLayout it only reports its chrome
+ * (including `dutyLock`); on its own it builds the full shell as before.
+ */
+export default function AppShell(props) {
+  const chrome = usePageChrome()
+  if (chrome) return <ReportPageChrome chrome={chrome} {...props} />
+  return <ShellFrame {...props} />
 }

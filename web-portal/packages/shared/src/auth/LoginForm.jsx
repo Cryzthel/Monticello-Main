@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Loader2, Lock, Mail } from '@shared/icons'
+import { Eye, EyeOff } from '@shared/icons'
 
 import { useAuth } from '@shared/auth/AuthContext'
 import AuthAlert from '@shared/auth/AuthAlert'
 import BackToSignIn from '@shared/auth/BackToSignIn'
+import CtaLabel from '@shared/auth/CtaLabel'
 import FloatingField from '@shared/auth/FloatingField'
 import OtpInput from '@shared/auth/OtpInput'
 import PasswordRecovery from '@shared/auth/PasswordRecovery'
@@ -268,14 +269,7 @@ export default function LoginForm({
 
         <div className="flex flex-col gap-3">
           <button type="submit" disabled={submitting || normaliseCode(code).length !== 6} className={CTA}>
-            {submitting ? (
-              <>
-                <Loader2 size="sm" className="animate-spin" />
-                Verifying…
-              </>
-            ) : (
-              'Verify and sign in'
-            )}
+            <CtaLabel busy={submitting} label="Verify and sign in" busyLabel="Verifying…" />
           </button>
 
           <BackToSignIn
@@ -296,7 +290,6 @@ export default function LoginForm({
       <FloatingField
         id="email"
         label="Email address"
-        icon={Mail}
         type="email"
         required
         autoComplete="email"
@@ -314,7 +307,6 @@ export default function LoginForm({
       <FloatingField
         id="password"
         label="Password"
-        icon={Lock}
         type={showPassword ? 'text' : 'password'}
         required
         autoComplete="current-password"
@@ -376,14 +368,7 @@ export default function LoginForm({
       <AuthAlert tone="error">{error}</AuthAlert>
 
       <button type="submit" disabled={submitting} className={CTA}>
-        {submitting ? (
-          <>
-            <Loader2 size="sm" className="animate-spin" />
-            Signing in…
-          </>
-        ) : (
-          submitLabel
-        )}
+        <CtaLabel busy={submitting} label={submitLabel} busyLabel="Signing in…" />
       </button>
     </form>
   )

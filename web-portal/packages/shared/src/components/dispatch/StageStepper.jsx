@@ -1,5 +1,6 @@
 import { Check } from '@shared/icons'
 import { DISPATCH_STAGES, STAGE_LABELS, deriveDispatchStage, stageIndex } from '@shared/lib/dispatchStage'
+import { formatTime } from '@shared/lib/dates'
 
 /**
  * DISPATCHED → RESPONDING → RESOLVED, with the time each step was reached.
@@ -46,7 +47,17 @@ const STAGE_STAMPS = {
   resolved: 'resolvedAt',
 }
 
-const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
+/**
+ * When a step happened, with fallbacks for calls that went through the older
+ * five-stage machine. Those never wrote `respondingAt` — they wrote
+ * `acknowledgedAt`, then `onSceneAt` — so a call that was plainly responding
+ * showed "—" under Responding. The first stamp that exists is the moment the
+ * step began.
+ */
+const stampFor = (report, key) => {
+  if (key === 'responding') return report.respondingAt ?? report.acknowledgedAt ?? report.onSceneAt
+  return report[STAGE_STAMPS[key]]
+}
 
 export default function StageStepper({ report, stage }) {
   const current = stageIndex(stage ?? deriveDispatchStage(report))
@@ -71,7 +82,7 @@ export default function StageStepper({ report, stage }) {
         const step = i + 1
         const done = step < current || (step === current && key === 'resolved')
         const active = step === current && !done
-        const at = report[STAGE_STAMPS[key]]
+        const at = stampFor(report, key)
         return (
           <li
             key={key}
@@ -81,13 +92,13 @@ export default function StageStepper({ report, stage }) {
             {i > 0 ? (
               <span
                 aria-hidden="true"
-                className={`absolute right-1/2 top-2.5 h-0.5 w-full -translate-y-1/2 ${
+                className={`absolute right-1/2 top-3 h-0.5 w-full -translate-y-1/2 ${
                   step <= current ? 'bg-brand-500' : 'bg-tint/10'
                 }`}
               />
             ) : null}
             <span
-              className={`relative z-[1] flex h-5 w-5 items-center justify-center rounded-full text-2xs font-bold ${
+              className={`relative z-[1] flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold ${
                 done
                   ? 'bg-brand-500 text-base-900'
                   : active
@@ -104,8 +115,8 @@ export default function StageStepper({ report, stage }) {
             >
               {STAGE_LABELS[key]}
             </span>
-            <span className="font-mono text-2xs tabular-nums text-text-muted">
-              {at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—'}
+            <span className={`text-2xs tabular-nums ${at ? 'text-text-secondary' : 'text-text-muted/60'}`}>
+              {formatTime(at)}
             </span>
           </li>
         )

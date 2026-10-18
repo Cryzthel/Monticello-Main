@@ -133,7 +133,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
         onSubmit={submit}
         className="card dialog-panel flex max-h-[80dvh] w-full max-w-lg flex-col overflow-hidden rounded-b-none bg-base-900 shadow-modal sm:rounded-b-xl"
       >
-        <header className="flex shrink-0 items-start gap-3 border-b border-hairline px-5 py-3.5">
+        <header className="flex shrink-0 items-start gap-3 border-b border-hairline px-6 py-3.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success ring-1 ring-inset ring-success/30">
             <CheckCircle2 size="md" aria-hidden="true" />
           </span>
@@ -154,7 +154,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
           </button>
         </header>
 
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
+        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6">
           {/* ── CLOSING A CALL NOBODY ARRIVED AT ──────────────────────────
               Arrival is stamped automatically when the officer's own
               position reaches the pin, so an absent `onSceneAt` means the
@@ -310,7 +310,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
           </div>
         </div>
 
-        <footer className="flex shrink-0 flex-col gap-2 border-t border-hairline px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <footer className="flex shrink-0 flex-col gap-2 border-t border-hairline px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="flex min-w-0 items-center gap-1.5 text-caption text-text-muted" aria-live="polite">
             {touched && missing.length ? (
               <>

@@ -41,6 +41,27 @@ service cloud.firestore {
         && staffDoc().data.role in ['super_admin', 'security_head', 'security_officer'];
     }
 
+    // A resident the HOA office has verified: `residents/{uid}` exists and its
+    // verificationStatus (or the legacy `status`) reads as approved.
+    //
+    // The accepted spellings are the ones the portals' own parser treats as
+    // verified (normalizeResidentStatus in
+    // web-portal/packages/shared/src/lib/residents.js), so nobody the Residents
+    // page shows as Verified is refused here. Case and surrounding spaces are
+    // ignored for the same reason. Today's write path stores 'verified'; the
+    // others exist only in older documents.
+    //
+    // Gates the two privileged resident actions, filing a report and raising
+    // an SOS (decided 2026-10-18). Until this, both were checked only in the
+    // app, and any signed-in account's write was accepted.
+    function isVerifiedResident() {
+      let ref = /databases/$(database)/documents/residents/$(request.auth.uid);
+      return isSignedIn()
+        && exists(ref)
+        && get(ref).data.get('verificationStatus', get(ref).data.get('status', ''))
+             .lower().trim() in ['verified', 'approved', 'accepted'];
+    }
+
     // Resident property (verify-first). Doc id must match the signed-in user.
     match /properties/{userId} {
       allow read, write: if isOwner(userId);
@@ -332,8 +353,14 @@ service cloud.firestore {
       // report wizard and the Guardhouse's File a report) write exactly that,
       // and nothing else may, or a resident could file a report that claims to
       // be resolved already.
+      //
+      // WHO may file: a verified resident, or security staff. The second is
+      // the Guardhouse's File a report (FileReportModal), whose reporterUid is
+      // the guard's own uid — a guard has no residents document, so a
+      // resident-only check would stop the guardhouse filing at all.
       allow create: if isSignedIn()
         && request.resource.data.reporterUid == request.auth.uid
+        && (isVerifiedResident() || isSecurityStaff())
         && request.resource.data.get('status', 'pending') == 'pending'
         && !request.resource.data.keys().hasAny(workflowFields().removeAll(['status']))
         && !('residentRating' in request.resource.data);
@@ -430,8 +457,11 @@ service cloud.firestore {
     // read it back, but only security staff can acknowledge/resolve.
     // onPanicAlertCreate (functions/index.js) does the FCM fan-out.
     match /panic_alerts/{alertId} {
+      // Verified residents only. Nothing else creates these: staff update
+      // them, and the Cloud Functions write with the Admin SDK.
       allow create: if isSignedIn()
-        && request.resource.data.residentUid == request.auth.uid;
+        && request.resource.data.residentUid == request.auth.uid
+        && isVerifiedResident();
       // READ is isStaff(), not isSecurityStaff(). The narrower helper excludes
       // 'hoa_admin', so the Admin portal's Panic Alerts (SOS) page — an
       // oversight surface — would return permission-denied for every HOA
@@ -601,8 +631,14 @@ service cloud.firestore {
         && request.resource.data.get(['residentApp', 'requireVerificationForSos'], false) is bool
 
         && request.resource.data.get('organisation', {}).keys().hasOnly([
-          'contactEmail', 'officeHours', 'logoUrl', 'auditRetentionDays'
+          'contactEmail', 'officeHours', 'logoUrl', 'auditRetentionDays', 'timeZone'
         ])
+        // The zone every console formats timestamps in (Settings › System).
+        // An IANA name — "Asia/Manila", "America/Argentina/Buenos_Aires" — or
+        // "UTC"; the client checks it against Intl before it is ever saved.
+        && request.resource.data.get(['organisation', 'timeZone'], 'Asia/Manila') is string
+        && request.resource.data.get(['organisation', 'timeZone'], 'Asia/Manila')
+             .matches('^(UTC|[A-Za-z_]+(/[A-Za-z0-9_+-]+){1,2})$')
         && request.resource.data.get(['organisation', 'contactEmail'], '') is string
         && request.resource.data.get(['organisation', 'officeHours'], '') is string
         && request.resource.data.get(['organisation', 'logoUrl'], '') is string
@@ -654,6 +690,17 @@ service cloud.firestore {
         && request.resource.data.get(['policies', 'communityGuidelines'], '') is string
         && request.resource.data.get(['policies', 'communityGuidelines'], '').size() <= 20000;
       allow delete: if false;
+    }
+
+    // ── OFFICER PRESENCE (MIRROR) ────────────────────────────────────────
+    //
+    // Online / last-seen per security account, copied from the Realtime
+    // Database `presence/{uid}` node by the onPresenceWrite function (RTDB
+    // rules cannot see who is an admin, Firestore rules can). Server-written
+    // only; read by the admin roster and by the officer themself.
+    match /staff_presence/{uid} {
+      allow read: if isAdminStaff() || isOwner(uid);
+      allow write: if false;
     }
 
     // ── LIVE UNIT TELEMETRY ──────────────────────────────────────────────

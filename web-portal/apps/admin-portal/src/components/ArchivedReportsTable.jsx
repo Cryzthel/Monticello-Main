@@ -1,5 +1,6 @@
+import { toast } from '@shared/lib/toast'
 import { useMemo, useState } from 'react'
-import { Archive, ArchiveRestore, Search } from '@shared/icons'
+import { Archive, ArchiveRestore } from '@shared/icons'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
 import TimeframeFilter from '@/components/TimeframeFilter'
@@ -8,9 +9,10 @@ import { unarchiveIncidents } from '@shared/lib/incidents'
 import { formatCategory } from '@shared/lib/wpda'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTime } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
-const STAMP = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
-const stamp = (value) => (value ? new Date(value).toLocaleString('en-GB', STAMP).replace(',', '') : '—')
+const stamp = (value) => formatDateTime(value)
 
 /**
  * Archived reports, with a retention filter over them.
@@ -30,7 +32,6 @@ export default function ArchivedReportsTable({ incidents = [], loading = false, 
   const [search, setSearch] = useState('')
   const [timeframe, setTimeframe] = useState({ preset: '30d', from: '', to: '' })
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
 
   const rows = useMemo(() => {
     const range = resolveTimeframe(timeframe)
@@ -49,14 +50,11 @@ export default function ArchivedReportsTable({ incidents = [], loading = false, 
 
   async function restore(id) {
     setBusy(true)
-    setError('')
-    try {
-      await unarchiveIncidents([id])
-    } catch (err) {
-      setError(err.message ?? 'Could not return this report to the active list.')
-    } finally {
-      setBusy(false)
-    }
+    await toast.run(() => unarchiveIncidents([id]), {
+      success: 'Report restored to the active list',
+      error: 'Could not restore the report',
+    })
+    setBusy(false)
   }
 
   return (
@@ -82,21 +80,19 @@ export default function ArchivedReportsTable({ incidents = [], loading = false, 
         />
       </div>
 
-      {error ? <p className="px-4 pt-3 text-xs text-danger">{error}</p> : null}
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-auto pb-6">
-        <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            <tr className="table-head">
-              <th className="px-4 py-3 font-medium">Archived</th>
-              <th className="px-4 py-3 font-medium">Category</th>
-              <th className="px-4 py-3 font-medium">Location</th>
-              <th className="px-4 py-3 font-medium">Resident</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable
+        minWidth="48rem"
+        scrollClassName="pb-6"
+        columns={[
+          { header: <>Archived</> },
+          { header: <>Category</> },
+          { header: <>Location</> },
+          { header: <>Resident</> },
+          { header: <>Status</> },
+          {},
+        ]}
+      >
             {loading ? (
               <SkeletonTableRows
                 rows={6}
@@ -152,9 +148,7 @@ export default function ArchivedReportsTable({ incidents = [], loading = false, 
                 </tr>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
     </Card>
   )
 }

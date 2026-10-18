@@ -1,5 +1,6 @@
+import { toast } from '@shared/lib/toast'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDownWideNarrow, Search, Trash2, X } from '@shared/icons'
+import { ArrowDownWideNarrow, Trash2, X } from '@shared/icons'
 import Card from '@shared/components/Card'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import RowActionMenu from './RowActionMenu'
@@ -16,6 +17,8 @@ import { softDeleteIncidents } from '@shared/lib/incidents'
 import { displayPersonName } from '@shared/lib/identity'
 import { applyIncidentSort, DEFAULT_SORT, SORT_OPTIONS } from '@shared/lib/incidentSort'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTimeSeconds } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 const STATUS_FILTERS = ['All', ...INCIDENT_STATUSES]
 
@@ -43,10 +46,9 @@ function ticketId(id) {
  * outside the locale that wrote it. This form is the same character count for
  * every date in a year, which is what makes the mono column actually align.
  */
-const LOG_TIME = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
 
 function formatLogTime(value) {
-  return new Date(value).toLocaleString('en-GB', LOG_TIME).replace(',', '')
+  return formatDateTimeSeconds(value)
 }
 
 /**
@@ -118,6 +120,12 @@ export default function IncidentsTable({
   const [freshIds, setFreshIds] = useState(() => new Set())
 
   useEffect(() => {
+    // ── SEED ON THE FIRST LOADED RENDER, NOT THE FIRST RENDER ──────────────
+    // The first render happens while the stream is still loading, with an
+    // EMPTY list. Seeding then meant the real list, arriving a moment later,
+    // was all "arrivals", and every row on the page flashed at once on every
+    // load (2026-10-17, reported as a green tint over the whole table).
+    if (loading) return undefined
     const currentIds = new Set(incidents.map((incident) => incident.id))
 
     if (seenIds.current === null) {
@@ -140,7 +148,7 @@ export default function IncidentsTable({
       })
     }, 2200)
     return () => clearTimeout(timer)
-  }, [incidents])
+  }, [incidents, loading])
 
   // Filter → sort → page, as three memos rather than one. Only the last of them
   // re-runs when the operator turns a page, so paging a few hundred rows does
@@ -212,16 +220,17 @@ export default function IncidentsTable({
   async function runConfirmed() {
     if (!confirming) return
     setBulkUpdating(true)
-    try {
-      // Soft delete — the documents survive in Audit History -> Deleted Reports.
-      await softDeleteIncidents(confirming.ids)
-      setSelectedIds(new Set())
-      setConfirming(null)
-    } catch (err) {
-      console.error('Bulk delete failed', err)
-    } finally {
-      setBulkUpdating(false)
-    }
+    const { ids } = confirming
+    const noun = ids.length === 1 ? 'Report' : `${ids.length} reports`
+    // Soft delete — the documents survive in Audit History -> Deleted Reports.
+    const ok = await toast.run(() => softDeleteIncidents(ids), {
+      success: `${noun} moved to Deleted reports`,
+      error: `Could not delete ${noun.toLowerCase()}`,
+    })
+    setBulkUpdating(false)
+    if (!ok) return
+    setSelectedIds(new Set())
+    setConfirming(null)
   }
 
   // Avoids a panel-inside-a-panel double border when a caller supplies its own
@@ -299,41 +308,35 @@ export default function IncidentsTable({
         </div>
       ) : null}
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto pb-6">
-        <table className="w-full min-w-[40rem] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            {/* Column heads use the shared .table-head scale: small grey
-                sentence-case labels on the pale band, as in every table. */}
-            <tr className="table-head">
-              {!compact ? (
-                <th className="w-10 px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="h-3.5 w-3.5 rounded-lg border-slate-200 bg-base-800 accent-brand-500"
-                  />
-                </th>
-              ) : null}
-              {!compact ? <th className="w-[7.5rem] px-4 py-3 text-left">Ticket</th> : null}
-              <th className="px-4 py-3 text-left">Category</th>
-              <th className="px-4 py-3 text-left">Location</th>
-              <th className="px-4 py-3 text-left">Resident</th>
-              <th className="w-[10rem] px-4 py-3 text-left">Status</th>
-              {/* `aria-sort` on the one column the table IS ordered by. Plain
-                  headers everywhere else, so a screen reader is not told four
-                  columns are sortable when none of them are clickable. */}
-              <th
-                scope="col"
-                aria-sort={sort === 'oldest' ? 'ascending' : 'descending'}
-                className="w-[11rem] px-4 py-3 text-left"
-              >
-                Reported
-              </th>
-              {!compact ? <th className="w-14 px-4 py-3" /> : null}
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable
+        // Compact is the dashboard's preview card; the full table carries the
+        // selection, ticket and actions columns as well.
+        minWidth={compact ? '40rem' : '60rem'}
+        scrollClassName="pb-6"
+        columns={[
+          {
+            hidden: compact,
+            className: 'w-10',
+            header: (
+              <input
+                type="checkbox"
+                aria-label="Select all tickets"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="h-3.5 w-3.5 rounded-lg border-slate-200 bg-base-800 accent-brand-500"
+              />
+            ),
+          },
+          { hidden: compact, header: 'Ticket', className: 'w-[7.5rem]' },
+          { header: 'Category' },
+          { header: 'Location', minWidth: '14rem' },
+          { header: 'Resident' },
+          { header: 'Status', className: 'w-[10rem]' },
+          // `aria-sort` on the one column the table IS ordered by, and nowhere else.
+          { header: 'Reported', className: 'w-[11rem]', ariaSort: sort === 'oldest' ? 'ascending' : 'descending' },
+          { hidden: compact, className: 'w-14' },
+        ]}
+      >
             {loading ? (
               /* Column descriptors, not a row count — the placeholder cells
                  have to land in the same `<td>`s the real ones will, or the
@@ -461,9 +464,7 @@ export default function IncidentsTable({
                 </tr>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
 
       {/* Sibling of the scroll region, not inside it — see TablePagination for
           why that is what keeps it pinned at every resolution. Hidden on the

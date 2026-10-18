@@ -61,6 +61,19 @@
  */
 export const GPS_ACCURACY_LIMIT_M = 100
 
+/**
+ * The line between a GPS fix and an estimate, for choosing BETWEEN devices.
+ *
+ * GPS_ACCURACY_LIMIT_M above answers "is this a usable position at all"; this
+ * answers "is this the sensor we want". A laptop on good Wi-Fi reports 30-100 m
+ * and passes the first test, so with only that line a ±60 m laptop never gave
+ * way to the ±8 m phone in the same officer's pocket. A phone with a sky view
+ * reports 5-20 m; 30 m leaves room for a cloudy street without letting Wi-Fi
+ * in. Used by the dispatch map's accuracy badge and by the rules that decide
+ * which of an officer's devices owns their published position.
+ */
+export const PRECISE_FIX_M = 30
+
 export const GPS_REJECT_ACCURACY_M = 1000
 
 /**

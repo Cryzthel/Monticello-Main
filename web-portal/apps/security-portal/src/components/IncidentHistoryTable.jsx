@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Search } from '@shared/icons'
+import { ChevronRight } from '@shared/icons'
 import Card from '@shared/components/Card'
 import PriorityBadge from '@shared/components/PriorityBadge'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -9,6 +9,8 @@ import { displayPersonName } from '@shared/lib/identity'
 import { incidentReference } from '@/lib/dispatch'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
 import SearchField from '@shared/components/SearchField'
+import { formatDateTimeSeconds } from '@shared/lib/dates'
+import DataTable from '@shared/components/DataTable'
 
 /**
  * The Incident History directory.
@@ -47,10 +49,9 @@ import SearchField from '@shared/components/SearchField'
  * reasoning as IncidentsTable — a variable-width locale string jags the column
  * on every row, and a mono column that does not align is just noise.
  */
-const LOG_TIME = { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }
 
 function formatLogTime(value) {
-  return new Date(value).toLocaleString('en-GB', LOG_TIME).replace(',', '')
+  return formatDateTimeSeconds(value)
 }
 
 export default function IncidentHistoryTable({
@@ -127,27 +128,21 @@ export default function IncidentHistoryTable({
         {filterSlot}
       </div>
 
-      <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-auto pb-6">
-        <table className="w-full min-w-[40rem] text-left text-sm">
-          <thead className="sticky top-0 z-10 bg-slate-50">
-            {/* The shared `.table-head` scale, same as the ticket queue. */}
-            <tr className="table-head">
-              <th className="w-[8.5rem] px-4 py-3 text-left">Reference</th>
-              <th className="px-4 py-3 text-left">Category</th>
-              <th className="px-4 py-3 text-left">Location</th>
-              <th className="px-4 py-3 text-left">Resident</th>
-              <th className="w-[10rem] px-4 py-3 text-left">Status</th>
-              {/* The list is always newest-first — the page sorts it, because
-                  the page owns the scope — so this column states the order
-                  rather than offering a control that would be a second
-                  opinion about it. */}
-              <th scope="col" aria-sort="descending" className="w-[11rem] px-4 py-3 text-left">
-                Reported
-              </th>
-              <th className="w-14 px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
+      <DataTable
+        minWidth="56rem"
+        scrollClassName="pb-6"
+        columns={[
+          { header: 'Reference', className: 'w-[8.5rem]' },
+          { header: 'Category' },
+          { header: 'Location', minWidth: '14rem' },
+          { header: 'Resident' },
+          { header: 'Status', className: 'w-[10rem]' },
+          // Always newest-first — the page owns the order — so the column states
+          // it rather than offering a control that would second-guess it.
+          { header: 'Reported', className: 'w-[11rem]', ariaSort: 'descending' },
+          { className: 'w-14' },
+        ]}
+      >
             {loading ? (
               <SkeletonTableRows
                 rows={8}
@@ -215,9 +210,7 @@ export default function IncidentHistoryTable({
                 </tr>
               ))
             )}
-          </tbody>
-        </table>
-      </div>
+      </DataTable>
 
       {/* Sibling of the scroll region, not inside it — see TablePagination for
           why that is what keeps it pinned at every resolution. */}

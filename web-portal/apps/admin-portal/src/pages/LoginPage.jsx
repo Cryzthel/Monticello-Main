@@ -1,5 +1,3 @@
-import { Mail } from '@shared/icons'
-
 import LoginSplitLayout from '@shared/auth/LoginSplitLayout'
 import LoginHeroAnimation from '@shared/auth/LoginHeroAnimation'
 import LoginForm from '@shared/auth/LoginForm'
@@ -61,8 +59,7 @@ export default function LoginPage() {
       illustration={<LoginHero />}
     >
       <LoginForm
-        emailIcon={Mail}
-        emailPlaceholder="monticellovillas@gmail.com"
+        emailPlaceholder="Enter your email address"
         submitLabel="Sign in"
         fallbackPath={ROUTES.home}
       />

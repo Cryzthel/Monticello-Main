@@ -1,4 +1,14 @@
 import { jsPDF } from 'jspdf'
+import {
+  drawBrandHeader,
+  drawOfficialFooter,
+  INK,
+  MARGIN as M,
+  MUTED,
+  PAGE,
+  RULE,
+} from '@shared/lib/pdfBrand'
+import { formatDate, formatDateTime } from '@shared/lib/dates'
 
 /**
  * An officer's duty history, as a PDF.
@@ -31,20 +41,21 @@ import { jsPDF } from 'jspdf'
  * server that could do it: Functions cannot deploy on the Spark plan.
  */
 
-const PAGE = { w: 595.28, h: 841.89 } // A4 portrait, points
-const M = 56
 const CONTENT_W = PAGE.w - M * 2
 
-const INK = [23, 23, 27]
-const MUTED = [113, 113, 122]
-const RULE = [228, 228, 231]
-const BRAND = [4, 120, 87] // --color-brand-cta, the same green as the lockup
+/**
+ * ── THE GEOMETRY AND THE PALETTE MOVED TO `@shared/lib/pdfBrand` ───────
+ * They were local constants here, including a `BRAND` of #047857 — the
+ * console's emerald, described in the comment it carried as "the same green as
+ * the lockup". It is not: the official lockup is maroon type with a green
+ * LEAF, and nothing in it is the product's emerald. The letterhead now comes
+ * from one module that reads its colours off the supplied artwork, so there is
+ * nowhere left for a second opinion about the brand to live.
+ */
 
-const STAMP = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }
-const DATE = { day: '2-digit', month: 'short', year: 'numeric' }
 
-const stamp = (v) => (v ? new Date(v).toLocaleString('en-GB', STAMP).replace(',', '') : '—')
-const day = (v) => (v ? new Date(v).toLocaleDateString('en-GB', DATE) : '—')
+const stamp = (v) => formatDateTime(v)
+const day = (v) => formatDate(v)
 const clock = (v) => (v ? new Date(v).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—')
 
 /** "7h 25m" — the same shape the on-screen table shows, so the two agree. */
@@ -66,13 +77,24 @@ function duration(minutes) {
  * against what an administrator is looking at should not have to re-map it.
  */
 const COLUMNS = [
-  { key: 'date', label: 'Date', share: 0.17, align: 'left' },
-  { key: 'shift', label: 'Shift', share: 0.15, align: 'left' },
-  { key: 'in', label: 'Time in', share: 0.12, align: 'left' },
-  { key: 'out', label: 'Time out', share: 0.12, align: 'left' },
+  { key: 'date', label: 'Date', share: 0.16, align: 'left' },
+  { key: 'shift', label: 'Shift', share: 0.14, align: 'left' },
+  { key: 'in', label: 'Time in', share: 0.11, align: 'left' },
+  { key: 'out', label: 'Time out', share: 0.11, align: 'left' },
   { key: 'hours', label: 'Duration', share: 0.14, align: 'right' },
-  { key: 'handover', label: 'Handover filed', share: 0.3, align: 'left' },
+  { key: 'handover', label: 'Handover filed', share: 0.34, align: 'left' },
 ]
+
+/**
+ * Gutter, in points, between a right-aligned cell and the column after it.
+ *
+ * It was 4, which is the inset a right-aligned column needs from its OWN
+ * edge and not the gap it needs from its neighbour — so “DURATION” ended
+ * four points before “HANDOVER FILED” began and the two headers read as one
+ * word. The only right-aligned column is Duration, and the one to its right
+ * is the widest, so the space comes out of the column that can spare it.
+ */
+const RIGHT_GUTTER = 16
 
 /**
  * Build and download the duty log. Returns the filename so a caller can
@@ -83,7 +105,12 @@ const COLUMNS = [
  * `filterLabel` says so in the header, so a six-row export of a thirty-shift
  * history cannot be mistaken for the whole record.
  */
-export function exportDutyLogPdf({ officer, shifts = [], filterLabel = 'All time' } = {}) {
+export function exportDutyLogPdf({
+  officer,
+  shifts = [],
+  filterLabel = 'All time',
+  incidentsHandled = null,
+} = {}) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: true })
   let y = M
 
@@ -100,7 +127,7 @@ export function exportDutyLogPdf({ officer, shifts = [], filterLabel = 'All time
   function drawHead() {
     setText(7.5, 'bold', MUTED)
     COLUMNS.forEach((col, i) => {
-      const x = col.align === 'right' ? xs[i] + widths[i] - 4 : xs[i]
+      const x = col.align === 'right' ? xs[i] + widths[i] - RIGHT_GUTTER : xs[i]
       doc.text(col.label.toUpperCase(), x, y, { align: col.align })
     })
     y += 7
@@ -110,19 +137,10 @@ export function exportDutyLogPdf({ officer, shifts = [], filterLabel = 'All time
     y += 14
   }
 
-  // ── Masthead ──────────────────────────────────────────────────────────────
-  setText(9, 'bold', BRAND)
-  doc.text('MONTICELLO VILLAS', M, y)
-  setText(9, 'normal', MUTED)
-  doc.text('Duty log', PAGE.w - M, y, { align: 'right' })
+  // ── The letterhead ───────────────────────────────────────
+  y = drawBrandHeader(doc, 'Community Security & Dispatch Log')
 
-  y += 10
-  doc.setDrawColor(...BRAND)
-  doc.setLineWidth(1.5)
-  doc.line(M, y, PAGE.w - M, y)
-
-  // ── Who, and over what window ─────────────────────────────────────────────
-  y += 30
+  // ── Who, and over what window ─────────────────────────────────
   setText(18, 'bold', INK)
   doc.text(officer?.name || 'Security officer', M, y)
 
@@ -139,16 +157,29 @@ export function exportDutyLogPdf({ officer, shifts = [], filterLabel = 'All time
   const totalMinutes = shifts.reduce((sum, s) => sum + (s.durationMinutes ?? 0), 0)
 
   y += 26
+  /**
+   * ── FIVE FACTS, AND ONE OF THEM IS NOT A SHIFT FIGURE ─────────────
+   * `incidentsHandled` is counted from the incident collection, not from
+   * these rows, so it is the one number here the table below does not also
+   * prove. It is passed in rather than derived precisely so that stays
+   * visible: a caller that cannot count them passes nothing and the row
+   * reads — rather than silently printing 0, which is a claim.
+   *
+   * Everything else is summed from the SAME rows the table prints, never
+   * from a separate query. A header that disagrees with the rows beneath it
+   * is the one failure a timesheet cannot survive.
+   */
   const facts = [
     ['Shifts', String(shifts.length)],
     ['Completed', String(closed.length)],
     ['Total on duty', duration(totalMinutes)],
+    ['Incidents handled', incidentsHandled == null ? '—' : String(incidentsHandled)],
     ['Range', filterLabel],
   ]
   const factW = CONTENT_W / facts.length
   facts.forEach(([label, text], i) => {
-    setText(8, 'bold', MUTED)
-    doc.text(label.toUpperCase(), M + i * factW, y)
+    setText(7.5, 'bold', MUTED)
+    doc.text(label.toUpperCase(), M + i * factW, y, { maxWidth: factW - 6 })
     setText(11, 'normal', INK)
     doc.text(text, M + i * factW, y + 14)
   })
@@ -187,7 +218,7 @@ export function exportDutyLogPdf({ officer, shifts = [], filterLabel = 'All time
       COLUMNS.forEach((col, i) => {
         setText(9.5, col.key === 'date' ? 'bold' : 'normal', col.key === 'date' ? INK : MUTED)
         const text = doc.splitTextToSize(String(cells[col.key]), widths[i] - 8)[0] ?? '—'
-        const x = col.align === 'right' ? xs[i] + widths[i] - 4 : xs[i]
+        const x = col.align === 'right' ? xs[i] + widths[i] - RIGHT_GUTTER : xs[i]
         doc.text(text, x, y, { align: col.align })
       })
 
@@ -212,16 +243,13 @@ export function exportDutyLogPdf({ officer, shifts = [], filterLabel = 'All time
     }
   }
 
-  // ── Footer, on every page ─────────────────────────────────────────────────
-  // Page numbers are stamped at the end because the count is not known until
-  // the last row is drawn.
-  const pages = doc.getNumberOfPages()
-  for (let p = 1; p <= pages; p += 1) {
-    doc.setPage(p)
-    setText(8, 'normal', MUTED)
-    doc.text(`Exported ${stamp(new Date())}`, M, PAGE.h - M + 16)
-    doc.text(`Page ${p} of ${pages}`, PAGE.w - M, PAGE.h - M + 16, { align: 'right' })
-  }
+  // ── The official footer, on every page ────────────────────────
+  drawOfficialFooter(doc, {
+    disclaimer:
+      `Generated ${stamp(new Date())} by the Monticello Villas security console from the ` +
+      'guard_shifts record. Times are as clocked by the officer\u2019s own device. This document ' +
+      'is a copy of a live record and is not valid as proof of hours without the signature above.',
+  })
 
   const who = (officer?.badgeNumber || officer?.name || 'officer')
     .toString()

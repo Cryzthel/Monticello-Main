@@ -1,21 +1,13 @@
-import { useMemo, useState } from 'react'
-import { collection, query, orderBy, limit } from 'firebase/firestore'
+import { useMemo } from 'react'
 import AppShell from '@/layouts/AppShell'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
-import DutyPanel from '@/components/DutyPanel'
 import PriorityBreakdownChart from '@shared/components/PriorityBreakdownChart'
-import CategoryBreakdownPanel from '@/components/CategoryBreakdownPanel'
 import KpiCard from '@shared/components/KpiCard'
-import { Skeleton, SkeletonKpiRow } from '@shared/components/Skeleton'
-import { useLiveCollection } from '@shared/hooks/useLiveCollection'
+import { SkeletonKpiRow } from '@shared/components/Skeleton'
+import { useIncidentFeed } from '@shared/hooks/useIncidentFeed'
+import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
 import { useMetricsClock } from '@/hooks/useMetricsClock'
-import { db } from '@shared/lib/firebase'
-import { mapIncidentDoc } from '@shared/lib/incidents'
-import {
-  OVERDUE_SLA_MINUTES,
-  SHIFT_WINDOW_HOURS,
-  computeResponseMetrics,
-} from '@/lib/responseMetrics'
+import { OVERDUE_SLA_MINUTES, computeResponseMetrics } from '@/lib/responseMetrics'
 
 /**
  * Response Metrics.
@@ -33,8 +25,8 @@ import {
  *                 because every figure below is derived from those documents
  *                 rather than stored anywhere.
  *
- *   the clock     `useMetricsClock` ticks every 15s. Three of these metrics
- *                 measure against the present, and a snapshot listener does
+ *   the clock     `useMetricsClock` ticks every 15s. The Overdue count
+ *                 measures against the present, and a snapshot listener does
  *                 not fire when the only thing that changed is the time. See
  *                 the hook for why a quiet shift is the case that needs it.
  *
@@ -43,145 +35,88 @@ import {
  * in for what any of these numbers means.
  */
 export default function PerformancePage() {
-  // Window for the category breakdown only — the KPI row above it is a fixed
-  // rolling shift window, which is a different question.
-  const [rangeDays, setRangeDays] = useState(30)
-
-  const historyQuery = useMemo(
-    () => query(collection(db, 'incidents'), orderBy('reportedAt', 'desc'), limit(500)),
-    [],
-  )
-  const { data: rawIncidents, loading } = useLiveCollection(historyQuery)
-  const reports = useMemo(() => rawIncidents.map(mapIncidentDoc), [rawIncidents])
+  // The SAME feed the admin Overview and Metrics read, so the two consoles
+  // count one population. This page used to run its own query — newest 500 by
+  // `reportedAt`, deleted reports included — so a report an administrator
+  // deleted kept counting as Active here while it vanished from the admin's
+  // figures, and a call open longer than the newest 500 dropped out of the
+  // guard's counts while the admin still had it. useIncidentFeed is live
+  // (onSnapshot), uncapped and excludes soft-deleted reports by default.
+  const { incidents: reports, loading } = useIncidentFeed()
 
   const now = useMetricsClock()
   const metrics = useMemo(() => computeResponseMetrics(reports, now), [reports, now])
+
+  // The SOS feed the dispatch map and the alert sound already listen to. Its
+  // own listener, because these are panic_alerts, not incidents.
+  const { liveCount: liveSos, loading: sosLoading } = usePanicAlerts()
 
   return (
     <AppShell
       dutyLock={false}
       title="Response metrics"
-      subtitle="Shift performance, dispatch efficiency and response times by category."
+      subtitle="What is open, waiting for a unit or running late — live."
       topBarSlot={<GuardHeaderActions />}
     >
       <div className="flex flex-col gap-6">
-        {/* ── THE DUTY PANEL ──────────────────────────────────────────────
-            First, and on this page specifically, because this is the only
-            console page that renders with `dutyLock={false}` — so it is the
-            only one where the OFF-duty half of the panel can ever be seen.
-            It takes the page's own `reports` array rather than subscribing
-            again; the same documents answering two listeners is two answers
-            that can disagree. */}
-        <DutyPanel reports={reports} />
+        {/* ── WHAT NEEDS ACTING ON, AND NOTHING ELSE ──────────────────────
+            Four cards, each a thing a guard can do something about right now:
+            calls open, SOS alerts unanswered, reports waiting for a unit, and
+            dispatches running late. The average time to assign rides under
+            "Awaiting dispatch" because it is that queue's speed.
 
-        {/* ── THE RESPONSE ROW ────────────────────────────────────────────
-            Six cards, in the order a call passes through them: how much is
-            open, how much of it is late, how fast we assign, when the next
-            deadline lands, how much we close, and how long a case takes end to
-            end.
+            Removed 2026-10-17: the Duty Status panel (clock-in lives on the
+            duty-lock overlay of every console page, clock-out in the header),
+            and On-Site ETA, Resolution Rate and Avg Resolution Time — outcome
+            measures that belong to the administrator's Metrics page.
 
-            An explicit 3-up rather than the shared `kpi-grid`. That class is
-            built for four cards — one, two, then four up — so six on it would
-            break as four plus two at desktop widths. (It used to be `auto-fit
-            minmax(14rem, 1fr)`, which orphaned the sixth card on a 1440px
-            laptop with the rail collapsed.) Six divides evenly by three and by
-            two, so fixing the column count keeps the row balanced at every
-            width it actually breaks at.
-
-            The 3-up waits for `xl`, not `lg`, so this row changes shape at the
-            same breakpoint as every other dashboard row (see .page-grid). That
-            is a consistency call, not a rescue: at 1024px with the rail open
-            three cards would be 221px, and the Overview's four-up cards measure
-            223px at 1280px with nothing clipped — they only grow one line of
-            help text taller. From 1024 to 1279px the six sit two-up in three
-            even rows, which is roomier rather than more correct.
-
-            Average Dispatch Time, On-Site ETA and Resolution Rate are new
-            here; every one of them moves the moment a status changes on the
-            dispatch map, which is the point of this pass. */}
-        {/* The placeholder takes the SAME explicit 3-up grid the real row
-            does, not the shared `kpi-grid` — the note above is the reason, and
-            a skeleton that wrapped differently from the content it precedes
-            would reintroduce the shift it exists to prevent. */}
-        {loading ? (
-          <SkeletonKpiRow
-            count={6}
-            className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3"
-          />
+            Four cards, so the shared `kpi-grid` (one, two, then four up) fits
+            exactly, and the skeleton uses the same grid. */}
+        {loading || sosLoading ? (
+          <SkeletonKpiRow count={4} />
         ) : (
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-          <KpiCard
-            label="Active now"
-            value={metrics.activeCount}
-            helpText="Everything not yet resolved"
-          />
-          <KpiCard
-            label="Overdue"
-            value={metrics.overdueCount}
-            tone="danger"
-            helpText={`Dispatched > ${OVERDUE_SLA_MINUTES} min`}
-          />
-          {/* Report submitted -> unit assigned. The half of the response the
-              guardhouse actually controls: everything after it depends on how
-              far the unit has to drive. */}
-          <KpiCard
-            label="Avg dispatch time"
-            value={metrics.avgDispatchTime}
-            helpText="Report to unit assigned"
-          />
-          {/* A deadline, not a prediction — nothing here knows where a unit
-              is. This is the soonest on-site target still running across every
-              open call; see nextOnSiteDeadline for why the soonest rather
-              than the average. */}
-          <KpiCard
-            label="On-Site ETA"
-            value={metrics.onSiteEta}
-            tone={metrics.onSiteEtaBreached ? 'danger' : 'neutral'}
-            helpText="Soonest on-site target still open"
-          />
-          <KpiCard
-            label="Resolution rate"
-            value={metrics.resolutionRateLabel}
-            tone="success"
-            helpText={`${metrics.resolvedCount} of ${reports.length} reports closed`}
-          />
-          <KpiCard
-            label="Avg resolution time"
-            value={metrics.avgResolutionTime}
-            helpText="Report to resolved"
-          />
-        </div>
+          <div className="kpi-grid">
+            <KpiCard
+              label="Active calls"
+              value={metrics.activeCount}
+              helpText="Every report not yet resolved"
+            />
+            <KpiCard
+              label="Active SOS"
+              value={liveSos}
+              tone="danger"
+              helpText="Emergency alerts not yet resolved"
+            />
+            <KpiCard
+              label="Awaiting dispatch"
+              value={metrics.awaitingDispatchCount}
+              helpText={
+                metrics.avgDispatchTime !== 'No data yet'
+                  ? `Avg time to assign: ${metrics.avgDispatchTime}`
+                  : 'Reports with no unit assigned yet'
+              }
+            />
+            <KpiCard
+              label="Overdue"
+              value={metrics.overdueCount}
+              tone="danger"
+              helpText={`Dispatched more than ${OVERDUE_SLA_MINUTES} min ago`}
+            />
+          </div>
         )}
 
-        {/* Resolved This Shift moved into the Resolution Rate card's supporting
-            line as "N of M closed", which says the same thing with a
-            denominator. The rolling window it used is still the basis of
-            `resolvedThisShift` in the metrics module for any surface that
-            wants the raw count. */}
-        {loading ? (
-          <Skeleton variant="muted" className="-mt-3 h-3 w-96 max-w-full" />
-        ) : (
-          <p className="-mt-3 text-xs text-text-muted">
-            {`${metrics.resolvedThisShift} resolved in the last ${SHIFT_WINDOW_HOURS}h · figures update live as statuses change on the dispatch map.`}
-          </p>
-        )}
+        <p className="-mt-3 text-xs text-text-muted">
+          Figures update live as statuses change on the dispatch map.
+        </p>
 
         {/* Active Incidents by Priority — full width now that the mini map
             is gone; the full dispatch map lives on /dashboard. */}
         <PriorityBreakdownChart incidents={metrics.activeReports} loading={loading} />
 
-        {/* The ticket queue used to sit here. It is its own page now
-            (/tickets) — this one is analytics only. */}
-        {/* `loading` was already a prop on this panel, with a skeleton branch
-            behind it, and this page never passed it — so the branch had never
-            once rendered and the panel showed its "Nothing resolved in this
-            window yet." empty state during every initial load. */}
-        <CategoryBreakdownPanel
-          incidents={reports}
-          rangeDays={rangeDays}
-          onRangeChange={setRangeDays}
-          loading={loading}
-        />
+        {/* Response time BY CATEGORY (report → resolution) was the last
+            panel here and was removed with Avg Resolution Time on 2026-10-17:
+            it is the same outcome measure drawn as a chart, and resolution
+            analytics live on the administrator's Metrics page. */}
       </div>
     </AppShell>
   )

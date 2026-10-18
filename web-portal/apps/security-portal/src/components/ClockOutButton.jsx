@@ -1,3 +1,4 @@
+import { toast } from '@shared/lib/toast'
 import { useState } from 'react'
 import { LogOut, Loader2 } from '@shared/icons'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
@@ -61,8 +62,9 @@ export default function ClockOutButton({ className = 'btn btn-sm btn-outline', l
         error={error || null}
         onCancel={() => setConfirming(false)}
         onSubmit={async (handover) => {
-          await toggle({ handover })
-          setConfirming(false)
+          // Closed only on success: a failed clock-out used to close the
+          // dialog anyway and throw away the handover the guard had typed.
+          if (await toggle({ handover })) setConfirming(false)
         }}
       />
 
@@ -75,9 +77,12 @@ export default function ClockOutButton({ className = 'btn btn-sm btn-outline', l
         message="This closes your shift and removes you from the live unit list."
         confirmLabel="Clock out"
         busy={busy}
-        onConfirm={() => {
-          toggle({})
+        onConfirm={async () => {
+          const ok = await toggle({})
           setConfirming(false)
+          // This dialog has no error slot; without the toast a failure was
+          // only a tooltip on the button.
+          if (!ok) toast.error('Could not clock out', { description: 'You are still on duty. Try again.' })
         }}
         onCancel={() => setConfirming(false)}
       >

@@ -1,7 +1,14 @@
 import { useEffect, useRef } from 'react'
 
 /**
- * Six single-character boxes for a 6-digit code, with auto-advance.
+ * One single-character box per digit, with auto-advance.
+ *
+ * ── THE LENGTH IS A PROP ─────────────────────────────────────────────────────
+ * The two callers no longer agree. The two-factor step reads an authenticator
+ * app, whose codes are six digits by the TOTP standard and cannot be changed
+ * here; password recovery's code is four (the estate's decision, 2026-10-16 —
+ * see OTP_LENGTH in functions/index.js). Six stays the default so the 2FA step
+ * needs no change.
  *
  * ── WHERE THIS IS USED ───────────────────────────────────────────────────────
  * Two screens: the two-factor step of the sign-in form, and the code step of
@@ -38,7 +45,7 @@ import { useEffect, useRef } from 'react'
  * parent submits, validates and clears it exactly as it would a text field.
  */
 
-const LENGTH = 6
+const DEFAULT_LENGTH = 6
 
 /** Digits only. Authenticators and SMS pad codes with spaces and dashes. */
 const digitsOf = (text) => text.replace(/\D/g, '')
@@ -51,7 +58,9 @@ export default function OtpInput({
   disabled = false,
   invalid = false,
   autoFocus = false,
+  length = DEFAULT_LENGTH,
 }) {
+  const LENGTH = length
   const boxes = useRef([])
   const digits = digitsOf(value).slice(0, LENGTH).split('')
 
@@ -125,7 +134,22 @@ export default function OtpInput({
   }
 
   return (
-    <div className="flex items-center justify-between gap-2" role="group" aria-labelledby={`${id}-label`}>
+    // ── MOBILE'S PIN BOXES ────────────────────────────────────────────────────
+    // Geometry and type from OtpPinInput (lib/features/auth/widgets/
+    // otp_pin_input.dart): 60x64 boxes, 12px apart, 14px corners
+    // (AppRadius.md), a 28px bold digit, centred as a row. A filled box keeps a
+    // tinted brand border so progress through the code reads at a glance.
+    //
+    // Colour stays on THIS form's field tokens rather than mobile's mint
+    // stroke: the boxes sit directly under capsule fields drawn in slate, and a
+    // second resting border colour on one screen is the inconsistency the
+    // audit was asked to remove.
+    //
+    // `flex-1 max-w-[60px]` rather than a fixed width: four boxes are 276px,
+    // six (the two-factor step) are 420px, and both must still fit a 327px
+    // phone column — so they hold 60px where there is room and shrink evenly
+    // where there is not.
+    <div className="flex items-center justify-center gap-3" role="group" aria-labelledby={`${id}-label`}>
       {Array.from({ length: LENGTH }, (_, index) => (
         <input
           key={index}
@@ -153,10 +177,10 @@ export default function OtpInput({
           onKeyDown={handleKeyDown(index)}
           onPaste={handlePaste(index)}
           onFocus={(event) => event.target.select()}
-          className={`h-14 w-full min-w-0 rounded-2xl border bg-field text-center font-mono text-lg font-semibold text-text-primary outline-none transition-[border-color,box-shadow] duration-200 ease-in-out disabled:opacity-60 ${
+          className={`h-16 min-w-0 max-w-[60px] flex-1 rounded-[14px] border bg-field text-center text-[1.75rem] font-bold tabular-nums text-text-primary caret-brand-500 outline-none transition-[border-color,box-shadow,background-color] duration-200 ease-in-out disabled:opacity-60 ${
             invalid
-              ? 'border-danger focus:border-danger focus:ring-2 focus:ring-danger/20'
-              : 'border-slate-200/80 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20'
+              ? 'border-danger bg-danger/5 text-danger focus:border-danger focus:ring-2 focus:ring-danger/20'
+              : `${digits[index] ? 'border-brand-500/45' : 'border-slate-200/80 hover:border-slate-300'} focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20`
           }`}
         />
       ))}
