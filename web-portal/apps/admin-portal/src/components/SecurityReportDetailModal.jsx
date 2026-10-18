@@ -283,7 +283,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
           className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-hairline bg-base-950 shadow-2xl"
         >
           {/* ── Sticky header: tags, title, code · filed · by ── */}
-          <header className="z-20 flex shrink-0 items-start justify-between gap-4 border-b border-hairline bg-base-950/80 px-6 py-5 backdrop-blur-xl">
+          <header className="z-20 flex shrink-0 items-start justify-between gap-3 border-b border-hairline bg-base-950/80 px-4 py-4 backdrop-blur-xl sm:gap-4 sm:px-6 sm:py-5">
             {pending ? (
               <div aria-hidden="true" className="space-y-2">
                 <div className="flex gap-2">
@@ -311,14 +311,24 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                   {deleted ? <Tag tone="danger">Deleted</Tag> : null}
                 </div>
                 <div>
-                  <h2 id="report-sheet-title" className="text-xl font-semibold tracking-tight text-text-primary">
+                  {/* Two lines at most, so a long title cannot push the
+                      sticky header over a third of a phone screen; the full
+                      text is the tooltip. */}
+                  <h2
+                    id="report-sheet-title"
+                    title={report.title || undefined}
+                    className="line-clamp-2 break-words text-lg font-semibold tracking-tight text-text-primary sm:text-xl"
+                  >
                     {report.title || `${formatCategory(report.category)} report`}
                   </h2>
-                  <p className="mt-0.5 break-words font-mono text-xs text-text-muted">
-                    {ticketCode(report.id)}
+                  {/* Code and time never break; the filer, often a long email
+                      address, truncates on its own line. */}
+                  <p className="mt-0.5 font-mono text-xs text-text-muted">
+                    <span className="whitespace-nowrap">{ticketCode(report.id)}</span>
                     <span className="opacity-50"> • </span>
-                    {stamp(report.reportedAt) || 'No filing time'}
-                    <span className="opacity-50"> • </span>
+                    <span className="whitespace-nowrap">{stamp(report.reportedAt) || 'No filing time'}</span>
+                  </p>
+                  <p className="truncate font-mono text-xs text-text-muted" title={report.reportedByName || undefined}>
                     Filed by {report.reportedByName || 'an officer'}
                   </p>
                 </div>
@@ -335,7 +345,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
           </header>
 
           {/* ── Body: Miller's chunks, one card each ── */}
-          <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-6">
+          <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6">
             {pending ? (
               <SkeletonBody />
             ) : gone ? (
@@ -517,19 +527,19 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
           </div>
 
           {/* ── Sticky footer: Export PDF · Archive … Delete ── */}
-          <footer className="z-20 shrink-0 border-t border-hairline bg-base-950/80 px-6 py-4 backdrop-blur-xl">
+          <footer className="z-20 shrink-0 border-t border-hairline bg-base-950/80 px-4 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
             {error ? (
               <p role="alert" className="mb-3 rounded-lg border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
                 {error}
               </p>
             ) : null}
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   disabled={!report}
                   onClick={exportPdf}
-                  className="inline-flex items-center gap-2 rounded-full border border-hairline bg-base-900 px-4 py-2 text-xs font-medium text-text-primary transition-colors hover:bg-tint/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-base-900 px-3 py-2 text-xs sm:px-4 font-medium text-text-primary transition-colors hover:bg-tint/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
                 >
                   <FileDown size={14} className="opacity-70" aria-hidden="true" />
                   Export PDF
@@ -543,7 +553,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                       error: archived ? 'Could not unarchive the report' : 'Could not archive the report',
                     })
                   }
-                  className="inline-flex items-center gap-2 rounded-full border border-hairline bg-base-900 px-4 py-2 text-xs font-medium text-text-primary transition-colors hover:bg-tint/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-base-900 px-3 py-2 text-xs sm:px-4 font-medium text-text-primary transition-colors hover:bg-tint/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
                 >
                   {busy === 'archive' ? (
                     <Loader2 size={14} className="animate-spin" aria-hidden="true" />
@@ -559,7 +569,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                 type="button"
                 disabled={!report || deleted || Boolean(busy)}
                 onClick={() => setConfirming(true)}
-                className="inline-flex items-center gap-2 rounded-full border border-danger/20 bg-danger/10 px-4 py-2 text-xs font-medium text-danger transition-colors hover:bg-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:opacity-50"
+                className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-danger/20 bg-danger/10 px-3 py-2 text-xs sm:px-4 font-medium text-danger transition-colors hover:bg-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:opacity-50"
               >
                 <Trash2 size={14} className="opacity-80" aria-hidden="true" />
                 Delete
