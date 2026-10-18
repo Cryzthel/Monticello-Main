@@ -18,7 +18,7 @@ import SecurityDirectoryTable from '@/components/SecurityDirectoryTable'
 import SecurityAuditLog from '@/components/SecurityAuditLog'
 import ProvisionAccountModal from '@/components/ProvisionAccountModal'
 import EditSecurityAccountModal from '@/components/EditSecurityAccountModal'
-import SecurityAccountDetailsModal from '@/components/SecurityAccountDetailsModal'
+import SecurityAccountInspectorModal from '@/components/SecurityAccountInspectorModal'
 import ResetCredentialDialog from '@/components/ResetCredentialDialog'
 import { useSecurityAccounts } from '@/hooks/useSecurityAccounts'
 import {
@@ -320,7 +320,7 @@ export default function SecurityAccountsPage() {
       </div>
 
       {/* Resolved from the live list by uid, so it updates while open. */}
-      <SecurityAccountDetailsModal
+      <SecurityAccountInspectorModal
         account={accounts.find((a) => a.uid === viewingUid) ?? null}
         onClose={() => setViewingUid(null)}
       />
