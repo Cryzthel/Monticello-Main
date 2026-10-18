@@ -64,9 +64,12 @@ class SosAlertStatus {
   factory SosAlertStatus.fromSnapshot(
     DocumentSnapshot<Map<String, dynamic>> snap,
   ) {
-    if (!snap.exists) {
-      return SosAlertStatus(serverAcknowledged: !snap.metadata.hasPendingWrites);
-    }
+    // No document is not an acknowledgement. A queued alert's document does
+    // not exist until the sync service lands it, and a server snapshot that
+    // CONFIRMS the absence has no pending writes — reading that as
+    // "acknowledged" would tell a resident in a dead spot that the guardhouse
+    // has an alert it has never seen.
+    if (!snap.exists) return SosAlertStatus.unknown;
     final data = snap.data() ?? const <String, dynamic>{};
     final name = (data['acknowledgedByName'] as String?)?.trim();
     return SosAlertStatus(

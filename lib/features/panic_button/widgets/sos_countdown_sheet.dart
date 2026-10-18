@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:monticello_villas_app/core/widgets/leaf_loader.dart';
 import 'package:monticello_villas_app/core/widgets/staged_progress.dart'
     show AnimatedCheckmark;
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
+import 'package:monticello_villas_app/features/panic_button/services/sos_alert_status.dart';
 
 /// Opens the emergency countdown over whatever the resident was doing.
 ///
@@ -23,7 +25,8 @@ import 'package:monticello_villas_app/features/panic_button/services/panic_alert
 /// and cancellation flow without a Firebase app or a GPS fix.
 Future<void> showSosCountdown(
   BuildContext context, {
-  Future<SosDispatchOutcome> Function()? dispatcher,
+  Future<SosDispatchReceipt> Function()? dispatcher,
+  SosStatusStream? statusStream,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -37,6 +40,7 @@ Future<void> showSosCountdown(
     backgroundColor: Colors.transparent,
     builder: (_) => _SosCountdownSheet(
       dispatcher: dispatcher ?? PanicAlertService.dispatch,
+      statusStream: statusStream ?? watchSosAlert,
     ),
   );
 }
@@ -47,9 +51,16 @@ Future<void> showSosCountdown(
 enum _Phase { counting, sending, sent, queued, failed }
 
 class _SosCountdownSheet extends StatefulWidget {
-  const _SosCountdownSheet({required this.dispatcher});
+  const _SosCountdownSheet({
+    required this.dispatcher,
+    required this.statusStream,
+  });
 
-  final Future<SosDispatchOutcome> Function() dispatcher;
+  final Future<SosDispatchReceipt> Function() dispatcher;
+
+  /// The live feed for one alert: `watchSosAlert` in the app, a fake in
+  /// tests. See [_SosCountdownSheetState._watch].
+  final SosStatusStream statusStream;
 
   @override
   State<_SosCountdownSheet> createState() => _SosCountdownSheetState();
@@ -138,8 +149,46 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
     setState(() {});
   }
 
+  /// The alert this sheet raised, once it has; what its document says now.
+  String? _alertId;
+  SosAlertStatus _status = SosAlertStatus.unknown;
+  StreamSubscription<SosAlertStatus>? _statusSub;
+
+  /// Follows `panic_alerts/{alertId}` for as long as the sheet is open.
+  ///
+  /// -- WHAT THIS CHANGES ON SCREEN --
+  /// The tracker under the caption, step by step, and nothing else is
+  /// inferred from it. Plus one transition: a QUEUED alert whose document
+  /// reaches the server (the sync service landed it while the sheet was
+  /// still open) becomes SENT. The resident was told "the guardhouse has not
+  /// seen it yet"; leaving that up once the guardhouse has would be the
+  /// sheet misleading them in the other direction.
+  void _watch(String alertId) {
+    _statusSub?.cancel();
+    _status = SosAlertStatus.unknown;
+    _statusSub = widget.statusStream(alertId).listen(
+      (status) {
+        if (!mounted) return;
+        final newlyResponded = status.responded && !_status.responded;
+        final newlyLanded =
+            _phase == _Phase.queued && status.serverAcknowledged;
+        setState(() {
+          _status = status;
+          if (newlyLanded) _phase = _Phase.sent;
+        });
+        // A guard taking the alert is the moment the resident is waiting
+        // for; it should be felt even with the phone held at their side.
+        if (newlyResponded || newlyLanded) HapticFeedback.heavyImpact();
+      },
+      // The production stream already swallows its errors; this covers any
+      // other feed. A dead tracker is no reason to take the sheet down.
+      onError: (Object _) {},
+    );
+  }
+
   @override
   void dispose() {
+    _statusSub?.cancel();
     _clock.dispose();
     _hold.dispose();
     _pulse.dispose();
@@ -166,12 +215,16 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
     if (!mounted) return;
     setState(() => _phase = _Phase.sending);
     try {
-      final outcome = await widget.dispatcher();
+      final receipt = await widget.dispatcher();
       if (!mounted) return;
-      setState(() => _phase = outcome == SosDispatchOutcome.delivered
-          ? _Phase.sent
-          : _Phase.queued);
+      setState(() {
+        _alertId = receipt.alertId;
+        _phase = receipt.outcome == SosDispatchOutcome.delivered
+            ? _Phase.sent
+            : _Phase.queued;
+      });
       HapticFeedback.heavyImpact();
+      _watch(receipt.alertId);
     } catch (_) {
       if (!mounted) return;
       setState(() => _phase = _Phase.failed);
@@ -203,21 +256,30 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
             top: BorderSide(color: AppColors.glassBorderLight),
           ),
         ),
-        // ── LEFT-ALIGNED, TOP TO BOTTOM ────────────────────────────────────
-        // Header, dial and caption share one left edge. The sheet used to
-        // centre all three, which made the caption — two or three lines of
-        // instructions read under stress — a ragged block with no edge for
-        // the eye to return to. A left rag reads faster, and the dial
-        // sitting on the same edge keeps the column one shape.
+        // ── CENTRED RING, LEFT-ALIGNED TEXT ─────────────────────────────────
+        // The ring (or the outcome badge) is centred: it is the one graphic on
+        // the sheet, and a timer off to one side reads as misplaced. Every
+        // line of text — the status header and the caption beneath the ring —
+        // shares the left edge. Centred, the caption's two or three lines of
+        // instructions read under stress were a ragged block with no edge for
+        // the eye to return to.
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _header(),
             const SizedBox(height: 20),
-            _dial(),
+            Center(child: _dial()),
             const SizedBox(height: 20),
             _caption(),
+            if (_alertId != null &&
+                (_phase == _Phase.sent || _phase == _Phase.queued)) ...[
+              const SizedBox(height: 16),
+              _SosTracker(
+                status: _status,
+                delivered: _phase == _Phase.sent,
+              ),
+            ],
             const SizedBox(height: 24),
             _action(),
           ],
@@ -430,6 +492,95 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
           ],
         );
     }
+  }
+}
+
+/// The live tracker: three steps, each ticked only by something a person
+/// actually did to the alert document.
+///
+///   1. Received by the guardhouse   (the write reached the server)
+///   2. Acknowledged by `officer`  (an operator pressed Dispatch)
+///   3. Responder on the way         (shown only once step 2 is true)
+///      then Marked resolved         (an operator closed it out)
+///
+/// No ETA, no "en route" before anyone has acknowledged, and no step that
+/// advances on a timer. See the class note on [SosAlertStatus].
+class _SosTracker extends StatelessWidget {
+  const _SosTracker({required this.status, required this.delivered});
+
+  final SosAlertStatus status;
+
+  /// The sheet's own phase says delivered: the dispatch got a server ack, or
+  /// the live feed has since confirmed it. That ticks step 1 before the first
+  /// snapshot arrives, since the dispatch itself already proved it.
+  final bool delivered;
+
+  @override
+  Widget build(BuildContext context) {
+    final received = delivered || status.serverAcknowledged;
+    final who = status.respondedBy ?? 'an officer';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TrackerStep(
+          done: received,
+          label: received ? 'Received by the guardhouse' : 'Waiting for signal',
+        ),
+        _TrackerStep(
+          done: status.responded,
+          label: status.responded
+              ? 'Acknowledged by $who'
+              : 'Waiting for an officer to acknowledge',
+        ),
+        if (status.resolved)
+          const _TrackerStep(done: true, label: 'Marked resolved')
+        else if (status.responded)
+          const _TrackerStep(done: false, label: 'Responder on the way'),
+      ],
+    );
+  }
+}
+
+class _TrackerStep extends StatelessWidget {
+  const _TrackerStep({required this.done, required this.label});
+
+  final bool done;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // A filled tick for what has happened, a hollow ring for what has
+          // not. Cross-faded (180ms) so a step completing reads as a change
+          // rather than a redraw.
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 180),
+            child: Icon(
+              done ? PhosphorIconsFill.checkCircle : PhosphorIconsBold.circle,
+              key: ValueKey(done),
+              size: 18,
+              color: done ? AppColors.success : AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: sfPro(
+                fontSize: 14.5,
+                fontWeight: done ? FontWeight.w600 : FontWeight.w400,
+                color: done ? AppColors.textPrimary : AppColors.textSecondary,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

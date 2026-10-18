@@ -23,6 +23,23 @@ enum SosDispatchOutcome {
   queued,
 }
 
+/// What [PanicAlertService.dispatch] reports: the outcome, plus the payload
+/// that was actually sent.
+///
+/// The payload rides along for its [alertId]. The countdown sheet subscribes
+/// to `panic_alerts/{alertId}` once the alert is out (see `watchSosAlert`),
+/// and the id is minted inside [PanicAlertService.buildPayload] from the
+/// press time, so it cannot be reconstructed afterwards. Rebuilding it would
+/// name a different emergency.
+class SosDispatchReceipt {
+  const SosDispatchReceipt({required this.outcome, required this.payload});
+
+  final SosDispatchOutcome outcome;
+  final SosPayload payload;
+
+  String get alertId => payload.alertId;
+}
+
 /// Raises a panic alert to the security portal.
 ///
 /// ONE definition of the emergency payload, deliberately. This was a private
@@ -61,10 +78,14 @@ class PanicAlertService {
   /// Throws only if the alert could not be built — no signed-in resident. A
   /// caller must still surface that, because it is the one case where nothing
   /// was recorded anywhere.
-  static Future<SosDispatchOutcome> dispatch({
+  static Future<SosDispatchReceipt> dispatch({
     String emergencyType = 'general',
   }) async {
-    return dispatchPayload(await buildPayload(emergencyType: emergencyType));
+    final payload = await buildPayload(emergencyType: emergencyType);
+    return SosDispatchReceipt(
+      outcome: await dispatchPayload(payload),
+      payload: payload,
+    );
   }
 
   /// [dispatch] with the payload supplied.

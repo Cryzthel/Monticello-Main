@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:monticello_villas_app/features/panic_button/models/sos_payload.dart';
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
+import 'package:monticello_villas_app/features/panic_button/services/sos_alert_status.dart';
 import 'package:monticello_villas_app/features/panic_button/widgets/sos_countdown_sheet.dart';
 
 /// Records dispatch attempts, and can be made to fail on demand.
@@ -14,13 +18,45 @@ class _Dispatcher {
   /// a success, not as a failure with nicer wording.
   SosDispatchOutcome outcome = SosDispatchOutcome.delivered;
 
-  Future<SosDispatchOutcome> call() async {
+  static const String alertId = 'uid_1756300000000';
+
+  Future<SosDispatchReceipt> call() async {
     calls++;
     // The only real failure left is being unable to build a payload at all;
     // everything network-shaped resolves to `queued`.
     if (shouldFail) throw StateError('not signed in');
-    return outcome;
+    return SosDispatchReceipt(
+      outcome: outcome,
+      payload: SosPayload(
+        alertId: alertId,
+        residentUid: 'uid',
+        residentName: 'Ana Cruz',
+        residentPhone: '',
+        propertyPhase: '1',
+        propertyBlock: '4',
+        propertyLot: '12',
+        propertyLabel: null,
+        capturedAt: DateTime(2026, 8, 27, 21, 5),
+        emergencyType: 'general',
+      ),
+    );
   }
+}
+
+/// Stands in for `watchSosAlert`: records which alert was subscribed to, and
+/// lets a test push the snapshots a guard's actions would produce.
+class _StatusFeed {
+  final _controller = StreamController<SosAlertStatus>.broadcast();
+  final List<String> watched = [];
+
+  Stream<SosAlertStatus> call(String alertId) {
+    watched.add(alertId);
+    return _controller.stream;
+  }
+
+  void emit(SosAlertStatus status) => _controller.add(status);
+
+  Future<void> close() => _controller.close();
 }
 
 // NO pumpAndSettle ANYWHERE IN THIS FILE.
@@ -38,15 +74,21 @@ Future<void> _advance(WidgetTester tester,
   }
 }
 
-Future<void> _open(WidgetTester tester, _Dispatcher dispatcher) async {
+Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
+    {_StatusFeed? feed}) async {
+  // Always a fake feed: the real one needs a Firebase app.
+  final statusFeed = feed ?? _StatusFeed();
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: Builder(
           builder: (context) => Center(
             child: ElevatedButton(
-              onPressed: () =>
-                  showSosCountdown(context, dispatcher: dispatcher.call),
+              onPressed: () => showSosCountdown(
+                context,
+                dispatcher: dispatcher.call,
+                statusStream: statusFeed.call,
+              ),
               child: const Text('SOS'),
             ),
           ),
@@ -242,5 +284,118 @@ void main() {
 
     expect(find.text('SECURITY NOTIFIED'), findsNothing);
     expect(dispatcher.calls, 1);
+  });
+
+  // ── THE LIVE TRACKER ──────────────────────────────────────────────────────
+
+  Future<void> runOut(WidgetTester tester) async {
+    await tester.pump(const Duration(seconds: 6));
+    await _advance(tester);
+  }
+
+  testWidgets('subscribes to the alert it raised, and waits honestly',
+      (tester) async {
+    final feed = _StatusFeed();
+    await _open(tester, _Dispatcher(), feed: feed);
+    await runOut(tester);
+
+    expect(feed.watched, [_Dispatcher.alertId],
+        reason: 'the sheet must follow the alert it just raised');
+    expect(find.text('Received by the guardhouse'), findsOneWidget);
+    expect(find.text('Waiting for an officer to acknowledge'), findsOneWidget);
+    // Nothing about a responder until somebody has acknowledged.
+    expect(find.text('Responder on the way'), findsNothing);
+    await feed.close();
+  });
+
+  testWidgets('an acknowledgement names the officer who took it',
+      (tester) async {
+    final feed = _StatusFeed();
+    await _open(tester, _Dispatcher(), feed: feed);
+    await runOut(tester);
+
+    feed.emit(SosAlertStatus(
+      serverAcknowledged: true,
+      respondedBy: 'Officer Dela Cruz',
+      respondedAt: DateTime(2026, 8, 27, 21, 7),
+    ));
+    await _advance(tester, frames: 3);
+
+    expect(find.text('Acknowledged by Officer Dela Cruz'), findsOneWidget);
+    expect(find.text('Waiting for an officer to acknowledge'), findsNothing);
+    expect(find.text('Responder on the way'), findsOneWidget);
+    await feed.close();
+  });
+
+  testWidgets('an acknowledgement with no name still advances',
+      (tester) async {
+    final feed = _StatusFeed();
+    await _open(tester, _Dispatcher(), feed: feed);
+    await runOut(tester);
+
+    feed.emit(SosAlertStatus(
+      serverAcknowledged: true,
+      respondedAt: DateTime(2026, 8, 27, 21, 7),
+    ));
+    await _advance(tester, frames: 3);
+
+    expect(find.text('Acknowledged by an officer'), findsOneWidget);
+    await feed.close();
+  });
+
+  testWidgets('a resolved alert closes the tracker out', (tester) async {
+    final feed = _StatusFeed();
+    await _open(tester, _Dispatcher(), feed: feed);
+    await runOut(tester);
+
+    feed.emit(SosAlertStatus(
+      serverAcknowledged: true,
+      respondedBy: 'Officer Dela Cruz',
+      respondedAt: DateTime(2026, 8, 27, 21, 7),
+      resolvedAt: DateTime(2026, 8, 27, 21, 20),
+    ));
+    await _advance(tester, frames: 3);
+
+    expect(find.text('Marked resolved'), findsOneWidget);
+    expect(find.text('Responder on the way'), findsNothing);
+    await feed.close();
+  });
+
+  testWidgets('a queued alert waits for signal, then turns sent when it lands',
+      (tester) async {
+    final feed = _StatusFeed();
+    await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued,
+        feed: feed);
+    await runOut(tester);
+
+    expect(find.text('SAVED — NO SIGNAL'), findsOneWidget);
+    expect(find.text('Waiting for signal'), findsOneWidget);
+    expect(find.text('Received by the guardhouse'), findsNothing);
+
+    // Still only in this phone's cache: not delivered, nothing changes.
+    feed.emit(const SosAlertStatus(serverAcknowledged: false));
+    await _advance(tester, frames: 3);
+    expect(find.text('SAVED — NO SIGNAL'), findsOneWidget);
+
+    // The sync service lands it while the sheet is still open.
+    feed.emit(const SosAlertStatus(serverAcknowledged: true));
+    await _advance(tester, frames: 3);
+    expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
+    expect(find.text('SAVED — NO SIGNAL'), findsNothing);
+    expect(find.text('Received by the guardhouse'), findsOneWidget);
+    await feed.close();
+  });
+
+  testWidgets('a feed that errors leaves the sheet standing', (tester) async {
+    final feed = _StatusFeed();
+    await _open(tester, _Dispatcher(), feed: feed);
+    await runOut(tester);
+
+    feed._controller.addError(StateError('permission-denied'));
+    await _advance(tester, frames: 3);
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
+    await feed.close();
   });
 }
