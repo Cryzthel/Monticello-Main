@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+<!--
+  The window background during process start.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+  A flat colour and nothing else: the emblem is NOT drawn here. An Android
+  launch drawable cannot fade, so a bitmap of the mark would appear instantly,
+  then be replaced by SplashView's 620ms entrance of the same mark at the same
+  size — a double-take on every cold start. The colour is the part worth
+  matching; the motion belongs to Flutter.
+
+  @color/splash_canvas is appearance-qualified. See values/colors.xml.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splash_canvas" />
 </layer-list>

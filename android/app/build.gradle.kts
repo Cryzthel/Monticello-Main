@@ -11,6 +11,13 @@ plugins {
 android {
     namespace = "com.example.monticello_villas_app"
     compileSdk = flutter.compileSdkVersion
+
+    // `flutter.ndkVersion` is a non-null String (FlutterExtension.kt), so the
+    // `?: "25.2.9519653"` that used to sit here was dead code — Kotlin warns
+    // that the elvis operator always returns the left operand. It never
+    // applied, but it did leave a stale "25.x" version string in the one file
+    // people open when a build fails, which is misleading when the real error
+    // is about a different 25.x entirely. Flutter 3.44.8 supplies 28.2.13676358.
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -23,20 +30,21 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.monticello_villas_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        
+        // Mapbox Maps SDK requires a minimum SDK version of 21 or higher
+        minSdk = maxOf(flutter.minSdkVersion, 21)
+        
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Multidex support for Firebase dependencies
+        multiDexEnabled = true
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

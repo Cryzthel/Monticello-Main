@@ -12,7 +12,20 @@
           "package_name": "com.example.monticello_villas_app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "787092385070-t5kkigho4v6ubkouue4qoqprb2cav5l8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.monticello_villas_app",
+            "certificate_hash": "5247464c9e7c71cc33791f2d23c5c7181e30db36"
+          }
+        },
+        {
+          "client_id": "787092385070-om0onh6cktc86asbj69vgd09l0asb57i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyC5Vbf-ys4IiG12WhBfeimrA3JUmdIhGaU"
@@ -20,26 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:787092385070:android:83f7576f6073c51cea9ebf",
-        "android_client_info": {
-          "package_name": "com.monticello.villas_app"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyC5Vbf-ys4IiG12WhBfeimrA3JUmdIhGaU"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "787092385070-om0onh6cktc86asbj69vgd09l0asb57i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "787092385070-o08vlelj0i1o5m14qdig6aelovoub08q.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.monticello.villasApp"
+              }
+            }
+          ]
         }
       }
     }

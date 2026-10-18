@@ -1,8 +1,38 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ── PUSH ─────────────────────────────────────────────────────────────
+         Android 13 (API 33) gates notifications behind a runtime permission.
+         Without this declaration `requestPermission()` resolves to denied
+         immediately on a modern handset and no prompt is ever shown — which
+         looks exactly like a resident declining, and is not.
+
+         On API 32 and below the system grants notifications implicitly, so
+         this is a no-op there. See PushRegistration for where it is asked. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- ── LOCATION ─────────────────────────────────────────────────────────
+         geolocator declares nothing itself. Without these, checkPermission()
+         throws PermissionDefinitionsNotFoundException, no prompt is ever
+         shown, and the home map's "you are here" silently never appears.
+         COARSE is listed alongside FINE because Android 12+ lets the
+         resident pick "approximate", and the app must accept that answer.
+         Foreground only: no ACCESS_BACKGROUND_LOCATION is requested. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
-        android:label="monticello_villas_app"
+        android:label="Monticello Villas"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
+        <!-- Where a push lands when the app is not running. Without a named
+             channel Android files background notifications under a
+             "Miscellaneous" default the resident cannot configure
+             separately — on an app whose pushes are dispatch updates and
+             emergency broadcasts, those deserve their own switch. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="monticello_alerts" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/ic_launcher_background" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -40,6 +70,26 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Android 11 package visibility. Without these, url_launcher cannot
+             RESOLVE a tel: or sms: intent on API 30+ and every emergency
+             fallback on the SOS screen fails silently: the hotline rows do
+             nothing when tapped, and the offline SMS draft never opens. No
+             permission is involved and none is requested - this only declares
+             which intents the app is allowed to see handlers for. SEND_SMS is
+             deliberately absent; see SosSmsFallback for why the app drafts
+             rather than sends. -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="sms"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

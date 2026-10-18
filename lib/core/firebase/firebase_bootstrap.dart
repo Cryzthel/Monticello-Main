@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
-import '../firebase_options.dart';
+import 'package:monticello_villas_app/core/firebase/firebase_options.dart';
 
 bool firebaseAppReady = false;
 

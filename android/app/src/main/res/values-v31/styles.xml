@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ── ANDROID 12 DRAWS ITS OWN SPLASH, AND IT USED THE LAUNCHER ICON ────────
+  From API 31 the platform ignores `windowBackground` for the launch screen
+  and composes its own: a background colour with the app's LAUNCHER ICON
+  centred on it. Ours is an adaptive icon — an emerald plate with the mark on
+  top — so every cold start on a modern handset showed a green rounded square
+  behind the logo. That is the container this project removed from the splash,
+  from both auth headers and from the onboarding hero; the system was simply
+  putting it back, and nothing in the Dart code could reach it.
+
+  Naming a dedicated icon is the fix. `splash_mark` is the bare emblem (see
+  tool/gen_brand_mark.py), and no `windowSplashScreenIconBackgroundColor` is
+  set, so the platform draws no plate behind it.
+
+  `@color/splash_canvas` and `@color/splash_mark_ink` are both
+  appearance-qualified by values-night/, so this one file covers both themes.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/splash_canvas</item>
+        <!-- Empty on purpose — see drawable/splash_blank.xml. Flutter's
+             SplashView draws the one and only logo. -->
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <!-- Still set, for the sliver between the system splash being
+             dismissed and Flutter's first frame. -->
+        <item name="android:windowBackground">@color/splash_canvas</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/splash_canvas</item>
+    </style>
+</resources>

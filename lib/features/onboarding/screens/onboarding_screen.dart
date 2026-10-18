@@ -1,13 +1,24 @@
 import 'dart:math' show min;
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../theme/app_theme.dart';
+import 'package:monticello_villas_app/core/brand/brand_mark.dart';
+import 'package:monticello_villas_app/core/theme/app_theme.dart';
+import 'package:monticello_villas_app/features/auth/widgets/auth_controls.dart';
 
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  const OnboardingScreen({super.key, this.onCompleted});
+
+  /// Invoked instead of navigating, when this screen is rendered as part of a
+  /// reactive tree (see AuthGate) rather than pushed as a route.
+  ///
+  /// Navigating away is wrong in that context: `pushReplacementNamed('/login')`
+  /// would replace the ROOT route, tearing out the AuthGate that is supposed to
+  /// swap the tree once the user signs in — leaving them stranded on a login
+  /// screen that never transitions.
+  final VoidCallback? onCompleted;
 
   static const _seenKey = 'onboarding_seen_v1';
 
@@ -43,9 +54,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       title: 'Report incidents\nin seconds.',
       subtitle:
           'Instantly alert HOA security with GPS-pinned reports. Every submission is timestamped, categorized, and tracked end-to-end.',
-      primaryIcon: Icons.shield_rounded,
-      accentIcon: Icons.location_on_rounded,
-      badgeLabel: 'Live Reporting',
+      art: 'assets/onboarding/report_incidents.svg',
     ),
     _OnboardPage(
       theme: _PageTheme.community,
@@ -53,9 +62,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       title: 'Never miss an\nannouncement.',
       subtitle:
           'Official HOA circulars, village alerts, and administrative notices delivered instantly to your device—always organized, never lost.',
-      primaryIcon: Icons.campaign_rounded,
-      accentIcon: Icons.notifications_active_rounded,
-      badgeLabel: 'Instant Alerts',
+      art: 'assets/onboarding/announcements.svg',
     ),
     _OnboardPage(
       theme: _PageTheme.emergency,
@@ -63,9 +70,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       title: 'Emergency help,\neven offline.',
       subtitle:
           'The Panic Button works without internet. One tap deploys an automated SMS emergency protocol directly to village guards.',
-      primaryIcon: Icons.sos_rounded,
-      accentIcon: Icons.wifi_off_rounded,
-      badgeLabel: 'Panic Button',
+      art: 'assets/onboarding/emergency_offline.svg',
     ),
   ];
 
@@ -77,9 +82,25 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     super.dispose();
   }
 
-  Future<void> _finish() async {
-    await OnboardingScreen.markSeen();
-    if (!mounted) return;
+  /// Leaves onboarding. Synchronous by design.
+  ///
+  /// This previously `await`ed [OnboardingScreen.markSeen] before moving on.
+  /// That put a SharedPreferences write on the critical path of the "Get
+  /// Started" button: if the plugin throws the write is swallowed, and if it
+  /// HANGS the await never completes — either way the user taps the button and
+  /// nothing happens, with no error to show for it.
+  ///
+  /// Remembering that onboarding was seen is a convenience for the next
+  /// launch. It is not a precondition for leaving this screen, so it is now
+  /// fired without being awaited.
+  void _finish() {
+    OnboardingScreen.markSeen();
+
+    final onCompleted = widget.onCompleted;
+    if (onCompleted != null) {
+      onCompleted();
+      return;
+    }
     Navigator.of(context).pushReplacementNamed('/login');
   }
 
@@ -97,7 +118,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.midnightBase : const Color(0xFFF8F9FA);
+    final bg = isDark ? AppColors.midnightBase : AppColors.background;
 
     return Scaffold(
       backgroundColor: bg,
@@ -109,29 +130,37 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               padding: const EdgeInsets.fromLTRB(24, 16, 16, 0),
               child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 30,
-                        height: 30,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          borderRadius: BorderRadius.circular(8),
+                  // Flexible, because this Row was unbounded beside a
+                  // Spacer and a Skip button: at a large text scale the
+                  // wordmark pushed the whole header past the right edge and
+                  // painted the overflow stripe across the first screen a
+                  // new resident ever sees. The mark keeps its size; the
+                  // words give way.
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // The real emblem — the last of the shield stand-ins,
+                        // which the splash and both auth screens have already
+                        // given up. A green tile with a glyph in it beside the
+                        // words "Monticello Villas" was a lockup of a logo
+                        // that was not the logo.
+                        const BrandMark(height: 22, color: AuthTokens.brand),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            'Monticello Villas',
+                            overflow: TextOverflow.ellipsis,
+                            style: sfPro(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
                         ),
-                        child: const Icon(Icons.shield_rounded,
-                            color: Colors.white, size: 16),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'Monticello Villas',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : AppColors.textPrimary,
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const Spacer(),
                   AnimatedOpacity(
@@ -148,7 +177,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       ),
                       child: Text(
                         'Skip',
-                        style: GoogleFonts.inter(
+                        style: sfPro(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                           color: AppColors.textMuted,
@@ -191,9 +220,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                         decoration: BoxDecoration(
                           color: active
                               ? color
-                              : (isDark
-                                  ? AppColors.midnightSurfaceElevated
-                                  : const Color(0xFFE2E5EB)),
+                              : AppColors.midnightSurfaceElevated,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       );
@@ -210,23 +237,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                       curve: Curves.fastOutSlowIn,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(AppRadius.md),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _pages[_index]
-                                .theme
-                                .indicatorColor
-                                .withOpacity(0.38),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
+                        // Neutral. This took the CURRENT PAGE's accent at 38%,
+                        // so the CTA's glow changed hue as you swiped through
+                        // onboarding — the one place a coloured shadow was
+                        // doing something deliberate, and also the first thing
+                        // a new resident ever sees. It is a shadow; grey.
+                        boxShadow: AppShadows.md,
                       ),
                       child: ElevatedButton(
                         onPressed: _next,
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
                               _pages[_index].theme.indicatorColor,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.background,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius:
@@ -238,10 +261,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           child: Text(
                             _isLast ? 'Get Started' : 'Continue',
                             key: ValueKey(_isLast),
-                            style: GoogleFonts.inter(
+                            style: sfPro(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                              color: AppColors.background,
                             ),
                           ),
                         ),
@@ -302,153 +325,62 @@ class _OnboardSlide extends StatelessWidget {
   }
 }
 
+/// The slide's artwork.
+///
+/// ── WHAT CAME OFF IT ──────────────────────────────────────────────────────
+/// A rounded card with a tinted fill, a 1.5pt accent border, a drop shadow, a
+/// full-bleed gradient blob painted behind everything, a floating pill badge
+/// in the top-left, and two Phosphor glyphs. Seven layers of chrome framing
+/// an illustration that did not exist yet, because the glyphs were standing
+/// in for one.
+///
+/// Now that there is real artwork, all of it is in the way — the same call
+/// made on the splash and on both auth screens. An illustration is a picture;
+/// a picture in a bordered card with a shadow is a picture of a card. The
+/// gradient blob is the worst of them: it tinted the artwork's own whites and
+/// shifted hue on every swipe, so the same drawing read as a different colour
+/// on each slide.
+///
+/// ── SVG, NOT PNG ──────────────────────────────────────────────────────────
+/// These are line illustrations at up to 1033pt wide, shown at roughly a
+/// third of that on a handset and at full size on a tablet. A raster would
+/// need three densities per slide and would still be soft on the next screen
+/// size. They also already carry #047857 — the brand green — in the file, so
+/// the artwork is on-palette without being recoloured at runtime.
 class _IllustrationHero extends StatelessWidget {
-  final _OnboardPage page;
-  final bool isDark;
-  final double heroDim;
-
   const _IllustrationHero({
     required this.page,
     required this.isDark,
     required this.heroDim,
   });
 
+  final _OnboardPage page;
+  final bool isDark;
+  final double heroDim;
+
   @override
   Widget build(BuildContext context) {
-    final dim = heroDim;
-    final theme = page.theme;
-    final cardBg = isDark
-        ? Color.lerp(AppColors.midnightSurface, theme.gradientEnd, 0.12)!
-        : Color.lerp(Colors.white, theme.gradientEnd, 0.06)!;
-    final borderColor = isDark
-        ? theme.indicatorColor.withOpacity(0.22)
-        : theme.indicatorColor.withOpacity(0.15);
-
-    return Container(
-      width: dim,
-      height: dim,
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: borderColor, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: theme.indicatorColor.withOpacity(isDark ? 0.18 : 0.10),
-            blurRadius: 48,
-            spreadRadius: -8,
-            offset: const Offset(0, 16),
-          ),
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.35 : 0.06),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Gradient blob background
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(AppRadius.xl - 2),
-              child: CustomPaint(
-                painter: _BlobPainter(
-                  color: theme.indicatorColor,
-                  isDark: isDark,
-                ),
-              ),
-            ),
-          ),
-
-          // Badge top-left
-          Positioned(
-            top: 20,
-            left: 20,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? AppColors.midnightSurface.withOpacity(0.85)
-                    : Colors.white.withOpacity(0.92),
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(
-                    color: theme.indicatorColor.withOpacity(0.30)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(page.accentIcon,
-                      size: 12, color: theme.indicatorColor),
-                  const SizedBox(width: 6),
-                  Text(
-                    page.badgeLabel,
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: theme.indicatorColor,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Central icon
-          Center(
-            child: Container(
-              width: dim * 0.40,
-              height: dim * 0.40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: theme.indicatorColor.withOpacity(isDark ? 0.22 : 0.14),
-                border: Border.all(
-                    color: theme.indicatorColor.withOpacity(0.35), width: 2),
-              ),
-              child: Icon(
-                page.primaryIcon,
-                size: dim * 0.22,
-                color: theme.indicatorColor,
-              ),
-            ),
-          ),
-
-          // Status ring decoration bottom-right
-          Positioned(
-            bottom: 22,
-            right: 22,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isDark
-                    ? AppColors.midnightSurface.withOpacity(0.85)
-                    : Colors.white.withOpacity(0.92),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.14),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Icon(
-                Icons.check_rounded,
-                size: 22,
-                color: theme.indicatorColor,
-              ),
-            ),
-          ),
-        ],
+    return SizedBox(
+      width: heroDim,
+      height: heroDim,
+      child: Padding(
+        // The drawings carry very little internal margin, and a line
+        // illustration touching the edge of its box reads as cropped.
+        padding: const EdgeInsets.all(8),
+        child: SvgPicture.asset(
+          page.art,
+          // `contain`, so the three different aspect ratios (662x720,
+          // 731x629, 1033x835) each sit inside the same square without one
+          // of them being cropped or stretched to match the others.
+          fit: BoxFit.contain,
+          // Decorative: the heading and subtitle beneath carry the meaning,
+          // and a screen reader announcing a description of the drawing as
+          // well would say the slide twice.
+          excludeFromSemantics: true,
+          // Shown while the asset is decoded — a blank box of the right size,
+          // so the slide does not reflow when it arrives.
+          placeholderBuilder: (_) => const SizedBox.expand(),
+        ),
       ),
     );
   }
@@ -462,7 +394,7 @@ class _TextBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = isDark ? Colors.white : AppColors.textPrimary;
+    final textPrimary = AppColors.textPrimary;
     final textSecondary =
         isDark ? AppColors.textSecondaryOnDark : AppColors.textSecondary;
 
@@ -474,12 +406,12 @@ class _TextBlock extends StatelessWidget {
           padding:
               const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: page.theme.indicatorColor.withOpacity(0.10),
+            color: page.theme.indicatorColor.withValues(alpha: 0.10),
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
           child: Text(
             page.eyebrow,
-            style: GoogleFonts.inter(
+            style: sfPro(
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               color: page.theme.indicatorColor,
@@ -490,7 +422,7 @@ class _TextBlock extends StatelessWidget {
         const SizedBox(height: 14),
         Text(
           page.title,
-          style: GoogleFonts.inter(
+          style: sfPro(
             fontSize: 26,
             fontWeight: FontWeight.w700,
             color: textPrimary,
@@ -501,7 +433,7 @@ class _TextBlock extends StatelessWidget {
         const SizedBox(height: 14),
         Text(
           page.subtitle,
-          style: GoogleFonts.inter(
+          style: sfPro(
             fontSize: 14,
             fontWeight: FontWeight.w400,
             color: textSecondary,
@@ -515,63 +447,41 @@ class _TextBlock extends StatelessWidget {
 
 // ── Blob background painter ────────────────────────────────────────────────────
 
-class _BlobPainter extends CustomPainter {
-  final Color color;
-  final bool isDark;
-  const _BlobPainter({required this.color, required this.isDark});
+/// The per-slide accent.
+///
+/// ── THIS CLASS IS A RECONSTRUCTION, AND THE ORIGINAL IS LOST ──────────────
+/// It was deleted by accident on 2026-10-15 while removing the dead
+/// `_BlobPainter` that sat immediately above it, and it had never been
+/// committed, so there is no copy in git, in a worktree or in a `-lilo` twin.
+/// What survives is its USAGE — four call sites, all of them `indicatorColor`
+/// — and one comment on the CTA below recording that the accent differed per
+/// page ("this took the CURRENT PAGE's accent at 38%, so the CTA's glow
+/// changed hue as you swiped through onboarding").
+///
+/// So the SHAPE here is certain and the VALUES are not. The three were very
+/// likely distinct — a green, a blue and a red would fit the names.
+///
+/// ── WHY THE REBUILD IS ONE COLOUR ─────────────────────────────────────────
+/// Not laziness about the guess: picking three plausible-looking colours
+/// would be inventing a palette and then presenting it as recovered, which is
+/// worse than a flat one that is obviously a decision. And a single brand
+/// accent is where everything else in this app has independently landed —
+/// the CTA shadow on this very screen was neutralised because its hue
+/// shifting per slide was judged wrong, the splash, both auth screens and the
+/// three new illustrations are all #047857, and `AppColors.headerSurface`
+/// documents "one green in the app, no exceptions".
+///
+/// If the original three were deliberate, this is the one place to put them
+/// back: give each constant its own colour and nothing else has to change.
+class _PageTheme {
+  const _PageTheme({required this.indicatorColor});
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(isDark ? 0.09 : 0.06)
-      ..style = PaintingStyle.fill;
+  /// Drives the page dots, the CTA fill, and the eyebrow's wash and ink.
+  final Color indicatorColor;
 
-    final path = Path()
-      ..moveTo(size.width * 0.8, 0)
-      ..quadraticBezierTo(
-          size.width, size.height * 0.3, size.width * 0.9, size.height * 0.6)
-      ..quadraticBezierTo(
-          size.width * 0.7, size.height, size.width * 0.4, size.height * 0.85)
-      ..quadraticBezierTo(0, size.height * 0.7, 0, size.height * 0.4)
-      ..quadraticBezierTo(0, 0, size.width * 0.8, 0)
-      ..close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_BlobPainter old) =>
-      old.color != color || old.isDark != isDark;
-}
-
-// ── Data models ───────────────────────────────────────────────────────────────
-
-enum _PageTheme {
-  security,
-  community,
-  emergency;
-
-  Color get indicatorColor {
-    switch (this) {
-      case _PageTheme.security:
-        return AppColors.primary; // Deep Maroon
-      case _PageTheme.community:
-        return AppColors.ctaGreen; // Emerald Green
-      case _PageTheme.emergency:
-        return const Color(0xFFDC2626); // Emergency Red
-    }
-  }
-
-  Color get gradientEnd {
-    switch (this) {
-      case _PageTheme.security:
-        return AppColors.primary;
-      case _PageTheme.community:
-        return AppColors.ctaGreen;
-      case _PageTheme.emergency:
-        return const Color(0xFFDC2626);
-    }
-  }
+  static const security = _PageTheme(indicatorColor: AppColors.primaryDark);
+  static const community = _PageTheme(indicatorColor: AppColors.primaryDark);
+  static const emergency = _PageTheme(indicatorColor: AppColors.primaryDark);
 }
 
 class _OnboardPage {
@@ -579,17 +489,19 @@ class _OnboardPage {
   final String eyebrow;
   final String title;
   final String subtitle;
-  final IconData primaryIcon;
-  final IconData accentIcon;
-  final String badgeLabel;
+  /// The slide's illustration, as an SVG asset path.
+  ///
+  /// Replaces a `primaryIcon` / `accentIcon` / `badgeLabel` trio. Those
+  /// described the slide three times over — a glyph for the subject, a second
+  /// glyph for its qualifier, and a pill repeating both in words — above an
+  /// eyebrow that was already saying it a fourth time.
+  final String art;
 
   const _OnboardPage({
     required this.theme,
     required this.eyebrow,
     required this.title,
     required this.subtitle,
-    required this.primaryIcon,
-    required this.accentIcon,
-    required this.badgeLabel,
+    required this.art,
   });
 }

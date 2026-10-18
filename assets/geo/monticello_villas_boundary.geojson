@@ -1,0 +1,61 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "name": "Monticello Villas subdivision premises",
+    "location": "Brgy. Balabag, Pavia, 5001 Iloilo, Philippines",
+    "crs": "EPSG:4326 (WGS 84), coordinates as [longitude, latitude]",
+    "consumedBy": [
+      "lib/core/config/subdivision_boundary.dart (Flutter, via rootBundle)",
+      "web-portal/src/shared/lib/subdivisionBoundary.js (React, via @geo alias)"
+    ],
+    "accuracy": "APPROXIMATE — the north edge is survey-grade, the other three are traced. See 'provenance'. Not a cadastral boundary; do not rely on it for anything legal or billable.",
+    "extent": "1109 m north-south x 713 m east-west, 66.9 ha. The BUILT village inside it is 18.2 ha; the remaining ~49 ha is the undeveloped land the perimeter was drawn to include.",
+    "provenance": "Replaces a 10-vertex ring that was traced by eye and was badly wrong — it ran diagonally THROUGH the middle of the village, leaving roughly half the built houses outside the geofence. Rebuilt in August 2026 from two sources. NORTH EDGE: the actual node geometry of Angela Avenue (OSM way 170406307), offset 0.00006 deg (~6.6 m) to the northern kerb so that the village's own frontage nodes fall strictly inside rather than exactly on the line. EAST / SOUTH / WEST EDGES: traced from an operator-annotated satellite photo of the intended village perimeter, cross-checked against satellite imagery and against neighbouring OSM landuse polygons — the east edge sits just west of Avida Village (way 1025869912) and the west edge runs along the field boundary shared with Deca Homes Pavia Resort and Residences (relation 19195889). Those three edges carry roughly +/- 40 m of tracing error.",
+    "verification": "Ring is closed, has zero self-intersections, and is wound counter-clockwise per RFC 7946. Every one of the 37 vertices of the OSM 'Monticello Villas' built-extent polygon (way 1090421190) tests strictly INSIDE this ring, so no existing house can fall outside the geofence.",
+    "relationship-to-osm": "OSM way 1090421190 maps only the BUILT extent (18.2 ha) and is the tighter, more precise shape. This file is deliberately larger because the village premises include the undeveloped land to the south and west. To fall back to the built extent, fetch https://api.openstreetmap.org/api/0.6/way/1090421190/full.json and use its ring.",
+    "howToReplace": "Open this file at geojson.io, drag the vertices onto the true perimeter, and save over it. Both platforms pick the change up with no code edit and the ring is re-validated at load. If the extent changes materially, also refresh MapConstants.subdivisionSouthWest / subdivisionNorthEast in lib/core/config/map_constants.dart — they are the pre-load fallback and the camera clamp, and they are the only copies of this geometry that are not derived."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "monticello-villas-premises",
+      "properties": {
+        "name": "Monticello Villas",
+        "kind": "subdivision_premises",
+        "shortLabel": "Monticello Villas"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [122.513400, 10.769000],
+            [122.513400, 10.766000],
+            [122.513400, 10.763000],
+            [122.513400, 10.760450],
+            [122.514500, 10.760300],
+            [122.516000, 10.760150],
+            [122.518000, 10.760150],
+            [122.519350, 10.760350],
+            [122.519500, 10.761200],
+            [122.519680, 10.762600],
+            [122.519780, 10.764200],
+            [122.519880, 10.766000],
+            [122.519922, 10.767488],
+            [122.519408, 10.767703],
+            [122.519071, 10.767839],
+            [122.518447, 10.768089],
+            [122.517903, 10.768350],
+            [122.517285, 10.768657],
+            [122.516870, 10.768870],
+            [122.516781, 10.768912],
+            [122.516229, 10.769251],
+            [122.515962, 10.769413],
+            [122.515677, 10.769585],
+            [122.514600, 10.770241],
+            [122.513400, 10.769000]
+          ]
+        ]
+      }
+    }
+  ]
+}

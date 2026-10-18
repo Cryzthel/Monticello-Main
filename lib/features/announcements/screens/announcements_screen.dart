@@ -1,11 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-import '../models/incident.dart';
-import '../services/local_data_store.dart';
-import '../theme/app_theme.dart';
+import 'package:monticello_villas_app/core/widgets/page_title_bar.dart';
+import 'package:monticello_villas_app/core/widgets/refresh_shell.dart';
+import 'package:monticello_villas_app/features/announcements/widgets/announcement_card.dart';
+import 'package:monticello_villas_app/core/storage/local_data_store.dart';
+import 'package:monticello_villas_app/core/theme/app_theme.dart';
+import 'package:monticello_villas_app/core/widgets/feed_skeletons.dart';
 
+TextStyle _t({
+  double size = 15,
+  FontWeight weight = FontWeight.w400,
+  Color color = AppColors.textPrimary,
+  double letterSpacing = 0,
+  double height = 1.35,
+}) {
+  return sfPro(
+    fontSize: size,
+    fontWeight: weight,
+    color: color,
+    letterSpacing: letterSpacing,
+    height: height,
+  );
+}
+
+/// The community announcement feed: HOA broadcasts to every resident, with
+/// category filters.
+///
+/// ── SCOPE, AND WHAT THIS SCREEN IS NOT ────────────────────────────────────
+/// This screen carried a `title` parameter so that `/notifications` could
+/// mount it as "Notification" — one feed serving both the "See All" link and
+/// the header's bell. That is gone. The bell now has its own screen, its own
+/// model and its own content (NotificationsScreen: security actions on the
+/// resident's own reports), because a bell that rings for a pool-maintenance
+/// notice trains people to ignore it on the day it rings for their break-in.
+///
+/// The parameter is removed rather than defaulted, so the two feeds cannot
+/// quietly re-merge behind a string argument the way they did before.
 class AnnouncementsScreen extends StatefulWidget {
   const AnnouncementsScreen({super.key});
 
@@ -14,114 +45,78 @@ class AnnouncementsScreen extends StatefulWidget {
 }
 
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
-  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
-  Color get _bg => _isDark ? AppColors.midnightBase : AppColors.bgLight;
-  Color get _primary => _isDark ? AppColors.textPrimaryOnDark : AppColors.textPrimary;
-  Color get _secondary => _isDark ? AppColors.textSecondaryOnDark : AppColors.textSecondary;
-  Color get _dividerC => _isDark ? const Color(0xFF21262D) : AppColors.divider;
-  Color get _brandColor => _isDark ? AppColors.primaryLight : AppColors.primary;
-
-  String _filter = 'All';
-  final _filters = const ['All', 'Utilities', 'Security', 'Events'];
-
-  TextStyle _sf({
-    double size = 15,
-    FontWeight weight = FontWeight.w400,
-    Color? color,
-    double letterSpacing = 0,
-    double height = 1.35,
-  }) {
-    return GoogleFonts.inter(
-      fontSize: size,
-      fontWeight: weight,
-      color: color ?? _primary,
-      letterSpacing: letterSpacing,
-      height: height,
-    ).copyWith(
-      fontFamilyFallback: const ['SF Pro Text', 'SF Pro Display', 'Roboto'],
-    );
-  }
+  // Vocabulary and matching both come from the shared filter bar, so this
+  // screen cannot drift back to offering a category the dashboard never writes.
+  String _filter = AnnouncementFilterBar.allAnnouncements;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: _primary, size: 18),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        centerTitle: true,
-        title: Text(
-          'Announcements',
-          style: _sf(size: 16, weight: FontWeight.w600),
-        ),
-      ),
-      body: ListenableBuilder(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // The shared header. Was a hand-rolled Stack at w800 — one of the
+            // two screens that had drifted heavier than the other five.
+            const PageTitleBar(title: 'Announcements'),
+            Expanded(
+              child: ListenableBuilder(
         listenable: LocalDataStore.instance,
         builder: (context, _) {
           final all = LocalDataStore.instance.announcements;
-          final list = _filter == 'All'
-              ? all
-              : all.where((a) => a.category == _filter).toList();
+          // Filter first, then order — so a pinned notice rises to the top of
+          // whichever CATEGORY tab it belongs to rather than only of "All".
+          // Sorting first and filtering after produces the same list here, but
+          // this order is the one that stays correct if the filter ever becomes
+          // something that can reorder.
+          final list = sortAnnouncementsForFeed(
+            all.where((a) => AnnouncementFilterBar.matches(_filter, a)).toList(),
+          );
           return Column(
             children: [
-              SizedBox(
-                height: 44,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _filters.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (_, i) {
-                    final f = _filters[i];
-                    final selected = f == _filter;
-                    return GestureDetector(
-                      onTap: () => setState(() => _filter = f),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? _brandColor.withValues(alpha: 0.08)
-                              : (_isDark ? AppColors.midnightSurface : Colors.white),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: selected ? _brandColor : _dividerC,
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          f,
-                          style: _sf(
-                            size: 12.5,
-                            weight: FontWeight.w600,
-                            color: selected ? _brandColor : _secondary,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+              AnnouncementFilterBar(
+                value: _filter,
+                onChanged: (f) => setState(() => _filter = f),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 14),
               Expanded(
-                child: list.isEmpty
-                    ? _emptyState()
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 80),
-                        itemCount: list.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) =>
-                            _AnnouncementCard(announcement: list[i]),
-                      ),
+                // The app's one pull-to-refresh (leaf bar, pop, haptic), as on
+                // History, Notifications and Edit Profile.
+                child: RefreshShell(
+                  onRefresh: LocalDataStore.instance.refresh,
+                  child: !LocalDataStore.instance.hasLoadedAnnouncements &&
+                          list.isEmpty
+                      ? const AnnouncementFeedSkeleton()
+                      : list.isEmpty
+                      // Scrollable even when empty, or the pull has nothing
+                      // to drag and the gesture dies.
+                      ? LayoutBuilder(
+                          builder: (context, c) => SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: SizedBox(
+                              height: c.maxHeight,
+                              child: _emptyState(),
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                          itemCount: list.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (_, i) =>
+                              AnnouncementCard(announcement: list[i]),
+                        ),
+                ),
               ),
             ],
           );
         },
+      ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -138,19 +133,19 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               height: 64,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: _brandColor.withValues(alpha: 0.08),
+                color: AppColors.primary.withValues(alpha: 0.08),
               ),
-              child: Icon(Icons.campaign_outlined,
-                  color: _brandColor, size: 28),
+              child: const Icon(PhosphorIconsFill.megaphone,
+                  color: AppColors.primary, size: 28),
             ),
             const SizedBox(height: 14),
             Text('No announcements',
-                style: _sf(size: 15, weight: FontWeight.w600)),
+                style: _t(size: 15, weight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
               'New community posts will appear here automatically.',
               textAlign: TextAlign.center,
-              style: _sf(size: 12.5, color: _secondary, height: 1.4),
+              style: _t(size: 12.5, color: AppColors.textSecondary, height: 1.4),
             ),
           ],
         ),
@@ -159,94 +154,3 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   }
 }
 
-class _AnnouncementCard extends StatelessWidget {
-
-  final Announcement announcement;
-  const _AnnouncementCard({required this.announcement});
-
-  TextStyle _sf({
-    double size = 15,
-    FontWeight weight = FontWeight.w400,
-    Color color = AppColors.textPrimary,
-    double height = 1.35,
-  }) {
-    return GoogleFonts.inter(
-      fontSize: size,
-      fontWeight: weight,
-      color: color,
-      height: height,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? AppColors.midnightSurface : AppColors.surfaceLight;
-    final textPrimary = isDark ? AppColors.textPrimaryOnDark : AppColors.textPrimary;
-    final textSecondary = isDark ? AppColors.textSecondaryOnDark : AppColors.textSecondary;
-    final textMuted = isDark ? AppColors.textMutedOnDark : AppColors.textMuted;
-    final divider = isDark ? const Color(0xFF21262D) : AppColors.divider;
-    final brandColor = isDark ? AppColors.primaryLight : AppColors.primary;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: divider, width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (announcement.pinned) ...[
-                Icon(Icons.push_pin_rounded, size: 14, color: brandColor),
-                const SizedBox(width: 6),
-              ],
-              Expanded(
-                child: Text(
-                  announcement.title,
-                  style: _sf(size: 13.5, weight: FontWeight.w600, color: textPrimary),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: brandColor.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  announcement.category,
-                  style: _sf(
-                    size: 10.5,
-                    weight: FontWeight.w700,
-                    color: brandColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            announcement.body,
-            style: _sf(size: 12.5, color: textSecondary, height: 1.4),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(Icons.account_circle_outlined, size: 13, color: textMuted),
-              const SizedBox(width: 4),
-              Text(announcement.author, style: _sf(size: 11, color: textMuted)),
-              const Spacer(),
-              Text(
-                DateFormat('MMM d • h:mm a').format(announcement.postedAt),
-                style: _sf(size: 11, color: textMuted),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}

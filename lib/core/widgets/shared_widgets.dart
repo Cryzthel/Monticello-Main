@@ -1,9 +1,20 @@
+import 'dart:math' as math;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:monticello_villas_app/core/widgets/dismiss_keyboard_on_tap.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import '../models/incident.dart';
-import '../theme/app_theme.dart';
-import 'glass_container.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:monticello_villas_app/features/incidents/models/incident.dart';
+import 'package:monticello_villas_app/core/storage/local_data_store.dart';
+import 'package:monticello_villas_app/core/theme/app_icons.dart';
+import 'package:monticello_villas_app/core/theme/app_theme.dart';
+import 'package:monticello_villas_app/core/widgets/modern_back_button.dart';
+import 'package:monticello_villas_app/core/widgets/glass_container.dart';
+import 'package:monticello_villas_app/core/widgets/leaf_loader.dart';
+import 'package:monticello_villas_app/core/widgets/staged_progress.dart';
+import 'package:monticello_villas_app/features/media/widgets/media_viewer.dart';
 
 /// ─────────────────────── SCREEN HEADER ───────────────────────
 /// Unified page header used across every screen for consistent hierarchy.
@@ -27,11 +38,8 @@ class ScreenHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final secondary = Theme.of(context).brightness == Brightness.dark
-        ? AppColors.textSecondaryOnDark
-        : AppColors.textSecondary;
-    final onSurface = scheme.onSurface;
+    final secondary = AppColors.textSecondary;
+    final onSurface = AppColors.textPrimary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -42,19 +50,7 @@ class ScreenHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (showBack) ...[
-                GlassContainer(
-                  width: 40,
-                  height: 40,
-                  borderRadius: AppRadius.sm,
-                  padding: EdgeInsets.zero,
-                  variant: GlassVariant.subtle,
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: Icon(
-                    Icons.arrow_back_ios_new,
-                    size: 14,
-                    color: onSurface,
-                  ),
-                ),
+                const ModernBackButton(),
                 const SizedBox(width: AppSpacing.md),
               ],
               Expanded(
@@ -118,10 +114,8 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = Theme.of(context).brightness == Brightness.dark
-        ? AppColors.ctaGreen
-        : AppColors.accent;
-    final titleColor = Theme.of(context).colorScheme.onSurface;
+    final accent = AppColors.primary;
+    final titleColor = AppColors.textPrimary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -153,9 +147,9 @@ class SectionHeader extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(action!, style: GoogleFonts.inter(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                  Text(action!, style: sfPro(fontSize: 12.5, fontWeight: FontWeight.w600)),
                   const SizedBox(width: 2),
-                  const Icon(Icons.chevron_right, size: 14),
+                  const Icon(AppIcons.chevronRight, size: 14),
                 ],
               ),
             ),
@@ -186,13 +180,28 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final green = AppColors.ctaGreen;
-    const foreground = Colors.white;
+    // #047857 (emerald-700), not ctaGreen's #16A34A.
+    //
+    // The label sets at 15px/w600, which is under every WCAG threshold for
+    // "large text", so it owes the full 4.5:1. White on #16A34A measures
+    // 3.30:1 and does not pay it; white on #047857 measures 5.48:1 and does.
+    //
+    // The comment that used to sit here asserted the opposite — that the fill
+    // was a "bright seafoam" needing dark text on it, and that white "would
+    // fail contrast". That stopped describing the code once `background`
+    // became #FFFFFF and `ctaGreen` became a mid-depth emerald: `foreground`
+    // resolves to white, so this button has been painting white-on-green the
+    // whole time, which is exactly what the comment claimed to be avoiding.
+    //
+    // #047857 is also the web portal's `--color-brand-cta`, so the two
+    // products' primary buttons now land on one value instead of two.
+    final green = AppColors.primaryDark;
+    const foreground = AppColors.background;
     final btn = ElevatedButton(
-      onPressed: loading ? null : onPressed,
+      onPressed: loading ? null : withKeyboardDismissed(onPressed),
       style: ElevatedButton.styleFrom(
         backgroundColor: color ?? green,
-        disabledBackgroundColor: (color ?? green).withOpacity(0.45),
+        disabledBackgroundColor: (color ?? green).withValues(alpha: 0.45),
         foregroundColor: foreground,
         elevation: 0,
         shadowColor: Colors.transparent,
@@ -203,19 +212,12 @@ class PrimaryButton extends StatelessWidget {
       ).merge(
         ButtonStyle(
           overlayColor: WidgetStateProperty.resolveWith(
-            (_) => foreground.withOpacity(0.10),
+            (_) => foreground.withValues(alpha: 0.10),
           ),
         ),
       ),
       child: loading
-          ? const SizedBox(
-              height: 20,
-              width: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.2,
-                color: Colors.white,
-              ),
-            )
+          ? const LeafLoader(size: 20, color: foreground)
           : Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -229,25 +231,19 @@ class PrimaryButton extends StatelessWidget {
             ),
     );
     final glowing = !(loading || onPressed == null);
-    final tinted = color ?? green;
     final wrappedGlow = glowing
         ? DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.md),
-              boxShadow: [
-                BoxShadow(
-                  color: tinted.withOpacity(0.42),
-                  blurRadius: 22,
-                  spreadRadius: -2,
-                  offset: const Offset(0, 10),
-                ),
-                BoxShadow(
-                  color: tinted.withOpacity(0.20),
-                  blurRadius: 36,
-                  spreadRadius: -4,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+              // NEUTRAL, and one layer instead of two.
+              //
+              // This was the worst offender in the app: a DOUBLE glow in the
+              // button's own colour, 42% over 36% blur plus 20% over a wider
+              // 36px blur, stacked to fake a bloom. On the primary CTA — the
+              // widest element on most screens — that painted a green cloud
+              // across the bottom of the page, and it was reproduced under
+              // every secondary button that passed a `color`.
+              boxShadow: AppShadows.md,
             ),
             child: btn,
           )
@@ -273,17 +269,15 @@ class GhostButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fg = Theme.of(context).colorScheme.onSurface;
-    final edge = isDark ? AppColors.innerStroke : const Color(0xFFE2E5EB);
+    final fg = AppColors.textPrimary;
+    final edge = AppColors.innerStroke;
 
     final btn = OutlinedButton(
-      onPressed: onPressed,
+      onPressed: withKeyboardDismissed(onPressed),
       style: OutlinedButton.styleFrom(
         foregroundColor: fg,
         side: BorderSide(color: edge),
-        backgroundColor:
-            isDark ? AppColors.midnightSurface.withOpacity(0.35) : Colors.white.withOpacity(0.82),
+        backgroundColor: AppColors.surface,
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
@@ -329,9 +323,9 @@ class StatusChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: color.withOpacity(0.28)),
+        border: Border.all(color: color.withValues(alpha: 0.28)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -342,7 +336,7 @@ class StatusChip extends StatelessWidget {
           ],
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: sfPro(
               fontSize: 10.5,
               fontWeight: FontWeight.w700,
               color: color,
@@ -377,9 +371,9 @@ class BadgePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: solid ? color.withOpacity(0.2) : Colors.white.withOpacity(0.06),
+        color: solid ? color.withValues(alpha: 0.2) : AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: color.withOpacity(solid ? 0.45 : 0.22)),
+        border: Border.all(color: color.withValues(alpha: solid ? 0.45 : 0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -390,7 +384,7 @@ class BadgePill extends StatelessWidget {
           ],
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: sfPro(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: color,
@@ -435,7 +429,7 @@ class QuickActionTile extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: accent.withOpacity(0.18),
+              color: accent.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(icon, color: accent, size: AppIconSize.md - 2),
@@ -492,7 +486,7 @@ class StatCard extends StatelessWidget {
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.18),
+                  color: accent.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: 16, color: accent),
@@ -501,7 +495,7 @@ class StatCard extends StatelessWidget {
               if (trend != null)
                 Text(
                   trend!,
-                  style: GoogleFonts.inter(
+                  style: sfPro(
                     fontSize: 10.5,
                     fontWeight: FontWeight.w600,
                     color: accent,
@@ -556,7 +550,7 @@ class InfoTile extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.18),
+              color: iconColor.withValues(alpha: 0.18),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: iconColor, size: AppIconSize.md - 2),
@@ -583,7 +577,7 @@ class InfoTile extends StatelessWidget {
             const SizedBox(width: AppSpacing.sm),
             trailing!,
           ] else if (onTap != null)
-            const Icon(Icons.chevron_right, color: AppColors.textMuted, size: 20),
+            const Icon(AppIcons.chevronRight, color: AppColors.textMuted, size: 20),
         ],
       ),
     );
@@ -591,60 +585,258 @@ class InfoTile extends StatelessWidget {
 }
 
 /// ─────────────────────── SEGMENTED CONTROL ───────────────────────
-/// Glass pill-style segmented switch — used for top-of-screen filters.
+/// A closed choice over one list — History's All · Active · Resolved.
+///
+/// ── WHY THIS AND NOT A CHIP ROW ───────────────────────────────────────────
+/// A chip row says "zero or more of many". Its options are a set that can grow,
+/// it scrolls because it does not expect to fit, and nothing about its shape
+/// promises the options are mutually exclusive — separate pills on a rail read
+/// as toggles that happen to be adjacent. A segmented control says "exactly one
+/// of these few": a single track, split into a fixed number of parts, with one
+/// indicator that MOVES between them.
+///
+/// The movement is what carries the meaning. Two pills swapping fill colour is
+/// two independent state changes the eye has to associate; one thumb sliding
+/// from Active to Resolved is a single continuous object, and it says "this
+/// control changed which of its parts is on" without any inference.
+///
+/// ── ONE SLIDING THUMB, LABELS DRAWN OVER IT ───────────────────────────────
+/// The previous implementation here animated a per-segment `AnimatedContainer`
+/// — every segment tweening its own fill, which is the chip-row behaviour in a
+/// box. There is one thumb now, positioned by [AnimatedPositioned] against a
+/// width measured by [LayoutBuilder], and the labels sit ABOVE it in the stack
+/// rather than inside it. A label riding the indicator would have to fade two
+/// copies of itself past each other mid-slide; this way the text holds still
+/// and only its colour crosses over as the fill arrives underneath.
 class SegmentedControl extends StatelessWidget {
   final List<String> segments;
   final int selectedIndex;
   final ValueChanged<int> onChanged;
+
+  /// Continuous thumb position in segment units — 1.5 sits the thumb exactly
+  /// between the second and third segments. Drive it from a `PageController`
+  /// to make the indicator track a swipe frame by frame.
+  ///
+  /// ── WHY A LISTENABLE AND NOT A double ─────────────────────────────────────
+  /// A page drag produces a new position on every frame. Passing that down as
+  /// a plain value would mean the owning screen calling `setState` sixty times
+  /// a second, rebuilding the whole History feed — hundreds of widgets — to
+  /// move one pill a few pixels. As a [ValueListenable] only the thumb and the
+  /// three labels rebuild, which is the same trick [SwipeToDelete] uses to
+  /// keep a drag off the widget tree.
+  ///
+  /// Null falls back to animating between whole [selectedIndex] values, which
+  /// is what a control with no pager behind it wants.
+  final ValueListenable<double>? position;
 
   const SegmentedControl({
     super.key,
     required this.segments,
     required this.selectedIndex,
     required this.onChanged,
+    this.position,
+  });
+
+  /// 44 outer / 36 inner: the inner segment clears Material's 36px minimum for
+  /// a compact control, and the 4px inset is what makes the track read as a
+  /// groove the thumb sits IN rather than a border drawn around it.
+  static const double height = 44;
+  static const double _inset = 4;
+
+  static const Duration slide = Duration(milliseconds: 280);
+
+  @override
+  Widget build(BuildContext context) {
+    // Guarded rather than assumed: an out-of-range index would put the thumb
+    // off the end of the track, or negative-position it out of layout.
+    final index = selectedIndex.clamp(0, segments.length - 1);
+    final last = (segments.length - 1).toDouble();
+
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(_inset),
+      decoration: BoxDecoration(
+        // Slate-100. The track has to be a shade the thumb can be seen
+        // travelling across; on the app's pure-white canvas an untinted one
+        // would leave the emerald pill floating with no visible rail.
+        color: AppColors.neutralFill,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final segmentWidth = constraints.maxWidth / segments.length;
+          final tracker = position;
+
+          if (tracker == null) {
+            return _track(segmentWidth, index.toDouble(), index,
+                animated: true);
+          }
+
+          return ValueListenableBuilder<double>(
+            valueListenable: tracker,
+            builder: (context, value, _) {
+              final at = value.clamp(0.0, last);
+              // NOT animated while tracking. An implicit animation on a value
+              // that is already changing every frame lags the finger by its own
+              // duration — the thumb would trail the page instead of moving
+              // with it. The pager's own settle animation is the easing here.
+              //
+              // Labels flip at the halfway mark rather than when the page
+              // settles, so the text under the thumb is never the wrong colour
+              // against the fill that has already arrived beneath it.
+              return _track(segmentWidth, at, at.round(), animated: false);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _track(
+    double segmentWidth,
+    double at,
+    int active, {
+    required bool animated,
+  }) {
+    final thumb = DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppColors.accentPrimary,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        boxShadow: AppShadows.sm,
+      ),
+    );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (animated)
+          AnimatedPositioned(
+            duration: slide,
+            // Decelerating, not symmetric: the thumb should arrive settled
+            // rather than ease into its destination, which is what makes a
+            // 280ms travel feel instant instead of slow.
+            curve: Curves.easeOutCubic,
+            left: at * segmentWidth,
+            width: segmentWidth,
+            top: 0,
+            bottom: 0,
+            child: thumb,
+          )
+        else
+          Positioned(
+            left: at * segmentWidth,
+            width: segmentWidth,
+            top: 0,
+            bottom: 0,
+            child: thumb,
+          ),
+        Row(
+          children: [
+            for (var i = 0; i < segments.length; i++)
+              Expanded(
+                child: _Segment(
+                  label: segments[i],
+                  selected: i == active,
+                  onTap: () {
+                    if (i == selectedIndex) return;
+                    HapticFeedback.selectionClick();
+                    onChanged(i);
+                  },
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// One segment's tap target and label.
+class _Segment extends StatelessWidget {
+  const _Segment({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        // `opaque` so the full segment is the target, not just the glyphs.
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Center(
+          // Crossfades weight and colour over the same window the thumb takes
+          // to arrive. Snapping the text at the moment of the tap would beat
+          // the fill to the segment and read as two separate events.
+          child: AnimatedDefaultTextStyle(
+            duration: SegmentedControl.slide,
+            curve: Curves.easeOutCubic,
+            style: sfPro(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              color: selected ? AppColors.onAccent : AppColors.textSecondary,
+              letterSpacing: selected ? 0.1 : 0,
+              height: 1.35,
+            ),
+            child: Text(label),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ─────────────────────── ASYMMETRIC ICON PILL ───────────────────────
+/// Soft geometric enclosure for active/highlighted icon states — replaces
+/// generic circular or square badges. One diagonal (top-left/bottom-right)
+/// is fully rounded into a stadium curve while the other diagonal
+/// (top-right/bottom-left) stays a tight squircle, giving the container an
+/// asymmetric, hand-tuned silhouette instead of a perfectly uniform pill.
+class AsymmetricIconPill extends StatelessWidget {
+  final Widget child;
+  final Color background;
+  final double width;
+  final double height;
+  final Border? border;
+
+  const AsymmetricIconPill({
+    super.key,
+    required this.child,
+    required this.background,
+    this.width = 40,
+    this.height = 32,
+    this.border,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      padding: const EdgeInsets.all(4),
-      borderRadius: AppRadius.pill,
-      variant: GlassVariant.subtle,
-      child: Row(
-        children: List.generate(segments.length, (i) {
-          final selected = i == selectedIndex;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(i),
-              behavior: HitTestBehavior.opaque,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.accent.withOpacity(0.22)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                  border: selected
-                      ? Border.all(color: AppColors.accent.withOpacity(0.5))
-                      : null,
-                ),
-                child: Center(
-                  child: Text(
-                    segments[i],
-                    style: GoogleFonts.inter(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                      color: selected ? AppColors.accent : AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
+    final primaryRadius = Radius.circular(height);
+    final secondaryRadius = Radius.circular(height * 0.3);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      width: width,
+      height: height,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background,
+        border: border,
+        borderRadius: BorderRadius.only(
+          topLeft: primaryRadius,
+          bottomRight: primaryRadius,
+          topRight: secondaryRadius,
+          bottomLeft: secondaryRadius,
+        ),
       ),
+      child: child,
     );
   }
 }
@@ -727,20 +919,16 @@ class GlassTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final secondary = Theme.of(context).brightness == Brightness.dark
-        ? AppColors.textSecondaryOnDark
-        : AppColors.textSecondary;
-    final muted = Theme.of(context).brightness == Brightness.dark
-        ? AppColors.textSecondaryOnDark
-        : AppColors.textMuted;
-    final fg = Theme.of(context).colorScheme.onSurface;
+    final secondary = AppColors.textSecondary;
+    final muted = AppColors.textMuted;
+    final fg = AppColors.textPrimary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: sfPro(
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
             color: secondary,
@@ -751,10 +939,11 @@ class GlassTextField extends StatelessWidget {
         TextFormField(
           controller: controller,
           obscureText: obscureText,
+          obscuringCharacter: AppInput.obscuringCharacter,
           keyboardType: keyboardType,
           maxLines: obscureText ? 1 : maxLines,
           validator: validator,
-          style: GoogleFonts.inter(color: fg, fontSize: 14.5),
+          style: sfPro(color: fg, fontSize: 14.5, fontWeight: AppInput.weight, letterSpacing: obscureText ? AppInput.obscuredSpacing : null),
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: icon != null
@@ -768,166 +957,276 @@ class GlassTextField extends StatelessWidget {
 }
 
 /// ─────────────────────── REPORT STATUS TRACKER ───────────────────────
-/// Compact shipping-style timeline for incident progress.
+/// The horizontal four-step progress rail on a History card.
+///
+/// ── HOW MANY STEPS ARE DONE ───────────────────────────────────────────────
+/// [IncidentStatusTracking.trackingStep] answers "which step is the report ON",
+/// which is NOT the same question as "how many are finished", and reading one
+/// as the other is what left a resolved report showing three checks and a live
+/// step 4. `resolved` maps to step 3 — the last index — so under `idx < step`
+/// the final node was permanently the ACTIVE one: a filled circle with the
+/// numeral 4 in it, sitting there indefinitely on a report that was closed
+/// weeks ago. The timeline never visibly completed.
+///
+/// So the two are computed separately. [_completed] is the count of finished
+/// steps, and for a terminal state that is all four; `trackingStep` still marks
+/// the live node, and a report that has completed has no live node at all.
+///
+/// `falseAlarm` is terminal but does NOT complete, and needs both halves of
+/// that to be drawn right. It shares step 3 with `resolved`, but a report
+/// withdrawn as a mistake did not travel the four stages — completing it would
+/// claim a resolution that never happened — and it is not working through the
+/// fourth either, so the step is neither done nor live. It renders as what it
+/// is: three steps behind it and a pending fourth that will never fill.
 class ReportStatusTracker extends StatelessWidget {
   final IncidentStatus status;
-  final double verticalPadding;
 
-  const ReportStatusTracker({
-    super.key,
-    required this.status,
-    this.verticalPadding = 4,
-  });
+  const ReportStatusTracker({super.key, required this.status});
 
-  static const _labels = ['Submitted', 'Verified', 'In progress', 'Resolved'];
+  static const _labels = ['Submitted', 'Verified', 'In Progress', 'Resolved'];
 
-  @override
-  Widget build(BuildContext context) {
-    final step = status.trackingStep;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dimLine = isDark
-        ? AppColors.innerStroke.withValues(alpha: 0.95)
-        : const Color(0xFFE5E9F0);
+  static const _stepCount = 4;
 
-    final activeDot = AppColors.ctaGreen;
-    final idleDot = isDark ? AppColors.midnightInputFill : const Color(0xFFEEF1F7);
-    final glow = activeDot.withValues(alpha: 0.42);
+  // ── ONE SET OF NUMBERS, NO PER-CARD OVERRIDES ────────────────────────────
+  //
+  // Every dimension of this rail is fixed here. It is the same indicator on
+  // every card in a scrolling feed, and a feed is exactly where a few pixels
+  // of drift between neighbours is visible — the eye reads a column of rails
+  // against each other, not against a spec.
 
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: verticalPadding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              for (var i = 0; i < 4; i++) ...[
-                _TrackerDot(
-                  filled: i <= step,
-                  activeColor: activeDot,
-                  idleColor: idleDot,
-                  glowColor: glow,
-                ),
-                if (i < 3)
-                  Expanded(
-                    child: _TrackerSegment(
-                      active: step > i,
-                      activeColor: activeDot,
-                      dimColor: dimLine,
-                      glowColor: glow,
-                    ),
-                  ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: List.generate(4, (i) {
-              final align = i == 0
-                  ? TextAlign.left
-                  : (i == 3 ? TextAlign.right : TextAlign.center);
-              final highlight = i == step;
-              final done = i <= step;
-              return Expanded(
-                child: Text(
-                  _labels[i],
-                  textAlign: align,
-                  style: GoogleFonts.inter(
-                    fontSize: 9.5,
-                    fontWeight: highlight ? FontWeight.w700 : FontWeight.w500,
-                    letterSpacing: 0.2,
-                    color: done
-                        ? Theme.of(context).colorScheme.onSurface
-                        : (isDark
-                            ? AppColors.textSecondaryOnDark
-                            : AppColors.textMuted),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-}
+  /// Diameter of one step node. Read by the rail geometry as well as the discs
+  /// themselves — see [build] — so the two cannot disagree about how much of a
+  /// step column the node occupies.
+  static const double _nodeSize = 26;
 
-class _TrackerDot extends StatelessWidget {
-  final bool filled;
-  final Color activeColor;
-  final Color idleColor;
-  final Color glowColor;
+  /// Thickness of the rail running between two nodes.
+  ///
+  /// Two, not 2.5. A half-pixel rule lands on a fractional device pixel at
+  /// every common ratio (7.5 physical px at 3x), so it is anti-aliased into a
+  /// soft three-pixel smear instead of a crisp line — on the one element in
+  /// this widget whose whole job is to be a clean straight edge.
+  static const double _railHeight = 2;
 
-  const _TrackerDot({
-    required this.filled,
-    required this.activeColor,
-    required this.idleColor,
-    required this.glowColor,
-  });
+  /// Clearance between a node's edge and the rail that runs into it.
+  static const double _railInset = 4;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 11,
-      height: 11,
+  /// The block's own vertical margin inside a card.
+  ///
+  /// Fixed, not a constructor argument. It used to be `verticalPadding + 6`,
+  /// where the argument defaulted to 4 and the History card passed 10 — so the
+  /// rail's vertical rhythm depended on which call site built it, and on a
+  /// hidden +6 that was invisible from the call. One number, on the 8px grid.
+  static const double _blockPadding = 16;
+
+  /// Gap between the node row and the label row beneath it.
+  static const double _labelGap = 8;
+
+  /// Stroke weight of the check inside a completed node.
+  ///
+  /// Stated rather than inherited: [CheckmarkPainter]'s default is a ratio
+  /// tuned for the report wizard's large confirmation badge, and at 26px it
+  /// resolves to 2.9px — a tick that thick inside a disc this small closes up
+  /// its own inner angle and reads as a smudge.
+  static const double _checkStroke = 2.4;
+
+  /// Number of steps behind the resident, 0–4. Only a report that ran the
+  /// full course has four — see [IncidentLifecycle].
+  int get _completed => status.isComplete ? _stepCount : status.trackingStep;
+
+  /// The step currently underway, or null once nothing is.
+  int? get _live => status.isTerminal ? null : status.trackingStep;
+
+  /// One step's disc.
+  ///
+  /// ── NOTHING BUT A DISC ────────────────────────────────────────────────────
+  ///
+  /// Every node used to carry `border: 2px` regardless of state, and on a done
+  /// node that border was drawn in the SAME emerald as the fill — 2px of colour
+  /// outside 20px of the identical colour, which did nothing but grow the dot
+  /// and coarsen the check inside it. Worse, it was a stroke on a card that has
+  /// none, so four little outlined boxes marched across an otherwise borderless
+  /// surface.
+  ///
+  /// A completed step is exactly one thing: a solid emerald disc with a white
+  /// check. The ring survives only where it is load-bearing — a PENDING node,
+  /// which is an empty circle on white and would not exist without its edge.
+  ///
+  /// ── THE CHECK IS PAINTED, NOT A GLYPH ─────────────────────────────────────
+  ///
+  /// It was `Icon(PhosphorIconsFill.check)`, and an [Icon] is text: it asks the
+  /// font stack for one character and draws whatever comes back. When an icon
+  /// font has not resolved, what comes back is the missing-glyph box — a hollow
+  /// SQUARE, drawn in the icon's colour, sitting inside the circle. That is the
+  /// one way a square could still appear here after the container behind these
+  /// nodes was removed, and it is not a possibility worth leaving open on the
+  /// History screen's most-read indicator.
+  ///
+  /// [CheckmarkPainter] is a path, so it cannot fail that way. It is also
+  /// already what the report wizard's step indicator draws, which makes the two
+  /// step trackers in this app agree on what a completed step looks like
+  /// instead of merely resembling one another.
+  ///
+  /// Sized to fill the disc, DELIBERATELY: [CheckmarkPainter] insets its own
+  /// tick to the middle ~50% of the box it is given, so painting at the full
+  /// 26px node diameter is what produces a ~13px check with clearance all
+  /// round. The box is stated on the CustomPaint rather than inherited from
+  /// the parent's tight constraints, so resizing the node resizes the mark
+  /// with it instead of silently rescaling one and not the other.
+  ///
+  /// [CheckmarkPainter.boundsFor] measures what that actually puts on the
+  /// canvas, and a test holds those bounds inside the disc.
+  Widget _stepNode(int index) {
+    final isDone = index < _completed;
+    final isActive = index == _live;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+      width: _nodeSize,
+      height: _nodeSize,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: filled ? activeColor : idleColor,
-        boxShadow: filled
-            ? [
-                BoxShadow(
-                  color: glowColor,
-                  blurRadius: 10,
-                  spreadRadius: 0.5,
-                ),
-                BoxShadow(
-                  color: activeColor.withValues(alpha: 0.35),
-                  blurRadius: 16,
-                ),
-              ]
-            : null,
+        color: isDone
+            ? AppColors.ctaGreen
+            : (isActive ? AppColors.primary : AppColors.surface),
+        border: isDone || isActive
+            ? null
+            : Border.all(color: AppColors.borderNeutralStrong, width: 1.5),
+        // Neutral — see AppShadows. Was the active colour at 30%.
+        boxShadow: isActive ? AppShadows.sm : null,
       ),
+      child: isDone
+          ? Center(
+              child: CustomPaint(
+                size: const Size.square(_nodeSize),
+                painter: CheckmarkPainter(
+                  color: AppColors.onAccent,
+                  // Fully drawn. The stroke-on animation belongs to the wizard,
+                  // where a step completes under the resident's eyes; here it
+                  // would replay on every card that scrolls back into view.
+                  progress: 1,
+                  strokeWidth: _checkStroke,
+                ),
+              ),
+            )
+          : Center(
+              child: Text(
+                '${index + 1}',
+                style: sfPro(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                  color: isActive ? AppColors.onAccent : AppColors.textMuted,
+                ),
+              ),
+            ),
     );
   }
-}
-
-class _TrackerSegment extends StatelessWidget {
-  final bool active;
-  final Color activeColor;
-  final Color dimColor;
-  final Color glowColor;
-
-  const _TrackerSegment({
-    required this.active,
-    required this.activeColor,
-    required this.dimColor,
-    required this.glowColor,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(99),
-        color: active ? null : dimColor,
-        gradient: active
-            ? LinearGradient(
-                colors: [
-                  activeColor.withValues(alpha: 0.95),
-                  activeColor.withValues(alpha: 0.45),
-                ],
-              )
-            : null,
-        boxShadow: active
-            ? [
-                BoxShadow(
-                  color: glowColor,
-                  blurRadius: 8,
-                  spreadRadius: -1,
+    // ── ONE COLUMN PER STEP, NOT NODES-AND-GAPS ──────────────────────────────
+    //
+    // The rail was laid out as `node, Expanded(rail), node, …` while the labels
+    // underneath were four equal [Expanded] cells. Those are two different
+    // grids and they do not line up: the discs are fixed-width and the gaps
+    // absorb every pixel of slack, so on a width W the node centres fall at
+    // 13, W/3 + 4.3, 2W/3 − 4.3 and W − 13, while the label cells centre at
+    // W/8, 3W/8, 5W/8 and 7W/8. The two middle labels sat ~8px off the nodes
+    // they name, and the outer two were aligned to the CARD's edge rather than
+    // to a node — "Submitted" started 13px to the left of the disc above it.
+    //
+    // Both rows now derive from one number: the width cut into four equal step
+    // columns. The disc is centred in its column and the label is centred in
+    // the same column, so a label sitting under its own node is a consequence
+    // of the layout instead of a coincidence maintained by hand.
+    //
+    // The rails span BETWEEN column centres, which is why they are positioned
+    // rather than laid out in the row: a rail belongs to the gap between two
+    // steps, and a gap is not a step.
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: _blockPadding),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final column = constraints.maxWidth / _stepCount;
+          double centreOf(int step) => column * (step + 0.5);
+          // Floored at zero: a [Positioned] with a negative width asserts out
+          // of layout, and a column narrower than a node plus its clearances
+          // is not worth taking the whole card down for.
+          final railWidth =
+              math.max(0.0, column - _nodeSize - _railInset * 2);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                height: _nodeSize,
+                child: Stack(
+                  children: [
+                    // Rails first, so a disc always paints over the line that
+                    // runs into it.
+                    for (var i = 0; i < _stepCount - 1; i++)
+                      Positioned(
+                        left: centreOf(i) + _nodeSize / 2 + _railInset,
+                        width: railWidth,
+                        top: (_nodeSize - _railHeight) / 2,
+                        height: _railHeight,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOut,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(2),
+                            // Filled once the node to its LEFT is behind the
+                            // resident, so the rail fills up to where they
+                            // are rather than waiting on the step ahead.
+                            //
+                            // No glow on a 2.5px connector line. A completed
+                            // segment is already the done colour against a
+                            // grey one; a bloom around a hairline just blurs
+                            // the hairline.
+                            color: _completed > i
+                                ? AppColors.ctaGreen
+                                : AppColors.borderNeutralStrong,
+                          ),
+                        ),
+                      ),
+                    for (var i = 0; i < _stepCount; i++)
+                      Positioned(
+                        left: centreOf(i) - _nodeSize / 2,
+                        top: 0,
+                        child: _stepNode(i),
+                      ),
+                  ],
                 ),
-              ]
-            : null,
+              ),
+              const SizedBox(height: _labelGap),
+              Row(
+                children: List.generate(_stepCount, (i) {
+                  final isDone = i < _completed;
+                  final isActive = i == _live;
+                  // Centred, every one of them. Aligning the first label left
+                  // and the last right is what a label row needs when its
+                  // cells do NOT match the node positions — and is exactly
+                  // what throws it off once they do.
+                  return Expanded(
+                    child: Text(
+                      _labels[i],
+                      textAlign: TextAlign.center,
+                      style: sfPro(
+                        fontSize: 9.5,
+                        fontWeight:
+                            isActive ? FontWeight.w700 : FontWeight.w500,
+                        letterSpacing: 0.2,
+                        color: isDone || isActive
+                            ? AppColors.textPrimary
+                            : AppColors.textMuted,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -964,13 +1263,22 @@ class ChoiceChipRow extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppColors.accent.withOpacity(0.22)
-                  : Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(AppRadius.pill),
+                  ? AppColors.primary.withValues(alpha: 0.12)
+                  : AppColors.surface,
+              // Selected chips get an asymmetric "soft geometric enclosure"
+              // instead of the plain uniform pill everyone else uses.
+              borderRadius: isSelected
+                  ? const BorderRadius.only(
+                      topLeft: Radius.circular(AppRadius.pill),
+                      bottomRight: Radius.circular(AppRadius.pill),
+                      topRight: Radius.circular(AppRadius.xs),
+                      bottomLeft: Radius.circular(AppRadius.xs),
+                    )
+                  : BorderRadius.circular(AppRadius.pill),
               border: Border.all(
                 color: isSelected
-                    ? AppColors.accent
-                    : Colors.white.withOpacity(0.14),
+                    ? AppColors.primary
+                    : AppColors.innerStroke,
               ),
             ),
             child: Row(
@@ -979,15 +1287,15 @@ class ChoiceChipRow extends StatelessWidget {
                 Icon(
                   opt.icon,
                   size: 14,
-                  color: isSelected ? AppColors.accent : AppColors.textSecondary,
+                  color: isSelected ? AppColors.primary : AppColors.textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   opt.label,
-                  style: GoogleFonts.inter(
+                  style: sfPro(
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
-                    color: isSelected ? AppColors.accent : AppColors.textPrimary,
+                    color: isSelected ? AppColors.primary : AppColors.textPrimary,
                   ),
                 ),
               ],
@@ -1017,6 +1325,38 @@ class _IncidentStatusTimelineState extends State<IncidentStatusTimeline>
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
 
+  // ── THE GRID ─────────────────────────────────────────────────────────────
+  //
+  // Four numbers set the whole vertical rhythm, and every gap in the stage
+  // body is a multiple of four. They are named because the rail and the prose
+  // beside it have to agree about where a stage starts and ends, and a
+  // literal buried in one of the two columns is how they stopped agreeing
+  // last time.
+
+  /// Width of the rail column. Sized to the active node's halo, so a stage
+  /// going live does not shove the text column sideways.
+  static const double _railColumn = 28;
+
+  /// Height of the box the dot is centred in — and, on the other side of the
+  /// gutter, the box the stage label is centred in. One number for both is
+  /// what puts a dot and its label on a shared centre line.
+  static const double _dotSlot = 22;
+
+  static const double _dotSize = 18;
+  static const double _haloSize = 28;
+  static const double _dotIconSize = 10;
+
+  /// Gap between the rail column and the text column.
+  static const double _gutter = 14;
+
+  /// Vertical gap between one stage's content and the next stage's label.
+  static const double _stageGap = 24;
+
+  static const double _lineWidth = 2;
+
+  /// Clearance between the connector and the dots at either end of it.
+  static const double _lineInset = 6;
+
   @override
   void initState() {
     super.initState();
@@ -1039,224 +1379,294 @@ class _IncidentStatusTimelineState extends State<IncidentStatusTimeline>
     _TimelineNode(
       label: 'Report Submitted',
       sublabel: 'Ticket initialized and queued',
-      icon: Icons.upload_rounded,
+      icon: PhosphorIconsFill.uploadSimple,
     ),
     _TimelineNode(
       label: 'Verified by Security',
       sublabel: 'Guard has acknowledged the report',
-      icon: Icons.verified_user_rounded,
+      icon: PhosphorIconsFill.shieldCheck,
     ),
     _TimelineNode(
       label: 'Dispatched / In Progress',
       sublabel: 'Responding personnel are active',
-      icon: Icons.directions_run_rounded,
+      icon: PhosphorIconsFill.personSimpleRun,
     ),
     _TimelineNode(
       label: 'Resolved',
       sublabel: 'Incident has been closed',
-      icon: Icons.check_circle_rounded,
+      icon: PhosphorIconsFill.checkCircle,
     ),
   ];
 
+  /// Server-verified timestamp for a timeline node, or null when the backend
+  /// has no real time for that stage. Deliberately returns null rather than
+  /// deriving a plausible-looking value — this chip previously rendered
+  /// `reportedAt + (nodeIndex * 2 hours)`, which showed residents dispatch
+  /// times that never happened.
+  DateTime? _timestampForNode(int index) {
+    switch (index) {
+      case 0:
+        return widget.incident.reportedAt;
+      case 2:
+        return widget.incident.dispatchedAt;
+      case 3:
+        return widget.incident.resolvedAt;
+      default:
+        // "Verified by Security" has no dedicated timestamp in the schema.
+        return null;
+    }
+  }
+
+  /// Prefers the real responder's name (written by the web command centers)
+  /// over the node's generic placeholder copy.
+  String _sublabelForNode(int index, _TimelineNode node, bool isPending, bool isActive) {
+    if (isPending) return 'Pending';
+    final guard = widget.incident.assignedGuardName;
+    if (index == 2 && guard.isNotEmpty) {
+      return isActive ? 'Responding: $guard' : 'Responded by $guard';
+    }
+    return isActive ? 'In progress…' : node.sublabel;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeStep = widget.incident.status.trackingStep;
-    final textPrimary = isDark ? Colors.white : AppColors.textPrimary;
-    final textSecondary =
-        isDark ? AppColors.textSecondaryOnDark : AppColors.textSecondary;
-    final doneColor = AppColors.ctaGreen;
-    final pendingColor =
-        isDark ? const Color(0xFF2D3548) : const Color(0xFFE9ECEF);
-    final lineColorDone = AppColors.ctaGreen.withOpacity(0.70);
-    final lineColorPending =
-        isDark ? const Color(0xFF252D3F) : const Color(0xFFE2E5EB);
+    final status = widget.incident.status;
+    // Same distinction the horizontal tracker draws, for the same reason: a
+    // report that has stopped moving has no live node. Without this the last
+    // node stayed "active" forever — pulsing, and captioned "Now" — on an
+    // incident that closed weeks ago, which is the one node a resident opens
+    // this sheet to check. See [IncidentLifecycle] for why `falseAlarm` stops
+    // without completing.
+    final activeStep = status.trackingStep;
+    final completed = status.isComplete ? _nodes.length : activeStep;
+    final textPrimary = AppColors.onGlassPrimary;
+    final textSecondary = AppColors.onGlassSecondary;
+    final doneColor = AppColors.success;
+    // Slate, not white-at-22%. That value was legible only against the dark
+    // glass sheet this timeline used to sit on; on the white panel it now
+    // renders into, a pending node was drawn in white on white and simply did
+    // not exist. Same for the resolution note fill below.
+    final pendingColor = AppColors.borderNeutralStrong;
+    final lineColorDone = AppColors.success.withValues(alpha: 0.70);
+    final lineColorPending = AppColors.borderNeutral;
 
+    // ── ONE ROW PER STAGE, AND THE LINE IS WHAT IS LEFT OVER ─────────────────
+    //
+    // The rail column and the text column used to be laid out independently:
+    // the connector was `height: 56`, hard-coded, while the text beside it was
+    // whatever its content came to plus 28px of bottom padding. Those two
+    // numbers only agree for one particular combination of label, sublabel and
+    // timestamp chip, and no stage has that combination reliably — the resolved
+    // stage carries a wrapped resolution note, a pending stage carries one
+    // word. So the line under-ran the next dot on a tall stage and over-ran it
+    // on a short one, and the gap moved as the report progressed.
+    //
+    // [IntrinsicHeight] makes the row as tall as its tallest child, and the
+    // connector then takes an [Expanded] share of the rail column: whatever is
+    // left after the dot. The line therefore runs dot-to-dot by construction at
+    // every content height, which is what "grid-aligned" has to mean for a rail
+    // whose spacing is set by prose it does not control.
+    //
+    // IntrinsicHeight is a two-pass layout and normally worth avoiding. Four
+    // rows in a bottom sheet is not where that cost shows up, and the
+    // alternative is a magic number that is wrong for three stages out of four.
     return Column(
       children: List.generate(_nodes.length, (i) {
         final node = _nodes[i];
-        final isDone = i < activeStep;
-        final isActive = i == activeStep;
-        final isPending = i > activeStep;
+        final isDone = i < completed;
+        final isActive = !status.isTerminal && i == activeStep;
+        final isPending = !isDone && !isActive;
         final isLast = i == _nodes.length - 1;
+        final timestamp = _timestampForNode(i);
+        final showChip = isActive || (isDone && timestamp != null);
+        final showResolution =
+            isLast && widget.incident.status == IncidentStatus.resolved;
 
         final dotColor = isDone || isActive ? doneColor : pendingColor;
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Left column: dot + line ──────────────────────────────
-            SizedBox(
-              width: 36,
-              child: Column(
-                children: [
-                  // Dot
-                  AnimatedBuilder(
-                    animation: _pulseAnim,
-                    builder: (_, __) {
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          if (isActive)
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: doneColor
-                                    .withOpacity(0.22 * _pulseAnim.value),
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Left column: dot, then the line that fills the rest ───────
+              SizedBox(
+                width: _railColumn,
+                child: Column(
+                  children: [
+                    SizedBox(
+                      height: _dotSlot,
+                      child: Center(
+                        child: AnimatedBuilder(
+                          animation: _pulseAnim,
+                          builder: (_, __) => Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              if (isActive)
+                                Container(
+                                  width: _haloSize,
+                                  height: _haloSize,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: doneColor.withValues(
+                                        alpha: 0.22 * _pulseAnim.value),
+                                  ),
+                                ),
+                              Container(
+                                width: _dotSize,
+                                height: _dotSize,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: dotColor,
+                                  // Neutral. The PULSE is not lost with the
+                                  // glow — it lives in the expanding halo
+                                  // directly above, which is a fill, not a
+                                  // shadow. This shadow was pulsing in the same
+                                  // colour on top of that, doubling the
+                                  // animation in the brand hue.
+                                  boxShadow: (isDone || isActive)
+                                      ? AppShadows.sm
+                                      : null,
+                                ),
+                                child: Icon(
+                                  isPending
+                                      ? PhosphorIconsFill.circle
+                                      : node.icon,
+                                  size: _dotIconSize,
+                                  color: isPending
+                                      ? AppColors.onGlassMuted
+                                      : Colors.white,
+                                ),
                               ),
-                            ),
-                          Container(
-                            width: 18,
-                            height: 18,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (!isLast)
+                      Expanded(
+                        child: Center(
+                          child: Container(
+                            width: _lineWidth,
+                            margin: const EdgeInsets.symmetric(
+                                vertical: _lineInset),
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: dotColor,
-                              boxShadow: (isDone || isActive)
-                                  ? [
-                                      BoxShadow(
-                                        color: doneColor.withOpacity(
-                                            isActive
-                                                ? 0.55 * _pulseAnim.value
-                                                : 0.30),
-                                        blurRadius: 12,
-                                        spreadRadius: 1,
-                                      ),
-                                    ]
+                              borderRadius: BorderRadius.circular(_lineWidth),
+                              color: isDone ? lineColorDone : lineColorPending,
+                              gradient: isDone
+                                  ? LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        doneColor.withValues(alpha: 0.80),
+                                        isActive
+                                            ? doneColor.withValues(alpha: 0.20)
+                                            : doneColor.withValues(alpha: 0.55),
+                                      ],
+                                    )
                                   : null,
                             ),
-                            child: Icon(
-                              isPending
-                                  ? Icons.circle_outlined
-                                  : node.icon,
-                              size: 10,
-                              color: isPending
-                                  ? (isDark
-                                      ? AppColors.textSecondaryOnDark
-                                      : AppColors.textMuted)
-                                  : Colors.white,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: _gutter),
+
+              // ── Right column: label, sublabel, timestamp ──────────────────
+              //
+              // Every gap in here is a multiple of four, and the label sits in
+              // a box of exactly [_dotSlot] — the same box the dot is centred
+              // in — so the first line of type and the dot beside it share a
+              // centre line rather than approximately agreeing. The stray 1px
+              // SizedBox that used to nudge the label down is gone with it.
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : _stageGap),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        height: _dotSlot,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            node.label,
+                            style: sfPro(
+                              fontSize: 14,
+                              height: 1.2,
+                              fontWeight: isActive || isDone
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isPending ? textSecondary : textPrimary,
                             ),
                           ),
-                        ],
-                      );
-                    },
-                  ),
-
-                  // Connector line
-                  if (!isLast)
-                    Container(
-                      width: 2,
-                      height: 56,
-                      margin: const EdgeInsets.symmetric(vertical: 3),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(2),
-                        color: isDone ? lineColorDone : lineColorPending,
-                        gradient: isDone
-                            ? LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  doneColor.withOpacity(0.80),
-                                  isActive
-                                      ? doneColor.withOpacity(0.20)
-                                      : doneColor.withOpacity(0.55),
-                                ],
-                              )
-                            : null,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            const SizedBox(width: 14),
-
-            // ── Right column: label + timestamp ──────────────────────
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(bottom: isLast ? 0 : 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 1),
-                    Text(
-                      node.label,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: isActive || isDone
-                            ? FontWeight.w700
-                            : FontWeight.w500,
-                        color: isPending ? textSecondary : textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      isPending
-                          ? 'Pending'
-                          : (isActive ? 'In progress…' : node.sublabel),
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: isActive
-                            ? doneColor
-                            : (isPending
-                                ? (isDark
-                                    ? AppColors.textSecondaryOnDark
-                                        .withOpacity(0.55)
-                                    : AppColors.textMuted)
-                                : textSecondary),
-                        fontWeight: isActive
-                            ? FontWeight.w600
-                            : FontWeight.w400,
-                      ),
-                    ),
-                    if (isDone || isActive) ...[
-                      const SizedBox(height: 5),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: doneColor.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
                         ),
-                        child: Text(
-                          isDone
-                              ? DateFormat('MMM d • h:mm a')
-                                  .format(widget.incident.reportedAt
-                                      .add(Duration(hours: i * 2)))
-                              : 'Now',
-                          style: GoogleFonts.inter(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                            color: doneColor,
+                      ),
+                      Text(
+                        _sublabelForNode(i, node, isPending, isActive),
+                        style: sfPro(
+                          fontSize: 12,
+                          height: 1.35,
+                          color: isActive
+                              ? doneColor
+                              : (isPending
+                                  ? AppColors.onGlassMuted
+                                  : textSecondary),
+                          fontWeight:
+                              isActive ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                      ),
+                      // Only rendered when there's a real server timestamp to
+                      // show (or the stage is live) — a completed stage with no
+                      // recorded time simply shows no chip rather than a
+                      // made-up one.
+                      if (showChip) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: doneColor.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text(
+                            isActive
+                                ? 'Now'
+                                : DateFormat('MMM d • h:mm a')
+                                    .format(timestamp!),
+                            style: sfPro(
+                              fontSize: 10.5,
+                              height: 1.2,
+                              fontWeight: FontWeight.w600,
+                              color: doneColor,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                    if (i == _nodes.length - 1 &&
-                        widget.incident.status == IncidentStatus.resolved)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Container(
+                      ],
+                      if (showResolution) ...[
+                        const SizedBox(height: 12),
+                        // Fill only — the 35%-alpha emerald outline this had
+                        // was a box drawn around a note that the tint already
+                        // separates from the page.
+                        Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.midnightSurfaceElevated
-                                : const Color(0xFFF0FDF4),
-                            borderRadius:
-                                BorderRadius.circular(AppRadius.md),
-                            border: Border.all(
-                                color: doneColor.withOpacity(0.25)),
+                            color: AppColors.success.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
                           ),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.notes_rounded,
-                                  size: 14, color: AppColors.ctaGreen),
+                              Icon(PhosphorIconsFill.notepad,
+                                  size: 14, color: doneColor),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  'Resolution notes: Issue has been fully addressed by the HOA security team.',
-                                  style: GoogleFonts.inter(
+                                  'Resolution notes: Issue has been fully '
+                                  'addressed by the HOA security team.',
+                                  style: sfPro(
                                     fontSize: 12,
                                     color: textSecondary,
                                     height: 1.4,
@@ -1266,12 +1676,13 @@ class _IncidentStatusTimelineState extends State<IncidentStatusTimeline>
                             ],
                           ),
                         ),
-                      ),
-                  ],
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         );
       }),
     );
@@ -1289,7 +1700,190 @@ class _TimelineNode {
   });
 }
 
-/// Shows the incident detail timeline in a premium bottom sheet.
+/// ─────────────────────── REPORT DELETION ───────────────────────
+///
+/// Split into three pieces rather than the one `confirmDeleteReport` that used
+/// to do all of it, because the swipe gesture needs them at different moments:
+/// [Dismissible] asks for a yes/no BEFORE it animates the row away
+/// (`confirmDismiss`) and only reports the deletion AFTER (`onDismissed`), so
+/// the question and the write cannot stay welded together.
+///
+///   [confirmReportDeletion]  asks, answers bool, touches nothing
+///   [deleteReport]           writes, reports success, asks nothing
+///   [confirmDeleteReport]    both, for the long-press path
+///
+/// The permission check sits in front of all three — see [IncidentLifecycle].
+
+/// Base dialog shell, so the delete prompt and the locked notice cannot drift
+/// apart in radius, fill or typography.
+Future<T?> _showReportDialog<T>(
+  BuildContext context, {
+  required String title,
+  required Widget content,
+  required List<Widget> Function(BuildContext ctx) actions,
+}) {
+  return showDialog<T>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: AppColors.backgroundSecondary,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        side: const BorderSide(color: AppColors.innerStroke),
+      ),
+      title: Text(
+        title,
+        style: sfPro(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary),
+      ),
+      content: content,
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      actions: actions(ctx),
+    ),
+  );
+}
+
+TextStyle get _dialogBody =>
+    sfPro(fontSize: 13.5, color: AppColors.textSecondary, height: 1.45);
+
+/// Asks whether to delete [incident]. Returns false on dismiss or Cancel.
+///
+/// Answers a bool and does NOT write, so [Dismissible.confirmDismiss] can drive
+/// the row's spring-back off the same prompt the long-press menu uses.
+Future<bool> confirmReportDeletion(
+    BuildContext context, Incident incident) async {
+  final confirmed = await _showReportDialog<bool>(
+    context,
+    title: 'Delete report?',
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Are you sure you want to delete this resolved report from your '
+          'history?',
+          style: _dialogBody,
+        ),
+        const SizedBox(height: 10),
+        // The consequence, kept separate from the question. A resident
+        // answering "delete this from my history?" is picturing a list row,
+        // not the photos they attached — and those go too.
+        Text(
+          'This permanently removes "${incident.title}" and its photo and '
+          'video evidence. It can\'t be undone.',
+          style: _dialogBody.copyWith(
+              fontSize: 12.5, color: AppColors.textMuted),
+        ),
+      ],
+    ),
+    actions: (ctx) => [
+      TextButton(
+        onPressed: () => Navigator.of(ctx).pop(false),
+        child: Text('Cancel',
+            style: sfPro(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary)),
+      ),
+      ElevatedButton(
+        onPressed: () => Navigator.of(ctx).pop(true),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.danger,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        child: Text('Delete',
+            style: sfPro(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white)),
+      ),
+    ],
+  );
+  return confirmed ?? false;
+}
+
+/// Explains why an open report has no delete action.
+///
+/// Reached from the long-press path; the swipe path says the same thing by
+/// simply not moving — an open card does not budge, which is the cheapest
+/// possible "no" and needs no dialog at all.
+Future<void> showReportLockedNotice(
+    BuildContext context, Incident incident) {
+  return _showReportDialog<void>(
+    context,
+    title: 'Report still open',
+    content: Text(
+      '"${incident.title}" is still being handled by the HOA. Reports can be '
+      'deleted once they are resolved — until then this record stays so the '
+      'response has something to track against.',
+      style: _dialogBody,
+    ),
+    actions: (ctx) => [
+      TextButton(
+        onPressed: () => Navigator.of(ctx).pop(),
+        child: Text('Got it',
+            style: sfPro(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primary)),
+      ),
+    ],
+  );
+}
+
+/// Performs the delete and reports whether it landed.
+///
+/// The bool is load-bearing for the swipe path: [Dismissible] has already
+/// animated the row out of the list by the time this runs, so a caller holding
+/// an optimistic removal needs to know to put it back.
+Future<bool> deleteReport(BuildContext context, Incident incident) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await LocalDataStore.instance.deleteIncident(incident);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: AppColors.backgroundElevated,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: const BorderSide(color: AppColors.innerStroke),
+      ),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      content: Text('Report deleted',
+          style: sfPro(
+              color: AppColors.textPrimary, fontWeight: FontWeight.w500)),
+    ));
+    return true;
+  } catch (_) {
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: AppColors.danger,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      content: Text('Could not delete the report. Please try again.',
+          style: sfPro(color: Colors.white, fontWeight: FontWeight.w500)),
+    ));
+    return false;
+  }
+}
+
+/// Long-press path: permission check, then confirm, then delete.
+Future<void> confirmDeleteReport(
+    BuildContext context, Incident incident) async {
+  if (!incident.status.isDeletable) {
+    return showReportLockedNotice(context, incident);
+  }
+  if (!await confirmReportDeletion(context, incident)) return;
+  if (!context.mounted) return;
+  await deleteReport(context, incident);
+}
+
 void showIncidentTimeline(BuildContext context, Incident incident) {
   showModalBottomSheet(
     context: context,
@@ -1306,48 +1900,51 @@ class _IncidentTimelineSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.midnightSurface : Colors.white;
-    final textPrimary = isDark ? Colors.white : AppColors.textPrimary;
-    final textSecondary =
-        isDark ? AppColors.textSecondaryOnDark : AppColors.textSecondary;
+    final textPrimary = AppColors.onGlassPrimary;
+    final textSecondary = AppColors.onGlassSecondary;
     final sColor = IncidentStatusInfo.color(incident.status);
     final pColor = IncidentPriorityInfo.color(incident.priority);
+    final sheetRadius = const BorderRadius.vertical(
+      top: Radius.circular(AppRadius.xl),
+    );
 
     return DraggableScrollableSheet(
       initialChildSize: 0.72,
       minChildSize: 0.40,
       maxChildSize: 0.92,
-      builder: (_, controller) => Container(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppRadius.xl),
+      builder: (_, controller) => ClipRRect(
+        borderRadius: sheetRadius,
+        // ── SOLID WHITE, NO BLUR ────────────────────────────────────────────
+        //
+        // This was the last glassmorphic surface left in the app: a 24px
+        // BackdropFilter over emerald at 35%, with slate text sitting on
+        // whatever colour happened to be behind it. Every other container moved
+        // to white-on-white several passes ago; this one survived because it
+        // only appears on tap. It IS the background shift — open a report from
+        // the white History list and the panel that slides up was dark green.
+        //
+        // Dropping the BackdropFilter also drops a full-screen blur pass from a
+        // sheet that animates its own height on every drag.
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: sheetRadius,
+            border: Border.all(color: AppColors.borderNeutralSoft),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.55 : 0.15),
-              blurRadius: 40,
-              offset: const Offset(0, -8),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // ── Drag handle ─────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Container(
-                width: 38,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.innerStroke
-                      : const Color(0xFFDDE1E9),
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
+            child: Column(
+              children: [
+                // ── Drag handle ─────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderNeutralStrong,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                  ),
                 ),
-              ),
-            ),
 
             // ── Header ──────────────────────────────────────────────
             Padding(
@@ -1355,21 +1952,24 @@ class _IncidentTimelineSheet extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Both pills are fill-only now, at the same alpha as the
+                  // status badge on the History card these open from — the
+                  // outline was a second, darker copy of the shade already
+                  // filling them, and the two surfaces disagreed about whether
+                  // a status pill has an edge.
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 11, vertical: 5),
                         decoration: BoxDecoration(
-                          color: sColor.withOpacity(0.12),
+                          color: sColor.withValues(alpha: 0.16),
                           borderRadius:
                               BorderRadius.circular(AppRadius.pill),
-                          border: Border.all(
-                              color: sColor.withOpacity(0.30)),
                         ),
                         child: Text(
                           IncidentStatusInfo.label(incident.status),
-                          style: GoogleFonts.inter(
+                          style: sfPro(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: sColor,
@@ -1380,28 +1980,20 @@ class _IncidentTimelineSheet extends StatelessWidget {
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 11, vertical: 5),
                         decoration: BoxDecoration(
-                          color: pColor.withOpacity(0.10),
+                          color: pColor.withValues(alpha: 0.16),
                           borderRadius:
                               BorderRadius.circular(AppRadius.pill),
                         ),
                         child: Text(
                           IncidentPriorityInfo.label(incident.priority),
-                          style: GoogleFonts.inter(
+                          style: sfPro(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
                             color: pColor,
+                            letterSpacing: 0.3,
                           ),
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        incident.id,
-                        style: GoogleFonts.inter(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textMuted,
                         ),
                       ),
                     ],
@@ -1409,7 +2001,7 @@ class _IncidentTimelineSheet extends StatelessWidget {
                   const SizedBox(height: 10),
                   Text(
                     incident.title,
-                    style: GoogleFonts.inter(
+                    style: sfPro(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: textPrimary,
@@ -1419,13 +2011,13 @@ class _IncidentTimelineSheet extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(Icons.location_on_outlined,
+                      Icon(PhosphorIconsFill.mapPin,
                           size: 13, color: textSecondary),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           incident.location,
-                          style: GoogleFonts.inter(
+                          style: sfPro(
                               fontSize: 13, color: textSecondary),
                         ),
                       ),
@@ -1435,12 +2027,10 @@ class _IncidentTimelineSheet extends StatelessWidget {
               ),
             ),
 
-            Divider(
+            const Divider(
               height: 1,
               thickness: 1,
-              color: isDark
-                  ? AppColors.innerStroke
-                  : const Color(0xFFF0F1F4),
+              color: AppColors.borderNeutralSoft,
             ),
 
             // ── Scrollable timeline body ─────────────────────────────
@@ -1451,21 +2041,201 @@ class _IncidentTimelineSheet extends StatelessWidget {
                 children: [
                   Text(
                     'Status Timeline',
-                    style: GoogleFonts.inter(
+                    style: sfPro(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textMuted,
+                      color: AppColors.onGlassMuted,
                       letterSpacing: 0.7,
                     ),
                   ),
                   const SizedBox(height: 20),
                   IncidentStatusTimeline(incident: incident),
+                  if (incident.hasMedia ||
+                      incident.photoUrls.isNotEmpty ||
+                      incident.videoUrls.isNotEmpty) ...[
+                    const SizedBox(height: 28),
+                    EvidenceSection(incident: incident),
+                  ],
+                  const SizedBox(height: 28),
+                  _ReportSummarySection(incident: incident),
                 ],
               ),
             ),
           ],
+              ),
+            ),
         ),
+    );
+  }
+}
+
+/// "Report Summary" — the structured recap of a report's key fields, shown at
+/// the bottom of the History detail sheet.
+///
+/// ── A TABLE, NOT A LIST OF DECORATED LINES ────────────────────────────────
+/// This was five icon-and-stacked-text rows: a 15px glyph, then the field name
+/// in small caps with the value under it, repeated. Two problems compound
+/// there. Stacking label over value means every field is two lines tall and
+/// nothing lines up vertically between fields, so the eye has no column to run
+/// down — the reader parses five little cards instead of scanning one table.
+/// And the icons were decorative: a tag beside "Category", a pin beside
+/// "Location", a clock beside "Reported On" all restate the word next to them,
+/// while costing 25px of the value's width on the narrowest screens.
+///
+/// It is now what it always was underneath — a metadata table. Field names sit
+/// in a fixed left column, values start on one shared alignment line, and a
+/// hairline separates each row. The description, which is prose rather than a
+/// field, drops to a full-width block at the end where it can wrap without
+/// dragging the value column out with it.
+class _ReportSummarySection extends StatelessWidget {
+  final Incident incident;
+  const _ReportSummarySection({required this.incident});
+
+  /// The label column. Wide enough for the longest field name at this weight
+  /// ("Reported By") without wrapping, and fixed so every value in the card
+  /// starts on the same vertical line.
+  static const double _labelColumn = 104;
+
+  static const double _sidePad = 16;
+  static const double _rowPad = 13;
+
+  @override
+  Widget build(BuildContext context) {
+    // Field names follow the spec's vocabulary rather than the model's:
+    // `incident.category` is displayed as "Incident Type" and `reportedAt` as
+    // "Date & Time". The data is untouched — this is the label a resident
+    // reads, not a rename of anything the app stores.
+    final fields = <(String, String)>[
+      ('Incident Type', incident.category),
+      ('Priority', IncidentPriorityInfo.label(incident.priority)),
+      ('Status', IncidentStatusInfo.label(incident.status)),
+      (
+        'Date & Time',
+        DateFormat('MMM d, yyyy · h:mm a').format(incident.reportedAt),
+      ),
+      ('Location', incident.location),
+      ('Reported By', incident.reporter),
+    ];
+
+    return Container(
+      // White fill, slate-100 hairline, `shadow-sm` — matched to the History
+      // cards this sheet opens from. Both surfaces move together or the detail
+      // view stops looking like the same app as the list that led to it.
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: AppColors.borderNeutralSoft,
+          width: AppStroke.hairline,
+        ),
+        boxShadow: AppShadows.sm,
+      ),
+      // Clipped so the hairline rules below meet the rounded corner cleanly
+      // instead of running out past it.
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(_sidePad, 14, _sidePad, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Report Summary',
+                    style: sfPro(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onGlassMuted,
+                      letterSpacing: 0.7,
+                    ),
+                  ),
+                ),
+                Text(
+                  incident.id,
+                  style: sfPro(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (final (label, value) in fields) ...[
+            const _SummaryRule(),
+            _summaryRow(label, value),
+          ],
+          if (incident.description.isNotEmpty) ...[
+            const _SummaryRule(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  _sidePad, _rowPad, _sidePad, _rowPad + 3),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Description', style: _labelStyle),
+                  const SizedBox(height: 6),
+                  Text(
+                    incident.description,
+                    style: sfPro(
+                      fontSize: 13,
+                      height: 1.45,
+                      color: AppColors.onGlassPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
+
+  static TextStyle get _labelStyle => sfPro(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: AppColors.onGlassMuted,
+      );
+
+  Widget _summaryRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(_sidePad, _rowPad, _sidePad, _rowPad),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: _labelColumn,
+            child: Text(label, style: _labelStyle),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: sfPro(
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+                color: AppColors.onGlassPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The hairline between two summary rows. Full-bleed on purpose: an inset rule
+/// inside a card that already has a border draws a second, shorter edge a few
+/// pixels in from the first, and the two read as a misalignment.
+class _SummaryRule extends StatelessWidget {
+  const _SummaryRule();
+
+  @override
+  Widget build(BuildContext context) => const Divider(
+        height: AppStroke.hairline,
+        thickness: AppStroke.hairline,
+        color: AppColors.borderNeutralSoft,
+      );
 }

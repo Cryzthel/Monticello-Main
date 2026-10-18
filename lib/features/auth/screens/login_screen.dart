@@ -1,13 +1,15 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/account_approval_service.dart';
-import '../services/firebase_bootstrap.dart';
-import '../services/property_storage.dart';
-import '../services/theme_mode_controller.dart';
-import '../theme/app_theme.dart';
+import 'package:monticello_villas_app/core/brand/brand_mark.dart';
+import 'package:monticello_villas_app/core/firebase/firebase_bootstrap.dart';
+import 'package:monticello_villas_app/core/theme/theme_mode_controller.dart';
+import 'package:monticello_villas_app/core/theme/app_theme.dart';
+import 'package:monticello_villas_app/features/auth/services/email_rule.dart';
+import 'package:monticello_villas_app/features/auth/widgets/auth_controls.dart';
+import 'package:monticello_villas_app/features/auth/widgets/auth_scaffold.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,12 +30,21 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = false;
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
-  Color get _bg => _isDark ? AppColors.midnightBase : AppColors.bgLight;
-  Color get _surface => _isDark ? AppColors.midnightSurface : AppColors.surfaceLight;
-  Color get _textPrimary => _isDark ? AppColors.textPrimaryOnDark : AppColors.textPrimary;
-  Color get _textSecondary => _isDark ? AppColors.textSecondaryOnDark : AppColors.textSecondary;
-  Color get _border => _isDark ? AppColors.innerStroke : AppColors.divider;
-  Color get _brandColor => _isDark ? AppColors.primaryLight : AppColors.primary;
+  // `_bg` is gone with the Scaffold that read it; AuthScaffold owns the
+  // canvas for both auth screens, so the two cannot drift apart.
+  Color get _textPrimary =>
+      _isDark ? AppColors.textPrimaryOnDark : AppColors.textPrimary;
+  Color get _textSecondary =>
+      _isDark ? AppColors.textSecondaryOnDark : AppColors.textSecondary;
+  // `_border` lived here and is gone with the Material Checkbox that used
+  // it. Its value was `AppColors.divider` — emerald-100 at 80% — which is why
+  // the Remember-me box rendered as a pale green square beside a form whose
+  // every other outline is slate. AuthCheckbox owns its own colours.
+  // `_brandColor` lived here and is gone with the controls that used it. The
+  // threshold's green is AuthTokens.brand (#047857) — see the contrast note
+  // on that token. It is a constant rather than a theme-derived getter
+  // because the sign-in screen is deliberately NOT themed: it is the one
+  // surface that has to match the web portals' sign-in exactly.
 
   @override
   void initState() {
@@ -97,66 +108,27 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  InputDecoration _inputDecoration({
-    required String hint,
-    required IconData prefixIcon,
-    Widget? suffix,
-  }) {
-    return InputDecoration(
-      hintText: hint,
-      filled: true,
-      fillColor: _isDark ? AppColors.midnightInputFill : AppColors.bgLight,
-      hintStyle: GoogleFonts.inter(fontSize: 14, color: AppColors.textMuted),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-      prefixIcon: Icon(prefixIcon, size: 20, color: AppColors.textMuted),
-      suffixIcon: suffix,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        borderSide: BorderSide(color: _border, width: 1),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        borderSide: BorderSide(color: _border, width: 1),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        borderSide: BorderSide(color: _brandColor, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        borderSide: const BorderSide(color: AppColors.danger, width: 1),
-      ),
-    );
-  }
-
+  /// Post-sign-in work that is specific to LOGGING IN, and nothing else.
+  ///
+  /// This deliberately no longer navigates. AuthGate (lib/app/auth_gate.dart)
+  /// is the root of the tree and rebuilds off `authStateChanges()`, so the
+  /// moment sign-in succeeds it swaps LoginScreen out for the verification
+  /// gate / dashboard on its own.
+  ///
+  /// The previous `pushNamedAndRemoveUntil('/home', (_) => false)` now actively
+  /// fights that: it tears down the whole stack — including the AuthGate at the
+  /// root — and pushes a bare `/home` route in its place. It also duplicated
+  /// the property/profile loading that AuthGate already does, so the same
+  /// awaits ran twice and any failure among them silently cancelled the
+  /// navigation that was supposed to follow.
   Future<void> _routeAfterAuth(User user) async {
     await _persistRememberMe();
-
-    bool approved = true;
-    bool verified = true;
     try {
-      approved = await AccountApprovalService.isApproved(user.uid);
+      await ThemeModeController.instance.loadForUser(user.uid);
     } catch (_) {
-      approved = true;
+      // Cosmetic only — never block sign-in on a theme preference read.
     }
-    if (!approved) {
-      await FirebaseAuth.instance.signOut();
-      _showToast('Your account is pending admin verification.', isError: true);
-      return;
-    }
-    try {
-      await PropertyStorage.clearIfUserMismatch(user.uid);
-      verified = await PropertyStorage.isVerifiedForUser(user.uid);
-    } catch (_) {
-      verified = true;
-    }
-    if (!mounted) return;
-    await ThemeModeController.instance.loadForUser(user.uid);
-    if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      verified ? '/home' : '/verify',
-      (_) => false,
-    );
+    // No Navigator call. AuthGate takes it from here.
   }
 
   Future<void> _handleSignIn() async {
@@ -222,22 +194,33 @@ class _LoginScreenState extends State<LoginScreen> {
     messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        backgroundColor: isError ? AppColors.danger : AppColors.primary,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+        // The threshold's green, like every other accent on these two
+        // screens. A success toast in #16A34A over a form built in
+        // #047857 is the brand changing shade on the way to confirming
+        // that something worked.
+        backgroundColor: isError ? AppColors.danger : AuthTokens.brand,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         content: Row(
           children: [
             Icon(
-              isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
-              color: Colors.white,
+              isError
+                  ? PhosphorIconsFill.warningCircle
+                  : PhosphorIconsFill.checkCircle,
+              color: AppColors.background,
               size: 20,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 message,
-                style: GoogleFonts.inter(
-                    fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500),
+                style: sfPro(
+                    fontSize: 14,
+                    // White on both. Dark ink on the danger red was the
+                    // one toast in the app that did it, and it read at a
+                    // fraction of the contrast of every other error.
+                    color: AppColors.background,
+                    fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -248,248 +231,217 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
+    // ── THE SHELL IS SHARED, AND IT CENTRES ──────────────────────────
+    // `AuthScaffold` carries the flat canvas and tap-to-dismiss;
+    // `AuthFormPane` carries the centring, which `Center` inside a plain
+    // scroll view could never do — see the long note on that class.
+    //
+    // The leading 8pt spacer is gone with the layout that needed it: it
+    // existed to nudge a top-anchored column off the status bar, and a
+    // centred one has no top to be nudged from.
+    return AuthScaffold(
+      child: AuthFormPane(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // The real emblem, bare — no tile behind it.
+            //
+            // This was a 72px rounded square filled with the brand green
+            // holding a Phosphor shield: a STAND-IN, from before the
+            // artwork was wired up on mobile, and the same stand-in the
+            // splash carried. Two things go with it. The glyph, because
+            // BrandMark is now the actual logo. And the tile, because a
+            // coloured container behind a logo is an app-icon
+            // impression, and the icon is already on the home screen the
+            // resident just tapped — repeating it at the top of the
+            // first form reads as chrome rather than as identity.
+            const Center(
+              child: BrandMark(
+                height: 56,
+                color: AuthTokens.brand,
+                semanticLabel: 'Monticello Villas',
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Welcome back',
+              textAlign: TextAlign.center,
+              // The display face. One element per screen — see
+              // displayFont's doc, and --font-display in the portals.
+              style: displayFont(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: _textPrimary,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Sign in to your Monticello Villas account',
+              textAlign: TextAlign.center,
+              style: sfPro(fontSize: 14, color: _textSecondary),
+            ),
+            const SizedBox(height: 32),
+            Form(
+              key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 32),
-                  Center(
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: _brandColor,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _brandColor.withValues(alpha:0.3),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.shield_rounded,
-                        color: Colors.white,
-                        size: 36,
+                  AuthField(
+                    label: 'Email',
+                    controller: _emailCtrl,
+                    hint: 'name@example.com',
+                    keyboardType: TextInputType.emailAddress,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.username],
+                    validator: EmailRule.validate,
+                  ),
+                  const SizedBox(height: 16),
+                  AuthField(
+                    label: 'Password',
+                    controller: _passwordCtrl,
+                    hint: 'Enter your password',
+                    obscureText: _obscurePassword,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onSubmitted: (_) => _loading ? null : _handleSignIn(),
+                    // Sized to the 48px capsule rather than Material's
+                    // default 48px-plus-padding IconButton, which forced
+                    // the field taller than the button below it.
+                    trailing: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 12),
+                        child: Icon(
+                          _obscurePassword
+                              ? PhosphorIconsFill.eyeSlash
+                              : PhosphorIconsFill.eye,
+                          size: 20,
+                          color: AppColors.textMuted,
+                        ),
                       ),
                     ),
+                    // Presence only. The length rule is the password
+                    // POLICY (8, not the 6 this checked), and a sign-in
+                    // field that enforces it refuses any older password
+                    // that predates the rule.
+                    validator: (v) =>
+                        v.isEmpty ? 'Enter your password.' : null,
                   ),
-                  const SizedBox(height: 28),
-                  Text(
-                    'Welcome back',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                      color: _textPrimary,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sign in to your Monticello Villas account',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.inter(
-                        fontSize: 14, color: _textSecondary),
-                  ),
-                  const SizedBox(height: 40),
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Email',
-                          style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: _textPrimary),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          autocorrect: false,
-                          textInputAction: TextInputAction.next,
-                          style: GoogleFonts.inter(
-                              fontSize: 15, color: _textPrimary),
-                          decoration: _inputDecoration(
-                            hint: 'you@example.com',
-                            prefixIcon: Icons.mail_outline_rounded,
-                          ),
-                          validator: (v) => (v == null || !v.contains('@'))
-                              ? 'Enter a valid email'
-                              : null,
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Password',
-                          style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: _textPrimary),
-                        ),
-                        const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _passwordCtrl,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) =>
-                              _loading ? null : _handleSignIn(),
-                          style: GoogleFonts.inter(
-                              fontSize: 15, color: _textPrimary),
-                          decoration: _inputDecoration(
-                            hint: 'Enter your password',
-                            prefixIcon: Icons.lock_outline_rounded,
-                            suffix: Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: IconButton(
-                                splashRadius: 20,
-                                onPressed: () => setState(
-                                    () => _obscurePassword = !_obscurePassword),
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 20,
-                                  color: AppColors.textMuted,
+                  const SizedBox(height: 12),
+                  // ── ONE LINE, ALWAYS, AND IT CANNOT OVERFLOW ──────
+                  // This was a Row, then a Wrap, and both were wrong in
+                  // opposite directions. A Row cannot break, so at a
+                  // large text scale it painted the overflow stripe
+                  // across the sign-in form. A Wrap breaks too eagerly:
+                  // on a 360dp handset it dropped "Forgot password?"
+                  // onto its own line, left-aligned under the checkbox,
+                  // which reads as two unrelated controls rather than as
+                  // the pair either side of a line.
+                  //
+                  // A Row with the LEFT side flexible is the answer to
+                  // both: the link keeps its intrinsic width because it
+                  // is the thing you have to be able to read and hit,
+                  // and "Remember me" gives up room first, ellipsising
+                  // only in the extreme case where there is genuinely
+                  // none left.
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () =>
+                              setState(() => _rememberMe = !_rememberMe),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AuthCheckbox(checked: _rememberMe),
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: Text(
+                                  'Remember me',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: sfPro(
+                                    fontSize: 13,
+                                    color: _textSecondary,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          validator: (v) => (v == null || v.length < 6)
-                              ? 'Minimum 6 characters'
-                              : null,
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            GestureDetector(
-                              onTap: () => setState(
-                                  () => _rememberMe = !_rememberMe),
-                              child: Row(
-                                children: [
-                                  SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: Checkbox(
-                                      value: _rememberMe,
-                                      activeColor: _brandColor,
-                                      checkColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(4)),
-                                      side: BorderSide(
-                                          color: _border, width: 1.5),
-                                      onChanged: (v) => setState(
-                                          () => _rememberMe = v ?? false),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text('Remember me',
-                                      style: GoogleFonts.inter(
-                                          fontSize: 13,
-                                          color: _textSecondary)),
-                                ],
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: _loading
-                                  ? null
-                                  : () => Navigator.of(context).pushNamed(
-                                        '/forgot-password',
-                                        arguments: {
-                                          'email': _emailCtrl.text.trim()
-                                        },
-                                      ),
-                              style: TextButton.styleFrom(
-                                foregroundColor: _brandColor,
-                                padding: EdgeInsets.zero,
-                                minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'Forgot password?',
-                                style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: _brandColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 28),
-                        SizedBox(
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: _loading ? null : _handleSignIn,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _brandColor,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  _brandColor.withValues(alpha:0.5),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.sm),
-                              ),
-                            ),
-                            child: _loading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
-                                        color: Colors.white),
-                                  )
-                                : Text(
-                                    'Sign In',
-                                    style: GoogleFonts.inter(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white),
-                                  ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text("Don't have an account? ",
-                          style: GoogleFonts.inter(
-                              fontSize: 14, color: _textSecondary)),
+                      ),
+                      const SizedBox(width: 12),
                       GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: _loading
                             ? null
-                            : () => Navigator.of(context)
-                                .pushNamed('/register'),
-                        child: Text(
-                          'Sign Up',
-                          style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: _brandColor,
-                              fontWeight: FontWeight.w700),
+                            : () => Navigator.of(context).pushNamed(
+                                  '/forgot-password',
+                                  arguments: {'email': _emailCtrl.text.trim()},
+                                ),
+                        child: Padding(
+                          // Vertical only: the row's height is already
+                          // the checkbox's, and padding the sides would
+                          // push the link off the form's right edge.
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            'Forgot password?',
+                            style: sfPro(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AuthTokens.brand,
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  AuthButton(
+                    label: 'Sign In',
+                    busy: _loading,
+                    onPressed: _loading ? null : _handleSignIn,
+                  ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(height: 32),
+            // Wrap, not Row. As a Row this overflowed by 28px whenever
+            // the two labels were wider than the available line — on a
+            // narrow device, at a large system text scale, or under a
+            // fallback font whose metrics differ from the bundled one
+            // (which is what made the widget test fail). A Row cannot
+            // break, so it painted the yellow-and-black overflow stripe
+            // across the bottom of the sign-in screen; Wrap simply moves
+            // "Sign Up" onto the next line and stays centred.
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text("Don't have an account? ",
+                    style: sfPro(fontSize: 14, color: _textSecondary)),
+                GestureDetector(
+                  onTap: _loading
+                      ? null
+                      : () => Navigator.of(context).pushNamed('/register'),
+                  child: Text(
+                    'Sign Up',
+                    style: sfPro(
+                        fontSize: 14,
+                        color: AuthTokens.brand,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );

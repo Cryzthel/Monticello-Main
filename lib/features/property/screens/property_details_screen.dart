@@ -1,15 +1,28 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-import '../services/property_storage.dart';
-import '../services/user_profile_service.dart';
+import 'package:monticello_villas_app/core/theme/app_theme.dart';
+import 'package:monticello_villas_app/core/widgets/modern_back_button.dart';
+import 'package:monticello_villas_app/core/widgets/refresh_shell.dart';
+import 'package:monticello_villas_app/features/auth/widgets/auth_controls.dart';
+import 'package:monticello_villas_app/features/auth/widgets/verification_lock.dart';
+import 'package:monticello_villas_app/features/property/services/property_storage.dart';
+import 'package:monticello_villas_app/features/settings/services/account_approval_service.dart';
+import 'package:monticello_villas_app/core/widgets/feed_skeletons.dart';
 
-/// Phase / Block / Lot registry plus optional street & unit, with **view**
-/// and **edit** layouts matching premium grouped-card patterns (compact
-/// three-field row, account rows, verified banner).
+/// "Your Property": the address this account is registered to, and where the
+/// HOA's review of it stands. Read-only — see the note on [_load].
 ///
-/// Palette: Monticello maroon + white (light shell), plain background.
+/// ── THE REFERENCE LAYOUT, WITHOUT THE GREEN CARD (2026-10-18) ─────────────
+/// Rebuilt from the user's reference screenshot: the LOCATION card with
+/// Phase, Block and Lot as three tinted tiles, and the RESIDENCY card with
+/// resident type and HOA status as labelled rows. The large green card that
+/// sat above them is removed at the user's request, as is the explanatory
+/// footer and its "Contact the HOA office" link — the directory lives in
+/// Settings → HOA contacts.
+///
+/// Status comes from the HOA's actual decision, and nothing here edits.
 class PropertyDetailsScreen extends StatefulWidget {
   const PropertyDetailsScreen({super.key});
 
@@ -18,802 +31,472 @@ class PropertyDetailsScreen extends StatefulWidget {
 }
 
 class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
-  static const _maroon = Color(0xFF7B1124);
-  static const _success = Color(0xFF16A34A);
-  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
-  Color get _bg => _isDark ? const Color(0xFF0F1218) : const Color(0xFFF7F7F8);
-  Color get _textPrimary => _isDark ? const Color(0xFFF5F7FA) : const Color(0xFF111827);
-  Color get _textSecondary => _isDark ? const Color(0xFFB3BDC8) : const Color(0xFF6B7280);
-  Color get _textMuted => _isDark ? const Color(0xFF8D98A6) : const Color(0xFF9AA0A6);
-  Color get _cardBorder => _isDark ? const Color(0xFF2A3140) : const Color(0xFFEFEFF1);
-  Color get _card => _isDark ? const Color(0xFF171C24) : Colors.white;
-
   bool _loading = true;
-  bool _editing = false;
-  bool _saving = false;
-
-  bool _verified = false;
-  PropertyRecord? _saved;
-
-  String? _phase;
-  String? _block;
-  String? _lot;
-  late final TextEditingController _streetCtrl;
-  late final TextEditingController _unitCtrl;
-
-  final _phases = const ['1', '2', '3', '4', '5'];
-  final _blocks = const ['1', '2', '3', '4', '5', '6', '7', '8'];
-  final _lots = const ['01', '02', '03', '04', '05', '06', '07', '08'];
-
-  TextStyle _sf({
-    double size = 15,
-    FontWeight weight = FontWeight.w400,
-    Color? color,
-    double letterSpacing = 0,
-    double height = 1.35,
-  }) {
-    return GoogleFonts.inter(
-      fontSize: size,
-      fontWeight: weight,
-      color: color ?? _textPrimary,
-      letterSpacing: letterSpacing,
-      height: height,
-    );
-  }
+  PropertyRecord? _record;
+  Stream<String?>? _residentType;
+  Stream<String?>? _rejectionReason;
 
   @override
   void initState() {
     super.initState();
-    _streetCtrl = TextEditingController();
-    _unitCtrl = TextEditingController();
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _streetCtrl.dispose();
-    _unitCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _verified = false;
-        _saved = null;
-      });
-      return;
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      // Opened once here, not in build, so a rebuild never opens a listener.
+      _residentType = AccountApprovalService.residentTypeStream(uid);
+      _rejectionReason = AccountApprovalService.rejectionReasonStream(uid);
     }
-    UserProfileService.instance.load();
-    final v = await PropertyStorage.isVerifiedForUser(user.uid);
-    final record = await PropertyStorage.loadFullForUser(user.uid);
+    // The home header has usually fetched this already: paint it at once and
+    // refresh quietly, rather than spinning on data we probably hold.
+    final cached = uid == null ? null : PropertyStorage.cachedFor(uid);
+    if (cached != null) {
+      _record = cached;
+      _loading = false;
+    }
+    _load(silent: cached != null);
+  }
+
+  /// ── NOTHING HERE EDITS ──────────────────────────────────────────────────
+  /// Phase, Block and Lot are what the HOA office verified this account
+  /// against and what every report is routed by. Corrections go through the
+  /// HOA office.
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() => _loading = true);
+    final user = FirebaseAuth.instance.currentUser;
+    final record =
+        user == null ? null : await PropertyStorage.loadFullForUser(user.uid);
     if (!mounted) return;
     setState(() {
-      _verified = v;
-      _saved = record;
-      _phase = record?.phase;
-      _block = record?.block;
-      _lot = record?.lot;
-      _streetCtrl.text = record?.street ?? '';
-      _unitCtrl.text = record?.unit ?? '';
+      _record = record;
       _loading = false;
     });
   }
 
-  void _enterEdit() {
-    final r = _saved;
-    if (r != null) {
-      setState(() {
-        _editing = true;
-        _phase = r.phase;
-        _block = r.block;
-        _lot = r.lot;
-        _streetCtrl.text = r.street;
-        _unitCtrl.text = r.unit;
-      });
-    }
-  }
-
-  void _cancelEdit() {
-    final r = _saved;
-    setState(() {
-      _editing = false;
-      if (r != null) {
-        _phase = r.phase;
-        _block = r.block;
-        _lot = r.lot;
-        _streetCtrl.text = r.street;
-        _unitCtrl.text = r.unit;
-      }
-    });
-  }
-
-  Future<void> _save() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    if (_phase == null || _block == null || _lot == null) {
-      _toast('Choose phase, block, and lot.', isError: true);
-      return;
-    }
-    setState(() => _saving = true);
-    try {
-      await PropertyStorage.saveVerifiedProperty(
-        uid: user.uid,
-        phase: _phase!,
-        block: _block!,
-        lot: _lot!,
-        street: _streetCtrl.text,
-        unit: _unitCtrl.text,
-      );
-      await _load();
-      if (!mounted) return;
-      setState(() {
-        _editing = false;
-        _saving = false;
-      });
-      _toast('Changes saved.');
-    } catch (_) {
-      if (mounted) {
-        setState(() => _saving = false);
-        _toast('Could not save.', isError: true);
-      }
-    }
-  }
-
-  void _toast(String msg, {bool isError = false}) {
-    final m = ScaffoldMessenger.of(context);
-    m.hideCurrentSnackBar();
-    m.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: isError ? const Color(0xFFEF4444) : _maroon,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        content: Text(msg,
-            style: _sf(size: 14, weight: FontWeight.w500, color: Colors.white)),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: _textPrimary, size: 18),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        centerTitle: true,
-        title: Text(
-          'Property Details',
-          style: _sf(size: 16, weight: FontWeight.w600),
-        ),
-        actions: [
-          if (_verified && !_loading)
-            if (_editing)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: TextButton(
-                  onPressed: _saving ? null : _cancelEdit,
-                  child: Text(
-                    'Cancel',
-                    style: _sf(
-                        size: 14.5,
-                        weight: FontWeight.w600,
-                        color: _textSecondary),
-                  ),
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: TextButton.icon(
-                  onPressed: _enterEdit,
-                  icon:
-                      const Icon(Icons.edit_outlined, color: _maroon, size: 18),
-                  label: Text(
-                    'Edit',
-                    style: _sf(
-                        size: 14.5, weight: FontWeight.w600, color: _maroon),
-                  ),
-                ),
-              ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _maroon))
-          : ListenableBuilder(
-              listenable: UserProfileService.instance,
-              builder: (context, _) {
-                final email = user?.email ??
-                    UserProfileService.instance.profile?.email ??
-                    '';
-                final displayName = UserProfileService.instance.profile?.name
-                            .trim()
-                            .isNotEmpty ==
-                        true
-                    ? UserProfileService.instance.profile!.name.trim()
-                    : (user?.displayName?.trim().isNotEmpty == true
-                        ? user!.displayName!.trim()
-                        : '');
-
-                return RefreshIndicator(
-                  color: _maroon,
-                  onRefresh: _load,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 36),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (!_verified || _saved == null) ...[
-                          _unverifiedBanner(),
-                          const SizedBox(height: 20),
-                          _sectionTitle('PROPERTY LOCATION'),
-                          _verifyNeededCard(context),
-                          const SizedBox(height: 24),
-                          _sectionTitle('ACCOUNT DETAILS'),
-                          _accountCard(
-                            email: email,
-                            displayName: displayName,
-                          ),
-                        ] else ...[
-                          _verifiedBanner(),
-                          const SizedBox(height: 22),
-                          _sectionTitle('PROPERTY LOCATION'),
-                          if (_editing) ...[
-                            _editLocationBody(),
-                          ] else ...[
-                            _viewLocationCard(_saved!),
-                          ],
-                          if (_editing) ...[
-                            const SizedBox(height: 16),
-                            _saveChangesButton(),
-                          ],
-                          const SizedBox(height: 24),
-                          _sectionTitle('ACCOUNT DETAILS'),
-                          _accountCard(
-                            email: email.isNotEmpty ? email : '—',
-                            displayName:
-                                displayName.isNotEmpty ? displayName : '—',
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-
-  Widget _verifiedBanner() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _iconSquare(Icons.verified_rounded, _success,
-              iconColor: Colors.white),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Verified Resident',
-                  style: _sf(size: 16, weight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Your property ownership is confirmed.',
-                  style: _sf(size: 13.5, color: _textSecondary, height: 1.45),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: SizedBox(
+                height: 44,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    _miniBadge(
-                        Icons.check_circle_rounded, 'Verified', _success),
-                    _miniBadge(
-                      Icons.home_work_outlined,
-                      'Ph ${_saved!.phase} · Blk ${_saved!.block} · Lot ${_saved!.lot}',
-                      _maroon,
+                    const Align(
+                      alignment: Alignment.centerLeft,
+                      child: ModernBackButton(),
+                    ),
+                    Text(
+                      'Your Property',
+                      textAlign: TextAlign.center,
+                      style: sfPro(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: _loading
+                  // The cards' own shapes, so nothing jumps when they land.
+                  ? const PropertyDetailsSkeleton()
+                  // The app's shared pull-to-refresh.
+                  : RefreshShell(
+                      onRefresh: () => _load(silent: true),
+                      child: ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                        children: _record == null
+                            ? [const _NoPropertyCard()]
+                            : _cards(_record!),
+                      ),
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _miniBadge(IconData icon, String label, Color color) {
+  List<Widget> _cards(PropertyRecord r) {
+    final street = r.street.trim();
+    final unit = r.unit.trim();
+
+    return [
+      // ── LOCATION ──────────────────────────────────────────────────────
+      _PropertyCard(
+        children: [
+          const _Caption('LOCATION'),
+          Row(
+            children: [
+              Expanded(
+                child: _FigureTile(
+                  icon: PhosphorIconsFill.stack,
+                  label: 'Phase',
+                  value: r.phase,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _FigureTile(
+                  icon: PhosphorIconsFill.gridFour,
+                  label: 'Block',
+                  value: r.block,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _FigureTile(
+                  icon: PhosphorIconsFill.houseLine,
+                  label: 'Lot',
+                  value: r.lot,
+                ),
+              ),
+            ],
+          ),
+          // Optional at sign-up, so only shown when there is something to
+          // show — a row reading "Not set" teaches nothing.
+          if (street.isNotEmpty) ...[
+            const _Hairline(),
+            _Row(
+              icon: PhosphorIconsFill.signpost,
+              label: 'Street / road',
+              value: Text(street, style: _Row.valueStyle),
+            ),
+          ],
+          if (unit.isNotEmpty) ...[
+            const _Hairline(),
+            _Row(
+              icon: PhosphorIconsFill.door,
+              label: 'Unit / house no.',
+              value: Text(unit, style: _Row.valueStyle),
+            ),
+          ],
+        ],
+      ),
+      const SizedBox(height: 14),
+
+      // ── RESIDENCY ─────────────────────────────────────────────────────
+      _PropertyCard(
+        children: [
+          const _Caption('RESIDENCY'),
+          _Row(
+            icon: PhosphorIconsFill.identificationBadge,
+            label: 'Resident type',
+            value: StreamBuilder<String?>(
+              stream: _residentType,
+              builder: (context, snap) => Text(
+                snap.data == null
+                    ? (snap.connectionState == ConnectionState.waiting
+                        ? '—'
+                        : 'Not recorded')
+                    : ResidentType.label(snap.data!),
+                style: _Row.valueStyle,
+              ),
+            ),
+          ),
+          const _Hairline(),
+          _Row(
+            icon: PhosphorIconsFill.sealCheck,
+            label: 'HOA status',
+            value: VerificationStatusBuilder(
+              builder: (context, status) => _StatusPill(status: status),
+            ),
+          ),
+          // The reason, when there is one, under the status it explains.
+          StreamBuilder<String?>(
+            stream: _rejectionReason,
+            builder: (context, snap) {
+              final reason = snap.data;
+              if (reason == null) return const SizedBox.shrink();
+              return VerificationStatusBuilder(
+                builder: (context, status) =>
+                    status != ResidentVerification.rejected
+                        ? const SizedBox.shrink()
+                        : Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.danger.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                            ),
+                            child: Text(
+                              reason,
+                              style: sfPro(
+                                fontSize: 13,
+                                color: AppColors.dangerInk,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+              );
+            },
+          ),
+        ],
+      ),
+    ];
+  }
+}
+
+/// `rounded-2xl p-5`, a hairline border and a soft lift, on the app surface.
+class _PropertyCard extends StatelessWidget {
+  const _PropertyCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundSecondary,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        border: Border.all(color: AuthTokens.border),
+        boxShadow: AppShadows.sm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Caption extends StatelessWidget {
+  const _Caption(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: sfPro(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textMuted,
+        letterSpacing: 0.9,
+      ),
+    );
+  }
+}
+
+/// One of Phase / Block / Lot: a tinted tile, the name small with its glyph,
+/// the number large.
+class _FigureTile extends StatelessWidget {
+  const _FigureTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label $value',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+        decoration: BoxDecoration(
+          color: AppColors.accentPrimary.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(
+              color: AppColors.accentPrimary.withValues(alpha: 0.14)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 14, color: AppColors.accentPrimary),
+                const SizedBox(width: 5),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: sfPro(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.accentPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                style: displayFont(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  letterSpacing: -0.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Hairline extends StatelessWidget {
+  const _Hairline();
+
+  @override
+  Widget build(BuildContext context) =>
+      const Divider(height: 1, thickness: 1, color: AuthTokens.border);
+}
+
+/// A glyph and label on the left, the value on the right.
+///
+/// The LABEL gives way when space is short, never the value: in the old
+/// layout the label kept its width and the status pill was squeezed until it
+/// read "Verified mem…", which is the one part of the row that matters.
+class _Row extends StatelessWidget {
+  const _Row({required this.icon, required this.label, required this.value});
+
+  final IconData icon;
+  final String label;
+  final Widget value;
+
+  static final TextStyle valueStyle = sfPro(
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
+    color: AppColors.textPrimary,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 36),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.neutralIcon),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: sfPro(fontSize: 14.5, color: AppColors.textSecondary),
+            ),
+          ),
+          const SizedBox(width: 12),
+          value,
+        ],
+      ),
+    );
+  }
+}
+
+/// The HOA's actual decision, from `residents/{uid}.verificationStatus`.
+///
+/// An older screen claimed "Verified Resident" whenever a property record
+/// existed — which sign-up writes for everyone — so applicants saw approval
+/// days before the HOA had looked. This reads the real status.
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final ResidentVerification status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (String label, IconData icon, Color ink, Color fill) = switch (status) {
+      ResidentVerification.verified => (
+          'Verified member',
+          PhosphorIconsFill.sealCheck,
+          AppColors.successInk,
+          AppColors.success,
+        ),
+      ResidentVerification.pending => (
+          'Pending review',
+          PhosphorIconsFill.hourglassHigh,
+          AppColors.warningInk,
+          AppColors.warning,
+        ),
+      ResidentVerification.rejected => (
+          'Not approved',
+          PhosphorIconsFill.warningCircle,
+          AppColors.dangerInk,
+          AppColors.danger,
+        ),
+      ResidentVerification.unknown => (
+          'Checking…',
+          PhosphorIconsFill.circle,
+          AppColors.textMuted,
+          AppColors.textMuted,
+        ),
+    };
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+        color: fill.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: color),
+          Icon(icon,
+              size: status == ResidentVerification.unknown ? 7 : 13,
+              color: ink),
           const SizedBox(width: 5),
           Text(
             label,
-            style: _sf(size: 11, weight: FontWeight.w600, color: color),
+            maxLines: 1,
+            softWrap: false,
+            style: sfPro(fontSize: 13, fontWeight: FontWeight.w700, color: ink),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _unverifiedBanner() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _isDark ? const Color(0xFF2A1E1E) : const Color(0xFFFFF8F8),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _maroon.withValues(alpha: 0.22)),
-      ),
-      child: Row(
-        children: [
-          _iconSquare(
-              Icons.location_searching_rounded, const Color(0xFFF59E0B)),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Verification required',
-                  style: _sf(size: 16, weight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Register Phase, Block, and Lot before filing reports.',
-                  style: _sf(size: 13.5, color: _textSecondary),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _NoPropertyCard extends StatelessWidget {
+  const _NoPropertyCard();
 
-  Widget _verifyNeededCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _maroon.withValues(alpha: 0.15)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'No property linked yet.',
-            style: _sf(size: 14.5, weight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Finish the HOA registry wizard to activate your dashboard.',
-            style: _sf(size: 13.5, color: _textSecondary, height: 1.45),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () async {
-              await Navigator.of(context).pushNamed('/verify');
-              if (!context.mounted) return;
-              await _load();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _maroon,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              minimumSize: const Size.fromHeight(50),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: Text(
-              'Verify property',
-              style:
-                  _sf(size: 15, weight: FontWeight.w600, color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 10),
-      child: Text(
-        label,
-        style: _sf(
-          size: 11,
-          weight: FontWeight.w700,
-          color: _maroon.withValues(alpha: 0.82),
-          letterSpacing: 1.05,
-        ),
-      ),
-    );
-  }
-
-  Widget _viewLocationCard(PropertyRecord r) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _cardBorder),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Expanded(
-                  child:
-                      _tripleFieldTile('Phase', r.phase, Icons.layers_outlined),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _tripleFieldTile(
-                      'Block', r.block, Icons.grid_view_rounded),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _tripleFieldTile('Lot', r.lot, Icons.home_outlined),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          _valueRow(Icons.signpost_rounded, 'Street / Road',
-              r.street.trim().isEmpty ? 'Not set (optional)' : r.street,
-              muted: r.street.trim().isEmpty),
-          const Divider(height: 1),
-          _valueRow(Icons.door_front_door_rounded, 'Unit / House No.',
-              r.unit.trim().isEmpty ? 'Not set (optional)' : r.unit,
-              muted: r.unit.trim().isEmpty),
-        ],
-      ),
-    );
-  }
-
-  Widget _tripleFieldTile(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      decoration: BoxDecoration(
-        color: _maroon.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _maroon.withValues(alpha: 0.12)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 13, color: _maroon.withValues(alpha: 0.7)),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: _sf(
-                    size: 10.5,
-                    weight: FontWeight.w700,
-                    color: _maroon.withValues(alpha: 0.7)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Center(
-            child: Text(
-              value,
-              textAlign: TextAlign.center,
-              style: _sf(size: 18, weight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _valueRow(IconData icon, String label, String value,
-      {bool muted = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          _iconSquare(icon, _textSecondary.withValues(alpha: 0.5), size: 36),
-          const SizedBox(width: 14),
-          Expanded(
-            flex: 2,
-            child: Text(label, style: _sf(size: 14, weight: FontWeight.w500)),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              textAlign: TextAlign.end,
-              style: _sf(
-                  size: 14,
-                  weight: FontWeight.w600,
-                  color: muted ? _textMuted : _textPrimary),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-    );
-  }
-
-  Widget _accountCard({required String email, required String displayName}) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _cardBorder),
-      ),
-      child: Column(
-        children: [
-          _denseRow(
-              Icons.email_outlined, const Color(0xFF6366F1), 'Email', email),
-          const Divider(height: 1),
-          _denseRow(Icons.person_outline_rounded, _maroon, 'Display name',
-              displayName),
-        ],
-      ),
-    );
-  }
-
-  Widget _denseRow(IconData icon, Color iconBg, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      child: Row(
-        children: [
-          _iconSquare(icon, iconBg, size: 36),
-          const SizedBox(width: 12),
-          Expanded(
-            flex: 2,
-            child: Text(label, style: _sf(size: 14, weight: FontWeight.w500)),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value.isEmpty ? '—' : value,
-              textAlign: TextAlign.end,
-              style: _sf(size: 13.5, weight: FontWeight.w600),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _iconSquare(IconData icon, Color tint,
-      {bool light = false, double size = 42, Color? iconColor}) {
-    final bool solid = iconColor != null;
-    final Color bg = solid ? tint : tint.withValues(alpha: light ? 0.14 : 0.18);
-    final Color fg = iconColor ?? tint;
-
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(size > 38 ? 10 : 8),
-      ),
-      child: Icon(icon, color: fg, size: size * 0.45),
-    );
-  }
-
-  Widget _editLocationBody() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('Phase',
-              style: _sf(size: 12, weight: FontWeight.w700, color: _textMuted)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ..._buildPillWrap(_phases, _phase,
-                  onSelected: (v) => setState(() => _phase = v)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text('Block',
-              style: _sf(size: 12, weight: FontWeight.w700, color: _textMuted)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ..._buildPillWrap(_blocks, _block,
-                  onSelected: (v) => setState(() => _block = v)),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text('Lot',
-              style: _sf(size: 12, weight: FontWeight.w700, color: _textMuted)),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ..._buildPillWrap(_lots, _lot,
-                  onSelected: (v) => setState(() => _lot = v)),
-            ],
-          ),
-          const SizedBox(height: 18),
-          _labeledField(
-            hint: 'e.g. Main Street',
-            controller: _streetCtrl,
-            label: 'Street / Road (optional)',
-            icon: Icons.signpost_rounded,
-          ),
-          const SizedBox(height: 14),
-          _labeledField(
-            hint: 'e.g. 12 · Unit B',
-            controller: _unitCtrl,
-            label: 'Unit / House No. (optional)',
-            icon: Icons.door_front_door_rounded,
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildPillWrap(List<String> opts, String? sel,
-      {required void Function(String) onSelected}) {
-    return opts
-        .map((opt) => _pill(opt, sel == opt, () => onSelected(opt)))
-        .toList();
-  }
-
-  Widget _pill(String label, bool selected, VoidCallback onTap) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(
-            color: selected ? _maroon : _card,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: selected ? _maroon : _cardBorder),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: _maroon.withValues(alpha: 0.16),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Text(
-            label,
-            style: _sf(
-              size: 13.5,
-              weight: FontWeight.w600,
-              color: selected ? Colors.white : _textPrimary,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _labeledField({
-    required String label,
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  @override
+  Widget build(BuildContext context) {
+    return _PropertyCard(
       children: [
-        Text(label,
-            style: _sf(size: 12, weight: FontWeight.w700, color: _textMuted)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: controller,
-          style: _sf(size: 15),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: _sf(size: 14, color: _textMuted),
-            filled: true,
-            fillColor: _isDark ? const Color(0xFF131924) : const Color(0xFFF9FAFB),
-            prefixIcon: Icon(icon, color: _textMuted.withValues(alpha: 0.7)),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 14,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: _cardBorder),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: _maroon, width: 1.35),
-            ),
+        const Icon(PhosphorIconsFill.houseLine,
+            size: 28, color: AppColors.textMuted),
+        Text(
+          'No property linked yet',
+          style: sfPro(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
+        ),
+        Text(
+          'The HOA office links your unit to this account once your '
+          'registration has been checked. Nothing is needed from you.',
+          style: sfPro(fontSize: 13.5, color: AppColors.textSecondary, height: 1.45),
         ),
       ],
-    );
-  }
-
-  Widget _saveChangesButton() {
-    return ElevatedButton.icon(
-      onPressed: _saving ? null : _save,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _maroon,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: _maroon.withValues(alpha: 0.35),
-        elevation: 0,
-        minimumSize: const Size.fromHeight(54),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      icon: _saving
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2.2, color: Colors.white),
-            )
-          : const Icon(Icons.save_rounded, size: 20),
-      label: Text(
-        _saving ? 'Saving…' : 'Save changes',
-        style: _sf(size: 15, weight: FontWeight.w600, color: Colors.white),
-      ),
     );
   }
 }

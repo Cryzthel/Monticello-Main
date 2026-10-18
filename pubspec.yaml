@@ -15,18 +15,67 @@ dependencies:
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
   image_picker: ^1.0.4
+  video_player: ^2.8.1
   geolocator: ^10.1.0
-  firebase_core: ^2.24.0
-  firebase_auth: ^4.15.0
-  cloud_firestore: ^4.13.0
+  # Pinned to the 4.x line ON PURPOSE. `flutter pub add firebase_messaging`
+  # resolved the newest messaging, which dragged firebase_core to 6.8.0 and
+  # broke firebase_auth 6.5.7 at compile time:
+  # `FlutterFirebaseCorePlugin.customAuthDomain` does not exist in that core.
+  # Holding core here makes pub solve for a messaging that fits the Firebase
+  # set this app already builds against, rather than upgrading four plugins
+  # as a side effect of adding one.
+  # ── PINNED EXACTLY, NOT CARETED ───────────────────────────────────────
+  # firebase_auth 6.5.7's Android plugin calls
+  # `FlutterFirebaseCorePlugin.customAuthDomain`. That field was MOVED out
+  # of that class in firebase_core 4.15.0 (into FlutterFirebasePlugin), so
+  # any core above 4.13.x fails the Java compile with "cannot find symbol" —
+  # a break that only shows at `flutter build apk`, never at `pub get` or
+  # `flutter analyze`.
+  #
+  # `^4.13.0` is therefore NOT safe here: it permits 4.15.0, which is what
+  # `flutter pub add firebase_messaging` quietly resolved. Exact pin until
+  # firebase_auth ships a build against the newer core.
+  firebase_core: 4.13.0
+  firebase_auth: ^6.5.7
+  cloud_firestore: ^6.8.0
+  cloud_functions: ^6.3.6
+  firebase_storage: ^13.4.6
   http: ^1.1.2
   intl: ^0.19.0
   provider: ^6.1.1
   shared_preferences: ^2.2.2
   connectivity_plus: ^5.0.2
+  # Backs the offline SOS queue. iOS Keychain / Android EncryptedSharedPreferences
+  # with a Keystore-held key — a pending alert holds a resident's name, phone,
+  # home address and exact coordinates, and it is the one piece of this app's
+  # data that sits at rest in a known place with a known schema.
+  # See lib/features/panic_button/services/sos_queue.dart.
+  flutter_secure_storage: ^9.2.2
   url_launcher: ^6.2.2
   flutter_sms: ^3.0.1
   google_sign_in: ^7.2.0
+  phosphor_flutter: ^2.1.0
+  cached_network_image: ^3.4.1
+  audioplayers: ^6.1.0
+  mapbox_maps_flutter: ^2.27.0
+  flutter_svg: ^2.3.0
+  # 16.5.x is the newest line that accepts firebase_core 4.13.0 — see the
+  # exact pin above for why core cannot move.
+  firebase_messaging: ^16.5.0
+  # Picks a PDF for the HOA ID / proof-of-residency step. image_picker cannot:
+  # it only returns photos and videos.
+  file_picker: ^11.0.3
+
+# phosphor_flutter 2.1.0 — the newest version published — subclasses IconData,
+# which Flutter declares `final`, so the published package cannot compile
+# against this SDK. third_party/phosphor_flutter is that package with the
+# subclassing removed; the icon constants are byte-identical plain IconData, so
+# nothing in lib/ changed. Remove this override (and the directory) once
+# upstream ships a build that no longer extends IconData.
+# See third_party/phosphor_flutter/README.md.
+dependency_overrides:
+  phosphor_flutter:
+    path: third_party/phosphor_flutter
 
 dev_dependencies:
   flutter_lints: ^5.0.0
@@ -37,4 +86,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+    - assets/geo/
     - assets/onboarding/
+    - assets/sounds/

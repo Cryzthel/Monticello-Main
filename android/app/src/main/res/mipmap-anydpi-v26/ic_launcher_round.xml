@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The adaptive launcher icon, API 26+.
+
+  Without this file Android 8 and later take the legacy square mipmap and
+  shrink it inside a white backdrop of the launcher's own choosing — so a
+  carefully drawn emerald tile arrives on the home screen as a small picture
+  of an icon sitting on a white badge. Declaring the two layers lets the
+  launcher mask the brand colour itself, to whatever shape the device uses,
+  and animate the mark against it.
+
+  The layers are generated — see tool/app_icons/gen_app_icons.py, which also
+  documents why the foreground art only fills 44 of the 108dp canvas.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

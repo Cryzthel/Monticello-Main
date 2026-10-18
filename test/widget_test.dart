@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:monticello_villas_app/screens/login_screen.dart';
-import 'package:monticello_villas_app/theme/app_theme.dart';
+import 'package:monticello_villas_app/features/auth/screens/login_screen.dart';
+import 'package:monticello_villas_app/core/theme/app_theme.dart';
 
 void main() {
   testWidgets('Login screen builds', (WidgetTester tester) async {

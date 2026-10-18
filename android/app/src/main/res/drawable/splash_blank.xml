@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The Android 12+ system splash icon: deliberately EMPTY.
+
+  The system splash used to draw `splash_mark` (the emblem), then Flutter drew
+  SplashView's own copy of it. The two were sized to match on paper, but the
+  platform scales the splash icon per manufacturer, so on many handsets the
+  logo visibly jumped or doubled as one replaced the other. Now the system
+  shows only the white canvas, and the ONE logo is Flutter's, fading in.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <size android:width="1dp" android:height="1dp" />
+</shape>
