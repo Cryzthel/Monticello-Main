@@ -206,10 +206,9 @@ export default function PanicAlertsTable({
                       {/* Every SOS is critical by definition — a resident held a
                           panic button. There is no priority to compute, so the
                           badge states the fact rather than a derived grade. */}
-                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-danger/12 px-2 py-0.5 text-2xs font-bold text-danger ring-1 ring-inset ring-danger/25">
-                        <Siren size="sm" />
+                      <StatusBadge tone="danger" icon={Siren} className="mt-1">
                         Urgent
-                      </span>
+                      </StatusBadge>
                     </td>
                     <td className="px-4 py-3.5 align-top">
                       <p className="font-medium text-text-primary">{alert.residentName}</p>
@@ -245,7 +244,7 @@ export default function PanicAlertsTable({
                           for the cases that need chasing. */}
                       {geofenceAlert && isOutsideBoundary(alert) ? (
                         <p className="mt-1">
-                          <StatusBadge tone="warning" size="sm" icon={MapPinOff}>
+                          <StatusBadge tone="warning" icon={MapPinOff}>
                             Outside subdivision
                           </StatusBadge>
                         </p>

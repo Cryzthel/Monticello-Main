@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
   ArrowRight,
-  BellRing,
-  MapPin,
+  Check,
+  Clock,
+  Copy,
+  Crosshair,
   Phone,
   Satellite,
   Siren,
@@ -28,6 +30,7 @@ import {
   unansweredMinutes,
 } from '@shared/lib/operationsTargets'
 import { formatDateTime } from '@shared/lib/dates'
+import { toast } from '@shared/lib/toast'
 
 /** The same short code the SOS log prints, so an alert is quoted one way. */
 const alertCode = (id) => `SOS-${String(id ?? '').slice(-6).toUpperCase()}`
@@ -38,59 +41,78 @@ const when = (value) => {
   return Number.isNaN(date.getTime()) ? '' : formatDateTime(date)
 }
 
-function SectionTitle({ icon: Icon, action = null, children }) {
+/** "4 min", "1 h 12 min" between two moments — how long a stage took. */
+function took(from, to) {
+  const minutes = Math.max(0, Math.round((new Date(to) - new Date(from)) / 60000))
+  if (minutes < 60) return `${minutes} min`
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+}
+
+/** A compact card: a small ruled heading, then its facts. */
+function Card({ icon: Icon, title, action = null, className = '', children }) {
   return (
-    <div className="mb-4 flex items-center justify-between gap-3">
-      <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-text-muted">
-        <Icon size={14} aria-hidden="true" />
-        {children}
-      </h3>
-      {action}
-    </div>
+    <section className={`min-w-0 rounded-xl border border-hairline bg-base-900/40 p-4 ${className}`}>
+      <div className="mb-3 flex items-center justify-between gap-3 border-b border-hairline pb-2.5">
+        <h3 className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-text-muted">
+          <Icon size={14} aria-hidden="true" />
+          {title}
+        </h3>
+        {action}
+      </div>
+      <dl className="space-y-3">{children}</dl>
+    </section>
   )
 }
 
-/** Label/value rows on a fixed label column. Empty values print a muted em-dash. */
-function Facts({ rows, labelWidth = '120px' }) {
+/**
+ * One fact: a small label directly over its value. Stacked rather than on a
+ * fixed 120px label column — that column is what pushed every value away from
+ * its label and opened the gap between Resident and Received.
+ */
+function Fact({ label, children, mono = false, tone = 'text-text-primary' }) {
+  const empty = children == null || children === ''
   return (
-    <dl className="grid gap-x-4 gap-y-4 text-sm" style={{ gridTemplateColumns: `${labelWidth} minmax(0,1fr)` }}>
-      {rows.map(({ label, value, mono = false }) => (
-        <div key={label} className="contents">
-          <dt className="pt-0.5 text-text-muted">{label}</dt>
-          <dd
-            className={`min-w-0 break-words font-medium leading-relaxed ${mono ? 'font-mono tracking-wide' : ''} ${
-              value ? 'text-text-primary' : 'text-text-muted/70'
-            }`}
-          >
-            {value || '—'}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <div className="min-w-0">
+      <dt className="text-[11px] text-text-muted">{label}</dt>
+      <dd
+        className={`mt-0.5 break-words text-sm font-medium leading-snug ${mono ? 'font-mono tracking-wide' : ''} ${
+          empty ? 'text-text-muted' : tone
+        }`}
+      >
+        {empty ? '—' : children}
+      </dd>
+    </div>
   )
 }
 
 /**
  * One panic alert, opened from its circle on the Hazard Map.
  *
- *   ┌ [((siren))] Panic alert                                         [×] ┐ sticky
- *   │             Lian Nicole Jabagat                                     │
- *   ├────────────────────────────────────────────────────────────────────┤
- *   │ ALERT     code · signal pill · received · acknowledged · resolved  │
- *   │           (escalation note while unanswered, or its history)       │
- *   │ RESIDENT  name · phone (Call)                                      │
- *   │ LOCATION  ┌ address · unit · coordinates ┐                         │
- *   │           ├╌ GPS / boundary banner ╌╌╌╌╌╌┤                         │
- *   ├────────────────────────────────────────────────────────────────────┤
- *   │                                   (Close) (Open SOS log →)         │ sticky
- *   │ Read-only on this console …                                        │
- *   └────────────────────────────────────────────────────────────────────┘
+ *   ┌ [((siren))] Panic alert  SOS-4F2A9C   (● Active Emergency)          [×] ┐
+ *   ├──────────────────────────────────┬────────────────────────────────────┤
+ *   │ RESIDENT                         │ TIMELINE                           │
+ *   │ Name · Contact number (Call)     │ Received · Responder · Resolved    │
+ *   │ Property location                │                                    │
+ *   ├──────────────────────────────────┴────────────────────────────────────┤
+ *   │ LIVE GPS    10.76466, 122.51609  [Copy]   (boundary / no-fix note)    │
+ *   │ (escalation note while unanswered, or its history)                    │
+ *   ├────────────────────────────────────────────────────────────────────────┤
+ *   │ Read-only on this console …                 (Close) (Open SOS log →)  │
+ *   └────────────────────────────────────────────────────────────────────────┘
+ *
+ * ── TIGHTENED (2026-10-19) ─────────────────────────────────────────────────
+ * Resident and Received were three sections apart, `space-y-8` between them
+ * and every value pushed off a 120px label column. They are now two compact
+ * cards side by side, each label directly over its value, so the five facts
+ * an operator needs — name, location, contact, received, GPS — read in one
+ * glance. The resident's name is no longer repeated in the header.
  *
  * ── LIVE ───────────────────────────────────────────────────────────────────
  * `alert` is resolved by id from the Hazard Map's live `panic_alerts`
- * listener (usePanicAlerts), which keeps resolved alerts too — so an
- * acknowledgement or resolution from the Guardhouse lands in the open modal,
- * and the escalation note re-evaluates on every tick of `useNow`.
+ * listener (usePanicAlerts, onSnapshot), which keeps resolved alerts too — so
+ * an acknowledgement, the responder, a resolution or a moved GPS fix from the
+ * Guardhouse lands in the open modal in every admin console, and the
+ * escalation note re-evaluates on every tick of `useNow`.
  *
  * ── READ-ONLY, BY RULE ─────────────────────────────────────────────────────
  * firestore.rules lets administrators READ `panic_alerts` and not write them.
@@ -102,6 +124,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
   const escalateAfterMinutes = useSystemSettings((state) => state.values.sos.escalateAfterMinutes)
   const now = useNow()
   const navigate = useNavigate()
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!alert) return undefined
@@ -111,6 +134,12 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [alert, onClose])
+
+  useEffect(() => {
+    if (!copied) return undefined
+    const timer = setTimeout(() => setCopied(false), 1600)
+    return () => clearTimeout(timer)
+  }, [copied])
 
   const panelRef = useRef(null)
   useDialogFocus({ open: Boolean(alert), containerRef: panelRef })
@@ -133,18 +162,31 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
   ]
     .filter(Boolean)
     .join(' • ')
+  // mapPanicAlertDoc fills a missing label with this placeholder; it is not a
+  // location, so the unit (or the em-dash) speaks instead.
+  const address = alert.address && alert.address !== 'Address unavailable' ? alert.address : ''
+  const location = address || unit
   const hasFix = typeof alert.lat === 'number' && typeof alert.lng === 'number'
   const coordinates = hasFix ? `${alert.lat.toFixed(5)}, ${alert.lng.toFixed(5)}` : ''
 
-  // The GPS banner. Boundary checks follow the admin setting; a MISSING fix is
-  // stated whether or not that setting is on, because "we could not place this
-  // alert" is a fact about the record, not a geofence opinion.
+  // Boundary checks follow the admin setting; a MISSING fix is stated whether
+  // or not that setting is on, because "we could not place this alert" is a
+  // fact about the record, not a geofence opinion.
   const geofence = geofenceAlert ? describeGeofence(geofenceState(alert)) : null
   const gpsNotice =
     geofence ??
-    (hasFix
-      ? null
-      : { tone: 'neutral', label: 'No location', detail: 'The alert arrived without a usable GPS fix, so it cannot be placed on the map.' })
+    (hasFix ? null : { tone: 'neutral', label: 'No location', detail: 'The alert arrived without a usable GPS fix, so it cannot be placed on the map.' })
+
+  const responder = alert.acknowledgedAt ? acknowledgedByLabel(alert.acknowledgedByName) : ''
+
+  async function copyCoordinates() {
+    try {
+      await navigator.clipboard.writeText(coordinates)
+      setCopied(true)
+    } catch {
+      toast.error('Could not copy the coordinates', { description: 'Select them and copy by hand.' })
+    }
+  }
 
   const openLog = () => {
     onClose?.()
@@ -154,7 +196,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
   return createPortal(
     // Portalled to <body>: the map frame is an `isolate` stacking context.
     <div
-      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4"
+      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
       role="presentation"
     >
@@ -164,11 +206,11 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
         aria-modal="true"
         aria-labelledby="panic-detail-title"
         onClick={(event) => event.stopPropagation()}
-        className="dialog-panel relative flex max-h-[88dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl dark:bg-base-950"
+        className="dialog-panel relative flex max-h-[88dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
       >
-        {/* ── STICKY HEADER: the pulsing siren, the title, whose alert ── */}
-        <header className="sticky top-0 z-30 flex shrink-0 items-start justify-between border-b border-hairline bg-base-900/80 px-6 py-5 backdrop-blur-xl dark:bg-base-950/80">
-          <div className="flex min-w-0 items-center gap-4">
+        {/* ── HEADER: siren, title and code, the live status ── */}
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-hairline px-5 py-4">
+          <div className="flex min-w-0 items-center gap-3.5">
             <span className="relative flex shrink-0 items-center justify-center rounded-lg bg-danger/10 p-2.5">
               <Siren size="md" className="relative z-10 text-danger" />
               {/* The ping only while the alert is live; a resolved alert's
@@ -177,74 +219,37 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
                 <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-lg bg-danger/20 opacity-75 motion-reduce:hidden" />
               ) : null}
             </span>
-            <div className="flex min-w-0 flex-col">
-              <h2 id="panic-detail-title" className="text-base font-semibold leading-tight tracking-tight text-danger">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+              <h2 id="panic-detail-title" className="text-lg font-bold tracking-tight text-danger">
                 Panic alert
               </h2>
-              <p className="mt-0.5 truncate text-sm text-text-secondary">{alert.residentName || 'Unknown resident'}</p>
+              <span className="font-mono text-xs tracking-wider text-text-muted">{alertCode(alert.id)}</span>
+              <Pill tone={signal.tone} icon={panicSignalIcon(alert.status)} pulse={signal.live}>
+                {signal.label}
+              </Pill>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-mr-1.5 -mt-1.5 shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+            className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
           >
-            <X size="md" />
+            <X size={20} />
           </button>
         </header>
 
         {/* ── BODY ── */}
-        <div className="hide-scrollbar relative z-10 min-h-0 flex-1 space-y-8 overflow-y-auto overscroll-contain p-6">
-          <section>
-            <SectionTitle icon={BellRing}>Alert</SectionTitle>
-            <dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-4 text-sm">
-              <dt className="text-text-muted">Alert</dt>
-              <dd className="font-mono font-medium tracking-wide text-text-primary">{alertCode(alert.id)}</dd>
-              <dt className="pt-0.5 text-text-muted">Signal</dt>
-              <dd>
-                <Pill tone={signal.tone} icon={panicSignalIcon(alert.status)}>
-                  {signal.label}
-                </Pill>
-              </dd>
-            </dl>
-            <div className="mt-4">
-              <Facts
-                rows={[
-                  { label: 'Received', value: when(alert.createdAt) },
-                  {
-                    label: 'Acknowledged',
-                    value: alert.acknowledgedAt
-                      ? `${acknowledgedByLabel(alert.acknowledgedByName)} · ${when(alert.acknowledgedAt)}`
-                      : '',
-                  },
-                  { label: 'Resolved', value: when(alert.resolvedAt) },
-                ]}
-              />
-            </div>
-            {escalation || escalationHistory ? (
-              <p
-                role={escalation ? 'status' : undefined}
-                className={`mt-5 flex items-start gap-3 rounded-xl border p-4 text-xs leading-relaxed ${
-                  escalation
-                    ? 'border-warning/20 bg-warning/10 text-warning'
-                    : 'border-hairline bg-base-800/60 text-text-secondary dark:bg-base-900/40'
-                }`}
-              >
-                <AlertTriangle size="sm" className="mt-px shrink-0 opacity-80" aria-hidden="true" />
-                <span>{escalation ?? escalationHistory}</span>
-              </p>
-            ) : null}
-          </section>
-
-          <section>
-            <SectionTitle
+        <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-base-950/40 p-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Card
               icon={User}
+              title="Resident"
               action={
                 alert.residentPhone ? (
                   <a
                     href={`tel:${alert.residentPhone}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 text-xs font-semibold text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 text-xs font-semibold text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
                   >
                     <Phone size={14} aria-hidden="true" />
                     Call
@@ -252,72 +257,109 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
                 ) : null
               }
             >
-              Resident
-            </SectionTitle>
-            <Facts
-              rows={[
-                { label: 'Resident', value: alert.residentName },
-                { label: 'Phone', value: alert.residentPhone },
-              ]}
-            />
-          </section>
+              <Fact label="Name">{alert.residentName}</Fact>
+              <Fact label="Property location">{location}</Fact>
+              {address && unit && address !== unit ? <Fact label="Unit">{unit}</Fact> : null}
+              <Fact label="Contact number" mono>
+                {alert.residentPhone}
+              </Fact>
+            </Card>
 
-          <section>
-            <SectionTitle icon={MapPin}>Location</SectionTitle>
-            <div className="overflow-hidden rounded-xl border border-hairline bg-base-800/60 dark:bg-base-900/40">
-              <div className="p-5">
-                <Facts
-                  labelWidth="100px"
-                  rows={[
-                    { label: 'Address', value: alert.address || unit },
-                    // Only when the free-text address does not already say it.
-                    ...(alert.address && unit && alert.address !== unit ? [{ label: 'Unit', value: unit }] : []),
-                    { label: 'Coordinates', value: coordinates, mono: true },
-                  ]}
-                />
-              </div>
-              {gpsNotice ? (
-                <div className="flex items-start gap-3 border-t border-dashed border-hairline px-5 py-4">
-                  {gpsNotice.tone === 'warning' ? (
-                    <AlertTriangle size="sm" className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
-                  ) : (
-                    <Satellite size="sm" className="mt-0.5 shrink-0 text-text-muted" aria-hidden="true" />
-                  )}
-                  <p className="text-sm leading-relaxed text-text-secondary">
-                    <span className={`font-medium ${gpsNotice.tone === 'warning' ? 'text-warning' : 'text-text-primary'}`}>
-                      {gpsNotice.label}.
-                    </span>{' '}
-                    {gpsNotice.detail}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-          </section>
+            <Card icon={Clock} title="Timeline">
+              <Fact label="Received" mono>
+                {when(alert.createdAt)}
+              </Fact>
+              <Fact label="Responder" tone={responder ? 'text-text-primary' : 'text-warning'}>
+                {responder ? (
+                  <>
+                    {responder}
+                    <span className="mt-0.5 block font-mono text-xs font-normal text-text-muted">
+                      {when(alert.acknowledgedAt)}
+                      {alert.createdAt ? ` · after ${took(alert.createdAt, alert.acknowledgedAt)}` : ''}
+                    </span>
+                  </>
+                ) : signal.live ? (
+                  'Awaiting acknowledgement'
+                ) : null}
+              </Fact>
+              <Fact label="Resolved" mono tone="text-success">
+                {when(alert.resolvedAt)}
+              </Fact>
+            </Card>
+          </div>
+
+          <Card
+            icon={Crosshair}
+            title="Live GPS"
+            action={
+              coordinates ? (
+                <button
+                  type="button"
+                  onClick={copyCoordinates}
+                  aria-label={copied ? 'Coordinates copied' : 'Copy coordinates'}
+                  className="inline-flex items-center gap-1 rounded text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                >
+                  {copied ? <Check size={14} className="text-success" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+                  <span className="text-[10px] font-medium uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
+                </button>
+              ) : null
+            }
+          >
+            <Fact label="Coordinates" mono tone="text-brand-500">
+              {coordinates ? <span className="select-all">{coordinates}</span> : null}
+            </Fact>
+            {gpsNotice ? (
+              <p className="flex items-start gap-2 border-t border-dashed border-hairline pt-3 text-xs leading-relaxed text-text-secondary">
+                {gpsNotice.tone === 'warning' ? (
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+                ) : (
+                  <Satellite size={14} className="mt-0.5 shrink-0 text-text-muted" aria-hidden="true" />
+                )}
+                <span>
+                  <span className={`font-semibold ${gpsNotice.tone === 'warning' ? 'text-warning' : 'text-text-primary'}`}>
+                    {gpsNotice.label}.
+                  </span>{' '}
+                  {gpsNotice.detail}
+                </span>
+              </p>
+            ) : null}
+          </Card>
+
+          {escalation || escalationHistory ? (
+            <p
+              role={escalation ? 'status' : undefined}
+              className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs leading-relaxed ${
+                escalation ? 'border-warning/20 bg-warning/10 text-warning' : 'border-hairline bg-base-900/40 text-text-secondary'
+              }`}
+            >
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 opacity-80" aria-hidden="true" />
+              <span>{escalation ?? escalationHistory}</span>
+            </p>
+          ) : null}
         </div>
 
-        {/* ── STICKY FOOTER ── */}
-        <footer className="sticky bottom-0 z-30 shrink-0 border-t border-hairline bg-base-900/80 px-6 py-5 backdrop-blur-xl dark:bg-base-950/80">
-          <div className="mb-4 flex items-center justify-end gap-3">
+        {/* ── FOOTER ── */}
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline px-5 py-3.5">
+          <p className="max-w-xs text-[11px] leading-snug text-text-muted">
+            Read-only here. The Guardhouse acknowledges and resolves alerts.
+          </p>
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full px-5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              className="rounded-full px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
             >
               Close
             </button>
             <button
               type="button"
               onClick={openLog}
-              className="group inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-6 py-2.5 text-sm font-semibold text-[var(--color-cta-fg)] shadow-[0_0_20px_-5px_color-mix(in_oklab,var(--color-cta)_30%,transparent)] transition-colors hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97]"
+              className="group inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-sm font-semibold text-[var(--color-cta-fg)] transition-colors hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97]"
             >
               Open SOS log
               <ArrowRight size="sm" className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden="true" />
             </button>
           </div>
-          <p className="text-[11px] leading-relaxed text-text-muted">
-            Read-only on this console. The Guardhouse acknowledges and resolves alerts; the admin portal
-            watches the stream.
-          </p>
         </footer>
       </div>
     </div>,
