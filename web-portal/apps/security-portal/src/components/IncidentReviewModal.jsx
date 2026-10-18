@@ -268,7 +268,7 @@ export default function IncidentReviewModal({ report, onClose }) {
                 <div className="custom-scrollbar flex gap-2 overflow-x-auto border-t border-hairline bg-base-900 p-2">
                   {media.map((item, index) => (
                     <button
-                      key={item.url}
+                      key={`${index}:${item.url}`}
                       type="button"
                       onClick={() => setActiveIndex(index)}
                       aria-label={`Show ${item.type} ${index + 1} of ${media.length}`}

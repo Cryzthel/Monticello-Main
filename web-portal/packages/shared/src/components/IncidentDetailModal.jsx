@@ -468,7 +468,7 @@ export default function IncidentDetailModal({
                   <div className="flex flex-wrap items-center gap-2">
                     {media.map((item, index) => (
                       <button
-                        key={item.url}
+                        key={`${index}:${item.url}`}
                         type="button"
                         onClick={() => setActiveIndex(index)}
                         aria-label={`Show evidence ${index + 1} of ${media.length}`}

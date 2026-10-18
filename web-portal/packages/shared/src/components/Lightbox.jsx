@@ -118,7 +118,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
         >
           {media.map((item, i) => (
             <button
-              key={item.url}
+              key={`${i}:${item.url}`}
               type="button"
               onClick={() => setIndex(i)}
               className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition ${

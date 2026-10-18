@@ -195,7 +195,7 @@ function useAdminAction(incidentId) {
  *   │ ┌ REPORTED DESCRIPTION (1 file)  note · evidence ┐               │
  *   │ ┌ RESOLUTION (once closed) ┐                                     │
  *   ├──────────────────────────────────────────────────────────────────┤
- *   │ [ the action for this stage ]                         (Close)    │ fixed
+ *   │ [ the action for this stage ]                                    │ fixed
  *   │ what this console may and may not do                              │
  *   └──────────────────────────────────────────────────────────────────┘
  *
@@ -207,7 +207,7 @@ function useAdminAction(incidentId) {
  * LIVE: `report` is the Hazard Map's own `incidents` onSnapshot document, so
  * the stage, the stepper's timestamps, the assigned unit and the location
  * update in the open modal, in every admin console, as the Guardhouse works
- * the call. Dismissed by ✕, Close, a backdrop click or Escape (the Lightbox
+ * the call. Dismissed by the header ✕, a backdrop click or Escape (the Lightbox
  * owns Escape while it is open; a write in flight holds the modal open).
  *
  * ── WHAT THIS CONSOLE MAY ACTUALLY DO, AND WHAT IT MAY NOT ─────────────────
@@ -689,15 +689,14 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
           ) : null}
         </div>
 
-        {/* ══ FOOTER (fixed): the action for this stage, Close, and the note
-            saying what this console may and may not do. ══ */}
+        {/* ══ FOOTER (fixed): the action for this stage and the note saying
+            what this console may and may not do. ══ */}
         <footer className="shrink-0 space-y-3 border-t border-hairline bg-base-950 px-6 py-4">
           {feedback ? <Receipt feedback={feedback} onDismiss={dismiss} /> : null}
           <div className="flex flex-wrap items-center gap-3">
+            {/* No text Close (2026-10-19, by request): dismissal is the header
+                ✕, a backdrop click or Escape — one control, not two. */}
             {footer}
-            <button type="button" onClick={onClose} disabled={Boolean(busy)} className="sheet-btn sheet-btn-outline">
-              Close
-            </button>
           </div>
           {hint ? <p className="text-center font-mono text-[10px] leading-relaxed text-text-muted">{hint}</p> : null}
         </footer>

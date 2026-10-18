@@ -84,7 +84,7 @@ export default function EvidenceGrid({ media, stamp, onOpen, emptyText }) {
     // A forensic stamp that truncates is a stamp that cannot be read.
     <ul className="grid grid-cols-2 gap-2">
       {media.map((item, index) => (
-        <li key={item.url}>
+        <li key={`${index}:${item.url}`}>
           <button
             type="button"
             onClick={() => onOpen(index)}
