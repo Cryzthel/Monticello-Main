@@ -134,6 +134,51 @@ export function toDate(value) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+// ── ANY OTHER SHAPE, STILL IN THE PORTAL ZONE ──────────────────────────────
+// For a display that needs a format the named formatters above do not cover
+// (a 24-hour duty clock, a weekday label, the browser's own 12/24-hour
+// preference). The zone is read at CALL time — a formatter built at module
+// level would freeze whatever zone was current at import — and each
+// (locale, zone, options) formatter is built once and reused.
+const ZONED_FORMATS = new Map()
+function zonedFormat(options, locale) {
+  const key = `${locale ?? ''}|${PORTAL_TIME_ZONE}|${JSON.stringify(options)}`
+  let format = ZONED_FORMATS.get(key)
+  if (!format) {
+    format = new Intl.DateTimeFormat(locale, { ...options, timeZone: PORTAL_TIME_ZONE })
+    ZONED_FORMATS.set(key, format)
+  }
+  return format
+}
+
+/** `value` formatted with `options` in the portal time zone. `locale` undefined = the browser's. */
+export function formatInZone(value, options, locale = LOCALE) {
+  const date = toDate(value)
+  return date ? zonedFormat(options, locale).format(date) : EMPTY
+}
+
+const DAY_MS = 86400000
+const YMD = { year: 'numeric', month: 'numeric', day: 'numeric' }
+
+/**
+ * The calendar day `value` falls on IN THE PORTAL ZONE, as a whole number
+ * (days since 1970-01-01). Subtract two to get "today / yesterday / n days
+ * ago" — `setHours(0, 0, 0, 0)` measures from the BROWSER's midnight, which
+ * puts a 11:30 PM Manila report on the wrong day on a laptop set elsewhere.
+ */
+export function zonedDayNumber(value) {
+  const date = toDate(value)
+  if (!date) return NaN
+  const parts = Object.fromEntries(zonedFormat(YMD, 'en-US').formatToParts(date).map((p) => [p.type, p.value]))
+  return Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)) / DAY_MS
+}
+
+/** The year `value` falls in, in the portal zone. */
+export function zonedYear(value) {
+  const date = toDate(value)
+  return date ? Number(zonedFormat({ year: 'numeric' }, 'en-US').format(date)) : NaN
+}
+
 // Takes a GETTER, not the formatter: the pinned formatters are replaced
 // whenever the time zone setting changes.
 const using = (format) => (value, fallback = EMPTY) => {

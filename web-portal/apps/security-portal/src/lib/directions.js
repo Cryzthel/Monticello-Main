@@ -16,6 +16,10 @@
  * about the report (resident, category, narrative) is sent.
  */
 
+// Relative, not `@shared/...`: scripts/*.test.mjs load this module under
+// bare node, which has no Vite aliases. dates.js itself imports nothing.
+import { formatInZone } from '../../../../packages/shared/src/lib/dates.js'
+
 /**
  * The two routing graphs an officer can choose between.
  *
@@ -461,5 +465,6 @@ export function arrivalAt(remainingDurationS, now = Date.now()) {
  */
 export function formatClockTime(date, locale = undefined) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
+  // The browser's 12/24-hour preference, but the portal's time zone.
+  return formatInZone(date, { hour: 'numeric', minute: '2-digit' }, locale)
 }

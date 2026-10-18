@@ -50,7 +50,7 @@ import {
 import { unitLabel } from '@shared/lib/unitIdentity'
 import { normalizeResidentStatus, RESIDENT_STATUS, RESIDENT_STATUS_LABELS } from '@shared/lib/residents'
 import { ROUTES } from '@/config/portal'
-import { formatDateTime } from '@shared/lib/dates'
+import { formatDateTime, formatInZone } from '@shared/lib/dates'
 
 /**
  * Width of the desktop rail, in px, exported so the Hazard Map can tell
@@ -81,7 +81,8 @@ const exactTime = (value) => {
 }
 
 const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
-const clock = (at) => (at ? new Date(at).toLocaleTimeString('en-GB', CLOCK) : '—')
+// In the portal time zone (Settings › System), like every other stamp.
+const clock = (at) => (at ? formatInZone(at, CLOCK, 'en-GB') : '—')
 
 // Tags are the shared oblong Pill — the same shape on every Hazard Map modal
 // (user's request, 2026-10-18). MiniTag is its one-step-down size, inline

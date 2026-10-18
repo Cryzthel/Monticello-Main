@@ -22,6 +22,12 @@ import { formatChartTick } from '@shared/lib/dates'
 
   The data key is the bucket's epoch ms, not a pre-formatted string, so the
   tick and the tooltip can format the same day differently.
+
+  NOT pinned to the portal time zone, deliberately (checked 2026-10-19). Each
+  bucket is a LOCAL midnight (computeDailyCounts), and these name the bucket,
+  not a moment: pinning the label alone could print the day before the bucket
+  it sits under. Timestamps go through shared/lib/dates; day-bucket labels stay
+  in the zone the buckets were cut in.
 */
 const TICK_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' })
 const TOOLTIP_FORMAT = new Intl.DateTimeFormat('en-US', {

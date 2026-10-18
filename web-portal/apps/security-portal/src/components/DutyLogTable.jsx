@@ -13,7 +13,7 @@ import { db } from '@shared/lib/firebase'
 import { mapShiftDoc } from '@shared/lib/shifts'
 import { useGuardProfile } from '@/hooks/useGuardProfile'
 import { exportDutyLogPdf } from '@/lib/dutyLogPdf'
-import { formatDate } from '@shared/lib/dates'
+import { formatDate, formatInZone } from '@shared/lib/dates'
 import DataTable from '@shared/components/DataTable'
 
 /**
@@ -70,7 +70,7 @@ function timeCell(value) {
     <span className="whitespace-nowrap">
       {formatDate(value)}{' '}
       <span className="font-mono text-xs text-text-muted">
-        {value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {formatInZone(value, { hour: '2-digit', minute: '2-digit' }, undefined)}
       </span>
     </span>
   )

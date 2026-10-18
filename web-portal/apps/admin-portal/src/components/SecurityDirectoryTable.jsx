@@ -15,7 +15,7 @@ import { SkeletonTableRows } from '@shared/components/Skeleton'
 import ResidentAvatar from '@/components/ResidentAvatar'
 import { relativeTime } from '@shared/lib/notifications'
 import { ACCOUNT_STATUS, STATUS_LABELS, STATUS_TONES } from '@/lib/securityAccounts'
-import { formatDate, formatDateTime, formatShortDate, formatTime } from '@shared/lib/dates'
+import { formatDate, formatDateTime, formatInZone, formatTime } from '@shared/lib/dates'
 import { useNow } from '@shared/hooks/useNow'
 import DataTable from '@shared/components/DataTable'
 
@@ -46,7 +46,7 @@ import DataTable from '@shared/components/DataTable'
 function seenAt(date, now) {
   return formatDate(date) === formatDate(now)
     ? formatTime(date)
-    : `${formatShortDate(date)} · ${formatTime(date)}`
+    : `${formatInZone(date, { month: 'short', day: 'numeric' })} · ${formatTime(date)}`
 }
 
 /**

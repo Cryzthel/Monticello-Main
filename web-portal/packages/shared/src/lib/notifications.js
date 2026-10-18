@@ -2,7 +2,7 @@ import { STATUS_TO_DISPLAY } from '@shared/lib/incidents'
 import { categoryLabel, normalizeCategory } from '@shared/lib/incidentCategories'
 import { categoryTone } from '@shared/theme/badgeStyles'
 import { panicSignal } from '@shared/lib/panicStatus'
-import { formatDate, formatShortDate, formatTime } from '@shared/lib/dates'
+import { formatDate, formatInZone, formatTime, zonedDayNumber } from '@shared/lib/dates'
 
 // Notification tones, matching the four circular status glyphs. `error` is
 // reserved for things demanding action now (a live high-severity incident),
@@ -17,13 +17,13 @@ export const NOTIFICATION_TONES = {
 
 const MINUTE = 60000
 const HOUR = 3600000
-const DAY = 86400000
 
-function startOfDay(time) {
-  const d = new Date(time)
-  d.setHours(0, 0, 0, 0)
-  return d.getTime()
-}
+/**
+ * The calendar day `time` falls on in the PORTAL time zone, as a day number.
+ * It was the browser's local midnight, which put a late-evening Manila alert
+ * under the wrong day on a console set to another zone.
+ */
+const dayOf = (time) => zonedDayNumber(time)
 
 /**
  * Relative timestamps ("12 minutes ago", "2 hours ago", "Yesterday").
@@ -44,13 +44,12 @@ export function relativeTime(date, now = Date.now()) {
     return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
   }
 
-  const todayStart = startOfDay(now)
-  if (ms >= todayStart) {
+  if (dayOf(ms) === dayOf(now)) {
     const hours = Math.floor(elapsed / HOUR)
     return `${hours} hour${hours === 1 ? '' : 's'} ago`
   }
 
-  const dayDelta = Math.round((todayStart - startOfDay(ms)) / DAY)
+  const dayDelta = dayOf(now) - dayOf(ms)
   if (dayDelta <= 1) return 'Yesterday'
   if (dayDelta < 7) return `${dayDelta} days ago`
   return formatDate(ms)
@@ -285,13 +284,13 @@ export function buildNotificationFeed({
  * missing its stamp.
  */
 export function groupNotificationsByDay(items, now = Date.now()) {
-  const todayStart = startOfDay(now)
+  const today = dayOf(now)
   const groups = new Map()
 
   items.forEach((item) => {
     const ms = item.at?.getTime?.()
     const dated = Boolean(ms) && !Number.isNaN(ms)
-    const key = dated ? String(startOfDay(ms)) : 'undated'
+    const key = dated ? String(dayOf(ms)) : 'undated'
 
     if (!groups.has(key)) {
       let label = 'Just received'
@@ -299,20 +298,19 @@ export function groupNotificationsByDay(items, now = Date.now()) {
       // Null where the label already is a date — it would say it twice.
       let date = null
       if (dated) {
-        const dayStart = startOfDay(ms)
-        const delta = Math.round((todayStart - dayStart) / DAY)
+        const delta = today - dayOf(ms)
         label =
           delta <= 0
             ? 'Today'
             : delta === 1
               ? 'Yesterday'
-              : new Date(dayStart).toLocaleDateString('en-US', {
+              : formatInZone(ms, {
                   weekday: 'short',
                   month: 'short',
                   day: 'numeric',
                 })
         if (delta <= 1) {
-          date = formatShortDate(dayStart)
+          date = formatInZone(ms, { month: 'short', day: 'numeric' })
         }
       }
       groups.set(key, { key, label, date, items: [] })

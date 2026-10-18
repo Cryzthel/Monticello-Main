@@ -2,8 +2,10 @@ import { X, Check, AlertTriangle, Info, ArrowRight, MapPin } from '@shared/icons
 import StatusBadge from '@shared/components/StatusBadge'
 import { clockTime, relativeTime } from '@shared/lib/notifications'
 import { notificationIcon } from '@shared/theme/categoryIcons'
+import { formatInZone } from '@shared/lib/dates'
 
-const FULL_STAMP = new Intl.DateTimeFormat('en-US', { dateStyle: 'full', timeStyle: 'short' })
+// Read in the portal time zone at render, not frozen at import.
+const FULL_STAMP = { dateStyle: 'full', timeStyle: 'short' }
 
 // Circular outline glyphs, one per tone — the feed's leading indicator.
 // Outline rather than filled: four solid dots in a vertical list read as a
@@ -104,7 +106,7 @@ export default function NotificationRow({ notification, unread = false, onSelect
               </div>
               <time
                 dateTime={valid ? at.toISOString() : undefined}
-                title={valid ? FULL_STAMP.format(at) : undefined}
+                title={valid ? formatInZone(at, FULL_STAMP) : undefined}
                 className="flex shrink-0 flex-col items-end text-right"
               >
                 <span className="text-sm font-medium tabular-nums text-text-primary">{clockTime(at)}</span>

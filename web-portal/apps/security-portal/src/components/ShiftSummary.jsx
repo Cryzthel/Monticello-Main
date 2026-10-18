@@ -6,6 +6,7 @@ import { db } from '@shared/lib/firebase'
 import { mapIncidentDoc } from '@shared/lib/incidents'
 import { shiftActivity } from '@shared/lib/shiftActivity'
 import { SHIFT_BY_VALUE, formatElapsed } from '@shared/lib/shiftTypes'
+import { formatInZone } from '@shared/lib/dates'
 
 /**
  * What this shift came to, shown at the moment of closing it.
@@ -52,7 +53,7 @@ export default function ShiftSummary({ shift, open }) {
   const shiftLabel = SHIFT_BY_VALUE[shift.shift]?.label ?? 'Shift'
   // 24-hour, zero-padded: a guardhouse roster is written that way and a shift
   // that crosses midnight reads wrong with am/pm.
-  const clockInAt = shift.timeIn.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  const clockInAt = formatInZone(shift.timeIn, { hour: '2-digit', minute: '2-digit' }, 'en-GB')
 
   const counts = [
     { key: 'dispatches', label: 'Dispatched', value: activity.dispatches.length },

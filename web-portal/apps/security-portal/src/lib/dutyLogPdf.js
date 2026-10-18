@@ -8,7 +8,7 @@ import {
   PAGE,
   RULE,
 } from '@shared/lib/pdfBrand'
-import { formatDate, formatDateTime } from '@shared/lib/dates'
+import { formatDate, formatDateTime, formatInZone } from '@shared/lib/dates'
 
 /**
  * An officer's duty history, as a PDF.
@@ -56,7 +56,7 @@ const CONTENT_W = PAGE.w - M * 2
 
 const stamp = (v) => formatDateTime(v)
 const day = (v) => formatDate(v)
-const clock = (v) => (v ? new Date(v).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—')
+const clock = (v) => (v ? formatInZone(v, { hour: '2-digit', minute: '2-digit' }, 'en-GB') : '—')
 
 /** "7h 25m" — the same shape the on-screen table shows, so the two agree. */
 function duration(minutes) {

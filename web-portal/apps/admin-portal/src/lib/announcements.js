@@ -23,6 +23,7 @@ import {
 } from 'firebase/firestore'
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage'
 import { auth, db, storage } from '@shared/lib/firebase'
+import { formatInZone, zonedDayNumber, zonedYear } from '@shared/lib/dates'
 
 const COLLECTION = 'announcements'
 
@@ -411,17 +412,17 @@ export function formatTimestamp(value) {
   const date = toDate(value)
   if (!date) return '—'
 
-  const startOfToday = new Date()
-  startOfToday.setHours(0, 0, 0, 0)
-  const dayDelta = Math.round((startOfToday - new Date(date).setHours(0, 0, 0, 0)) / 86400000)
+  // Calendar days and the clock are both read in the portal time zone, so
+  // "Today" means today in the subdivision, not on this laptop.
+  const dayDelta = zonedDayNumber(new Date()) - zonedDayNumber(date)
 
-  const time = date.toLocaleTimeString('en-US', TIME)
+  const time = formatInZone(date, TIME)
   if (dayDelta === 0) return `Today, ${time}`
   if (dayDelta === 1) return `Yesterday, ${time}`
   if (dayDelta === -1) return `Tomorrow, ${time}`
 
-  const sameYear = date.getFullYear() === new Date().getFullYear()
-  const day = date.toLocaleDateString('en-US', {
+  const sameYear = zonedYear(date) === zonedYear(new Date())
+  const day = formatInZone(date, {
     day: 'numeric',
     month: 'short',
     ...(sameYear ? {} : { year: 'numeric' }),
