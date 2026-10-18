@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Siren, MapPin, Phone, Send, CheckCircle2 } from '@shared/icons'
+import { Siren, MapPin, Phone, Send, CheckCircle2, Crosshair } from '@shared/icons'
 import OverflowMenu from '@shared/components/OverflowMenu'
 import Card from '@shared/components/Card'
 import StatusBadge from '@shared/components/StatusBadge'
@@ -12,7 +12,8 @@ import { useSystemSettings } from '@shared/lib/systemSettingsStore'
 import { isOutsideBoundary } from '@shared/lib/panicGeofence'
 import { MapPinOff } from '@shared/icons'
 import SearchField from '@shared/components/SearchField'
-import { formatDateTime } from '@shared/lib/dates'
+import { formatDateTime, formatTime } from '@shared/lib/dates'
+import { relativeTime } from '@shared/lib/notifications'
 import DataTable from '@shared/components/DataTable'
 
 /*
@@ -53,6 +54,25 @@ function stamp(date) {
   if (!date) return '—'
   const d = new Date(date)
   return formatDateTime(d)
+}
+
+/** "10.76466, 122.51609", or '' without a usable fix. */
+function coordinatesOf(alert) {
+  return typeof alert.lat === 'number' && typeof alert.lng === 'number'
+    ? `${alert.lat.toFixed(5)}, ${alert.lng.toFixed(5)}`
+    : ''
+}
+
+/**
+ * ── COLUMN WIDTHS ARE SHARES, NOT LEFTOVERS (2026-10-19) ───────────────────
+ * Resident was the only column without a width, so on a wide screen it took
+ * every spare pixel and Received sat a thousand pixels away from the name it
+ * belongs to. The table is now `table-fixed` with every column given a share,
+ * and the space Resident was wasting holds the alert's GPS fix instead.
+ */
+const COLS = {
+  withActions: ['11%', '26%', '16%', '17%', '24%', '6%'],
+  withoutActions: ['12%', '28%', '17%', '18%', '25%'],
 }
 
 /** Human-quotable alert id, matching how tickets are shortened elsewhere. */
@@ -135,19 +155,28 @@ export default function PanicAlertsTable({
       </div>
 
       <DataTable
-        minWidth="44rem"
+        minWidth="56rem"
         scrollClassName="pb-6"
+        tableClassName="table-fixed"
+        colgroup={
+          <colgroup>
+            {(hasActions ? COLS.withActions : COLS.withoutActions).map((width, index) => (
+              <col key={index} style={{ width }} />
+            ))}
+          </colgroup>
+        }
         columns={[
-          { header: 'Alert', className: 'w-[9rem]' },
-          { header: 'Resident', minWidth: '12rem' },
-          { header: 'Received', className: 'w-[12rem]' },
-          { header: 'Signal', className: 'w-[12rem]' },
-          { hidden: !hasActions, className: 'w-14' },
+          { header: 'Alert' },
+          { header: 'Resident' },
+          { header: 'Received' },
+          { header: 'Live GPS' },
+          { header: 'Signal' },
+          { hidden: !hasActions },
         ]}
       >
             {error ? (
               <tr>
-                <td colSpan={hasActions ? 5 : 4} className="px-4 py-14 text-center">
+                <td colSpan={hasActions ? 6 : 5} className="px-4 py-14 text-center">
                   {/* Surfaced, never swallowed. A denied listener resolves to an
                       empty array with loading:false — indistinguishable from
                       "no emergencies have happened", which is the worst possible
@@ -170,13 +199,14 @@ export default function PanicAlertsTable({
                   { width: 'w-20' },
                   { identity: true },
                   { width: 'w-28', variant: 'muted' },
+                  { width: 'w-28', variant: 'muted' },
                   { width: 'w-24' },
                   ...(hasActions ? [{ empty: true, className: 'w-14' }] : []),
                 ]}
               />
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={hasActions ? 5 : 4} className="px-4 py-16 text-center">
+                <td colSpan={hasActions ? 6 : 5} className="px-4 py-16 text-center">
                   <Siren size="lg" className="mx-auto mb-2 text-text-muted" />
                   <p className="text-sm text-text-secondary">
                     {alerts.length === 0
@@ -211,10 +241,10 @@ export default function PanicAlertsTable({
                       </StatusBadge>
                     </td>
                     <td className="px-4 py-3.5 align-top">
-                      <p className="font-medium text-text-primary">{alert.residentName}</p>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-secondary">
+                      <p className="truncate font-medium text-text-primary">{alert.residentName}</p>
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-text-secondary">
                         <MapPin size="sm" className="shrink-0" />
-                        {alert.address}
+                        <span className="truncate">{alert.address}</span>
                       </p>
                       {/* The number, as a real tel: link. "Call resident" was
                           removed from the map popup, and one-tap dialling is not
@@ -230,8 +260,21 @@ export default function PanicAlertsTable({
                         </a>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3.5 align-top font-mono text-xs tabular-nums text-text-secondary">
-                      {stamp(alert.createdAt)}
+                    <td className="px-4 py-3.5 align-top">
+                      <p className="font-mono text-xs tabular-nums text-text-secondary">{stamp(alert.createdAt)}</p>
+                      {alert.createdAt ? (
+                        <p className="mt-1 text-2xs text-text-muted">{relativeTime(alert.createdAt)}</p>
+                      ) : null}
+                    </td>
+                    <td className="px-4 py-3.5 align-top">
+                      {coordinatesOf(alert) ? (
+                        <p className="flex items-center gap-1.5 font-mono text-xs tabular-nums text-brand-500">
+                          <Crosshair size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
+                          <span className="select-all">{coordinatesOf(alert)}</span>
+                        </p>
+                      ) : (
+                        <p className="text-xs text-text-muted">No GPS fix</p>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 align-top">
                       <StatusBadge tone={signal.tone} icon={panicSignalIcon(alert.status)}>
@@ -250,8 +293,11 @@ export default function PanicAlertsTable({
                         </p>
                       ) : null}
                       {alert.acknowledgedByName ? (
-                        <p className="mt-1 text-2xs text-text-muted">
+                        <p className="mt-1 truncate text-2xs text-text-muted">
                           by {acknowledgedByLabel(alert.acknowledgedByName)}
+                          {alert.acknowledgedAt ? (
+                            <span className="font-mono"> · {formatTime(alert.acknowledgedAt)}</span>
+                          ) : null}
                         </p>
                       ) : null}
                     </td>
