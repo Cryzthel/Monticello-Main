@@ -25,6 +25,7 @@ import {
 import Lightbox from '@shared/components/Lightbox'
 import EvidenceImage from '@shared/components/EvidenceImage'
 import Pill from '@shared/components/Pill'
+import { DetailCard, DetailField as Field, DetailTimeline } from '@shared/components/detail/DetailCard'
 import { captureTimestamp } from '@shared/components/dispatch/EvidenceGrid'
 import { buildMediaItems, mapIncidentDoc } from '@shared/lib/incidents'
 import { db } from '@shared/lib/firebase'
@@ -137,81 +138,35 @@ function stageLabel(report) {
   return { text: status.label ?? report.status, tone: status.tone, pulse: false }
 }
 
-/** A card's heading: mono, uppercase, ruled — the reference's section label. */
-function CardTitle({ icon: Icon, children, action = null }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-hairline pb-3">
-      <h3 className="flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">
-        <Icon size={14} aria-hidden="true" />
-        {children}
-      </h3>
-      {action}
-    </div>
-  )
-}
-
-/** One labelled value with the reference's left rule. */
-function Field({ label, children, empty = false, accent = '' }) {
-  return (
-    <div className={`min-w-0 border-l-2 pl-3 ${accent || 'border-hairline'}`}>
-      <span className="mb-0.5 block text-[11px] text-text-muted">{label}</span>
-      <div className={`break-words text-sm ${empty ? 'font-medium italic text-text-muted' : 'font-medium text-text-primary'}`}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-const CARD = 'min-w-0 rounded-xl border border-hairline bg-base-900/40'
-
 /**
- * STATUS HISTORY — a vertical timeline. Each recorded stage is a filled node
- * (emerald, with a soft glow; amber for an escalation or a sweep flag), with
- * who and when beneath it. Until the report is resolved, a hollow
- * "Awaiting resolution" node closes the line.
+ * STATUS HISTORY — every recorded stage as a filled node (amber for an
+ * escalation or a sweep flag) with who and when beneath it, the gap since the
+ * stage before, and — until resolved — a hollow "Awaiting resolution" node.
+ * Drawn by the shared DetailTimeline, which the Report details uses too.
  */
 function StatusTimeline({ report }) {
   const steps = statusHistory(report)
   const resolved = steps.some((step) => step.key === 'resolved')
-
-  return (
-    <ol className="relative space-y-8 pl-6 before:absolute before:bottom-6 before:left-[4px] before:top-2 before:w-px before:bg-hairline">
-      {steps.map((step, index) => {
-        const previous = steps[index - 1]
-        const warn = step.tone === 'warning'
-        return (
-          <li key={step.key} className="relative">
-            <span
-              aria-hidden="true"
-              className={`absolute -left-6 top-1.5 h-2.5 w-2.5 rounded-full ${
-                warn
-                  ? 'bg-warning shadow-[0_0_8px_color-mix(in_oklab,var(--color-warning)_60%,transparent)]'
-                  : 'bg-success shadow-[0_0_8px_color-mix(in_oklab,var(--color-success)_60%,transparent)]'
-              }`}
-            />
-            <p className={`text-sm font-bold ${warn ? 'text-warning' : 'text-success'}`}>{step.label}</p>
-            {step.detail ? <p className="mt-0.5 truncate text-xs font-medium text-text-secondary">{step.detail}</p> : null}
-            <time dateTime={step.date.toISOString()} className="mt-0.5 block font-mono text-[10px] text-text-muted">
-              {stampOf(step.date)}
-              {previous ? ` · ${elapsed(previous.date.getTime(), step.date.getTime())}` : ''}
-            </time>
-          </li>
-        )
-      })}
-      {!resolved ? (
-        <li className="relative">
-          <span
-            aria-hidden="true"
-            className="absolute -left-6 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-text-muted bg-base-900"
-          />
-          <p className="text-sm font-medium text-text-secondary">Awaiting resolution</p>
-          <p className="mt-0.5 text-xs text-text-muted">
-            {report.dispatchedAt ? 'Officer on the call' : 'Pending officer dispatch'}
-          </p>
-        </li>
-      ) : null}
-    </ol>
-  )
+  const items = steps.map((step, index) => {
+    const previous = steps[index - 1]
+    return {
+      key: step.key,
+      label: step.label,
+      detail: step.detail,
+      tone: step.tone === 'warning' ? 'warning' : 'done',
+      stamp: `${stampOf(step.date)}${previous ? ` · ${elapsed(previous.date.getTime(), step.date.getTime())}` : ''}`,
+      dateTime: step.date.toISOString(),
+    }
+  })
+  if (!resolved) {
+    items.push({
+      key: 'awaiting',
+      label: 'Awaiting resolution',
+      detail: report.dispatchedAt ? 'Officer on the call' : 'Pending officer dispatch',
+      tone: 'pending',
+    })
+  }
+  return <DetailTimeline items={items} />
 }
 
 /**
@@ -402,10 +357,12 @@ export default function IncidentDetailModal({
           <div className="flex flex-col gap-6">
             {/* ═══ MEDIA EVIDENCE · NOTES ═══ */}
             <div className="contents">
-              <section aria-label="Media evidence" className={`${CARD} space-y-4 p-6`}>
-                <CardTitle
-                  icon={Camera}
-                  action={
+              <DetailCard
+                aria-label="Media evidence"
+                icon={Camera}
+                title="Media evidence"
+                bodyClassName="space-y-4"
+                action={
                     media.length ? (
                       <Pill tone="success" icon={CheckCircle2}>
                         {media.length} file{media.length === 1 ? '' : 's'} verified
@@ -416,9 +373,7 @@ export default function IncidentDetailModal({
                       </Pill>
                     )
                   }
-                >
-                  Media evidence
-                </CardTitle>
+              >
 
                 <div className="group relative flex h-64 w-full items-center justify-center overflow-hidden rounded-lg border border-hairline bg-zinc-900 sm:h-80">
                   {active?.type === 'video' ? (
@@ -486,20 +441,18 @@ export default function IncidentDetailModal({
                     ))}
                   </div>
                 ) : null}
-              </section>
+              </DetailCard>
 
-              <section className={`${CARD} space-y-4 p-6`}>
-                <CardTitle icon={FileText}>Incident notes / description</CardTitle>
+              <DetailCard icon={FileText} title="Incident notes / description">
                 <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-secondary shadow-inner">
                   {report.description || 'No written description.'}
                 </p>
-              </section>
+              </DetailCard>
             </div>
 
             {/* ═══ REPORTER · TELEMETRY ═══ */}
             <div className="contents">
-              <section className={`${CARD} space-y-5 p-6`}>
-                <CardTitle icon={User}>Reporter information</CardTitle>
+              <DetailCard icon={User} title="Reporter information">
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <Field label="Full name" empty={!report.reportedByName}>
                     {report.reportedByName || 'Unknown'}
@@ -516,13 +469,12 @@ export default function IncidentDetailModal({
                     </div>
                   ) : null}
                 </div>
-              </section>
+              </DetailCard>
 
-              <section className={`${CARD} space-y-6 p-6`}>
-                <CardTitle icon={Crosshair}>Incident telemetry</CardTitle>
+              <DetailCard icon={Crosshair} title="Incident telemetry" bodyClassName="space-y-6">
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <Field label="Ticket ID">
-                    <span className="font-mono tracking-wide">{ticketCode(report.id)}</span>
+                  <Field label="Ticket ID" mono>
+                    {ticketCode(report.id)}
                   </Field>
                   <Field label="Category">{category}</Field>
                   <Field label="Priority level" accent={PRIORITY_RULE[severityTone] ?? 'border-hairline'}>
@@ -551,17 +503,12 @@ export default function IncidentDetailModal({
                     ) : null}
                   </div>
                 </div>
-              </section>
+              </DetailCard>
             </div>
 
             {/* ═══ STATUS HISTORY ═══ */}
-            <section aria-label="Status history" className={`${CARD} flex flex-col p-6`}>
-              <div className="mb-6">
-                <CardTitle icon={History}>Status history</CardTitle>
-              </div>
-              <div className="flex-1">
-                <StatusTimeline report={report} />
-              </div>
+            <DetailCard aria-label="Status history" icon={History} title="Status history" bodyClassName="">
+              <StatusTimeline report={report} />
               <div className="mt-6 space-y-4 border-t border-hairline pt-6">
                 <p className="flex items-start gap-2 text-xs leading-relaxed text-text-muted">
                   <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -576,7 +523,7 @@ export default function IncidentDetailModal({
                   Export summary
                 </button>
               </div>
-            </section>
+            </DetailCard>
           </div>
         </div>
 

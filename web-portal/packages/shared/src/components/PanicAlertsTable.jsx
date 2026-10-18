@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Siren, MapPin, Phone, Send, CheckCircle2, Crosshair } from '@shared/icons'
 import OverflowMenu from '@shared/components/OverflowMenu'
 import Card from '@shared/components/Card'
@@ -15,6 +15,7 @@ import SearchField from '@shared/components/SearchField'
 import { formatDateTime, formatTime } from '@shared/lib/dates'
 import { relativeTime } from '@shared/lib/notifications'
 import DataTable from '@shared/components/DataTable'
+import TablePagination from '@shared/components/TablePagination'
 
 /*
  * A dot on Live, and only on Live.
@@ -134,6 +135,26 @@ export default function PanicAlertsTable({
     })
   }, [alerts, query, filter])
 
+  // ── PAGES (2026-10-19) ───────────────────────────────────────────────────
+  // The same TablePagination, page sizes and rules as the incident tickets:
+  // a shrinking result set clamps to its new last page (a resolved alert
+  // leaving the Live view must not strand the operator on an empty page),
+  // and a new search or filter returns to page 1. New alerts arrive at the
+  // top of page 1, so the live view an operator is watching is never paged.
+  const [page, setPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
+  const totalPages = Math.max(1, Math.ceil(rows.length / rowsPerPage))
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages))
+  }, [totalPages])
+  useEffect(() => {
+    setPage(1)
+  }, [query, filter, rowsPerPage])
+  const pageRows = useMemo(() => {
+    const start = (Math.min(page, totalPages) - 1) * rowsPerPage
+    return rows.slice(start, start + rowsPerPage)
+  }, [rows, page, totalPages, rowsPerPage])
+
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden p-0">
       <div className="flex flex-wrap items-center gap-3 border-b border-hairline p-4">
@@ -216,7 +237,7 @@ export default function PanicAlertsTable({
                 </td>
               </tr>
             ) : (
-              rows.map((alert) => {
+              pageRows.map((alert) => {
                 const signal = panicSignal(alert.status)
                 // Each action is offered only where it is a real transition:
                 // an alert already dispatched has nothing to dispatch, and a
@@ -326,6 +347,17 @@ export default function PanicAlertsTable({
               })
             )}
       </DataTable>
+
+      {/* Sibling of the scroll region, like every other table's pager, so
+          it stays pinned while the rows scroll. */}
+      <TablePagination
+        page={page}
+        rowsPerPage={rowsPerPage}
+        totalItems={rows.length}
+        onPageChange={setPage}
+        onRowsPerPageChange={setRowsPerPage}
+        itemLabel="panic alert"
+      />
     </Card>
   )
 }

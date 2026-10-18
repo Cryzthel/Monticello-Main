@@ -285,7 +285,12 @@ export default function DashboardLayout({
             grows with the page, and the bottom padding has something to sit
             under. Measured after: 48px of clearance at the end of the scroll.
           */}
-          <div className={scroll ? '' : 'min-h-0 flex-1'}>{children}</div>
+          {/* Keyed by path, so each route fades in (`.page-enter`, 180 ms,
+              opacity only). A query or hash change on the same page does not
+              replay it. */}
+          <div key={location.pathname} className={`page-enter ${scroll ? '' : 'min-h-0 flex-1'}`}>
+            {children}
+          </div>
         </main>
       </div>
 

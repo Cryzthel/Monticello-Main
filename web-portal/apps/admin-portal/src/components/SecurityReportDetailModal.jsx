@@ -1,7 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { doc, onSnapshot } from 'firebase/firestore'
-import { Archive, ArchiveRestore, Camera, FileDown, FileType, Loader2, Lock, Trash2, X } from '@shared/icons'
+import {
+  Archive,
+  ArchiveRestore,
+  Camera,
+  ClipboardList,
+  FileText,
+  FileType,
+  Fingerprint,
+  History,
+  ImageOff,
+  Loader2,
+  Lock,
+  Maximize2,
+  Printer,
+  ShieldAlert,
+  Trash2,
+  User,
+  X,
+} from '@shared/icons'
 import EvidenceImage from '@shared/components/EvidenceImage'
 import Lightbox from '@shared/components/Lightbox'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
@@ -27,42 +45,36 @@ import { formatDateTime } from '@shared/lib/dates'
 import { toast } from '@shared/lib/toast'
 import { exportReportPdf } from '@/lib/reportPdf'
 import Pill from '@shared/components/Pill'
+import { DetailCard, DetailField, DetailTimeline } from '@shared/components/detail/DetailCard'
 
 const stamp = (value) => formatDateTime(value, '')
-
-/** The severity value's colour in Classification, matching its header pill. */
-const SEVERITY_TEXT = {
-  critical: 'text-danger',
-  high: 'text-orange-500',
-  medium: 'text-warning',
-  low: 'text-success',
-}
 
 /** Human-quotable code, derived from the document id — the one the table prints. */
 const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : '')
 
 /**
- * The admin's view of one officer-filed report — opened from Audit History and
- * from Security Reports.
+ * The admin's view of one officer-filed report — opened from Reports and from
+ * Audit History.
  *
- *   ┌ (Security) (Medium) (● Pending)                                 (×) ┐ sticky
- *   │ Power Interruption                                                   │
- *   │ MV-8VTMQ212 • Oct 18, 2026, 1:34 AM • Filed by …                     │
- *   ├──────────────────────────────────────────────────────────────────────┤
- *   │ CLASSIFICATION & PRIORITY  [ category · severity · WPDA · files ]    │
- *   │ REPORTED DESCRIPTION       [ the officer's text ]                    │
- *   │ RESIDENT DATA              [ name · reported · coords | P · B · L ]  │
- *   │ TIMELINE                   [ ● Submitted ○ Dispatched ○ Resolved … ] │
- *   │ RESPONDER NOTES            (only when recorded)                      │
- *   │ EVIDENCE                   [ preview · thumbnails · documents ]      │
- *   ├──────────────────────────────────────────────────────────────────────┤
- *   │ (Export PDF) (Archive)                                    (Delete)   │ sticky
- *   └──────────────────────────────────────────────────────────────────────┘
+ *   ┌ [shield] Power Interruption (MV-8VTMQ212)                           (×) ┐ fixed
+ *   │          Oct 18, 2026, 1:34 AM • Filed by …                              │
+ *   │          (Security) (Medium) (● Pending)                                 │
+ *   ├──────────────────────────────────────────────────────────────────────────┤
+ *   │ CLASSIFICATION & PRIORITY   category · severity · WPDA · files          │
+ *   │ REPORTED DESCRIPTION        the officer's text                          │
+ *   │ RESIDENT DATA               name · reported · coordinates · P | B | L   │
+ *   │ TIMELINE                    ● Submitted ○ Dispatched ○ Resolved …       │
+ *   │ RESPONDER NOTES             (only when recorded)                        │
+ *   │ EVIDENCE                    h-64/h-80 preview · thumbnails · documents  │
+ *   ├──────────────────────────────────────────────────────────────────────────┤
+ *   │ (Export PDF) (Archive)                                      (Delete)    │ fixed
+ *   └──────────────────────────────────────────────────────────────────────────┘
  *
- * Rebuilt 2026-10-19 from the provided "Pro Max" reference: a max-w-2xl
- * near-black glass sheet, each chunk in its own card, chunks divided by a
- * hairline (Miller's law). Colours are the console's tokens, so it follows
- * the light and dark themes.
+ * ── ONE DESIGN WITH THE INCIDENT DETAILS (2026-10-19) ──────────────────────
+ * Same shell as the shared IncidentDetailModal — max-w-3xl panel, icon-tile
+ * header with the mono ticket code, one column of cards on a base-950/40 body,
+ * a base-950 footer — and the same cards, fields and timeline, drawn by
+ * @shared/components/detail/DetailCard, so the two screens cannot drift.
  *
  * ── LIVE ON ITS OWN ────────────────────────────────────────────────────────
  * The sheet subscribes to `incidents/{id}` itself while open. The page's
@@ -72,87 +84,25 @@ const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : 
  * current list, and it can tell "still loading" (skeleton) from "deleted by
  * someone else" (a notice), which a `.find()` over a list cannot.
  *
- * Approve writes `reviewedAt`, which lands back through the same listener: the
- * header pill turns Reviewed and the timeline gains its fourth step without the
- * sheet doing anything itself.
- *
  * EXPORT PDF builds the document itself (lib/reportPdf.js) rather than calling
  * window.print(), which printed the dark modal as grey.
  */
 
-// Header tags are the shared oblong Pill (rounded-full px-3 py-1 text-xs).
-const Tag = Pill
-
-/** The surface every chunk of the sheet sits in (the reference's zinc-900/30 card). */
-const CARD = 'rounded-xl border border-hairline bg-base-900/30 p-4'
-
-/** One chunk: a tracked caps label, then its card. Chunks are separated by a hairline. */
-function Section({ title, action = null, children }) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-muted">{title}</h3>
-        {action}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-const Divider = () => <div aria-hidden="true" className="border-t border-hairline" />
-
-function Field({ label, value, tone = 'text-text-primary', mono = false, breakAll = false }) {
-  return (
-    <div className="min-w-0">
-      <span className="mb-1 block text-[11px] uppercase tracking-wide text-text-muted">{label}</span>
-      <span
-        className={`block text-sm font-medium ${breakAll ? 'break-all' : 'break-words'} ${mono ? 'font-mono' : ''} ${
-          value ? tone : 'text-text-muted'
-        }`}
-      >
-        {value || '—'}
-      </span>
-    </div>
-  )
-}
-
-/**
- * One step of the timeline: a filled emerald node when it happened, a hollow
- * one when not, joined to the next by a 1px rail.
- */
-function Step({ label, at, pendingLabel, detail, last = false }) {
-  const done = Boolean(at)
-  return (
-    <li className="relative flex items-start gap-3">
-      {!last ? <span aria-hidden="true" className="absolute bottom-[-16px] left-[7px] top-6 w-px bg-hairline" /> : null}
-      {done ? (
-        <span
-          aria-hidden="true"
-          className="z-10 mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-success bg-success/20"
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-success" />
-        </span>
-      ) : (
-        <span aria-hidden="true" className="z-10 mt-0.5 h-4 w-4 shrink-0 rounded-full border border-hairline bg-base-900" />
-      )}
-      <div className="min-w-0">
-        <p className={`text-sm font-medium ${done ? 'text-text-primary' : 'text-text-muted'}`}>{label}</p>
-        <p className={`text-xs ${done ? 'font-mono text-text-muted' : 'text-text-muted/70'}`}>
-          {done ? stamp(at) : pendingLabel}
-          {done && detail ? <span className="text-success"> · {detail}</span> : null}
-        </p>
-      </div>
-    </li>
-  )
+/** The severity field's rule colour, matching its pill (as Incident telemetry's priority). */
+const SEVERITY_RULE = {
+  critical: 'border-danger/50',
+  high: 'border-orange-500/50',
+  medium: 'border-warning/50',
+  low: 'border-success/50',
 }
 
 function SkeletonBody() {
   return (
-    <div className="space-y-6" aria-hidden="true">
+    <div className="flex flex-col gap-6" aria-hidden="true">
       {[4, 1, 3].map((cols, i) => (
-        <div key={i} className="space-y-3">
-          <Skeleton className="h-2.5 w-36" />
-          <div className={`${CARD} grid gap-4 ${cols === 4 ? 'grid-cols-2 sm:grid-cols-4' : cols === 3 ? 'grid-cols-1 sm:grid-cols-3' : ''}`}>
+        <div key={i} className="rounded-xl border border-hairline bg-base-900/40 p-6">
+          <Skeleton className="mb-5 h-3 w-40" />
+          <div className={`grid gap-6 ${cols === 4 ? 'grid-cols-2 sm:grid-cols-4' : cols === 3 ? 'grid-cols-1 sm:grid-cols-3' : ''}`}>
             {Array.from({ length: cols }, (_, j) => (
               <div key={j} className="space-y-2">
                 <Skeleton className="h-2.5 w-16" />
@@ -266,10 +216,43 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
     }
   }
 
+  const timeline = report
+    ? [
+        { key: 'submitted', label: 'Submitted', at: report.reportedAt, pending: 'No submission time' },
+        {
+          key: 'dispatched',
+          label: report.assignedGuardName ? `Dispatched to ${report.assignedGuardName}` : 'Dispatched',
+          at: report.dispatchedAt,
+          pending: 'Not yet dispatched',
+          gap: durations.toDispatch,
+        },
+        { key: 'resolved', label: 'Resolved', at: report.resolvedAt, pending: 'Not yet resolved', gap: durations.onScene },
+        {
+          key: 'reviewed',
+          label: report.reviewedAt ? `Reviewed by ${report.reviewedByName || 'an admin'}` : 'Reviewed',
+          at: report.reviewedAt,
+          pending: 'Awaiting admin review',
+        },
+      ].map((step) =>
+        step.at
+          ? {
+              key: step.key,
+              label: step.label,
+              tone: 'done',
+              stamp: `${stamp(step.at)}${step.gap != null ? ` · +${formatMinutes(step.gap)}` : ''}`,
+              dateTime: new Date(step.at).toISOString(),
+            }
+          : { key: step.key, label: step.label, detail: step.pending, tone: 'pending' },
+      )
+    : []
+
+  const footerButton =
+    'inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-tint/[0.06] px-4 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:pointer-events-none disabled:opacity-50'
+
   return createPortal(
     <>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+        className="dialog-scrim fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4 md:p-6"
         onClick={onClose}
         role="presentation"
       >
@@ -280,57 +263,60 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
           aria-labelledby="report-sheet-title"
           aria-busy={pending}
           onClick={(event) => event.stopPropagation()}
-          className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-hairline bg-base-950 shadow-2xl"
+          className="dialog-panel relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
         >
-          {/* ── Sticky header: tags, title, code · filed · by ── */}
-          <header className="z-20 flex shrink-0 items-start justify-between gap-3 border-b border-hairline bg-base-950/80 px-4 py-4 backdrop-blur-xl sm:gap-4 sm:px-6 sm:py-5">
+          {/* ═══ HEADER — the Incident details' header, field for field ═══ */}
+          <header className="relative shrink-0 border-b border-hairline px-6 py-5 pr-14 sm:px-8 sm:pr-16">
             {pending ? (
-              <div aria-hidden="true" className="space-y-2">
-                <div className="flex gap-2">
-                  <Skeleton className="h-6 w-20 rounded-full" />
-                  <Skeleton className="h-6 w-16 rounded-full" />
+              <div aria-hidden="true" className="flex items-start gap-4">
+                <Skeleton className="h-12 w-12 shrink-0 rounded-xl" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-6 w-56 max-w-full" />
+                  <Skeleton className="h-3 w-72 max-w-full" />
+                  <div className="flex gap-2 pt-1">
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                  </div>
                 </div>
-                <Skeleton className="h-6 w-56" />
-                <Skeleton className="h-3 w-80 max-w-full" />
               </div>
             ) : gone ? (
-              <h2 id="report-sheet-title" className="text-xl font-semibold tracking-tight text-text-primary">
+              <h2 id="report-sheet-title" className="text-xl font-bold tracking-tight text-text-primary">
                 Report removed
               </h2>
             ) : (
-              <div className="min-w-0 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Tag tone={categoryTone(report.category)}>{formatCategory(report.category)}</Tag>
-                  {severity ? (
-                    <Tag tone={SEVERITY_TONES[severity] ?? 'neutral'}>{severity[0].toUpperCase() + severity.slice(1)}</Tag>
-                  ) : null}
-                  <Tag tone={REVIEW_TONES[review] ?? 'neutral'} pulse={!report.reviewedAt}>
-                    {review}
-                  </Tag>
-                  {archived ? <Tag>Archived</Tag> : null}
-                  {deleted ? <Tag tone="danger">Deleted</Tag> : null}
-                </div>
-                <div>
-                  {/* Two lines at most, so a long title cannot push the
-                      sticky header over a third of a phone screen; the full
-                      text is the tooltip. */}
-                  <h2
-                    id="report-sheet-title"
-                    title={report.title || undefined}
-                    className="line-clamp-2 break-words text-lg font-semibold tracking-tight text-text-primary sm:text-xl"
-                  >
-                    {report.title || `${formatCategory(report.category)} report`}
-                  </h2>
-                  {/* Code and time never break; the filer, often a long email
-                      address, truncates on its own line. */}
-                  <p className="mt-0.5 font-mono text-xs text-text-muted">
-                    <span className="whitespace-nowrap">{ticketCode(report.id)}</span>
-                    <span className="opacity-50"> • </span>
-                    <span className="whitespace-nowrap">{stamp(report.reportedAt) || 'No filing time'}</span>
+              <div className="flex min-w-0 items-start gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-danger/20 bg-danger/10 text-danger shadow-inner">
+                  <ShieldAlert size={22} aria-hidden="true" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <h2
+                      id="report-sheet-title"
+                      title={report.title || undefined}
+                      className="line-clamp-2 break-words text-xl font-bold tracking-tight text-text-primary"
+                    >
+                      {report.title || `${formatCategory(report.category)} report`}
+                    </h2>
+                    <Pill className="font-mono tracking-wider">{ticketCode(report.id)}</Pill>
+                  </div>
+                  <p className="mt-0.5 truncate text-xs text-text-muted" title={report.reportedByName || undefined}>
+                    <span className="font-mono">{stamp(report.reportedAt) || 'No filing time'}</span>
+                    {' • '}Filed by {report.reportedByName || 'an officer'}
                   </p>
-                  <p className="truncate font-mono text-xs text-text-muted" title={report.reportedByName || undefined}>
-                    Filed by {report.reportedByName || 'an officer'}
-                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Pill tone={categoryTone(report.category)}>
+                      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+                      {formatCategory(report.category)}
+                    </Pill>
+                    {severity ? (
+                      <Pill tone={SEVERITY_TONES[severity] ?? 'neutral'}>{severity[0].toUpperCase() + severity.slice(1)}</Pill>
+                    ) : null}
+                    <Pill tone={REVIEW_TONES[review] ?? 'neutral'} pulse={!report.reviewedAt}>
+                      {review}
+                    </Pill>
+                    {archived ? <Pill tone="neutral" icon={Archive}>Archived</Pill> : null}
+                    {deleted ? <Pill tone="danger" icon={Trash2}>Deleted</Pill> : null}
+                  </div>
                 </div>
               </div>
             )}
@@ -338,159 +324,139 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
               type="button"
               onClick={onClose}
               aria-label="Close report"
-              className="shrink-0 rounded-full bg-base-900/50 p-2 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:right-6 sm:top-5"
             >
-              <X size={16} />
+              <X size={20} />
             </button>
           </header>
 
-          {/* ── Body: Miller's chunks, one card each ── */}
-          <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6">
+          {/* ═══ BODY — one column of DetailCards ═══ */}
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-base-950/40 p-4 sm:p-8">
             {pending ? (
               <SkeletonBody />
             ) : gone ? (
               <p className="text-sm text-text-secondary">
-                This report was deleted while it was open. It may be in Audit History → Deleted reports, where it
-                can be restored.
+                This report was deleted while it was open. It may be in Audit History → Deleted reports, where it can be
+                restored.
               </p>
             ) : (
-              <>
-                <Section title="Classification & priority">
-                  <div className={`${CARD} grid grid-cols-2 gap-4 sm:grid-cols-4`}>
-                    <Field label="Category" value={formatCategory(report.category)} />
-                    <Field
-                      label="Severity"
-                      value={severity ? severity[0].toUpperCase() + severity.slice(1) : ''}
-                      tone={SEVERITY_TEXT[severity] ?? 'text-text-primary'}
-                    />
-                    <Field label="WPDA urgency" value={wpda != null ? String(wpda) : ''} tone="text-success" mono />
-                    <Field label="Evidence files" value={`${attachmentCount} file${attachmentCount === 1 ? '' : 's'}`} />
+              <div className="flex flex-col gap-6">
+                <DetailCard icon={Fingerprint} title="Classification & priority">
+                  <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+                    <DetailField label="Category">{formatCategory(report.category)}</DetailField>
+                    <DetailField label="Severity" accent={SEVERITY_RULE[severity]} empty={!severity}>
+                      {severity ? severity[0].toUpperCase() + severity.slice(1) : '—'}
+                    </DetailField>
+                    <DetailField label="WPDA urgency" mono empty={wpda == null}>
+                      {wpda != null ? <span className="text-brand-500">{wpda}</span> : '—'}
+                    </DetailField>
+                    <DetailField label="Evidence files">{`${attachmentCount} file${attachmentCount === 1 ? '' : 's'}`}</DetailField>
                   </div>
-                </Section>
+                </DetailCard>
 
-                <Divider />
+                <DetailCard icon={FileText} title="Reported description">
+                  <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-secondary shadow-inner">
+                    {report.description || 'No written description.'}
+                  </p>
+                </DetailCard>
 
-                <Section title="Reported description">
-                  <div className={CARD}>
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-text-secondary">
-                      {report.description || 'No written description.'}
-                    </p>
+                <DetailCard icon={User} title="Resident data">
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                    <DetailField label="Full name" empty={!report.reportedByName}>
+                      <span className="break-all">{report.reportedByName || 'Unknown'}</span>
+                    </DetailField>
+                    <DetailField label="Reported at" mono empty={!report.reportedAt}>
+                      {stamp(report.reportedAt) || '—'}
+                    </DetailField>
+                    <DetailField label="Coordinates" mono empty={!coordinates}>
+                      {coordinates ? <span className="select-all text-brand-500">{coordinates}</span> : 'No GPS fix'}
+                    </DetailField>
                   </div>
-                </Section>
+                  <dl className="grid grid-cols-3 divide-x divide-hairline rounded-lg border border-hairline bg-base-950 py-3 text-center shadow-inner">
+                    {[
+                      ['Phase', report.phase],
+                      ['Block', report.block],
+                      ['Lot', report.lot],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <dt className="mb-0.5 text-[10px] uppercase tracking-wider text-text-muted">{label}</dt>
+                        <dd className="text-sm font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </DetailCard>
 
-                <Divider />
-
-                <Section title="Resident data">
-                  <div className={`${CARD} space-y-4`}>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <Field label="Full name" value={report.reportedByName} breakAll />
-                      <Field label="Reported at" value={stamp(report.reportedAt)} mono />
-                      <Field label="Coordinates" value={coordinates} mono tone="text-text-secondary" />
-                    </div>
-                    <dl className="grid grid-cols-3 divide-x divide-hairline rounded-lg border border-hairline bg-base-950/80 py-3 text-center">
-                      {[
-                        ['Phase', report.phase],
-                        ['Block', report.block],
-                        ['Lot', report.lot],
-                      ].map(([label, value]) => (
-                        <div key={label}>
-                          <dt className="mb-0.5 text-[10px] uppercase tracking-wider text-text-muted">{label}</dt>
-                          <dd className="text-sm font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
-                </Section>
-
-                <Divider />
-
-                <Section title="Timeline">
-                  <div className={`${CARD} space-y-4`}>
-                    <ol className="space-y-4">
-                      <Step label="Submitted" at={report.reportedAt} pendingLabel="No submission time" />
-                      <Step
-                        label={report.assignedGuardName ? `Dispatched to ${report.assignedGuardName}` : 'Dispatched'}
-                        at={report.dispatchedAt}
-                        pendingLabel="Not yet dispatched"
-                        detail={durations.toDispatch != null ? `+${formatMinutes(durations.toDispatch)}` : ''}
-                      />
-                      <Step
-                        label="Resolved"
-                        at={report.resolvedAt}
-                        pendingLabel="Not yet resolved"
-                        detail={durations.onScene != null ? `+${formatMinutes(durations.onScene)}` : ''}
-                      />
-                      <Step
-                        label={report.reviewedAt ? `Reviewed by ${report.reviewedByName || 'an admin'}` : 'Reviewed'}
-                        at={report.reviewedAt}
-                        pendingLabel="Awaiting admin review"
-                        last
-                      />
-                    </ol>
-                  </div>
-                </Section>
+                <DetailCard icon={History} title="Timeline" bodyClassName="">
+                  <DetailTimeline items={timeline} />
+                </DetailCard>
 
                 {report.responderNotes || report.resolutionSummary ? (
-                  <>
-                    <Divider />
-                    <Section title="Responder notes">
-                      <div className={`${CARD} grid grid-cols-1 gap-4 sm:grid-cols-2`}>
-                        <Field label="Responder notes" value={report.responderNotes} />
-                        <Field label="Final resolution summary" value={report.resolutionSummary} />
-                      </div>
-                    </Section>
-                  </>
+                  <DetailCard icon={ClipboardList} title="Responder notes">
+                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                      <DetailField label="Responder notes" empty={!report.responderNotes}>
+                        {report.responderNotes || '—'}
+                      </DetailField>
+                      <DetailField label="Final resolution summary" empty={!report.resolutionSummary}>
+                        {report.resolutionSummary || '—'}
+                      </DetailField>
+                    </div>
+                  </DetailCard>
                 ) : null}
 
-                <Divider />
-
-                <Section
+                <DetailCard
+                  icon={Camera}
                   title="Evidence"
+                  bodyClassName="space-y-4"
                   action={
                     attachmentCount > 0 ? (
-                      <Pill tone="neutral" icon={Lock}>
+                      <Pill tone="success" icon={Lock}>
                         {attachmentCount} attached
                       </Pill>
-                    ) : null
+                    ) : (
+                      <Pill tone="neutral">No files</Pill>
+                    )
                   }
                 >
                   {attachmentCount === 0 ? (
-                    <div className={`${CARD} flex flex-col items-center justify-center py-10 text-text-muted`}>
-                      <Camera size={28} className="mb-2 opacity-40" aria-hidden="true" />
-                      <span className="text-sm font-medium opacity-70">No evidence attached</span>
+                    <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-hairline bg-zinc-900 text-zinc-400">
+                      <ImageOff size="lg" className="mb-2" aria-hidden="true" />
+                      <span className="text-sm">No evidence attached</span>
                     </div>
                   ) : (
-                    <div className={`${CARD} space-y-3`}>
+                    <>
                       {preview ? (
                         <button
                           type="button"
                           onClick={() => setLightboxIndex(media.indexOf(preview))}
                           aria-label="Open evidence full screen"
-                          className="relative block aspect-video w-full overflow-hidden rounded-lg border border-hairline bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                          className="group relative block h-64 w-full overflow-hidden rounded-lg border border-hairline bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:h-80"
                         >
                           {preview.type === 'video' ? (
                             <video src={preview.url} className="h-full w-full object-contain" muted />
                           ) : (
                             <EvidenceImage src={preview.url} fit="contain" />
                           )}
+                          <span className="pointer-events-none absolute right-3 top-3 rounded-lg border border-white/15 bg-black/60 p-2 text-white opacity-0 shadow-lg backdrop-blur-md transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                            <Maximize2 size="sm" aria-hidden="true" />
+                          </span>
                         </button>
                       ) : null}
 
                       {media.length > 1 ? (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           {media.map((item, index) => (
                             <button
                               key={`${index}:${item.url}`}
                               type="button"
                               onClick={() => setPreviewIndex(index)}
                               aria-label={`Show evidence ${index + 1} of ${media.length}`}
-                              aria-pressed={item === preview}
-                              className={`relative h-12 w-12 overflow-hidden rounded-md border transition-[border-color,opacity] duration-150 ${
-                                item === preview ? 'border-brand-500' : 'border-hairline opacity-60 hover:opacity-100'
+                              aria-current={item === preview ? 'true' : undefined}
+                              className={`relative h-12 w-12 shrink-0 overflow-hidden rounded transition-[border-color,opacity] duration-150 ${
+                                item === preview ? 'border-2 border-brand-500' : 'border border-hairline opacity-60 hover:opacity-100'
                               }`}
                             >
                               {item.type === 'video' ? (
-                                <video src={item.url} className="h-full w-full object-cover" muted />
+                                <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
                               ) : (
                                 <EvidenceImage src={item.url} />
                               )}
@@ -507,7 +473,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                                 href={url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="flex min-h-10 items-center gap-2.5 rounded-lg border border-hairline px-3 py-2 transition-colors hover:bg-tint/[0.04]"
+                                className="flex min-h-10 items-center gap-2.5 rounded-lg border border-hairline bg-base-950 px-3 py-2 transition-colors hover:bg-tint/[0.04]"
                               >
                                 <FileType size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
                                 <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary">
@@ -519,15 +485,15 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                           ))}
                         </ul>
                       ) : null}
-                    </div>
+                    </>
                   )}
-                </Section>
-              </>
+                </DetailCard>
+              </div>
             )}
           </div>
 
-          {/* ── Sticky footer: Export PDF · Archive … Delete ── */}
-          <footer className="z-20 shrink-0 border-t border-hairline bg-base-950/80 px-4 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
+          {/* ═══ FOOTER — Export PDF · Archive … Delete ═══ */}
+          <footer className="shrink-0 border-t border-hairline bg-base-950 px-4 py-3 sm:px-8">
             {error ? (
               <p role="alert" className="mb-3 rounded-lg border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
                 {error}
@@ -535,13 +501,8 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
             ) : null}
             <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-4">
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={!report}
-                  onClick={exportPdf}
-                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-base-900 px-3 py-2 text-xs sm:px-4 font-medium text-text-primary transition-colors hover:bg-tint/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
-                >
-                  <FileDown size={14} className="opacity-70" aria-hidden="true" />
+                <button type="button" disabled={!report} onClick={exportPdf} className={footerButton}>
+                  <Printer size={14} aria-hidden="true" />
                   Export PDF
                 </button>
                 <button
@@ -553,14 +514,14 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                       error: archived ? 'Could not unarchive the report' : 'Could not archive the report',
                     })
                   }
-                  className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-base-900 px-3 py-2 text-xs sm:px-4 font-medium text-text-primary transition-colors hover:bg-tint/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
+                  className={footerButton}
                 >
                   {busy === 'archive' ? (
                     <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                   ) : archived ? (
-                    <ArchiveRestore size={14} className="opacity-70" aria-hidden="true" />
+                    <ArchiveRestore size={14} aria-hidden="true" />
                   ) : (
-                    <Archive size={14} className="opacity-70" aria-hidden="true" />
+                    <Archive size={14} aria-hidden="true" />
                   )}
                   {archived ? 'Unarchive' : 'Archive'}
                 </button>
@@ -569,9 +530,9 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                 type="button"
                 disabled={!report || deleted || Boolean(busy)}
                 onClick={() => setConfirming(true)}
-                className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-danger/20 bg-danger/10 px-3 py-2 text-xs sm:px-4 font-medium text-danger transition-colors hover:bg-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:opacity-50"
+                className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-danger/20 bg-danger/10 px-4 py-2 text-xs font-semibold text-danger transition-colors hover:bg-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:pointer-events-none disabled:opacity-50"
               >
-                <Trash2 size={14} className="opacity-80" aria-hidden="true" />
+                <Trash2 size={14} aria-hidden="true" />
                 Delete
               </button>
             </div>
