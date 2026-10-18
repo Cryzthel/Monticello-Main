@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { UserCheck, UserPlus, Info } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
-import ResidentDetailsDrawer from '@/components/ResidentDetailsDrawer'
+import ResidentVerificationModal from '@/components/ResidentVerificationModal'
 import Card from '@shared/components/Card'
 import ResidentAvatar from '@/components/ResidentAvatar'
 import RowActionMenu from '@shared/components/RowActionMenu'
@@ -298,8 +298,8 @@ export default function ResidentsPage() {
       </div>
 
       {/* isOpen follows the LIVE row: if the resident is deleted while the
-          drawer is open, it closes rather than showing a stale record. */}
-      <ResidentDetailsDrawer
+          modal is open, it closes rather than showing a stale record. */}
+      <ResidentVerificationModal
         isOpen={Boolean(selected)}
         resident={selected}
         onClose={() => setSelectedId(null)}
