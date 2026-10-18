@@ -216,21 +216,21 @@ function StatusTimeline({ report }) {
 
 /**
  * The ticket's detail view, shared by both portals (Admin tickets, Overview
- * and shift records; Guardhouse tickets and reports). Rebuilt 2026-10-19 from
- * the provided reference: three equal columns (Miller's law).
+ * and shift records; Guardhouse tickets and reports). Restacked 2026-10-19
+ * from the provided reference into ONE column of five cards (max-w-3xl), with
+ * a fixed header and footer and only the body scrolling.
  *
- *   ┌ [shield] Maintenance Report (MV-3A1U1BIQ)   (• Maintenance) (• Pending…) │ ✕ ┐
- *   │          Monticello Villas · Admin incident record                          │
- *   ├────────────────────────┬────────────────────────┬───────────────────────────┤
- *   │ MEDIA EVIDENCE (✓ n)   │ REPORTER INFORMATION   │ STATUS HISTORY            │
- *   │ h-56 photo + caption   │ name · address         │ ● Reported …              │
- *   │ ▢ ▢ thumbnails         │ INCIDENT TELEMETRY     │ ○ Awaiting resolution     │
- *   │ INCIDENT NOTES         │ ticket · category      │ audit hint                │
- *   │                        │ priority · responder   │ (Export summary)          │
- *   │                        │ GPS [Copy]             │                           │
- *   ├────────────────────────┴────────────────────────┴───────────────────────────┤
- *   │ (shield) Guardhouse dispatch system • Monticello Villas   [primary action]  │
- *   └─────────────────────────────────────────────────────────────────────────────┘
+ *   ┌ [shield] Maintenance Report (MV-3A1U1BIQ)  (• Maintenance) (• Pending…) ✕ ┐
+ *   ├───────────────────────────────────────────────────────────────────────────┤
+ *   │ MEDIA EVIDENCE (✓ n verified)   h-64/h-80 photo + caption, thumbnails      │
+ *   │ INCIDENT NOTES / DESCRIPTION                                               │
+ *   │ REPORTER INFORMATION            name · address                             │
+ *   │ INCIDENT TELEMETRY              ticket · category · priority · responder   │
+ *   │                                 GPS [Copy]                                 │
+ *   │ STATUS HISTORY                  ● Reported … ○ Awaiting · (Export summary) │
+ *   ├───────────────────────────────────────────────────────────────────────────┤
+ *   │ (shield) Guardhouse dispatch system • Monticello Villas  [primary action]  │
+ *   └───────────────────────────────────────────────────────────────────────────┘
  *
  * ── LIVE ───────────────────────────────────────────────────────────────────
  * The modal subscribes to `incidents/{id}` (onSnapshot) while open and prefers
@@ -349,7 +349,7 @@ export default function IncidentDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="ticket-sheet-title"
-        className="dialog-panel relative flex max-h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[92vh] sm:rounded-2xl"
+        className="dialog-panel relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {/* Grab handle — phone sheet only. */}
@@ -357,49 +357,52 @@ export default function IncidentDetailModal({
           <span className="h-1 w-9 rounded-full bg-tint/25" />
         </button>
 
-        {/* ═══ HEADER ═══ */}
-        <header className="flex shrink-0 flex-col gap-4 border-b border-hairline px-6 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8 sm:py-6">
-          <div className="flex min-w-0 items-center gap-4">
+        {/* ═══ HEADER ═══
+            Two rows, by design, for the single-column panel: title and ticket
+            code, then the record line and the category / stage pills. The ✕ is
+            pinned top-right so it never wraps under the pills. */}
+        <header className="relative shrink-0 border-b border-hairline px-6 py-5 pr-14 sm:px-8 sm:pr-16">
+          <div className="flex min-w-0 items-start gap-4">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-danger/20 bg-danger/10 text-danger shadow-inner">
-              <ShieldAlert size={24} aria-hidden="true" />
+              <ShieldAlert size={22} aria-hidden="true" />
             </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 <h2 id="ticket-sheet-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
                   {title}
                 </h2>
                 <Pill className="font-mono tracking-wider">{ticketCode(report.id)}</Pill>
               </div>
-              <p className="mt-1 text-xs text-text-muted">{footerNote}</p>
+              <p className="mt-0.5 text-xs text-text-muted">{footerNote}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Pill tone={categoryTone(report.category)}>
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {category}
+                </Pill>
+                <Pill tone={stage.tone} pulse={stage.pulse}>
+                  {stage.text}
+                </Pill>
+              </div>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <Pill tone={categoryTone(report.category)}>
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
-              {category}
-            </Pill>
-            <Pill tone={stage.tone} pulse={stage.pulse}>
-              {stage.text}
-            </Pill>
-            <span aria-hidden="true" className="mx-1 hidden h-6 w-px bg-hairline sm:block" />
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close report details"
-              className="ml-auto rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:ml-0"
-            >
-              <X size={20} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close report details"
+            className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:right-6 sm:top-5"
+          >
+            <X size={20} />
+          </button>
         </header>
 
-        {/* ═══ BODY: THREE COLUMNS ═══ */}
+        {/* ═══ BODY: ONE COLUMN OF STACKED CARDS ═══
+            The three groups keep their wrappers as `contents`, so each card is
+            a direct item of the one flex column and the gap is uniform. */}
         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-base-950/40 p-6 sm:p-8">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-            {/* ═══ COLUMN 1 — VISUAL EVIDENCE & DESCRIPTION ═══ */}
-            <div className="flex min-w-0 flex-col gap-6">
-              <section aria-label="Media evidence" className={`${CARD} space-y-4 p-5`}>
+          <div className="flex flex-col gap-6">
+            {/* ═══ MEDIA EVIDENCE · NOTES ═══ */}
+            <div className="contents">
+              <section aria-label="Media evidence" className={`${CARD} space-y-4 p-6`}>
                 <CardTitle
                   icon={Camera}
                   action={
@@ -417,7 +420,7 @@ export default function IncidentDetailModal({
                   Media evidence
                 </CardTitle>
 
-                <div className="group relative flex h-56 w-full items-center justify-center overflow-hidden rounded-lg border border-hairline bg-zinc-900">
+                <div className="group relative flex h-64 w-full items-center justify-center overflow-hidden rounded-lg border border-hairline bg-zinc-900 sm:h-80">
                   {active?.type === 'video' ? (
                     <video key={active.url} src={active.url} controls className="absolute inset-0 h-full w-full object-contain" />
                   ) : active ? (
@@ -485,19 +488,19 @@ export default function IncidentDetailModal({
                 ) : null}
               </section>
 
-              <section className={`${CARD} space-y-3 p-5`}>
+              <section className={`${CARD} space-y-4 p-6`}>
                 <CardTitle icon={FileText}>Incident notes / description</CardTitle>
-                <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 font-mono text-sm leading-relaxed text-text-secondary">
+                <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-secondary shadow-inner">
                   {report.description || 'No written description.'}
                 </p>
               </section>
             </div>
 
-            {/* ═══ COLUMN 2 — REPORTER & TELEMETRY ═══ */}
-            <div className="flex min-w-0 flex-col gap-6">
+            {/* ═══ REPORTER · TELEMETRY ═══ */}
+            <div className="contents">
               <section className={`${CARD} space-y-5 p-6`}>
                 <CardTitle icon={User}>Reporter information</CardTitle>
-                <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <Field label="Full name" empty={!report.reportedByName}>
                     {report.reportedByName || 'Unknown'}
                   </Field>
@@ -508,14 +511,16 @@ export default function IncidentDetailModal({
                     </span>
                   </Field>
                   {report.location && report.location !== address ? (
-                    <Field label="Reported location">{report.location}</Field>
+                    <div className="sm:col-span-2">
+                      <Field label="Reported location">{report.location}</Field>
+                    </div>
                   ) : null}
                 </div>
               </section>
 
-              <section className={`${CARD} flex-1 space-y-5 p-6`}>
+              <section className={`${CARD} space-y-6 p-6`}>
                 <CardTitle icon={Crosshair}>Incident telemetry</CardTitle>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <Field label="Ticket ID">
                     <span className="font-mono tracking-wide">{ticketCode(report.id)}</span>
                   </Field>
@@ -549,7 +554,7 @@ export default function IncidentDetailModal({
               </section>
             </div>
 
-            {/* ═══ COLUMN 3 — LIFECYCLE STATUS & ACTIONS ═══ */}
+            {/* ═══ STATUS HISTORY ═══ */}
             <section aria-label="Status history" className={`${CARD} flex flex-col p-6`}>
               <div className="mb-6">
                 <CardTitle icon={History}>Status history</CardTitle>
