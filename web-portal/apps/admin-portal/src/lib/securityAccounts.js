@@ -196,7 +196,12 @@ export const POST_LABELS = Object.fromEntries(POSTS.map((p) => [p.value, p.label
  * truthful; showing "Unassigned post" is neither.
  */
 export function postLabel(value) {
-  if (!value) return ''
+  // DEFAULT_POST ("Perimeter patrol") is the placeholder every account is
+  // created with — no screen picks a post — so it says nothing the role
+  // ("Patrol guard") does not, and showing it beside the role read as the post
+  // twice (2026-10-19, by request). It stays stored, because the server's
+  // assignment validation requires a post; it is simply never displayed.
+  if (!value || value === DEFAULT_POST) return ''
   return POST_LABELS[value] ?? value
 }
 
