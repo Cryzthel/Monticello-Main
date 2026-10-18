@@ -4,7 +4,6 @@ import { collection, query, orderBy, limit } from 'firebase/firestore'
 import { Trash2, Megaphone, ShieldCheck, Activity, SlidersHorizontal } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
-import SectionHeading from '@shared/components/SectionHeading'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import AuditHistoryTable from '@/components/AuditHistoryTable'
 import DeletedReportsTable from '@/components/DeletedReportsTable'
@@ -35,25 +34,11 @@ const ARCHIVE_TABS = [
 /** How long a feed entry stays live before it belongs to the archive. */
 const ACTIVITY_WINDOW_HOURS = 24
 
-const VIEW_TITLES = {
-  events: 'System events',
-  archive: 'Archive',
-  trash: 'Deleted reports',
-}
-
 const COUNTS = {
   events: ({ events }) => events.length,
   archive: ({ archivedIncidents, expiredEvents }) =>
     archivedIncidents.length + expiredEvents.length,
   trash: ({ deletedIncidents }) => deletedIncidents.length,
-}
-
-const VIEW_DESCRIPTIONS = {
-  events: ({ events }) => `${events.length} event${events.length === 1 ? '' : 's'} recorded`,
-  archive: ({ archivedIncidents, expiredEvents }) =>
-    `${archivedIncidents.length} archived report${archivedIncidents.length === 1 ? '' : 's'} · ${expiredEvents.length} expired activity entr${expiredEvents.length === 1 ? 'y' : 'ies'}`,
-  trash: ({ deletedIncidents }) =>
-    `${deletedIncidents.length} report${deletedIncidents.length === 1 ? '' : 's'} · select rows to restore or permanently delete`,
 }
 
 /**
@@ -342,27 +327,20 @@ export default function HistoryPage() {
       scroll={false}
     >
       <div className="flex min-h-0 flex-col gap-4 lg:h-full">
-        <SectionHeading
-          title={VIEW_TITLES[view] ?? 'System events'}
-          description={VIEW_DESCRIPTIONS[view]?.({
-            events,
-            deletedIncidents,
-            archivedIncidents,
-            expiredEvents,
-          })}
-          action={
-            <SegmentedControl
-              kind="tabs"
-              ariaLabel="Audit history views"
-              options={VIEWS.map((v) => ({
-                value: v.key,
-                label: v.label,
-                count: COUNTS[v.key]({ events, deletedIncidents, archivedIncidents, expiredEvents }),
-              }))}
-              value={view}
-              onChange={setView}
-            />
-          }
+        {/* No heading above the tabs (2026-10-19, by request): "System
+            events · 12 events recorded" only repeated the selected tab's own
+            label and count. The tabs are the view switcher and the summary. */}
+        <SegmentedControl
+          kind="tabs"
+          ariaLabel="Audit history views"
+          className="shrink-0 self-start"
+          options={VIEWS.map((v) => ({
+            value: v.key,
+            label: v.label,
+            count: COUNTS[v.key]({ events, deletedIncidents, archivedIncidents, expiredEvents }),
+          }))}
+          value={view}
+          onChange={setView}
         />
 
         {view === 'trash' ? (

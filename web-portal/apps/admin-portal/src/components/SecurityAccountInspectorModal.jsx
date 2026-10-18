@@ -5,6 +5,8 @@ import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useNow } from '@shared/hooks/useNow'
 import { formatDate, formatDateTime, formatTime } from '@shared/lib/dates'
 import { ACCOUNT_STATUS, STATUS_LABELS, postLabel } from '@/lib/securityAccounts'
+import Pill from '@shared/components/Pill'
+import { DetailCard, DetailField } from '@shared/components/detail/DetailCard'
 
 /**
  * Security Account Inspector — the read-only view a row click opens on
@@ -44,19 +46,6 @@ const initialsOf = (name) =>
     .map((part) => part[0].toUpperCase())
     .join('') || '?'
 
-const PILL = 'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-sm'
-const PILL_TONES = {
-  success: 'border-success/20 bg-success/10 text-success',
-  warning: 'border-warning/25 bg-warning/10 text-warning',
-  danger: 'border-danger/25 bg-danger/10 text-danger',
-  info: 'border-info/25 bg-info/10 text-info',
-  neutral: 'border-hairline bg-tint/[0.06] text-text-secondary',
-}
-
-function Pill({ tone = 'neutral', children }) {
-  return <span className={`${PILL} ${PILL_TONES[tone]}`}>{children}</span>
-}
-
 /** "8h 28m" / "45m" since `since`. */
 function elapsed(since, now) {
   const minutes = Math.max(0, Math.floor((now - since.getTime()) / 60000))
@@ -70,29 +59,17 @@ function when(date, now) {
   return formatDate(date) === formatDate(now) ? formatTime(date) : formatDateTime(date)
 }
 
-/** One of the two chunks. */
-function Card({ icon: Icon, title, children }) {
-  return (
-    <section className="min-w-0 space-y-6 rounded-xl border border-hairline bg-base-900/40 p-6">
-      <h3 className="flex items-center gap-2 border-b border-hairline pb-3 font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">
-        <Icon size={14} aria-hidden="true" />
-        {title}
-      </h3>
-      <dl className="space-y-5">{children}</dl>
-    </section>
-  )
-}
-
-/** One labelled value with the reference's left rule; `accent` marks the lead fact of a card. */
+/**
+ * One fact, on the shared DetailField (2026-10-19: this file used to carry its
+ * own Pill, Card and Fact markup, duplicating the shared components).
+ * `accent` marks a card's lead fact; `className` colours the value.
+ */
 function Fact({ label, children, accent = false, className = 'text-text-primary' }) {
   const empty = children == null || children === ''
   return (
-    <div className={`min-w-0 border-l-2 pl-3 ${accent ? 'border-brand-500/50' : 'border-hairline'}`}>
-      <dt className="mb-0.5 text-[11px] text-text-muted">{label}</dt>
-      <dd className={`break-words text-sm font-medium leading-snug ${empty ? 'text-text-muted' : className}`}>
-        {empty ? '—' : children}
-      </dd>
-    </div>
+    <DetailField label={label} empty={empty} accent={accent ? 'border-brand-500/50' : ''}>
+      {empty ? '—' : <span className={`leading-snug ${className}`}>{children}</span>}
+    </DetailField>
   )
 }
 
@@ -190,7 +167,7 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
         {/* ── BODY: TWO CHUNKS ─────────────────────────────────────────── */}
         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-base-950/40 p-6 sm:p-8">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Card icon={User} title="Identity & contact">
+            <DetailCard icon={User} title="Identity & contact">
               <Fact label="Badge ID" accent className="font-mono tracking-wide text-brand-500">
                 {account.badgeNumber}
               </Fact>
@@ -204,9 +181,9 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
                   </a>
                 ) : null}
               </Fact>
-            </Card>
+            </DetailCard>
 
-            <Card icon={MapPin} title="Assignment & status">
+            <DetailCard icon={MapPin} title="Assignment & status">
               <Fact label="Duty" accent className={onDuty ? 'text-success' : 'text-text-primary'}>
                 {onDuty ? (
                   account.onDutySince ? (
@@ -258,7 +235,7 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
                 )}
               </Fact>
               {post ? <Fact label="Guard post">{post}</Fact> : null}
-            </Card>
+            </DetailCard>
           </div>
         </div>
       </div>

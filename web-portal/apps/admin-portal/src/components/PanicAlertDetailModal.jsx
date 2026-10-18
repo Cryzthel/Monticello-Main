@@ -31,6 +31,7 @@ import {
 } from '@shared/lib/operationsTargets'
 import { formatDateTime } from '@shared/lib/dates'
 import { toast } from '@shared/lib/toast'
+import { DetailCard, DetailField } from '@shared/components/detail/DetailCard'
 
 /** The same short code the SOS log prints, so an alert is quoted one way. */
 const alertCode = (id) => `SOS-${String(id ?? '').slice(-6).toUpperCase()}`
@@ -48,40 +49,17 @@ function took(from, to) {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
-/** A compact card: a small ruled heading, then its facts. */
-function Card({ icon: Icon, title, action = null, className = '', children }) {
-  return (
-    <section className={`min-w-0 rounded-xl border border-hairline bg-base-900/40 p-4 ${className}`}>
-      <div className="mb-3 flex items-center justify-between gap-3 border-b border-hairline pb-2.5">
-        <h3 className="flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-widest text-text-muted">
-          <Icon size={14} aria-hidden="true" />
-          {title}
-        </h3>
-        {action}
-      </div>
-      <dl className="space-y-3">{children}</dl>
-    </section>
-  )
-}
-
 /**
- * One fact: a small label directly over its value. Stacked rather than on a
- * fixed 120px label column — that column is what pushed every value away from
- * its label and opened the gap between Resident and Received.
+ * The two compact cards and their facts are the shared DetailCard (compact)
+ * and DetailField (2026-10-19), so this modal speaks the same card language as
+ * the ticket, report and account details. `tone` colours the value.
  */
 function Fact({ label, children, mono = false, tone = 'text-text-primary' }) {
   const empty = children == null || children === ''
   return (
-    <div className="min-w-0">
-      <dt className="text-[11px] text-text-muted">{label}</dt>
-      <dd
-        className={`mt-0.5 break-words text-sm font-medium leading-snug ${mono ? 'font-mono tracking-wide' : ''} ${
-          empty ? 'text-text-muted' : tone
-        }`}
-      >
-        {empty ? '—' : children}
-      </dd>
-    </div>
+    <DetailField label={label} mono={mono} empty={empty}>
+      {empty ? '—' : <span className={`leading-snug ${tone}`}>{children}</span>}
+    </DetailField>
   )
 }
 
@@ -242,7 +220,8 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
         {/* ── BODY ── */}
         <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-base-950/40 p-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Card
+            <DetailCard
+              compact
               icon={User}
               title="Resident"
               action={
@@ -263,9 +242,9 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
               <Fact label="Contact number" mono>
                 {alert.residentPhone}
               </Fact>
-            </Card>
+            </DetailCard>
 
-            <Card icon={Clock} title="Timeline">
+            <DetailCard compact icon={Clock} title="Timeline">
               <Fact label="Received" mono>
                 {when(alert.createdAt)}
               </Fact>
@@ -285,10 +264,11 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
               <Fact label="Resolved" mono tone="text-success">
                 {when(alert.resolvedAt)}
               </Fact>
-            </Card>
+            </DetailCard>
           </div>
 
-          <Card
+          <DetailCard
+            compact
             icon={Crosshair}
             title="Live GPS"
             action={
@@ -323,7 +303,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
                 </span>
               </p>
             ) : null}
-          </Card>
+          </DetailCard>
 
           {escalation || escalationHistory ? (
             <p

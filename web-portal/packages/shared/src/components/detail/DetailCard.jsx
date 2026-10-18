@@ -16,10 +16,20 @@
  * happened (emerald, amber for a warning), hollow nodes for what is still owed.
  */
 
-export function DetailCard({ icon: Icon, title, action = null, className = '', bodyClassName = 'space-y-5', children, ...rest }) {
+/** `compact`: p-4 and a tighter title rule, for small side-by-side cards (the SOS modal). */
+export function DetailCard({
+  icon: Icon,
+  title,
+  action = null,
+  compact = false,
+  className = '',
+  bodyClassName = compact ? 'space-y-3' : 'space-y-5',
+  children,
+  ...rest
+}) {
   return (
-    <section className={`min-w-0 rounded-xl border border-hairline bg-base-900/40 p-6 ${className}`} {...rest}>
-      <div className="mb-5 flex items-center justify-between gap-3 border-b border-hairline pb-3">
+    <section className={`min-w-0 rounded-xl border border-hairline bg-base-900/40 ${compact ? 'p-4' : 'p-6'} ${className}`} {...rest}>
+      <div className={`flex items-center justify-between gap-3 border-b border-hairline ${compact ? 'mb-3 pb-2.5' : 'mb-5 pb-3'}`}>
         <h3 className="flex min-w-0 items-center gap-2 font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">
           {Icon ? <Icon size={14} aria-hidden="true" className="shrink-0" /> : null}
           <span className="truncate">{title}</span>
