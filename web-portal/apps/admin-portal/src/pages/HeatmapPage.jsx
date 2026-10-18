@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { collection, query } from 'firebase/firestore'
 import AppShell from '@/layouts/AppShell'
 import IncidentMap from '@shared/components/IncidentMap'
-import IncidentInspectorDrawer, { DRAWER_WIDTH_PX } from '@/components/IncidentInspectorDrawer'
+import HazardMapReportDetailsModal from '@/components/HazardMapReportDetailsModal'
 import PanicAlertDetailModal from '@/components/PanicAlertDetailModal'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
@@ -11,15 +11,6 @@ import { db } from '@shared/lib/firebase'
 import { mapIncidentDoc, isResolvedExpired } from '@shared/lib/incidents'
 import { isPanicLive } from '@shared/lib/panicStatus'
 
-/**
- * How much of the map's right edge the inspection rail covers.
- *
- * Passed unconditionally rather than behind a breakpoint check: `centerOnFeature`
- * already ignores an inset wider than half the canvas, which is exactly the
- * phone case where the panel is a bottom sheet over the whole map rather than
- * a rail beside it. The Guardhouse dispatch map passes its own the same way.
- */
-const DETAIL_PANEL_INSET = { right: DRAWER_WIDTH_PX }
 
 export default function HeatmapPage() {
   // ── INCIDENTS ONLY (2026-10-19) ──────────────────────────────────────────
@@ -151,15 +142,10 @@ export default function HeatmapPage() {
           The floor stays for a very short landscape window, where it is better
           to overflow and scroll than to show a letterbox. */}
       <div className="h-full min-h-[28rem]">
-        {/* ── THE CAMERA MOVES NOW, BECAUSE THE PANEL NO LONGER BLANKS THE MAP ──
-            `centerOnSelect` was off on this map on the grounds that "the Admin
-            console opens a centred modal over a scrim, so a camera move
-            underneath it is motion nobody can see, spent on a map nobody is
-            looking at while the dialog is up". That reasoning was sound and is
-            now obsolete: the panel is a rail, the map behind it stays lit, and
-            sliding the clicked marker into the strip the rail leaves is the
-            other half of one gesture — precisely the case the prop was written
-            for. `focusInset` is what keeps the marker out from under it. */}
+        {/* `centerOnSelect`: the clicked pin is centred behind the report
+            modal, so it is where the eye lands when the modal closes. No
+            `focusInset` — the modal is centred over a scrim (2026-10-19), not a
+            rail covering one edge. */}
         <IncidentMap
           variant="full"
           incidents={incidents}
@@ -169,11 +155,10 @@ export default function HeatmapPage() {
           onSelectPanicAlert={(alert) => setSelectedPanicId(alert.id)}
           focus={focus}
           centerOnSelect
-          focusInset={DETAIL_PANEL_INSET}
         />
       </div>
 
-      <IncidentInspectorDrawer report={selected} onClose={() => setSelectedId(null)} />
+      <HazardMapReportDetailsModal report={selected} onClose={() => setSelectedId(null)} />
       <PanicAlertDetailModal alert={selectedPanic} onClose={() => setSelectedPanicId(null)} />
     </AppShell>
   )

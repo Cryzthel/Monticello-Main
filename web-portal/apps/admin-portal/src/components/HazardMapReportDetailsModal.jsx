@@ -14,12 +14,12 @@ import {
   Loader2,
   MapPin,
   Radio,
+  ShieldCheck,
   ShieldX,
   Timer,
   UserRoundCheck,
   X,
 } from '@shared/icons'
-import StatusBadge from '@shared/components/StatusBadge'
 import Lightbox from '@shared/components/Lightbox'
 import Pill from '@shared/components/Pill'
 import StageStepper from '@shared/components/dispatch/StageStepper'
@@ -52,16 +52,6 @@ import { normalizeResidentStatus, RESIDENT_STATUS, RESIDENT_STATUS_LABELS } from
 import { ROUTES } from '@/config/portal'
 import { formatDateTime, formatInZone } from '@shared/lib/dates'
 
-/**
- * Width of the desktop rail, in px, exported so the Hazard Map can tell
- * IncidentMap how much of its right edge is spoken for. It IS this component's
- * `lg:w-[28rem]` (the reference's `max-w-md`). It was 416px to match the
- * Guardhouse's DispatchDetailDrawer; the redesign widened this rail only. Two places holding
- * this number independently is how a centred marker ends up underneath the
- * panel that was opened to describe it.
- */
-export const DRAWER_WIDTH_PX = 448
-
 const SEVERITY_LABELS = {
   critical: 'Critical',
   high: 'High',
@@ -84,31 +74,27 @@ const CLOCK = { hour: '2-digit', minute: '2-digit', hour12: false }
 // In the portal time zone (Settings › System), like every other stamp.
 const clock = (at) => (at ? formatInZone(at, CLOCK, 'en-GB') : '—')
 
-// Tags are the shared oblong Pill — the same shape on every Hazard Map modal
-// (user's request, 2026-10-18). MiniTag is its one-step-down size, inline
-// beside the reporter's name.
-const Tag = Pill
-const MiniTag = (props) => <Pill size="sm" {...props} />
-
-/** Section label: a muted glyph and 11px tracked caps, with an optional right-hand note. */
+/** A card's label: a muted glyph and mono tracked caps, with an optional right-hand note. */
 function SectionTitle({ icon: Icon, action = null, children }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <div className="flex items-center gap-2">
-        <Icon size="sm" className="text-text-muted" aria-hidden="true" />
-        <h3 className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{children}</h3>
-      </div>
+      <h3 className="flex items-center gap-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">
+        <Icon size={14} aria-hidden="true" />
+        {children}
+      </h3>
       {action}
     </div>
   )
 }
 
-/** One label/value line inside the location container: a 100px label column. */
-function LocationRow({ label, children }) {
+/** One label/value line in Location telemetry: label left, value right, a left rule. */
+function LocationRow({ label, mono = false, children }) {
   return (
-    <div className="grid grid-cols-[100px_1fr] items-baseline gap-2">
-      <dt className="text-[11px] font-bold uppercase tracking-widest text-text-muted">{label}</dt>
-      <dd className="min-w-0 break-words">{children}</dd>
+    <div className="flex items-baseline justify-between gap-4 border-l-2 border-hairline pl-3">
+      <dt className="shrink-0 font-medium text-text-muted">{label}</dt>
+      <dd className={`min-w-0 break-words text-right ${mono ? 'font-mono text-brand-500' : 'font-medium text-text-primary'}`}>
+        {children}
+      </dd>
     </div>
   )
 }
@@ -196,69 +182,33 @@ function useAdminAction(incidentId) {
 }
 
 /**
- * ── THE HAZARD MAP'S INSPECTION PANEL ──────────────────────────────────────
+ * ── THE HAZARD MAP'S REPORT DETAILS ────────────────────────────────────────
  *
- *   ┌ [icon] Break-in attempt at the side gate               [×] ┐
- *   │        MV-A1B2C3D4 · Reported 10:16                        │
- *   │ [Unassigned — awaiting dispatch] [Security] [High priority]│
- *   │          ●───────◉───────○                                 │
- *   │       Dispatched Responding Resolved                       │
- *   ├────────────────────────────────────────────────────────────┤
- *   │ REPORTER        who filed it, and whether they are verified│
- *   │ ASSIGNED UNIT   the unit, or one badge saying nobody is    │
- *   │ LOCATION        address, coordinates                       │
- *   │ REPORTED …      the narrative AND the photos, one card     │
- *   │ RESOLUTION      outcome, notes, photos (once closed)       │
- *   ├────────────────────────────────────────────────────────────┤
- *   │ [ the oversight action for this stage ]            pinned  │
- *   └────────────────────────────────────────────────────────────┘
+ *   ┌ [icon] Maintenance Report                                   [×] ┐ fixed
+ *   │        MV-SACELWL6 • Reported 17:49                              │
+ *   ├──────────────────────────────────────────────────────────────────┤
+ *   │ (Maintenance) (● Medium priority)                                │
+ *   │ ┌ ●──────◉──────○  Dispatched · Responding · Resolved ┐          │
+ *   │ ┌ (L) Lian Nicole Jabagat (Pending)  Aug 30, 2026, 5:49 PM ┐     │
+ *   │ ┌ ASSIGNED UNIT  (● Unit MV-0864) ┐                              │
+ *   │ ┌ LOCATION TELEMETRY  address · coordinates ┐                    │
+ *   │ ┌ REPORTED DESCRIPTION (1 file)  note · evidence ┐               │
+ *   │ ┌ RESOLUTION (once closed) ┐                                     │
+ *   ├──────────────────────────────────────────────────────────────────┤
+ *   │ [ the action for this stage ]                         (Close)    │ fixed
+ *   │ what this console may and may not do                              │
+ *   └──────────────────────────────────────────────────────────────────┘
  *
- * A RAIL, NOT A CENTRED MODAL. The Hazard Map used the shared
- * `IncidentDetailModal`, which is the right shape on the ticket queue — a table
- * row has nothing behind it worth preserving — and the wrong one here. A dialog
- * over a scrim blanks the map, so the one thing that makes a pin mean anything
- * (what is AROUND it: the other pins on that street, the phase it sits in, how
- * far it is from the gate) disappears at the exact moment someone asks about
- * it. A rail down one edge keeps the map live, leaves the camera free to slide
- * the marker clear of it, and lets an administrator click the next pin without
- * closing anything first.
+ * A CENTRED MODAL (2026-10-19, by request), max-w-xl and max-h-[92vh], with
+ * only the body scrolling. It replaced a right-hand rail that left the map
+ * visible beside it; the trade was made deliberately for a narrower, card-led
+ * read of one report. Each part of the record is its own card.
  *
- * Below `lg` it is a bottom sheet instead, for the reason the shared modal
- * gives: a 416px rail on a 375px phone is the whole screen with none of a
- * sheet's affordances.
- *
- * The shared modal is UNTOUCHED and still serves the Admin ticket queue and the
- * Guard triage queue. This panel exists because the map wants different things
- * on screen, not because the modal was wrong where it already was.
- *
- * ── ONE PANEL, TWO CONSOLES, ONE VOCABULARY ────────────────────────────────
- * This rail and the Guardhouse's DispatchDetailDrawer describe the same
- * document at the same width, and they had drifted into describing it
- * differently in every way a reader would notice:
- *
- *   • The pipeline. Three stages drawn here in a `grid-cols-5` built for the
- *     five-stage machine — left-weighted, with the connectors reaching across
- *     two empty columns — against a centred flex row there. The two consoles
- *     drew the same three facts as two different objects. Both are now
- *     `@shared/components/dispatch/StageStepper`, driven by one derived
- *     `stage`.
- *
- *   • The submission. The resident's sentence and the resident's photos were
- *     two groups with two headers here and one card there. They are one
- *     submission — typed and attached in the same breath, about the same thing
- *     — and the photos frequently ARRIVE after the text, so two cards meant
- *     two separate claims about one report with the reader left to join them.
- *
- *   • The evidence itself. A bare `grid-cols-3` of square tiles here against
- *     the stamped two-up grid there, which means the same photograph carried
- *     its time, position and incident code for an officer and carried none of
- *     them for the administrator who exports the record.
- *
- *   • The assigned unit. `report.assignedGuardName` printed raw into an
- *     "Assigned to" row, which on an email-provisioned account prints
- *     `guard.test@…` onto a screen shared in a meeting — and an em-dash when
- *     nobody is on the call at all, which reads as a missing field rather than
- *     as the fact it is.
+ * LIVE: `report` is the Hazard Map's own `incidents` onSnapshot document, so
+ * the stage, the stepper's timestamps, the assigned unit and the location
+ * update in the open modal, in every admin console, as the Guardhouse works
+ * the call. Dismissed by ✕, Close, a backdrop click or Escape (the Lightbox
+ * owns Escape while it is open; a write in flight holds the modal open).
  *
  * ── WHAT THIS CONSOLE MAY ACTUALLY DO, AND WHAT IT MAY NOT ─────────────────
  * The footer offers the oversight action for the stage the call is in, and the
@@ -289,7 +239,7 @@ function useAdminAction(incidentId) {
  * Admin › Reports filters to officer-filed reports, so a resolved
  * RESIDENT-filed report had no manual archive path anywhere in the console.
  */
-export default function IncidentInspectorDrawer({ report, onClose }) {
+export default function HazardMapReportDetailsModal({ report, onClose }) {
   const navigate = useNavigate()
 
   /**
@@ -330,11 +280,10 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
   }, [report?.id])
 
   /*
-   * Escape closes the rail, unless the Lightbox is up — that owns Escape while
-   * it is open, so this defers rather than closing both at once and dumping the
-   * operator back to a bare map from a full-screen photo. A write in flight
-   * also holds the rail open: closing it would leave the receipt nowhere to
-   * land.
+   * Escape closes the modal, unless the Lightbox is up — that owns Escape
+   * while it is open, so this defers rather than closing both at once. A write
+   * in flight also holds the modal open: closing it would leave the receipt
+   * nowhere to land.
    */
   useEffect(() => {
     if (!report || lightbox || busy) return undefined
@@ -386,6 +335,15 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
   ]
     .filter(Boolean)
     .join(' · ')
+
+  // "Phase 3 • Block 1 • Lot 2" and "Phase 3 · Block 1 · Lot 2" are the same
+  // place: `location` is built from the same fields with a different joiner,
+  // so a plain !== showed every such report's address twice.
+  const sameAddress = (a, b) => {
+    const norm = (v) => String(v ?? '').replace(/[\s·•,|]+/g, ' ').trim().toLowerCase()
+    return norm(a) === norm(b)
+  }
+  const extraLocation = report.location && !sameAddress(report.location, address) ? report.location : ''
 
   const household = normalizeResidentStatus(contact?.verificationStatus ?? contact?.status)
   const reporterInitial = (report.reportedByName || '?').trim().charAt(0).toUpperCase() || '?'
@@ -492,193 +450,161 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
 
   const CategoryGlyph = categoryIcon(normalizeCategory(report.category))
   const categoryHex = categoryColor(normalizeCategory(report.category))
+  const CARD = 'rounded-xl border border-hairline bg-base-900/60 p-4'
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[var(--z-modal)] flex items-end justify-end lg:items-stretch">
-      {/* Scrim BELOW `lg` only. On a desktop the map behind this rail is still
-          the thing being read — dimming or blurring it would undo the whole
-          reason this is a rail — and the camera has already slid the marker
-          clear of it. On a phone the sheet covers the map anyway. */}
+    <div
+      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-6"
+      onClick={() => {
+        if (!busy) onClose()
+      }}
+      role="presentation"
+    >
       <div
-        className="dialog-scrim pointer-events-auto absolute inset-0 bg-black/50 backdrop-blur-sm lg:hidden"
-        onClick={onClose}
-        role="presentation"
-      />
-
-      <aside
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={`Incident ${code}`}
-        className="pointer-events-auto relative flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-[-30px_0_60px_-15px_rgba(0,0,0,0.8)] animate-[riseIn_220ms_var(--ease-spring)] lg:h-full lg:w-[28rem] lg:animate-[drawerInRight_260ms_var(--ease-spring)] lg:rounded-none lg:border-y-0 lg:border-r-0 dark:bg-base-950"
+        aria-labelledby="hazard-report-title"
+        onClick={(event) => event.stopPropagation()}
+        className="dialog-panel flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl shadow-black/90 sm:max-h-[92vh] sm:rounded-2xl"
       >
-        {/* Grab handle (phone sheet only). */}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close incident details"
-          className="flex h-6 shrink-0 items-center justify-center pt-2 lg:hidden"
-        >
-          <span className="h-1 w-9 rounded-full bg-tint/25" />
-        </button>
-
-        {/* ══ STICKY HEADER ══ what it is, its code, and where the response
-            stands: the category tile, the tags, then the 3-step pipeline. */}
-        <header className="relative z-20 shrink-0 border-b border-hairline bg-base-900/95 px-6 pb-6 pt-6 backdrop-blur-md sm:px-8 lg:pt-8 dark:bg-base-950/95">
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close incident details"
-            className="absolute right-6 top-6 rounded-md p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 sm:right-8 lg:top-8"
-          >
-            <X size="md" />
-          </button>
-
-          <div className="flex items-start gap-4 pr-10">
-            {/* The category's own colour, as the reference's rose tile is for
-                Medical: tinted fill, a matching edge and a soft glow. */}
+        {/* ══ HEADER (fixed): category tile, title, code and report time ══ */}
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-hairline bg-base-900/95 px-6 py-5">
+          <div className="flex min-w-0 items-center gap-3.5">
+            {/* The category's own colour: tinted fill and a matching edge. */}
             <span
               aria-hidden="true"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border"
-              style={{
-                color: categoryHex,
-                backgroundColor: `${categoryHex}1a`,
-                borderColor: `${categoryHex}33`,
-                boxShadow: `0 0 15px -3px ${categoryHex}26`,
-              }}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border shadow-inner"
+              style={{ color: categoryHex, backgroundColor: `${categoryHex}1a`, borderColor: `${categoryHex}33` }}
             >
-              <CategoryGlyph size="md" />
+              <CategoryGlyph size={20} />
             </span>
-            <div className="flex min-w-0 flex-col pt-0.5">
-              <h2 className="line-clamp-2 text-lg font-semibold leading-snug tracking-tight text-text-primary">{title}</h2>
-              <p className="mt-0.5 text-[13px] font-medium text-text-secondary">
-                <span className="font-mono">{code}</span>
-                {report.reportedAt ? (
-                  <>
-                    <span aria-hidden="true" className="mx-1.5 opacity-40">•</span>
-                    Reported {clock(report.reportedAt)}
-                  </>
-                ) : null}
+            <div className="min-w-0">
+              <h2 id="hazard-report-title" className="truncate text-base font-bold tracking-tight text-text-primary">
+                {title}
+              </h2>
+              <p className="mt-0.5 font-mono text-xs text-text-muted">
+                {code}
+                {report.reportedAt ? ` • Reported ${clock(report.reportedAt)}` : ''}
               </p>
             </div>
           </div>
-
-          {/* ── TAGS ── unassigned state, category, priority, and the
-              exceptional states (no acknowledgement, escalated, archived). */}
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            {stage === 'none' ? (
-              <Tag tone="warning" icon={Radio}>
-                Unassigned
-              </Tag>
-            ) : null}
-            <Tag tone={categoryTone(report.category)}>{categoryLabel(report.category)}</Tag>
-            <Tag tone={SEVERITY_TONES[severity] ?? 'warning'} pulse={severity === 'critical'}>
-              {SEVERITY_LABELS[severity] ?? 'Medium'} priority
-            </Tag>
-            {ackExpired ? (
-              <Tag tone="danger" icon={Timer}>
-                No acknowledgement
-              </Tag>
-            ) : null}
-            {report.escalation ? (
-              <Tag tone="danger" icon={AlertOctagon}>
-                Escalated
-              </Tag>
-            ) : null}
-            {archived ? (
-              <Tag tone="neutral" icon={Archive}>
-                Archived
-              </Tag>
-            ) : null}
-          </div>
-
-          {/* ── THE 3-STEP LIFECYCLE ── Dispatched → Responding → Resolved, the
-              same component and derived stage as the Guardhouse's drawer. */}
-          <div className="mt-6">
-            <StageStepper report={report} stage={stage} />
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={Boolean(busy)}
+            aria-label="Close report details"
+            className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40"
+          >
+            <X size={20} />
+          </button>
         </header>
 
-        {/* ══ BODY ══ borderless sections on the panel itself. The one scroll
-            region; the scrollbar is hidden per the reference. */}
-        <div
-          ref={bodyRef}
-          className="hide-scrollbar min-h-0 flex-1 space-y-10 overflow-y-auto overscroll-contain px-6 py-8 sm:px-8"
-        >
+        {/* ══ BODY (the one scroll region) ══ */}
+        <div ref={bodyRef} className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain bg-base-950/40 p-6">
+          {/* ── BADGES & PRIORITY ── plus the exceptional states. */}
+          <div className="flex flex-wrap items-center gap-2">
+            {stage === 'none' ? (
+              <Pill tone="warning" icon={Radio}>
+                Unassigned
+              </Pill>
+            ) : null}
+            <Pill tone={categoryTone(report.category)}>{categoryLabel(report.category)}</Pill>
+            <Pill tone={SEVERITY_TONES[severity] ?? 'warning'} pulse={stage !== 'resolved'}>
+              {SEVERITY_LABELS[severity] ?? 'Medium'} priority
+            </Pill>
+            {ackExpired ? (
+              <Pill tone="danger" icon={Timer}>
+                No acknowledgement
+              </Pill>
+            ) : null}
+            {report.escalation ? (
+              <Pill tone="danger" icon={AlertOctagon}>
+                Escalated
+              </Pill>
+            ) : null}
+            {archived ? (
+              <Pill tone="neutral" icon={Archive}>
+                Archived
+              </Pill>
+            ) : null}
+          </div>
+
+          {/* ── PROGRESS STEPPER ── Dispatched → Responding → Resolved, the same
+              component and derived stage as the Guardhouse's drawer. */}
+          <div className="rounded-xl border border-hairline bg-base-900/80 p-4">
+            <StageStepper report={report} stage={stage} />
+          </div>
+
           {/* ── REPORTER ── */}
-          <section className="flex items-center gap-4" aria-label={officerFiled ? 'Filed by officer' : 'Reporter'}>
+          <section className={`${CARD} flex items-center gap-3.5`} aria-label={officerFiled ? 'Filed by officer' : 'Reporter'}>
             <span
               aria-hidden="true"
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-brand-500/20 bg-brand-500/10 text-[15px] font-semibold text-brand-500"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-sm font-bold text-brand-500"
             >
               {reporterInitial}
             </span>
-            <div className="flex min-w-0 flex-col">
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                <span className="truncate text-[15px] font-semibold text-text-primary">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-sm font-bold tracking-tight text-text-primary">
                   {report.reportedByName || 'Unknown reporter'}
-                </span>
+                </h3>
                 {/* Whether an administrator has confirmed this resident owns or
                     occupies the lot. Not a verified phone number. */}
                 {officerFiled ? (
-                  <MiniTag tone="neutral" icon={IdCard}>Security officer</MiniTag>
+                  <Pill tone="neutral" icon={IdCard}>Security officer</Pill>
                 ) : contactLoading ? (
                   <span className="text-[11px] text-text-muted">Looking up…</span>
                 ) : household === RESIDENT_STATUS.verified ? (
-                  <MiniTag tone="success" icon={BadgeCheck}>Verified</MiniTag>
+                  <Pill tone="success" icon={BadgeCheck}>Verified</Pill>
                 ) : household === RESIDENT_STATUS.rejected ? (
-                  <MiniTag tone="danger" icon={ShieldX}>{RESIDENT_STATUS_LABELS[household]}</MiniTag>
+                  <Pill tone="danger" icon={ShieldX}>{RESIDENT_STATUS_LABELS[household]}</Pill>
                 ) : (
-                  <MiniTag tone="warning" icon={Clock}>{RESIDENT_STATUS_LABELS[household]}</MiniTag>
+                  <Pill tone="warning" icon={Clock}>{RESIDENT_STATUS_LABELS[household]}</Pill>
                 )}
               </div>
-              <span className="mt-1 text-[13px] font-medium text-text-muted">
+              <p className="mt-0.5 font-mono text-xs text-text-muted">
                 {exactTime(report.reportedAt) || 'Time unavailable'}
                 {/* The relative time only while it IS relative: past a week
-                    relativeTime falls back to a plain date, which beside the
-                    exact time above just printed the date twice. */}
+                    relativeTime falls back to a plain date. */}
                 {report.reportedAt && /ago|now|Yesterday/i.test(relativeTime(report.reportedAt))
                   ? ` · ${relativeTime(report.reportedAt)}`
                   : ''}
-              </span>
+              </p>
             </div>
           </section>
 
           {/* ── ASSIGNED UNIT ── only when somebody is on the call; the
-              unassigned case is the amber tag in the header. */}
+              unassigned case is the amber badge above. */}
           {assigned ? (
-            <section className="space-y-3">
-              <SectionTitle icon={Radio}>Assigned unit</SectionTitle>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <StatusBadge tone="info" size="sm" icon={UserRoundCheck}>
+            <section className={`${CARD} space-y-2`}>
+              <SectionTitle icon={ShieldCheck}>Assigned unit</SectionTitle>
+              <div className="flex flex-wrap items-center gap-2">
+                <Pill tone={stage === 'resolved' ? 'neutral' : 'success'} pulse={stage !== 'resolved'} icon={stage === 'resolved' ? UserRoundCheck : null}>
                   {assigned.label}
-                </StatusBadge>
-                {assigned.badge ? (
-                  <StatusBadge tone="neutral" size="sm">
-                    Badge {assigned.badge}
-                  </StatusBadge>
+                </Pill>
+                {assigned.badge && !assigned.label.includes(assigned.badge) ? (
+                  <Pill tone="neutral" className="font-mono">
+                    {assigned.badge}
+                  </Pill>
                 ) : null}
               </div>
             </section>
           ) : null}
 
-          {/* ── LOCATION ── */}
-          <section className="space-y-3">
-            <SectionTitle icon={MapPin}>Location</SectionTitle>
-            <dl className="flex flex-col gap-4 rounded-xl border border-hairline bg-base-800/60 p-5 dark:bg-base-900/40">
+          {/* ── LOCATION TELEMETRY ── */}
+          <section className={`${CARD} space-y-3`}>
+            <div className="border-b border-hairline pb-2.5">
+              <SectionTitle icon={MapPin}>Location telemetry</SectionTitle>
+            </div>
+            <dl className="space-y-2.5 text-xs">
               <LocationRow label="Address">
-                <span className="text-[14px] font-semibold text-text-primary">
-                  {(address || report.location || '').replaceAll(' · ', ' • ') || '—'}
-                </span>
+                {(address || report.location || '').replaceAll(' · ', ' • ') || '—'}
               </LocationRow>
               {/* Only when it says something the address does not. */}
-              {report.location && report.location !== address ? (
-                <LocationRow label="Reported at">
-                  <span className="text-[14px] text-text-primary">{report.location}</span>
-                </LocationRow>
-              ) : null}
-              <LocationRow label="Coordinates">
-                <span className="select-all font-mono text-[13px] text-text-secondary">{coordinates || '—'}</span>
+              {extraLocation ? <LocationRow label="Reported at">{extraLocation}</LocationRow> : null}
+              <LocationRow label="Coordinates" mono>
+                {coordinates ? <span className="select-all">{coordinates}</span> : '—'}
               </LocationRow>
             </dl>
           </section>
@@ -686,31 +612,27 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           {/* ── WHAT THE RESIDENT SENT ── the narrative and the photos as one
               submission. Photos often land after the text: while the document
               says media is coming (`hasMedia`) and no URL has arrived, the
-              uploading line shows; the next snapshot that carries URLs swaps
-              it for the stamped, clickable evidence grid. */}
-          <section className="space-y-4">
-            <SectionTitle
-              icon={FileText}
-              action={
-                media.length ? (
-                  <span className="text-[12px] font-medium text-text-muted">
-                    {media.length} file{media.length === 1 ? '' : 's'}
-                  </span>
-                ) : null
-              }
-            >
-              Reported description
-            </SectionTitle>
-            {report.description ? (
-              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text-primary">
-                {report.description}
-              </p>
-            ) : (
-              <p className="text-[15px] text-text-muted">The resident submitted no written description.</p>
-            )}
-
+              uploading line shows; the next snapshot swaps in the evidence. */}
+          <section className={`${CARD} space-y-3`}>
+            <div className="border-b border-hairline pb-2.5">
+              <SectionTitle
+                icon={FileText}
+                action={
+                  media.length ? (
+                    <Pill tone="neutral" className="font-mono">
+                      {media.length} file{media.length === 1 ? '' : 's'}
+                    </Pill>
+                  ) : null
+                }
+              >
+                Reported description
+              </SectionTitle>
+            </div>
+            <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 font-mono text-xs leading-relaxed text-text-secondary">
+              {report.description || 'The resident submitted no written description.'}
+            </p>
             {media.length ? (
-              <div className="pt-2">
+              <div className="max-w-sm">
                 <EvidenceGrid
                   media={media}
                   stamp={stamp}
@@ -719,7 +641,7 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
                 />
               </div>
             ) : report.hasMedia ? (
-              <p role="status" className="flex items-center gap-3 pt-2 text-[13px] font-medium text-text-muted">
+              <p role="status" className="flex items-center gap-2 text-xs font-medium text-text-muted">
                 <Loader2 size="sm" className="animate-[spin_1.5s_linear_infinite]" aria-hidden="true" />
                 Media still uploading…
               </p>
@@ -728,20 +650,20 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
 
           {/* ── RESOLUTION ── once the Guardhouse closes the call. */}
           {stage === 'resolved' && report.resolution ? (
-            <section className="space-y-4">
-              <SectionTitle
-                icon={ClipboardList}
-                action={
-                  outcomeLabel ? <span className="text-[12px] font-medium text-text-muted">{outcomeLabel}</span> : null
-                }
-              >
-                Resolution
-              </SectionTitle>
-              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text-primary">
+            <section className={`${CARD} space-y-3`}>
+              <div className="border-b border-hairline pb-2.5">
+                <SectionTitle
+                  icon={ClipboardList}
+                  action={outcomeLabel ? <Pill tone="success">{outcomeLabel}</Pill> : null}
+                >
+                  Resolution
+                </SectionTitle>
+              </div>
+              <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 font-mono text-xs leading-relaxed text-text-secondary">
                 {report.resolution.notes}
               </p>
               {resolutionMedia.length ? (
-                <div className="pt-2">
+                <div className="max-w-sm">
                   <EvidenceGrid
                     media={resolutionMedia}
                     stamp={resolutionStamp}
@@ -767,20 +689,19 @@ export default function IncidentInspectorDrawer({ report, onClose }) {
           ) : null}
         </div>
 
-        {/* ══ STICKY FOOTER ══ the one action the stage calls for, Close last,
-            and the helper note saying what this console may and may not do. */}
-        <footer className="relative z-20 shrink-0 border-t border-hairline bg-base-900/90 px-6 py-6 backdrop-blur-md sm:px-8 dark:bg-base-950/90">
+        {/* ══ FOOTER (fixed): the action for this stage, Close, and the note
+            saying what this console may and may not do. ══ */}
+        <footer className="shrink-0 space-y-3 border-t border-hairline bg-base-950 px-6 py-4">
           {feedback ? <Receipt feedback={feedback} onDismiss={dismiss} /> : null}
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {footer}
-            <button type="button" onClick={onClose} className="sheet-btn sheet-btn-outline">
-              <X size="sm" className="opacity-70" aria-hidden="true" />
+            <button type="button" onClick={onClose} disabled={Boolean(busy)} className="sheet-btn sheet-btn-outline">
               Close
             </button>
           </div>
-          {hint ? <p className="text-center text-[12px] leading-relaxed text-text-muted">{hint}</p> : null}
+          {hint ? <p className="text-center font-mono text-[10px] leading-relaxed text-text-muted">{hint}</p> : null}
         </footer>
-      </aside>
+      </div>
 
       {lightbox ? (
         <Lightbox
