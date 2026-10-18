@@ -1,5 +1,6 @@
 import { PlayCircle } from '@shared/icons'
 import EvidenceImage from '@shared/components/EvidenceImage'
+import { PORTAL_TIME_ZONE, formatDateTime } from '@shared/lib/dates'
 
 const STAMP = {
   year: 'numeric',
@@ -15,18 +16,14 @@ const STAMP = {
 export function forensicTimestamp(at) {
   if (!at) return 'time not recorded'
   const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-GB', STAMP).formatToParts(new Date(at)).map((p) => [p.type, p.value]),
+    // In the organisation's time zone (Settings › System), like every other
+    // stamp — read at call time, so a changed setting applies at once.
+    new Intl.DateTimeFormat('en-GB', { ...STAMP, timeZone: PORTAL_TIME_ZONE })
+      .formatToParts(new Date(at))
+      .map((p) => [p.type, p.value]),
   )
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`
 }
-
-const CAPTURE = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-})
 
 /**
  * "Oct 16, 2026, 10:14 PM" — the stamp a person reads off a thumbnail.
@@ -37,7 +34,8 @@ const CAPTURE = new Intl.DateTimeFormat('en-US', {
 export function captureTimestamp(at) {
   if (!at) return 'Time not recorded'
   const date = new Date(at)
-  return Number.isNaN(date.getTime()) ? 'Time not recorded' : CAPTURE.format(date)
+  // formatDateTime is this exact shape, pinned to the organisation's zone.
+  return Number.isNaN(date.getTime()) ? 'Time not recorded' : formatDateTime(date)
 }
 
 export function forensicCoordinates(lat, lng) {
