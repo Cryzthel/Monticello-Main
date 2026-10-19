@@ -170,10 +170,18 @@ exports.sendPasswordOtp = functions
   //
   // `failed-precondition` with `details.reason`, NOT `not-found`: both clients
   // read `not-found` as "the function is not deployed".
+  //
+  // ONLY `auth/user-not-found` means "not registered". Every other failure (a
+  // quota, an IAM or network error) used to be swallowed into the same
+  // answer, so an outage told a real admin their address did not exist.
   let uid = null;
   try {
     uid = (await admin.auth().getUserByEmail(email)).uid;
-  } catch (_) {
+  } catch (err) {
+    if (err?.code !== "auth/user-not-found") {
+      console.error("sendPasswordOtp: account lookup failed", err?.code, err?.message);
+      throw new functions.https.HttpsError("unavailable", "Could not check that address. Try again shortly.");
+    }
     uid = null;
   }
   if (!uid) {
@@ -869,6 +877,11 @@ exports.onPresenceWrite = presence.onPresenceWrite;
 const accountSync = require("./accountSync");
 
 exports.syncStaffEmail = accountSync.syncStaffEmail;
+
+// The OTP-verified email change (replaces verifyBeforeUpdateEmail; see the file).
+const emailChange = require("./emailChange");
+exports.requestEmailChange = emailChange.requestEmailChange;
+exports.confirmEmailChange = emailChange.confirmEmailChange;
 
 /**
  * THE SCHEDULED OPERATIONS SWEEP.

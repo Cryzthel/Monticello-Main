@@ -61,6 +61,9 @@ const ACTION_STYLE = {
   // Written by functions/scripts/migrateStaffEmails.cjs, not by a callable:
   // a sign-in email change is an account migration run from a terminal.
   'security.account.email_changed': { icon: Mail, tone: 'info', label: 'Email changed' },
+  // A staff member's own change: functions/emailChange.js (code-verified) and
+  // the sign-in sync in functions/accountSync.js.
+  'staff.email.changed': { icon: Mail, tone: 'info', label: 'Email changed' },
 }
 
 const FALLBACK_STYLE = { icon: FileClock, tone: 'neutral', label: 'Event' }

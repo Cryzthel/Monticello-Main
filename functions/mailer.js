@@ -172,4 +172,71 @@ function buildResetCodeEmail(otp, ttlMinutes) {
   return { subject, text, html };
 }
 
-module.exports = { sendMail, mailSecrets, buildResetCodeEmail, provider, smtpAuth };
+/**
+ * The email-change code, sent to the NEW address. Same rules as the reset
+ * code: the code leads, no code in the subject, no links.
+ */
+function buildEmailChangeCodeEmail(otp, ttlMinutes) {
+  const code = String(otp);
+  const subject = "Confirm your new Monticello Villas sign-in email";
+  const text = [
+    `${code} is your code to confirm this address as your Monticello Villas sign-in email.`,
+    "",
+    `It expires in ${ttlMinutes} minutes and can be used once.`,
+    "",
+    "If you didn't ask for this, ignore this email. Nothing changes without the code.",
+    "",
+    "No one from Monticello Villas will ever ask you for this code.",
+    "",
+    "— Monticello Villas HOA",
+  ].join("\n");
+  const html =
+    `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;` +
+    `font-size:15px;line-height:1.6;color:#0F172A;max-width:480px">` +
+    `<p style="margin:0 0 20px;font-size:13px;font-weight:700;letter-spacing:.08em;` +
+    `color:#047857;text-transform:uppercase">Monticello Villas</p>` +
+    `<p style="margin:0 0 12px">Your code to confirm this sign-in email is:</p>` +
+    `<p style="margin:0 0 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;` +
+    `font-size:34px;font-weight:700;letter-spacing:10px;color:#0F172A">${code}</p>` +
+    `<p style="margin:0 0 16px">It expires in ${ttlMinutes} minutes and can be used once.</p>` +
+    `<p style="margin:0 0 8px;color:#475569">If you didn't ask for this, ignore this email. ` +
+    `Nothing changes without the code.</p>` +
+    `<p style="margin:0;font-size:12px;color:#94A3B8">Monticello Villas HOA · automated message</p>` +
+    `</div>`;
+  return { subject, text, html };
+}
+
+/** Told to the OLD address once a change completes, so a takeover is noticed. */
+function buildEmailChangedNotice(from, to) {
+  const subject = "Your Monticello Villas sign-in email was changed";
+  const text = [
+    `The sign-in email for your Monticello Villas staff account was changed from ${from} to ${to}.`,
+    "",
+    "If you made this change, there is nothing to do.",
+    "If you did not, contact the HOA office immediately so the account can be secured.",
+    "",
+    "— Monticello Villas HOA",
+  ].join("\n");
+  const html =
+    `<div style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;` +
+    `font-size:15px;line-height:1.6;color:#0F172A;max-width:480px">` +
+    `<p style="margin:0 0 20px;font-size:13px;font-weight:700;letter-spacing:.08em;` +
+    `color:#047857;text-transform:uppercase">Monticello Villas</p>` +
+    `<p style="margin:0 0 12px">The sign-in email for your staff account was changed ` +
+    `from <strong>${from}</strong> to <strong>${to}</strong>.</p>` +
+    `<p style="margin:0 0 8px;color:#475569">If you made this change, there is nothing to do. ` +
+    `If you did not, contact the HOA office immediately so the account can be secured.</p>` +
+    `<p style="margin:0;font-size:12px;color:#94A3B8">Monticello Villas HOA · automated message</p>` +
+    `</div>`;
+  return { subject, text, html };
+}
+
+module.exports = {
+  sendMail,
+  mailSecrets,
+  buildResetCodeEmail,
+  buildEmailChangeCodeEmail,
+  buildEmailChangedNotice,
+  provider,
+  smtpAuth,
+};

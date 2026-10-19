@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
-import { CheckCircle2, CircleAlert, Loader2, Mail, MailCheck, Pencil, ShieldCheck, UserRound } from '@shared/icons'
+import { CheckCircle2, CircleAlert, KeyRound, Loader2, Mail, Pencil, ShieldCheck, UserRound } from '@shared/icons'
 import Pill from '@shared/components/Pill'
 import FormField from '@shared/components/settings/FormField'
 import { ROLE_LABELS } from '@shared/auth/roles'
-import { useAccountEmail } from '@/hooks/useAccountEmail'
+import OtpInput from '@shared/auth/OtpInput'
+import { EMAIL_CODE_LENGTH, useAccountEmail } from '@/hooks/useAccountEmail'
 import SettingsDialog from './SettingsDialog'
 import SettingsItem from './SettingsItem'
 import SettingsSection from './SettingsSection'
@@ -17,21 +18,21 @@ const ROLE_SCOPE = {
  * Profile: the signed-in administrator's email and role.
  *
  * The email is shown read-only; "Edit email address" opens the change in a
- * MODAL (2026-10-19, by request — it was an inline dropdown). Two steps:
+ * MODAL, modelled on Forgot password (2026-10-19, by request):
  *
  *   1. New address + current password. The password re-authenticates the
- *      session (Firebase requires a recent sign-in), and the button stays
- *      off until the address is valid and different.
- *   2. "Check your inbox": Firebase's verifyBeforeUpdateEmail has sent a
- *      one-time confirmation link to the NEW address. Nothing changes until
- *      that link is opened, so the step says so and names the address.
+ *      session, and a 6-digit code is mailed to the NEW address.
+ *   2. The code challenge. Only a correct code makes the server change the
+ *      sign-in email (functions/emailChange.js), sync the staff record, log
+ *      it to Audit History and tell the OLD address. Until then nothing about
+ *      the account has changed — closing here abandons the change.
  *
  * Cancel, Escape or the backdrop clear what was typed. The change is a
  * Firebase Auth action with its own button, never part of the page's Save.
  */
 export default function ProfileSettingsCard({ role }) {
   const account = useAccountEmail()
-  // null (closed) | 'form' | 'sent'
+  // null (closed) | 'form' | 'code'
   const [step, setStep] = useState(null)
   const firstFieldRef = useRef(null)
 
@@ -41,14 +42,18 @@ export default function ProfileSettingsCard({ role }) {
   }
 
   async function send() {
-    if (await account.submit()) setStep('sent')
+    if (await account.request()) setStep('code')
+  }
+
+  async function confirm(entered) {
+    if (await account.confirm(entered)) setStep(null)
   }
 
   return (
     <SettingsSection id="profile" icon={UserRound} title="Profile">
       <SettingsItem
         title="Email address"
-        description="The administrator signed in to this console. Confirmation links are sent to this address."
+        description="The administrator signed in to this console. Security codes and notices are sent to this address."
         align="start"
       >
         <div className="flex flex-col gap-4">
@@ -68,22 +73,7 @@ export default function ProfileSettingsCard({ role }) {
             </span>
           </div>
 
-          {account.pending ? (
-            <p role="status" className="flex items-start gap-2 rounded-lg bg-info/10 px-3 py-2.5 text-xs leading-relaxed text-text-secondary">
-              <MailCheck size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-info" />
-              <span>
-                Waiting for <span className="font-medium text-text-primary">{account.pending}</span> to be confirmed.
-                Your sign-in email changes when that link is opened, and you will sign in again with it.{' '}
-                <button
-                  type="button"
-                  onClick={account.dismissPending}
-                  className="font-medium text-text-primary underline underline-offset-2"
-                >
-                  Dismiss
-                </button>
-              </span>
-            </p>
-          ) : !account.verified && account.available ? (
+          {!account.verified && account.available ? (
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
               This address has not been confirmed.
               <button
@@ -122,7 +112,7 @@ export default function ProfileSettingsCard({ role }) {
         open={step === 'form'}
         icon={Mail}
         title="Change email address"
-        description="Confirm with your password. A one-time link is sent to the new address."
+        description="Confirm with your password. A 6-digit code is sent to the new address."
         busy={account.busy}
         onClose={close}
         onSubmit={send}
@@ -134,7 +124,7 @@ export default function ProfileSettingsCard({ role }) {
             </button>
             <button type="submit" disabled={account.busy || !account.ready} className="btn btn-sm btn-brand">
               {account.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
-              {account.busy ? 'Sending…' : 'Send confirmation link'}
+              {account.busy ? 'Sending…' : 'Send code'}
             </button>
           </>
         }
@@ -158,7 +148,7 @@ export default function ProfileSettingsCard({ role }) {
               ? 'Enter a valid email address.'
               : account.same
                 ? 'That is already your sign-in email.'
-                : 'Nothing changes until the link sent here is opened.'
+                : 'A code is sent here. Nothing changes until you enter it.'
           }
           onChange={account.setNextEmail}
         />
@@ -181,24 +171,55 @@ export default function ProfileSettingsCard({ role }) {
       </SettingsDialog>
 
       <SettingsDialog
-        open={step === 'sent'}
-        icon={MailCheck}
-        title="Check your inbox"
-        description="One more step, from the new address."
+        open={step === 'code'}
+        icon={KeyRound}
+        title="Enter the code"
+        description={`Sent to ${account.sentTo}. It expires in 10 minutes.`}
+        busy={account.busy}
         onClose={close}
-        onSubmit={close}
+        onSubmit={() => confirm()}
         footer={
-          <button type="submit" className="btn btn-sm btn-brand">
-            Done
-          </button>
+          <>
+            <button type="button" onClick={() => setStep('form')} disabled={account.busy} className="btn btn-sm btn-outline">
+              Change address
+            </button>
+            <button type="submit" disabled={account.busy || !account.codeReady} className="btn btn-sm btn-brand">
+              {account.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
+              {account.busy ? 'Verifying…' : 'Confirm change'}
+            </button>
+          </>
         }
       >
-        <p className="text-sm leading-relaxed text-text-secondary">
-          A confirmation link was sent to <span className="font-medium text-text-primary">{account.pending}</span>.
-          Your sign-in email changes when it is opened, and you will sign in again with the new address.
+        <OtpInput
+          id="email-change-otp"
+          length={EMAIL_CODE_LENGTH}
+          value={account.code}
+          invalid={Boolean(account.error)}
+          disabled={account.busy}
+          autoFocus
+          onChange={account.setCode}
+          onComplete={confirm}
+        />
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+          No email? Check spam, or
+          <button
+            type="button"
+            onClick={account.resend}
+            disabled={account.busy || account.cooldown > 0}
+            className="font-medium text-text-primary underline underline-offset-2 disabled:no-underline disabled:opacity-50"
+          >
+            {account.cooldown > 0 ? `resend in ${account.cooldown}s` : 'send a new code'}
+          </button>
         </p>
+        {account.error ? (
+          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-xs text-danger">
+            <CircleAlert size="sm" aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>{account.error}</span>
+          </p>
+        ) : null}
         <p className="text-xs leading-relaxed text-text-muted">
-          No email after a few minutes? Check spam, or send it again from Edit email address.
+          Your sign-in email changes only when the code is confirmed. The old address is told, and the change is
+          recorded in Audit History.
         </p>
       </SettingsDialog>
     </SettingsSection>
