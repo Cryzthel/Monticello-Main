@@ -2,7 +2,7 @@ import { toast } from '@shared/lib/toast'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import Pill from '@shared/components/Pill'
-import { AlertTriangle, Loader2, RotateCcw, Save } from '@shared/icons'
+import { AlertTriangle, Save } from '@shared/icons'
 import { diffSettings, logSettingsChange } from '@/lib/settingsChanges'
 import AppShell from '@/layouts/AppShell'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
@@ -17,6 +17,7 @@ import ProfileSettingsCard from '@/components/settings/ProfileSettingsCard'
 import SecuritySettingsCard from '@shared/components/settings/SecuritySettingsCard'
 import NotificationsSettingsCard from '@/components/settings/NotificationsSettingsCard'
 import SystemSettingsCard from '@/components/settings/SystemSettingsCard'
+import SaveActions from '@shared/components/settings/SaveActions'
 
 /*
  * ── FOUR CHUNKS (2026-10-19, template pass) ─────────────────────────────────
@@ -190,7 +191,13 @@ export default function SettingsPage() {
       subtitle="Manage your account, alerts, and system preferences."
       stickyHeader
       headerActions={
-        <SaveActions form={form} settled={settled} changeCount={changes.length} onSave={() => setConfirmingSave(true)} />
+        <SaveActions
+          dirty={form.dirty}
+          saving={form.saving}
+          canSave={settled && !form.saving && form.dirty && changes.length > 0}
+          onDiscard={form.reset}
+          onSave={() => setConfirmingSave(true)}
+        />
       }
     >
       <form onSubmit={(event) => event.preventDefault()} aria-busy={!settled}>
@@ -254,39 +261,5 @@ export default function SettingsPage() {
         ) : null}
       </ConfirmDialog>
     </AppShell>
-  )
-}
-
-/**
- * The sticky header's two actions, and nothing else: Discard (secondary) and
- * Save changes (primary). Both stay put so the header never reflows; Discard
- * is enabled only with unsaved edits, Save also waits for the saved values to
- * load. Save opens the confirmation that lists each change — nothing is
- * written until that is accepted — and shows a spinner while writing.
- */
-function SaveActions({ form, settled, changeCount, onSave }) {
-  const canSave = settled && !form.saving && form.dirty && changeCount > 0
-  return (
-    <div className="flex items-center justify-end gap-2">
-      <button
-        type="button"
-        onClick={form.reset}
-        disabled={!form.dirty || form.saving}
-        className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-medium text-text-secondary transition-colors duration-150 hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:pointer-events-none disabled:opacity-40"
-      >
-        <RotateCcw size="sm" aria-hidden="true" />
-        Discard
-      </button>
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={!canSave}
-        aria-busy={form.saving || undefined}
-        className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-5 py-2 text-sm font-semibold text-white shadow-[0_0_20px_-5px_color-mix(in_oklab,var(--color-brand-500)_60%,transparent)] transition-[background-color,transform,opacity] duration-150 hover:bg-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
-      >
-        {form.saving ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : <Save size="sm" aria-hidden="true" />}
-        {form.saving ? 'Saving…' : 'Save changes'}
-      </button>
-    </div>
   )
 }

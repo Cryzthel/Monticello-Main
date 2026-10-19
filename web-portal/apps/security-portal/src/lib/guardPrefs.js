@@ -43,6 +43,19 @@ export const GUARD_PREF_DEFAULTS = {
    * a call the position is always shared; see lib/guardTelemetry.js.
    */
   shareIdleLocation: true,
+  /**
+   * This officer's siren level, 0–1, or null to follow the level an
+   * administrator set for every console (system_settings, Admin › Settings).
+   * Kept on the account like the others, so it follows the officer
+   * (2026-10-19, by request: an adjustable alarm volume on Guard Settings).
+   */
+  sirenVolume: null,
+}
+
+/** The level the siren should play at: this officer's, else the console-wide one. */
+export function effectiveSirenVolume(prefs, adminVolume) {
+  const own = prefs?.sirenVolume
+  return typeof own === 'number' && own >= 0 && own <= 1 ? own : adminVolume
 }
 
 // The last saved value, so a choice made where localStorage throws (private

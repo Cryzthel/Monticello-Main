@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { loopAlert } from '@shared/lib/alertSound'
 import { panicSirenStep } from '@shared/lib/panicSiren'
 import { getSettings } from '@shared/lib/systemSettingsStore'
+import { effectiveSirenVolume, loadGuardPrefs } from '@/lib/guardPrefs'
 
 /**
  * Sounds the alarm when a panic alert arrives.
@@ -112,6 +113,8 @@ export function usePanicSiren(alerts, { ready = true, muted = false } = {}) {
     const settings = getSettings()
     if (!settings.sos.sirenEnabled) return undefined
 
-    return loopAlert('panic', { volume: settings.guardhouse.sirenVolume })
+    // This officer's own level when they set one (Settings), else the
+    // console-wide level an administrator chose.
+    return loopAlert('panic', { volume: effectiveSirenVolume(loadGuardPrefs(), settings.guardhouse.sirenVolume) })
   }, [hasAlerts, ready, muted])
 }

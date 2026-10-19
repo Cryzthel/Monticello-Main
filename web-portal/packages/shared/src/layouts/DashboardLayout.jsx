@@ -8,6 +8,7 @@ import PageHeader from '@shared/components/PageHeader'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { LogOut } from '@shared/icons'
 import { useIncidentAlerts } from '@shared/hooks/useIncidentAlerts'
+import { useStaffAvatar } from '@shared/lib/staffAvatar'
 
 /**
  * The dashboard layout shell — the single surface behind both AdminShell and
@@ -120,6 +121,8 @@ export default function DashboardLayout({
   profileName,
 }) {
   const { user, logout } = useAuth()
+  // The account's photo, live — set from Guardhouse › Settings (lib/staffAvatar).
+  const avatarUrl = useStaffAvatar(user?.uid ?? null)
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(collapseKey) === '1')
@@ -188,7 +191,7 @@ export default function DashboardLayout({
       else setConfirmingLogout(true)
     },
     sidebarSlot,
-    profile: user?.email ? { name: profileName, email: user.email } : null,
+    profile: user?.email ? { name: profileName, email: user.email, photoUrl: avatarUrl } : null,
   }
 
   return (

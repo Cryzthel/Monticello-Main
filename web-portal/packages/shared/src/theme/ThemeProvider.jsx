@@ -199,6 +199,29 @@ export default function ThemeProvider({ children }) {
     })
   }, [])
 
+  /**
+   * Choosing a preference (Settings: System / Dark / Light) takes the SAME
+   * one-layer cross-fade as the toggle (2026-10-19, by request: no flash when
+   * switching). It used to call setPreference directly, which fell back to
+   * the per-element `.theme-switching` fade — the mismatched half-light frames
+   * the view transition was introduced to end. A choice that does not change
+   * what is on screen (System while the OS already matches) skips the fade.
+   */
+  const choosePreference = useCallback((next) => {
+    const apply = () => setPreference(next)
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const resolvedNext = next === 'system' ? readSystem() : next
+    const visible = document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+    if (typeof document.startViewTransition !== 'function' || reduced || resolvedNext === visible) {
+      apply()
+      return
+    }
+    document.startViewTransition(() => {
+      viewTransitionRef.current = true
+      flushSync(apply)
+    })
+  }, [])
+
   const value = useMemo(
     () => ({
       /** Resolved: 'light' | 'dark'. What is actually on screen. */
@@ -206,14 +229,14 @@ export default function ThemeProvider({ children }) {
       isDark: theme === 'dark',
       /** Stored: 'light' | 'dark' | 'system'. Unaffected by a pin. */
       preference,
-      setPreference,
+      setPreference: choosePreference,
       /** Hands control back to the OS. */
-      useSystemTheme: () => setPreference('system'),
+      useSystemTheme: () => choosePreference('system'),
       toggle,
       /** For useForcedTheme only. Pass a theme to pin, null to release. */
       setForcedTheme,
     }),
-    [theme, preference, toggle],
+    [theme, preference, toggle, choosePreference],
   )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

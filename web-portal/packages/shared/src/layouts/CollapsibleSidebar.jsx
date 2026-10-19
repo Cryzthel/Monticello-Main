@@ -313,12 +313,20 @@ function SidebarProfile({ collapsed, profile }) {
     <Tooltip label={name || email} hint={name ? email : undefined} disabled={!collapsed}>
       <div className="nav-link cursor-default py-2 hover:bg-transparent" aria-label={name ? `Signed in as ${name}, ${email}` : `Signed in as ${email}`}>
         <span className={`nav-icon ${slotWidth(collapsed)}`}>
-          <span
-            aria-hidden="true"
-            className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-[#047857]"
-          >
-            {initial}
-          </span>
+          {profile.photoUrl ? (
+            <img
+              src={profile.photoUrl}
+              alt=""
+              className="size-8 shrink-0 rounded-full border border-hairline object-cover"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-[#047857]"
+            >
+              {initial}
+            </span>
+          )}
         </span>
         <span className={`nav-label min-w-0 ${labelMotion(collapsed)}`}>
           {name ? (
@@ -363,7 +371,7 @@ export default function CollapsibleSidebar({
   navGroups,
   badgeCounts,
   onLogout,
-  /** `{ name?, email }` for the footer's profile block. */
+  /** `{ name?, email, photoUrl? }` for the footer's profile block. */
   profile,
   /** Rail only. The drawer is always expanded. Toggled from TopHeader. */
   collapsed = false,

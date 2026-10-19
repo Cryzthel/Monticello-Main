@@ -58,7 +58,10 @@ export default function GuardPrefsSync() {
       )
     }
 
-    const local = () => ({ alertsMuted: isMuted(), shareIdleLocation: loadGuardPrefs().shareIdleLocation })
+    const local = () => {
+      const prefs = loadGuardPrefs()
+      return { alertsMuted: isMuted(), shareIdleLocation: prefs.shareIdleLocation, sirenVolume: prefs.sirenVolume ?? null }
+    }
 
     const stopSnapshot = subscribeWithRetry(
       ref,
@@ -73,11 +76,13 @@ export default function GuardPrefsSync() {
           alertsMuted: typeof stored.alertsMuted === 'boolean' ? stored.alertsMuted : device.alertsMuted,
           shareIdleLocation:
             typeof stored.shareIdleLocation === 'boolean' ? stored.shareIdleLocation : device.shareIdleLocation,
+          sirenVolume:
+            stored.sirenVolume === null || typeof stored.sirenVolume === 'number' ? stored.sirenVolume : device.sirenVolume,
         }
         remote.current = next
         if (next.alertsMuted !== device.alertsMuted) setMuted(next.alertsMuted)
-        if (next.shareIdleLocation !== device.shareIdleLocation) {
-          saveGuardPrefs({ ...loadGuardPrefs(), shareIdleLocation: next.shareIdleLocation })
+        if (next.shareIdleLocation !== device.shareIdleLocation || next.sirenVolume !== device.sirenVolume) {
+          saveGuardPrefs({ ...loadGuardPrefs(), shareIdleLocation: next.shareIdleLocation, sirenVolume: next.sirenVolume })
         }
       },
       (err) => console.warn('[guard prefs] account preferences unavailable', err?.code ?? err),
@@ -86,8 +91,12 @@ export default function GuardPrefsSync() {
     const stopSound = subscribeAlertSound(({ muted }) => {
       if (remote.current && remote.current.alertsMuted !== muted) write({ alertsMuted: muted })
     })
-    const stopPrefs = subscribeGuardPrefs(({ shareIdleLocation }) => {
-      if (remote.current && remote.current.shareIdleLocation !== shareIdleLocation) write({ shareIdleLocation })
+    const stopPrefs = subscribeGuardPrefs(({ shareIdleLocation, sirenVolume = null }) => {
+      if (!remote.current) return
+      const patch = {}
+      if (remote.current.shareIdleLocation !== shareIdleLocation) patch.shareIdleLocation = shareIdleLocation
+      if ((remote.current.sirenVolume ?? null) !== sirenVolume) patch.sirenVolume = sirenVolume
+      if (Object.keys(patch).length) write(patch)
     })
 
     return () => {
