@@ -405,8 +405,14 @@ async function main() {
   // ── EXECUTE ── Firestore first (data), then files and presence, then the
   // logins last, so a failure part-way leaves accounts able to sign in to an
   // app whose data is gone rather than data pointing at accounts that are.
+  // staff_accounts FIRST. The rules decide "is this staff" from that
+  // collection, so removing it cuts off every still-open guard console before
+  // anything else is emptied. Alphabetical order emptied guard_telemetry first
+  // on the live run (2026-10-20), and an open Guardhouse tab re-published its
+  // position into it before its staff record was gone.
+  const ordered = [...firestorePlan].sort((a, b) => (b.collection === 'staff_accounts') - (a.collection === 'staff_accounts'));
   let deleted = 0;
-  for (const p of firestorePlan) {
+  for (const p of ordered) {
     if (!p.refs.length) continue;
     process.stdout.write(`\nFirestore ${p.collection} `);
     await deleteRefs(p.refs, (n) => {

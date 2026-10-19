@@ -66,3 +66,6 @@ dart_defines.json
 
 # purge-test-data.js dry-run/execute manifests list account emails and uids.
 scripts/purge-manifest-*.json
+
+# Local pre-purge backups: personal data and password hashes. Never commit.
+backups/
