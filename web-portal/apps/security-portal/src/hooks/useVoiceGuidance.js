@@ -92,7 +92,15 @@ function speak(text) {
  * Returns nothing. It briefly handed out a `repeat()` for the panel's Repeat
  * button; that button is gone and the timer below covers what it was for.
  */
-export function useVoiceGuidance(progress, { enabled, routeKey }) {
+export function useVoiceGuidance(progress, { enabled, routeKey, onSpoken }) {
+  // Every phrase is also handed to `onSpoken`, so the top banner can show the
+  // last instruction in words for anyone who cannot hear it.
+  const onSpokenRef = useRef(onSpoken)
+  onSpokenRef.current = onSpoken
+  const say = (text) => {
+    speak(text)
+    onSpokenRef.current?.(text)
+  }
   // Which prompts have already been spoken, as `${stepIndex}@${threshold}`.
   const spokenRef = useRef(new Set())
   const lastRouteRef = useRef(routeKey)
@@ -174,7 +182,7 @@ export function useVoiceGuidance(progress, { enabled, routeKey }) {
       const key = `${index}@next`
       if (!spoken.has(key)) {
         spoken.add(key)
-        speak(`Next, ${instruction}`)
+        say(`Next, ${instruction}`)
         return
       }
     }
@@ -183,7 +191,7 @@ export function useVoiceGuidance(progress, { enabled, routeKey }) {
       const key = `${index}@arrived`
       if (!spoken.has(key)) {
         spoken.add(key)
-        speak('You have arrived.')
+        say('You have arrived.')
       }
       return
     }
@@ -192,7 +200,7 @@ export function useVoiceGuidance(progress, { enabled, routeKey }) {
       const key = `${index}@now`
       if (!spoken.has(key)) {
         spoken.add(key)
-        speak(instruction)
+        say(instruction)
       }
       return
     }
@@ -205,7 +213,7 @@ export function useVoiceGuidance(progress, { enabled, routeKey }) {
     const key = `${index}@${due}`
     if (spoken.has(key)) return
     spoken.add(key)
-    speak(`In ${formatDistance(distanceToManeuver)}, ${instruction}`)
+    say(`In ${formatDistance(distanceToManeuver)}, ${instruction}`)
   }, [enabled, progress])
 
   /**
@@ -225,7 +233,7 @@ export function useVoiceGuidance(progress, { enabled, routeKey }) {
       // cannot build a backlog of identical instructions.
       if (window.speechSynthesis?.speaking) return
       const phrase = phraseRef.current
-      if (phrase) speak(phrase)
+      if (phrase) say(phrase)
     }, REPEAT_MS)
     return () => clearInterval(id)
   }, [enabled, stepIndex, routeKey])

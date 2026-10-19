@@ -89,7 +89,7 @@ export default function UnitPicker({ units, value, onChange, excludeUid = null, 
                   distance on the right already answers that — it is null, and
                   shows an em dash, precisely when there is no usable fix. */}
               <span className="mt-1 flex">
-                <StatusBadge tone={STATE_TONES[unit.state]} size="sm" dot>
+                <StatusBadge tone={STATE_TONES[unit.state]} size="md" dot>
                   {UNIT_STATE_LABELS[unit.state]}
                 </StatusBadge>
               </span>

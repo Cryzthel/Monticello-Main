@@ -184,9 +184,19 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
             </p>
           </div>
 
-          <span className="inline-flex h-6 items-center rounded-full bg-danger/15 px-3 text-xs font-semibold capitalize text-danger ring-1 ring-inset ring-danger/30">
-            {alert.status}
-          </span>
+          {/* Where the alert stands, in the Guardhouse's words: unattended
+              until a guard acknowledges it. */}
+          {isActive ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-danger/15 px-3 py-1 text-xs font-semibold text-danger ring-1 ring-inset ring-danger/30">
+              <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none" />
+              Awaiting acknowledgement
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-semibold text-success ring-1 ring-inset ring-success/30">
+              <ShieldCheck size="sm" aria-hidden="true" />
+              Acknowledged by Security{alert.acknowledgedByName ? ` · ${alert.acknowledgedByName}` : ''}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-col items-center gap-4 p-6 text-center">
@@ -226,6 +236,21 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
               was the only place that distinction was stated in WORDS. */}
 
           {error ? <p className="text-xs text-danger">{error}</p> : null}
+
+          {/* STEP A — the explicit verification. Respond to SOS below also
+              verifies on its way out; this is for a guard confirming the
+              alert is real before anyone rolls. */}
+          {isActive ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => run(() => acknowledgePanicAlert(alert.id, user?.displayName), 'SOS verified by Security')}
+              className="btn btn-sm btn-brand w-full"
+            >
+              <ShieldCheck size="sm" />
+              {busy ? 'Acknowledging…' : 'Acknowledge'}
+            </button>
+          ) : null}
 
           {/* ── CLOSING THE CALL OUT ──────────────────────────────────────
               What replaced Acknowledge here.

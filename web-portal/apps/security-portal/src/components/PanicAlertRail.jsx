@@ -35,6 +35,9 @@ import { distanceMeters, formatDistance } from '@/lib/directions'
  * reduced-motion rule.
  */
 
+/** Cards shown per group before "Show more" — a glanceable chunk (Miller's law). */
+const MAX_PER_GROUP = 4
+
 /**
  * One alert. The card is a CONTAINER, not a button: the identity block opens
  * the alert, and the two actions are its siblings — a <button> inside a
@@ -47,7 +50,7 @@ function AlertCard({ alert, origin, onOpen, onAcknowledge, busy }) {
     canNavigate && origin ? distanceMeters([alert.lng, alert.lat], [origin.lng, origin.lat]) : null
 
   return (
-    <li className="group relative overflow-hidden rounded-2xl border border-hairline bg-base-800/60 p-5 transition-colors duration-200 hover:bg-base-800 dark:border-white/[0.04] dark:bg-zinc-900/40 dark:hover:bg-zinc-900/60">
+    <li className="group relative overflow-hidden rounded-xl border border-hairline bg-base-800/60 p-4 transition-colors duration-200 hover:bg-base-800 dark:border-white/[0.04] dark:bg-zinc-900/40 dark:hover:bg-zinc-900/60">
       {/* The state bar: red while unattended, amber once acknowledged. */}
       <span
         aria-hidden="true"
@@ -82,16 +85,16 @@ function AlertCard({ alert, origin, onOpen, onAcknowledge, busy }) {
           pill: the SOS payload carries no accuracy radius, and inventing one
           would assert a precision nobody measured. Whether there is a position
           at all IS known, and changes what a responder can do. */}
-      <div className="mt-3.5 flex flex-wrap items-center gap-2">
-        <Pill size="sm" tone={waiting ? 'danger' : 'warning'}>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Pill tone={waiting ? 'danger' : 'warning'}>
           {waiting ? 'Active SOS' : 'Responding'}
         </Pill>
         {canNavigate ? (
           metres != null ? (
-            <Pill size="sm">{formatDistance(metres)} away</Pill>
+            <Pill>{formatDistance(metres)} away</Pill>
           ) : null
         ) : (
-          <Pill size="sm">No GPS fix</Pill>
+          <Pill>No GPS fix</Pill>
         )}
         {!waiting && alert.acknowledgedByName ? (
           <span className="truncate text-[11px] text-text-muted">{alert.acknowledgedByName}</span>
@@ -101,7 +104,7 @@ function AlertCard({ alert, origin, onOpen, onAcknowledge, busy }) {
       {/* ── WHAT TO DO ── Acknowledge only while unattended; Confirm resolve
           opens the alert's modal, which is the confirmation (notes, photo
           proof) rather than a second press here. */}
-      <div className="mt-5 flex gap-3">
+      <div className="mt-4 flex gap-2.5">
         {waiting ? (
           <button
             type="button"
@@ -124,10 +127,10 @@ function AlertCard({ alert, origin, onOpen, onAcknowledge, busy }) {
           type="button"
           onClick={() => onOpen(alert)}
           disabled={busy}
-          aria-label={`Confirm resolve the alert from ${alert.residentName}`}
+          aria-label={waiting ? `Open the alert from ${alert.residentName}` : `Confirm resolve the alert from ${alert.residentName}`}
           className="min-h-[44px] flex-1 rounded-full border border-hairline bg-tint/[0.04] py-2 text-sm font-medium text-text-secondary transition-[background-color,color,transform] duration-150 hover:bg-tint/[0.1] hover:text-text-primary active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0 dark:border-zinc-700/50 dark:bg-zinc-800/50"
         >
-          Confirm resolve
+          {waiting ? 'Details' : 'Confirm resolve'}
         </button>
       </div>
     </li>
@@ -159,11 +162,34 @@ export default function PanicAlertRail({ onOpenAlert, muted, onToggleMute, origi
 
   // Shut on a phone until asked; on a console (lg+) always open.
   const [open, setOpen] = useState(false)
+  // Which groups show every card rather than the first MAX_PER_GROUP.
+  const [expanded, setExpanded] = useState({})
 
   // No emergencies: no column at all, rather than a permanent empty tax on the map.
   if (!alerts.length) return null
 
-  const unattended = alerts.filter((alert) => alert.status === 'active').length
+  const byAge = (a, b) => new Date(a.createdAt ?? 0) - new Date(b.createdAt ?? 0)
+  const waiting = alerts.filter((alert) => alert.status === 'active').sort(byAge)
+  const handled = alerts.filter((alert) => alert.status !== 'active').sort(byAge)
+  const unattended = waiting.length
+  const groups = [
+    {
+      key: 'waiting',
+      title: 'Needs acknowledgement',
+      items: waiting,
+      region: 'border-danger/25 bg-danger/[0.04]',
+      ink: 'text-danger',
+      count: 'bg-danger/15 text-danger ring-danger/30',
+    },
+    {
+      key: 'handled',
+      title: 'Being handled',
+      items: handled,
+      region: 'border-warning/25 bg-warning/[0.04]',
+      ink: 'text-warning',
+      count: 'bg-warning/15 text-warning ring-warning/30',
+    },
+  ]
 
   return (
     <aside
@@ -191,7 +217,7 @@ export default function PanicAlertRail({ onOpenAlert, muted, onToggleMute, origi
               {alerts.length === 1 ? '1 panic alert' : `${alerts.length} panic alerts`}
             </h2>
             <p className="mt-1.5 text-xs font-medium text-text-muted" aria-live="polite">
-              {unattended ? `${unattended} still unattended` : 'All acknowledged — none resolved yet'}
+              {unattended ? `${unattended} need acknowledgement · ${alerts.length - unattended} being handled` : 'All acknowledged — none resolved yet'}
             </p>
           </div>
         </div>
@@ -238,18 +264,55 @@ export default function PanicAlertRail({ onOpenAlert, muted, onToggleMute, origi
         id="panic-queue"
         className={`custom-scrollbar drawer-scroll min-h-0 flex-1 flex-col overflow-y-auto p-5 lg:flex ${open ? 'flex' : 'hidden'}`}
       >
-        <ul className="flex flex-col gap-4">
-          {alerts.map((alert) => (
-            <AlertCard
-              key={alert.id}
-              alert={alert}
-              origin={origin}
-              busy={busyId === alert.id}
-              onOpen={onOpenAlert}
-              onAcknowledge={(a) => run(a, () => acknowledgePanicAlert(a.id, user?.displayName))}
-            />
-          ))}
-        </ul>
+        {/* ── TWO REGIONS, OLDEST FIRST ─────────────────────────────────
+            Gestalt common region: each state is its own bounded group with
+            its own heading and count, so "who still needs someone" and "who
+            already has someone" are read as two lists, not inferred from a
+            1px accent bar on each card. Oldest first inside a group — the
+            person waiting longest is the triage question. Miller's law: a
+            group shows MAX_PER_GROUP cards and folds the rest behind one
+            "Show more", so a mass-alert night stays scannable. */}
+        <div className="flex flex-col gap-5">
+          {groups.map((group) =>
+            group.items.length ? (
+              <section
+                key={group.key}
+                aria-label={group.title}
+                className={`rounded-2xl border p-3 ${group.region}`}
+              >
+                <h3 className="mb-3 flex items-center justify-between gap-2 px-1">
+                  <span className={`font-mono text-[11px] font-semibold uppercase tracking-widest ${group.ink}`}>
+                    {group.title}
+                  </span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${group.count}`}>
+                    {group.items.length}
+                  </span>
+                </h3>
+                <ul className="flex flex-col gap-3">
+                  {(expanded[group.key] ? group.items : group.items.slice(0, MAX_PER_GROUP)).map((alert) => (
+                    <AlertCard
+                      key={alert.id}
+                      alert={alert}
+                      origin={origin}
+                      busy={busyId === alert.id}
+                      onOpen={onOpenAlert}
+                      onAcknowledge={(a) => run(a, () => acknowledgePanicAlert(a.id, user?.displayName))}
+                    />
+                  ))}
+                </ul>
+                {group.items.length > MAX_PER_GROUP ? (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((prev) => ({ ...prev, [group.key]: !prev[group.key] }))}
+                    className="mt-3 w-full rounded-full py-1.5 text-xs font-semibold text-text-secondary transition-colors hover:bg-tint/[0.08] hover:text-text-primary"
+                  >
+                    {expanded[group.key] ? 'Show fewer' : `Show ${group.items.length - MAX_PER_GROUP} more`}
+                  </button>
+                ) : null}
+              </section>
+            ) : null,
+          )}
+        </div>
       </div>
     </aside>
   )

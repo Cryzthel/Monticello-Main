@@ -1,4 +1,4 @@
-import { CheckCircle2, ShieldAlert, X } from '@shared/icons'
+import { CheckCircle2, Info, ShieldAlert, X } from '@shared/icons'
 
 /**
  * The receipt for the last action taken in an incident panel's pinned footer.
@@ -17,6 +17,8 @@ const TONES = {
   success: { shell: 'border-success/30 bg-success/10 text-success', Icon: CheckCircle2 },
   warning: { shell: 'border-warning/30 bg-warning/10 text-warning', Icon: ShieldAlert },
   danger: { shell: 'border-danger/30 bg-danger/10 text-danger', Icon: ShieldAlert },
+  // Neutral news, e.g. a save the server is slow to confirm (useStageAction).
+  info: { shell: 'border-info/30 bg-info/10 text-info', Icon: Info },
 }
 
 export default function Receipt({ feedback, onDismiss }) {

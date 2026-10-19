@@ -10,7 +10,9 @@ import PanicAlertModal from '@/components/PanicAlertModal'
 import DispatchDetailDrawer, { DRAWER_WIDTH_PX } from '@/components/DispatchDetailDrawer'
 import RouteSummaryBadge from '@/components/RouteSummaryBadge'
 import GuidanceBanner from '@/components/GuidanceBanner'
-import GpsLockBadge from '@/components/GpsLockBadge'
+import NavigationModal from '@/components/NavigationModal'
+import DispatchVoiceBanner from '@/components/DispatchVoiceBanner'
+import { useRouteSimulation } from '@/hooks/useRouteSimulation'
 import PanicAlertRail from '@/components/PanicAlertRail'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
@@ -21,13 +23,13 @@ import { isActiveStage } from '@shared/lib/dispatchStage'
 import { formatCategory } from '@shared/lib/wpda'
 import { useLivePanicAlerts } from '@/components/PanicAlertProvider'
 import { useGuardTelemetryState } from '@/components/GuardTelemetryProvider'
-import { describeDevice, getLastFix } from '@/lib/guardTelemetry'
+import { getLastFix } from '@/lib/guardTelemetry'
 import { useGuardUnits } from '@/hooks/useGuardUnits'
 import { useDispatchRoute } from '@/hooks/useDispatchRoute'
 import { blockLotLabel } from '@/lib/dispatch'
 import { withLiveSelfUnit } from '@/lib/liveSelfUnit'
 import { pickBestFix } from '@/lib/bestFix'
-import { DEFAULT_ROUTE_PROFILE, routeToGeojson } from '@/lib/directions'
+import { DEFAULT_ROUTE_PROFILE, formatDistance, routeToGeojson } from '@/lib/directions'
 import { isOffRoute, routeProgress } from '@/lib/routeProgress'
 import { useDeviceHeading } from '@/hooks/useDeviceHeading'
 import { useOffRoute } from '@/hooks/useOffRoute'
@@ -78,7 +80,7 @@ export default function DashboardPage() {
     () => query(collection(db, 'incidents'), where('status', 'not-in', ['resolved', 'closed', 'false_alarm'])),
     [],
   )
-  const { data: rawIncidents } = useLiveCollection(activeQuery)
+  const { data: rawIncidents, loading: incidentsLoading, error: incidentsError } = useLiveCollection(activeQuery)
   const reports = useMemo(
     // Deleted reports out, as on every admin surface (see useIncidentFeed):
     // a soft delete leaves the document matching this status query, so without
@@ -185,6 +187,15 @@ export default function DashboardPage() {
   const [navTargetId, setNavTargetId] = useState(null)
   const navTarget = navTargetId ? reports.find((r) => r.id === navTargetId) ?? null : null
   const routeIncident = sosRouteTarget ?? navTarget ?? selectedReport ?? myActive
+  /**
+   * NAVIGATION DETAILS ONLY AFTER ACKNOWLEDGING (2026-10-19, by request). The
+   * route is still computed for a report being reviewed — the unit picker
+   * measures distances from it — but the line, the route card and the "route
+   * ready" banner stay off the map until the call is acknowledged (stage
+   * dispatched or later), or an SOS is being answered.
+   */
+  const routeAcknowledged =
+    Boolean(sosRouteTarget) || (Boolean(routeIncident) && routeIncident.dispatchStage !== 'none')
   const routeIncidentRef = useRef(routeIncident)
   routeIncidentRef.current = routeIncident
 
@@ -215,7 +226,7 @@ export default function DashboardPage() {
    * officer as one sentence telling them to check a GPS permission that was
    * already granted.
    */
-  const { fix: deviceFix, mode: telemetryMode, locationError } = useGuardTelemetryState()
+  const { fix: deviceFix, mode: telemetryMode } = useGuardTelemetryState()
 
   /**
    * ── ONE DECISION ABOUT WHERE THIS OFFICER IS ────────────────────────────
@@ -237,9 +248,6 @@ export default function DashboardPage() {
     () => pickBestFix(deviceFix, publishedSelf),
     [deviceFix, publishedSelf],
   )
-  // Read once: whether this console is itself running on a phone, for the
-  // accuracy badge's "open this on your phone" hint.
-  const onMobile = useMemo(() => describeDevice().mobile, [])
 
   /**
    * This officer's own marker, driven by this device rather than by the
@@ -338,6 +346,28 @@ export default function DashboardPage() {
   const [navigating, setNavigating] = useState(false)
 
   /**
+   * The session's three switches, all local to this console and all reset
+   * when the session ends:
+   *   navModalOpen  the Start Navigation overlay is up (else minimised to the
+   *                 route sheet, with the turn banner over the map)
+   *   simulating    "Simulate drive" — a pretend unit walks the route
+   *                 (useRouteSimulation; never written anywhere)
+   *   voiceMuted    spoken directions off. On by default when a session
+   *                 starts; the guard can mute from the overlay or the banner.
+   */
+  const [navModalOpen, setNavModalOpen] = useState(false)
+  const [simulating, setSimulating] = useState(false)
+  const [voiceMuted, setVoiceMuted] = useState(false)
+  const [lastPhrase, setLastPhrase] = useState(null)
+  useEffect(() => {
+    setNavModalOpen(navigating)
+    if (!navigating) {
+      setSimulating(false)
+      setLastPhrase(null)
+    }
+  }, [navigating])
+
+  /**
    * This device's compass — live from the moment there is a route, not just
    * once a session starts.
    *
@@ -384,8 +414,19 @@ export default function DashboardPage() {
    * 'unit' for them and the published telemetry is the only thing either end
    * could know.
    */
-  const fix =
+  /**
+   * While "Simulate drive" runs, the pretend unit's position stands in for
+   * the real fix — for the turn card, the marker and the voice on THIS
+   * screen only. The route itself, the arrival stamp and telemetry keep
+   * reading the real fix (`selfFix`), so nothing simulated leaves the tab.
+   */
+  const simFix = useRouteSimulation({
+    coordinates: route.route?.geometry?.coordinates ?? null,
+    running: navigating && simulating,
+  })
+  const realFix =
     (route.originSource === 'self' ? selfFix : null) ?? route.unit?.position ?? null
+  const fix = simFix ?? realFix
 
   /**
    * Where the responding unit actually is along the plotted route.
@@ -423,24 +464,27 @@ export default function DashboardPage() {
    * other prop mirrors in IncidentMap do.
    */
   const stepLatchRef = useRef({ key: null, index: 0, point: null })
+  // A simulated drive is its own set of instructions: starting or stopping
+  // one must not carry the other's step (or spoken prompts) across.
+  const guidanceKey = routeKey ? `${routeKey}|${simulating ? 'sim' : 'live'}` : null
   const progress = useMemo(() => {
     if (!route.route || !fix) return null
     // A new call, a new unit or a new profile is a new set of instructions,
     // and the latch must not carry step 7 of the old route into step 7 of a
     // route that has four — nor the previous position, which belongs to a
     // different line. `routeKey` is already exactly this identity.
-    if (stepLatchRef.current.key !== routeKey) {
-      stepLatchRef.current = { key: routeKey, index: 0, point: null }
+    if (stepLatchRef.current.key !== guidanceKey) {
+      stepLatchRef.current = { key: guidanceKey, index: 0, point: null }
     }
     const { index, point } = stepLatchRef.current
     const next = routeProgress(route.route, fix, { stepFloor: index, prevPoint: point })
     // The SNAPPED point goes back in, matching what the gate compares
     // against — see the note on `point` in gateStepIndex.
-    if (next?.step) stepLatchRef.current = { key: routeKey, index: next.step.index, point: next.snapped }
+    if (next?.step) stepLatchRef.current = { key: guidanceKey, index: next.step.index, point: next.snapped }
     offRouteRef.current = isOffRoute(next)
     return next
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [route.route, fix, routeKey])
+  }, [route.route, fix, guidanceKey])
 
   /**
    * The responding unit, pointed along the road and sitting on it.
@@ -538,8 +582,8 @@ export default function DashboardPage() {
   // Spoken guidance IS the session now. The dispatcher's mute went with the
   // control that offered it (see above), so there is no second input that
   // could disagree with this.
-  const speaking = navigating && voiceSupported
-  useVoiceGuidance(progress, { enabled: speaking, routeKey })
+  const speaking = navigating && voiceSupported && !voiceMuted
+  useVoiceGuidance(progress, { enabled: speaking, routeKey: guidanceKey, onSpoken: setLastPhrase })
 
   // A route that ends, or hands off to a different unit, leaves a session
   // pointing at nobody.
@@ -774,6 +818,78 @@ export default function DashboardPage() {
     return () => clearTimeout(timer)
   }, [autoNav, navigating, route.incidentId, route.phase, routeIncidentStage, toggleNavigation, closeDetail])
 
+  /**
+   * ── A REPORT THAT JUST ARRIVED ─────────────────────────────────────────
+   * Its pin pulses like every open call, which on a busy map says nothing
+   * about it being NEW. So a report that lands after this console has its
+   * first good snapshot is announced in the top label for 90 seconds with a
+   * View button, and — when the guard is not driving or reading another
+   * call — the camera flies to it. Primed only from a SUCCESSFUL snapshot, so
+   * a listener recovering from an error does not announce the whole list.
+   */
+  const seenReportIdsRef = useRef(null)
+  const [freshReport, setFreshReport] = useState(null)
+  useEffect(() => {
+    if (incidentsLoading || incidentsError) return
+    const ids = new Set(reports.map((r) => r.id))
+    if (seenReportIdsRef.current === null) {
+      seenReportIdsRef.current = ids
+      return
+    }
+    const added = reports.filter((r) => !seenReportIdsRef.current.has(r.id) && r.dispatchStage === 'none')
+    seenReportIdsRef.current = ids
+    if (!added.length) return
+    const newest = added[added.length - 1]
+    setFreshReport({ id: newest.id, at: Date.now() })
+    if (!navigatingRef.current && !selectedId && Number.isFinite(newest.lat) && Number.isFinite(newest.lng)) {
+      setFocus({ id: `incident:${newest.id}:${Date.now()}`, lat: newest.lat, lng: newest.lng })
+    }
+  }, [reports, incidentsLoading, incidentsError, selectedId])
+  useEffect(() => {
+    if (!freshReport) return undefined
+    const timer = setTimeout(() => setFreshReport(null), 90_000)
+    return () => clearTimeout(timer)
+  }, [freshReport])
+  const fresh = freshReport ? reports.find((r) => r.id === freshReport.id && r.dispatchStage === 'none') ?? null : null
+
+  /**
+   * THE TOP LABEL'S LINE — what this console is doing, and what to do next.
+   * While navigating it is the last spoken phrase (or the current turn), so a
+   * guard who cannot hear the voice can read it.
+   */
+  const banner = (() => {
+    if (navigating) {
+      const turn = progress?.step?.upcoming?.instruction
+      const turnLine =
+        turn && !progress.step.isLast ? `In ${formatDistance(progress.step.distanceToManeuver)}, ${turn}` : turn
+      return { tone: 'nav', message: lastPhrase ?? turnLine ?? `Navigating to ${routeTargetLabel}` }
+    }
+    if (fresh) {
+      return {
+        tone: 'alert',
+        message: `New ${formatCategory(fresh.category).toLowerCase()} report · ${describeIncidentLocation(fresh) || blockLotLabel(fresh) || 'location pinned on the map'}`,
+        action: {
+          label: 'View',
+          onClick: () => {
+            handleMapSelect(fresh)
+            setFreshReport(null)
+          },
+        },
+      }
+    }
+    // The "N SOS alerts waiting" line is gone (2026-10-19, by request): the
+    // SOS rail, its siren and the red pulses already say it.
+    if (routeAcknowledged && route.phase === 'ready' && routeIncident) {
+      return { tone: 'route', message: `Route ready to ${routeTargetLabel} · Start navigation for spoken directions` }
+    }
+    if (routeAcknowledged && route.phase === 'routing') return { tone: 'route', message: 'Plotting the route…' }
+    if (reports.some((r) => r.dispatchStage === 'none')) {
+      return { tone: 'idle', message: 'Tap a pulse ring to review a report, then Acknowledge to take it' }
+    }
+    return { tone: 'idle', message: 'All reports handled · voice directions start with navigation' }
+  })()
+  const voiceOn = !voiceMuted
+
   // ── DEEP LINKS ───────────────────────────────────────────────────────────
   // `?panic=<id>` flies to an SOS from the Panic Alerts page without opening
   // anything. `?incident=<id>` opens a call from a dispatch alert (see
@@ -874,7 +990,7 @@ export default function DashboardPage() {
              a pan during one is a look rather than a decision: the camera
              comes back on the next fix, which is what the officer driving
              relies on and what a dispatcher glancing at the gate wants. */
-          route={routeGeojson}
+          route={routeAcknowledged ? routeGeojson : null}
           routeKey={routeKey}
           /* THE TURN BANNER, top-centre on every screen. Only while a
              session is running and there is a maneuver to show: a near-black
@@ -889,28 +1005,22 @@ export default function DashboardPage() {
                Wrapped here rather than changing the slot, which the Admin map
                also renders into. */
             <div className="flex w-full flex-col items-center gap-2">
-              {/* ── THE LOCK STATE, ABOVE THE TURN PLATE ──────────────────
-                  In the overlay slot rather than pinned to a corner of the
-                  canvas, because that slot is the one piece of this map that
-                  already solves the two problems a floating chip has: it
-                  keeps clear of the control column on a phone (`pr-14`) and
-                  it is the stacking context the guidance banner lives in, so
-                  the two cannot overlap however either one grows.
-
-                  Above the banner, not below: it is one line and the banner
-                  is the thing being read at speed, so the plate keeps the
-                  position closest to the middle of the screen. */}
-              <GpsLockBadge
-                mode={telemetryMode}
-                locationError={locationError}
-                fix={selfFix}
-                // pickBestFix hands back one of its two inputs, so identity
-                // says which: anything but this device's own fix came from
-                // the officer's other device through the telemetry document.
-                source={selfFix && selfFix !== deviceFix ? 'other-device' : 'this-device'}
-                onMobile={onMobile}
+              {/* THE CLASSIC TOP LABEL, with the voice-guidance state. */}
+              <DispatchVoiceBanner
+                message={banner.message}
+                tone={banner.tone}
+                action={banner.action}
+                voiceOn={voiceOn}
+                voiceSupported={voiceSupported}
+                onToggleVoice={() => setVoiceMuted((muted) => !muted)}
+                simulating={navigating && simulating}
               />
-              {navigating && progress?.step && !offRoute ? (
+              {/* The GPS precision chip ("High / Low precision · Wi-Fi
+                  estimate", "For GPS precision, open this console on your
+                  phone") is gone by request (2026-10-19) — it was clutter on
+                  the map. A refused or missing location is still told to the
+                  officer by LocationAccessNotice in the shell. */}
+              {navigating && !navModalOpen && progress?.step && !offRoute ? (
                 <GuidanceBanner maneuver={progress.step} waypointM={progress.waypointM ?? null} />
               ) : null}
             </div>
@@ -918,10 +1028,26 @@ export default function DashboardPage() {
           /* THE ROUTE PANEL: a bottom sheet on a phone, a card up here on a
              console. */
           sheet={
-            route.phase === 'idle' ? null : (
+            route.phase === 'idle' || !routeAcknowledged ? null : navigating && navModalOpen ? (
+              <NavigationModal
+                route={route}
+                progress={progress}
+                offRoute={offRoute}
+                targetLabel={routeTargetLabel}
+                targetDetail={routeTargetDetail}
+                simulating={simulating}
+                onToggleSimulation={() => setSimulating((on) => !on)}
+                voiceOn={voiceOn}
+                voiceSupported={voiceSupported}
+                onToggleVoice={() => setVoiceMuted((muted) => !muted)}
+                onMinimize={() => setNavModalOpen(false)}
+                onExit={toggleNavigation}
+              />
+            ) : (
               <RouteSummaryBadge
                 navigating={navigating}
                 onToggleNavigation={toggleNavigation}
+                onOpenDirections={() => setNavModalOpen(true)}
                 route={route}
                 progress={progress}
                 targetLabel={routeTargetLabel}

@@ -2,28 +2,25 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertOctagon,
-  Check,
+  AlertTriangle,
   CheckCircle2,
   ClipboardList,
-  Copy,
   FileText,
   History,
+  Home,
   Loader2,
-  MapPin,
   Navigation,
-  Phone,
   Radio,
+  ShieldCheck,
   Timer,
-  UserRoundCheck,
+  User,
   UserRoundCog,
   X,
 } from '@shared/icons'
-import StatusBadge from '@shared/components/StatusBadge'
-import { categoryTone } from '@shared/theme/badgeStyles'
+import Pill from '@shared/components/Pill'
+import { SEVERITY_TONES, categoryTone } from '@shared/theme/badgeStyles'
 import Lightbox from '@shared/components/Lightbox'
 import { useAuth } from '@shared/auth/AuthContext'
-import { useReporterContact } from '@shared/hooks/useReporterContact'
-import { buildMediaItems } from '@shared/lib/incidents'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import {
   ACK_TIMEOUT_MS,
@@ -37,19 +34,20 @@ import {
   dispatchUnit,
   resolveIncident,
 } from '@/lib/dispatchWorkflow'
-import {
-  formatStopwatch,
-  incidentReference,
-  residentMessageForStage,
-} from '@/lib/dispatch'
+import { GUARD_STAGE_LABELS, formatStopwatch, residentMessageForStage } from '@/lib/dispatch'
 import { ROUTES } from '@/config/portal'
 import { useStageAction } from '@/hooks/useStageAction'
-import { Section } from '@/components/dispatch/parts'
 import CategoryIconBadge from '@shared/components/dispatch/CategoryIconBadge'
 import StageStepper from '@shared/components/dispatch/StageStepper'
 import Receipt from '@shared/components/dispatch/Receipt'
 import { unitLabel } from '@shared/lib/unitIdentity'
 import EvidenceGrid, { forensicCoordinates, forensicTimestamp } from '@shared/components/dispatch/EvidenceGrid'
+import { DetailCard, DetailField as Field } from '@shared/components/detail/DetailCard'
+import {
+  CoordinatesBlock,
+  MediaEvidenceCard,
+} from '@shared/components/detail/IncidentDetailCards'
+import { incidentAddress, ticketCode } from '@shared/lib/incidentDetail'
 import UnitPicker from '@/components/dispatch/UnitPicker'
 import ResolveIncidentModal from '@/components/dispatch/ResolveIncidentModal'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
@@ -63,81 +61,31 @@ import { formatTime } from '@shared/lib/dates'
  */
 export const DRAWER_WIDTH_PX = 416
 
-/**
- * The Guardhouse's names for the three steps (by request, 2026-10-19). Display
- * only — the stored stages, their stamps and the rules are unchanged:
- *   dispatched  → "Verified by Security": security has taken the report and
- *                 assigned it (dispatchedAt)
- *   responding  → "Dispatched": the officer accepted and is routed to it
- *                 (respondingAt)
- *   resolved    → "Resolved" (resolvedAt)
- * Admin and the resident app keep STAGE_LABELS.
- */
-const GUARD_STAGE_LABELS = {
-  dispatched: 'Verified by Security',
-  responding: 'Dispatched',
-  resolved: 'Resolved',
+const PRIORITY_LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
+
+/** The priority field's left rule, coloured like its pill (as in the Admin ticket). */
+const PRIORITY_RULE = {
+  danger: 'border-danger/50',
+  high: 'border-orange-500/50',
+  warning: 'border-warning/50',
+  info: 'border-info/50',
+  success: 'border-success/50',
 }
 
-const SEVERITY_LABELS = {
-  critical: 'Critical',
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
+/** Where the call stands, as the header pill (the Admin ticket's stage pill). */
+function stagePill(stage, ackExpired) {
+  if (stage === 'none') return { text: 'Awaiting acknowledgement', tone: 'warning', pulse: true, icon: Radio }
+  if (stage === 'dispatched')
+    return ackExpired
+      ? { text: 'No acknowledgement', tone: 'danger', pulse: true, icon: Timer }
+      : { text: 'Acknowledged · ready to navigate', tone: 'info', pulse: true, icon: ShieldCheck }
+  if (stage === 'responding') return { text: 'Guard dispatched · en route', tone: 'info', pulse: true, icon: Navigation }
+  return { text: 'Resolved', tone: 'success', pulse: false, icon: CheckCircle2 }
 }
 
 // 12-hour, from the shared date module, so "Reported 1:25 AM" here matches
-// the "Aug 13, 2026, 1:25 AM" stamped on the same report's photos. This was a
-// 24-hour en-GB clock, the one time format in the drawer that disagreed.
+// the stamp on the same report's photos.
 const clock = (at) => formatTime(at)
-
-/**
- * "Copy" beside a value, for the coordinates an officer pastes into another
- * map app or reads out over the radio. Confirms in place for two seconds; a
- * browser that refuses the clipboard (insecure origin, denied permission)
- * says so instead of pretending.
- */
-function CopyButton({ value, label }) {
-  const [state, setState] = useState('idle')
-  useEffect(() => {
-    if (state === 'idle') return undefined
-    const id = setTimeout(() => setState('idle'), 2000)
-    return () => clearTimeout(id)
-  }, [state])
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
-      setState('copied')
-    } catch {
-      setState('failed')
-    }
-  }
-  const text = state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy blocked' : 'Copy'
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      aria-label={state === 'idle' ? label : text}
-      className="ml-2 inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-hairline px-2 align-middle text-2xs font-semibold text-text-secondary transition-colors duration-150 hover:border-brand-500/50 hover:text-text-primary active:bg-tint/10"
-    >
-      {state === 'copied' ? <Check size="sm" aria-hidden="true" /> : <Copy size="sm" aria-hidden="true" />}
-      <span aria-live="polite">{text}</span>
-    </button>
-  )
-}
-
-
-/** A label/value row on a fixed gutter, so every value in the drawer starts on one edge. */
-function Row({ label, mono = false, children }) {
-  return (
-    <div className="flex items-baseline gap-3 py-1">
-      <dt className="w-20 shrink-0 text-caption font-medium text-text-muted">{label}</dt>
-      <dd className={`m-0 min-w-0 flex-1 break-words text-label font-medium text-text-primary ${mono ? 'font-mono' : ''}`}>
-        {children || <span className="font-sans font-normal text-text-muted">Not provided</span>}
-      </dd>
-    </div>
-  )
-}
 
 /** Seconds since the call was booked, for the 90-second acknowledgement window. */
 function useAckClock(report) {
@@ -155,101 +103,70 @@ function useAckClock(report) {
 }
 
 /**
- * The Incident Details panel for the Live Dispatch map.
+ * The Incident Details rail for the Live Dispatch map — drawn with the SAME
+ * cards as the Admin ticket modal (IncidentDetailModal), so the two consoles
+ * read one report one way (2026-10-19, by request):
  *
- *   ┌ [icon] Security · High                       12:43  [×] ┐
- *   │ Break-in attempt at the side gate                        │
- *   │ INC-A1B2C3D4 · Reported 10:16                            │
- *   │ ●───●───◉───○───○  Dispatched → … → Resolved             │
- *   ├──────────────────────────────────────────────────────────┤
- *   │ LOCATION        resident, number, phase · block · lot    │
- *   │ DESCRIPTION                                              │
- *   │ EVIDENCE        watermarked thumbnails                   │
- *   │ UNIT            picker, or the assigned unit + telemetry │
- *   │ INVESTIGATION   tags, scene photos, escalation           │
- *   │ RESOLUTION      outcome, notes, photos                   │
- *   ├──────────────────────────────────────────────────────────┤
- *   │ [ the ONE next action for this stage ]          pinned   │
- *   └──────────────────────────────────────────────────────────┘
+ *   ┌ [icon] Title  (MV-XXXX)                                         [×] ┐
+ *   │ (• Category) (Priority) (• Stage)                                    │
+ *   │ ①──②──③  Verified by Security → Dispatched → Resolved               │
+ *   ├──────────────────────────────────────────────────────────────────────┤
+ *   │ MEDIA EVIDENCE · NOTES · REPORTER · TELEMETRY (GPS + Copy)           │
+ *   │ ASSIGN A UNIT (before verification) · RESOLUTION · STATUS HISTORY    │
+ *   ├──────────────────────────────────────────────────────────────────────┤
+ *   │ [Start navigation]                                                   │
+ *   │ [ the ONE next action for this stage ]  [Close]            pinned    │
+ *   └──────────────────────────────────────────────────────────────────────┘
  *
- * ── ONE ACTION AT A TIME ───────────────────────────────────────────────────
- * The old footer offered Dispatch, On-Site and Resolve side by side, and any
- * of them could be pressed at any time. The footer now offers only the next
- * edge of the machine (lib/dispatchWorkflow.js), and only to someone allowed
- * to take it: the dispatcher picks the unit, the unit acknowledges, arrives,
- * investigates and resolves. The rules enforce the same, so a stale screen
- * that still shows an old button is refused, not obeyed.
+ * ONE ACTION AT A TIME (2026-10-19, by request): the footer offers only the
+ * next edge of the machine (lib/dispatchWorkflow.js), to someone allowed to
+ * take it; the rules enforce the same.
+ *   1. ACKNOWLEDGE — take the call yourself, or assign a unit (none →
+ *      dispatched). Navigation details stay off the map until this is done.
+ *   2. START NAVIGATION — replaces the action at once (dispatched →
+ *      responding) and opens turn-by-turn for the officer's own call.
+ *   3. GUARD DISPATCHED · EN ROUTE — the header says so, and the resident is
+ *      told, the moment step 2 reaches the server.
+ * Each press waits for the SERVER before the next button is enabled
+ * (useStageAction), so the steps never run ahead of the database.
  *
- * ── A RAIL, NOT A MODAL ────────────────────────────────────────────────────
- * From `lg` up this is a right-hand rail with no scrim: the map stays lit and
- * clickable, the camera centres the pin in the space the rail leaves (see
- * DRAWER_WIDTH_PX), and clicking another pin moves the rail to it. Below `lg`
- * it is a bottom sheet with a scrim, because there is no "beside" at that
- * width.
- */
-/**
+ * From `lg` up this is a right-hand rail with no scrim (the map stays live);
+ * below `lg` it is a bottom sheet with a scrim.
+ *
  * `navigation` (from the dispatch page), for an active call:
- *   { state: 'ready' | 'active' | 'routing' | 'unavailable', reason?, onStart, onExit }
- * The route sheet over the map carries the same control, but on a phone this
- * drawer covers it — so the call's own panel must be able to start the drive.
+ *   { state: 'ready' | 'active' | 'routing' | 'unavailable', reason?, onStart, onExit, onCommitted }
  */
 export default function DispatchDetailDrawer({ report, units = [], previewUid, onPreviewUnit, onClose, navigation = null }) {
   const navigate = useNavigate()
   const { user, role } = useAuth()
   const uid = user?.uid
-  const { contact, loading: contactLoading } = useReporterContact(report?.reporterUid)
-  const action = useStageAction(report?.id)
+  const { busy, feedback, run, dismiss } = useStageAction(report?.id)
 
-  // The ETA chip that lived here is gone: the route panel over the map
-  // carries the same figure, live and counting down, and a static copy of it
-  // in a drawer header was the second place to read one number.
-  const { busy, feedback, run, dismiss } = action
-
-  // Focus moves into the panel, stays inside it, and returns to whatever
-  // opened the call when it closes. See useDialogFocus for what this was
-  // before: `role="dialog"` with none of the behaviour the role promises.
   const panelRef = useRef(null)
   useDialogFocus({ open: Boolean(report), containerRef: panelRef })
   const ack = useAckClock(report)
 
-  const [lightboxIndex, setLightboxIndex] = useState(null)
+  const [mediaLightbox, setMediaLightbox] = useState(false)
   /** The resolution grid has its own, because it shows different media. */
   const [resolutionLightbox, setResolutionLightbox] = useState(null)
   const [reassigning, setReassigning] = useState(false)
   const [resolving, setResolving] = useState(false)
 
   useEffect(() => {
-    setLightboxIndex(null)
     setResolutionLightbox(null)
     setReassigning(false)
     setResolving(false)
   }, [report?.id])
 
-  // A dialog for a stage the call has left is a dialog for a press that has
-  // already happened. Offline, the stage moves locally before the server
-  // answers, and leaving the dialog open invited a second press that the
-  // rules would refuse when it arrived.
-  /**
-   * ── ONE STAGE, DERIVED, FOR EVERY PART OF THIS PANEL ───────────────────
-   *
-   * This was `report?.dispatchStage` — the RAW stored value — while the
-   * progress bar beside it went through `deriveDispatchStage`. Two sources
-   * of truth for one fact, and they disagreed on exactly the documents that
-   * matter: a call still stored at the retired `on_site` or `investigating`
-   * derives to `responding`, so the bar lit Responding while NOTHING here
-   * matched a branch. No action button, no hint, and a heading that computed
-   * `STAGE_LABELS[undefined]` and rendered the words "Next: undefined".
-   *
-   * That is the mismatch this panel was reported for. It is not a labelling
-   * problem; it is the bar and the controls reading different fields.
-   */
+  // One stage, derived, for every part of this panel — never the raw stored
+  // value, which reads the retired `on_site` / `investigating` as nothing.
   const stage = deriveDispatchStage(report)
   useEffect(() => {
     if (stage !== 'dispatched') setReassigning(false)
     if (stage !== 'responding') setResolving(false)
   }, [stage])
 
-  const anyDialog = lightboxIndex !== null || resolutionLightbox !== null || resolving
+  const anyDialog = mediaLightbox || resolutionLightbox !== null || resolving
   useEffect(() => {
     if (!report || anyDialog || busy) return undefined
     const onKeyDown = (event) => {
@@ -261,50 +178,43 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
 
   const pickerOpen = stage === 'none' || (stage === 'dispatched' && reassigning)
   const selectedUnit = pickerOpen && previewUid ? units.find((u) => u.uid === previewUid) ?? null : null
+  /** This officer as a unit, when they are on duty — for "Acknowledge". */
+  const selfUnit = uid ? units.find((u) => u.uid === uid) ?? null : null
 
-  const dispatchSelected = useCallback(() => {
-    if (!selectedUnit) return
-    // `unitLabel`, not the raw name: this string is shown as a receipt and
-    // an email-provisioned account would put an address in it.
-    const picked = unitLabel(selectedUnit).label
-    const label = stage === 'dispatched' ? `Reassigned to ${picked}` : `${picked} dispatched`
-    run('dispatch', label, () => dispatchUnit(report, selectedUnit, { role })).then((ok) => {
-      if (ok) {
-        setReassigning(false)
-        onPreviewUnit?.(null)
-        // Dispatching yourself is taking the call: navigation opens as soon
-        // as the route plots (DashboardPage `autoNav`).
-        if (selectedUnit.uid === uid) navigation?.onCommitted?.()
-      }
-    })
-  }, [selectedUnit, stage, run, report, role, onPreviewUnit, uid, navigation])
+  const dispatchTo = useCallback(
+    (unit) => {
+      if (!unit) return
+      // `unitLabel`, not the raw name: this string is shown as a receipt and
+      // an email-provisioned account would put an address in it.
+      const picked = unitLabel(unit).label
+      const label = stage === 'dispatched' ? `Reassigned to ${picked}` : unit.uid === uid ? 'Acknowledged' : `Acknowledged — ${picked} assigned`
+      run('dispatch', label, () => dispatchUnit(report, unit, { role })).then((ok) => {
+        if (ok) {
+          setReassigning(false)
+          onPreviewUnit?.(null)
+          // Taking the call yourself: navigation opens as soon as the route
+          // plots (DashboardPage `autoNav`).
+          if (unit.uid === uid) navigation?.onCommitted?.()
+        }
+      })
+    },
+    [stage, run, report, role, onPreviewUnit, uid, navigation],
+  )
 
   if (!report) return null
 
-  const actor = { uid, role }
-  const canAct = canActOn(report, actor)
+  const canAct = canActOn(report, { uid, role })
   const isMine = report.assignedGuardUid === uid
   const assignedUnit = report.assignedGuardUid ? units.find((u) => u.uid === report.assignedGuardUid) ?? null : null
-  const address = [
-    report.phase && `Phase ${report.phase}`,
-    report.block && `Block ${report.block}`,
-    report.lot && `Lot ${report.lot}`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
-  const reference = incidentReference(report.id)
-  /**
-   * The assigned officer, as the hints below are allowed to name them.
-   *
-   * Nine strings in this file interpolated `report.assignedGuardName`
-   * directly, which on an email-provisioned account prints the address into
-   * sentences a dispatcher reads aloud. One derivation, used by all of them.
-   */
+  const address = incidentAddress(report)
+  const reference = ticketCode(report.id)
+  // The assigned officer as the hints may name them — never a raw email.
   const guardLabel = unitLabel({
     name: report.assignedGuardName,
     badgeNumber: report.assignedGuardBadge || assignedUnit?.badgeNumber,
   }).label
-  const media = buildMediaItems(report)
+  const severity = String(report.severity ?? 'medium').toLowerCase()
+  const severityTone = SEVERITY_TONES[severity] ?? 'warning'
   const stamp = { at: report.reportedAt, lat: report.lat, lng: report.lng, reference }
   const resolutionMedia = (report.resolution?.photoUrls ?? []).map((url) => ({ url, type: 'image' }))
   const outcomeLabel = RESOLUTION_OUTCOMES.find((o) => o.value === report.resolution?.outcome)?.label
@@ -313,29 +223,17 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
     { dispatched: 'responding', responding: 'resolved' }[stage],
     guardLabel,
   )
-
+  const pill = stagePill(stage, ack?.expired)
 
   // ── THE FOOTER: THE ONE NEXT ACTION ──────────────────────────────────────
   let footer = null
-  /**
-   * A readout pinned ABOVE the action row, not inside it.
-   *
-   * The acknowledgement countdown used to be the first child of the button
-   * row, as a `flex-1` block that would give way to the buttons. With a third
-   * control in that row it gave way to 34 pixels — measured — and
-   * "No acknowledgement · 9:08", the one thing on the panel saying a unit has
-   * gone quiet on a live call, truncated to nothing.
-   *
-   * It was never an action, and sharing a row with actions meant it was
-   * competing for space against them on a rule ("whoever is flexible yields")
-   * that had no idea which of the two mattered. On its own line it cannot
-   * lose, and it cannot push a button off the row either.
-   */
+  /** A readout pinned ABOVE the action row, so it can never be squeezed out. */
   let status = null
   let hint = null
   const spinner = <Loader2 size="sm" className="animate-spin" aria-hidden="true" />
 
   if (pickerOpen) {
+    const takeSelf = stage === 'none' && selfUnit && !selectedUnit
     footer = (
       <>
         {stage === 'dispatched' ? (
@@ -343,24 +241,45 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
             Cancel
           </button>
         ) : null}
-        <button
-          type="button"
-          disabled={!selectedUnit || Boolean(busy)}
-          onClick={dispatchSelected}
-          className="btn btn-action btn-brand flex-1"
-        >
-          {busy === 'dispatch' ? spinner : <Radio size="sm" aria-hidden="true" />}
-          {selectedUnit
-            ? `${stage === 'dispatched' ? 'Reassign to' : 'Dispatch'} ${selectedUnit.name}`
-            : stage === 'dispatched'
-              ? 'Reassign unit'
-              : 'Dispatch unit'}
-        </button>
+        {takeSelf ? (
+          // STEP 1, the fast path: an officer acknowledging a report they
+          // will attend themselves, without picking their own name from a list.
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => dispatchTo(selfUnit)}
+            className="btn btn-action btn-brand flex-1"
+          >
+            {busy === 'dispatch' ? spinner : <ShieldCheck size="sm" aria-hidden="true" />}
+            Acknowledge
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={!selectedUnit || Boolean(busy)}
+            onClick={() => dispatchTo(selectedUnit)}
+            className="btn btn-action btn-brand flex-1"
+          >
+            {busy === 'dispatch' ? spinner : stage === 'dispatched' ? <Radio size="sm" aria-hidden="true" /> : <ShieldCheck size="sm" aria-hidden="true" />}
+            {selectedUnit
+              ? `${stage === 'dispatched' ? 'Reassign to' : 'Acknowledge & assign'} ${selectedUnit.name}`
+              : stage === 'dispatched'
+                ? 'Reassign unit'
+                : 'Acknowledge & assign unit'}
+          </button>
+        )}
       </>
     )
-    hint = selectedUnit
-      ? `${selectedUnit.name} is alerted and has ${ACK_TIMEOUT_MS / 1000} s to acknowledge.`
-      : 'Pick an available unit above. Its road route previews on the map.'
+    hint =
+      stage === 'dispatched'
+        ? selectedUnit
+          ? `${selectedUnit.name} is alerted and has ${ACK_TIMEOUT_MS / 1000} s to acknowledge.`
+          : 'Pick an available unit above. Its road route previews on the map.'
+        : takeSelf
+          ? 'Takes the call. Start navigation comes next. Or pick another unit above.'
+          : selectedUnit
+            ? `Acknowledges the report and assigns it. ${selectedUnit.name} has ${ACK_TIMEOUT_MS / 1000} s to respond.`
+            : 'Pick an available unit above to acknowledge and assign the report.'
   } else if (stage === 'dispatched') {
     status = (
       <div
@@ -388,60 +307,33 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
           </button>
         ) : null}
         {canAct ? (
+          // STEP 2: Start navigation. Puts the officer en route (dispatched →
+          // responding) and, for their own call, opens turn-by-turn once the
+          // server has it (DashboardPage `autoNav`).
           <button
             type="button"
             onClick={() =>
-              run('respond', 'Acknowledged — responding', () => acknowledgeAndRespond(report, { role })).then(
+              run('respond', 'Guard dispatched — en route', () => acknowledgeAndRespond(report, { role })).then(
                 (ok) => ok && isMine && navigation?.onCommitted?.(),
               )
             }
             disabled={Boolean(busy)}
             className="btn btn-action btn-brand"
           >
-            {busy === 'respond' ? spinner : <UserRoundCheck size="sm" aria-hidden="true" />}
-            Accept & go
+            {busy ? spinner : <Navigation size="sm" aria-hidden="true" />}
+            {isMine ? 'Start navigation' : 'Mark en route'}
           </button>
         ) : null}
       </>
     )
     hint = canAct
-      ? `${isMine ? 'Switches this device to high-precision GPS until the call is resolved' : `Acknowledges on behalf of ${guardLabel}`}. Sends: “${nextMessage}”`
+      ? `${isMine ? 'Opens turn-by-turn navigation to the call' : `Marks ${guardLabel} en route`}. Sends: “${nextMessage}”`
       : ack?.expired
         ? `${guardLabel} has not acknowledged within ${ACK_TIMEOUT_MS / 1000} s, and every console has been alerted. Reassign the call to another unit.`
         : `${guardLabel} has ${ACK_TIMEOUT_MS / 1000} s to acknowledge before every console is alerted.`
   } else if (stage === 'responding') {
-    /**
-     * ── ONE STAGE WHERE THERE WERE THREE ───────────────────────────────
-     * Responding used to end at "I have arrived", which opened ON-SITE,
-     * whose only control was "Begin investigation", which opened
-     * INVESTIGATING, where the real work finally lived. Three stages and two
-     * button presses between a guard reaching a scene and being able to
-     * photograph it.
-     *
-     * Both presses are gone. The arrival is stamped from the unit's own
-     * telemetry the moment it comes inside the radius (see `autoArrival`),
-     * and the scene tools are available for the whole of responding. What is
-     * left here is the two things that are genuinely decisions: escalate, and
-     * close.
-     */
-    /* One action. Escalate sat beside this and is gone — backup is called
-       by radio. See the note in lib/dispatchWorkflow.js for what that gave
-       up, because nothing automatic inherited it. */
-    /**
-     * ── THE BUTTON CHANGES ON ARRIVAL, BUT IS NEVER TAKEN AWAY ───────────
-     *
-     * The brief asks for the resolve action to appear "once the guard
-     * arrives". It does change on arrival — from an outline button to the
-     * filled primary one — and it is deliberately NOT disabled before then.
-     *
-     * Arrival is stamped from the officer's own GPS reaching the pin. A bad
-     * fix at a real scene is ordinary, and a console that hid or disabled
-     * the only way to close a call until a satellite agreed would strand an
-     * officer who had finished the job. Weight is the honest signal here:
-     * filled says "you are where you said you would be, this is the next
-     * thing"; outline says "you can still do this, but nothing has confirmed
-     * you arrived" — and the form then records that absence in writing.
-     */
+    // Arrival is stamped from the officer's own GPS; the button turns primary
+    // on arrival but is never taken away, so a bad fix cannot strand a call.
     footer = canAct ? (
       <button
         type="button"
@@ -450,12 +342,6 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         className={`btn btn-action ${report.onSceneAt ? 'btn-brand' : 'btn-outline'}`}
       >
         <CheckCircle2 size="sm" aria-hidden="true" />
-        {/* "Resolve incident", in the words a guard would use. It was
-            "Initiate resolution", which is accurate — the press opens a form
-            rather than resolving anything — and is also the kind of phrase
-            nobody says out loud. The form is titled the same thing and
-            opens immediately, so the two read as one action rather than as
-            a promise and a surprise. */}
         Resolve incident
       </button>
     ) : null
@@ -471,9 +357,9 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
       <button
         type="button"
         onClick={() => navigate(`${ROUTES.history}?incident=${report.id}`)}
-        className="btn btn-action btn-outline flex-1"
+        className="btn btn-action btn-outline !basis-full whitespace-nowrap"
       >
-        <History size="sm" aria-hidden="true" />
+        <History size="sm" aria-hidden="true" className="shrink-0" />
         Open in incident history
       </button>
     )
@@ -497,7 +383,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         role="dialog"
         aria-modal="true"
         aria-label={`Incident ${reference}`}
-        className="pointer-events-auto relative flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-xl border border-hairline bg-base-900 shadow-modal animate-[riseIn_220ms_var(--ease-spring)] lg:h-full lg:w-[26rem] lg:animate-[drawerInRight_260ms_var(--ease-spring)] lg:rounded-none lg:border-y-0 lg:border-r-0"
+        className="pointer-events-auto relative flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-modal animate-[riseIn_220ms_var(--ease-spring)] lg:h-full lg:w-[26rem] lg:animate-[drawerInRight_260ms_var(--ease-spring)] lg:rounded-none lg:border-y-0 lg:border-r-0"
       >
         <button
           type="button"
@@ -508,213 +394,66 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
           <span className="h-1 w-9 rounded-full bg-tint/25" />
         </button>
 
-        {/* ══ HEADER ══ category, reference, elapsed time, and the stepper. */}
-        <header className="shrink-0 border-b border-hairline px-4 pb-3 pt-3.5">
+        {/* ══ HEADER ══ the Admin ticket's header, sized for a rail. */}
+        <header className="relative shrink-0 border-b border-hairline px-4 pb-4 pt-4 pr-12">
           <div className="flex items-start gap-3">
             <CategoryIconBadge category={report.category} />
             <div className="min-w-0 flex-1">
-              <h2 className="line-clamp-2 text-base font-semibold leading-snug text-text-primary">
+              <h2 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-text-primary">
                 {report.title || `${categoryLabel(report.category)} report`}
               </h2>
-              <p className="mt-0.5 text-caption text-text-muted">
-                <span className="font-mono font-semibold text-text-secondary">{reference}</span>
-                {' · '}Reported {clock(report.reportedAt)}
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-text-muted">
+                <span className="font-mono font-semibold tracking-wider text-text-secondary">{reference}</span>
+                <span aria-hidden="true">·</span>
+                <span>Reported {clock(report.reportedAt)}</span>
               </p>
             </div>
-            {/* ── THE RUNNING CLOCK IS GONE ────────────────────────────
-                "Open for 42:04", ticking every second in the top-right corner
-                of an emergency console, was the loudest number in this drawer
-                and nothing was downstream of it. An officer does not drive
-                faster because a counter passed forty minutes, and a number
-                that moves constantly in peripheral vision costs attention on
-                every glance at the panel — all shift, on every call.
-
-                What it was really carrying was two facts, and both survive in
-                cheaper form: WHEN the call came in is in the subline above
-                ("Reported 12:43"), and whether it has BREACHED its response
-                target is now the pill below. A breach is a state, which is
-                worth a badge; the live count towards one is a metric, which
-                belongs on the metrics page where someone is actually reading
-                figures. The per-stage stamps in the stepper give the exact
-                durations to anyone who needs them. */}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close incident details"
-              className="icon-btn icon-btn-sm -mr-1.5 -mt-1 shrink-0"
-            >
-              <X size="sm" />
-            </button>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close incident details"
+            className="absolute right-3 top-3 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+          >
+            <X size={20} />
+          </button>
 
-          {/* Stage, then what kind of call and how urgent: the category and
-              priority ride here as pills rather than as a label over the title. */}
-          {/* ── THE PILL ROW, DOWN FROM SIX TO TWO ─────────────────────
-              Gone: the stage badge, which the pipeline directly below spells
-              out in three labelled steps; the ETA chip, which the route
-              panel over the map carries live and counting down; and the
-              overdue / target-missed pill, which measured a response target
-              against an arrival the console now stamps silently.
-
-              What is left answers the two questions a badge is good at and a
-              stepper is not: what KIND of call, and how urgent. The
-              escalation badge stays as a historic fact — calls escalated
-              before that control was removed still carry one, and nothing
-              can set it now. */}
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-            {/* ── NOBODY IS ON THIS CALL ──────────────────────────────────
-                The one stage the progress bar understates. Steps 2 and 3
-                are plainly ahead of you, but step 1 not having happened
-                looks the same as step 1 being in progress at a glance —
-                both are "the first node is not filled in".
-
-                So the header says it in words. The trigger it implies is
-                already on screen rather than in this badge: at this stage
-                the unit picker is open in the body and the footer button
-                reads "Dispatch <name>", so a second Assign control would be
-                a third way to start one action. */}
-            {stage === 'none' ? (
-              <StatusBadge tone="warning" size="md" icon={Radio}>
-                Unassigned — awaiting dispatch
-              </StatusBadge>
-            ) : null}
-            {/* `md`: h-6 px-3 text-xs, the pill geometry the brief names. At
-                `sm` (20px, caption text) these were the smallest type in the
-                header while answering two of its three questions. */}
-            <StatusBadge tone={categoryTone(report.category)} size="md">
+          {/* Oblong pills: what kind, how urgent, where it stands. */}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <Pill tone={categoryTone(report.category)}>
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
               {categoryLabel(report.category)}
-            </StatusBadge>
-            <StatusBadge severity={report.severity} size="md">
-              {SEVERITY_LABELS[report.severity] ?? 'Medium'} priority
-            </StatusBadge>
-            {ack?.expired ? (
-              <StatusBadge tone="danger" size="md" icon={Timer}>
-                No acknowledgement
-              </StatusBadge>
-            ) : null}
+            </Pill>
+            <Pill tone={severityTone} icon={AlertTriangle}>
+              {PRIORITY_LABELS[severity] ?? 'Medium'} priority
+            </Pill>
+            <Pill tone={pill.tone} pulse={pill.pulse}>
+              {pill.text}
+            </Pill>
             {report.escalation ? (
-              <StatusBadge tone="danger" size="md" icon={AlertOctagon}>
+              <Pill tone="danger" icon={AlertOctagon}>
                 Escalated
-              </StatusBadge>
+              </Pill>
             ) : null}
           </div>
 
-          <div className="mt-3">
+          <div className="mt-4">
             <StageStepper report={report} stage={stage} labels={GUARD_STAGE_LABELS} />
           </div>
         </header>
 
-        {/* ══ BODY ══ the only band that scrolls. */}
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-3.5">
-          {/* ── WHERE, AND WHO TO RING ───────────────────────────────────
-              Back to ONE card, after a spell as two.
-
-              Splitting them read well as an argument — an officer takes a
-              call, then drives to it, so the reporter and the destination are
-              two steps — and it was wrong in practice for a reason the
-              argument could not see: the two cards were four rows between
-              them, and a 416px rail spent two section headers, two borders
-              and 24px of padding to separate four rows. The chrome was taller
-              than the content it was organising.
-
-              They answer one question anyway. "Lot 12, and the daughter who
-              filed it is on 0917…" is what an officer reads on the way out of
-              the gate, and it is one thought.
-
-              CATEGORY AND REPORTED ARE GONE from this card. They were moved
-              here on the reasoning that an officer reading the details should
-              not have to look back up for them — true when this card was
-              below a long header, and no longer true now the header has shed
-              its clock: the category pill and "Reported 12:43" are both in
-              plain sight, two inches up. A fact in two places on one screen
-              is not twice as findable.
-
-              The label gutter stays `w-20`. "Contact number" and "Resident
-              name" would wrap inside it, and widening it to fit two words
-              would take that space from every value in the drawer — on a
-              panel this narrow the values are what the officer is reading. */}
-          <Section icon={MapPin} title="Location & contact">
-            <div className="flex items-start gap-3">
-              <dl className="min-w-0 flex-1">
-                <Row label="Address">{address || report.location}</Row>
-                <Row label="GPS" mono>
-                  {typeof report.lat === 'number' ? (
-                    <>
-                      {forensicCoordinates(report.lat, report.lng)}
-                      <CopyButton
-                        value={forensicCoordinates(report.lat, report.lng)}
-                        label="Copy coordinates"
-                      />
-                    </>
-                  ) : null}
-                </Row>
-                <Row label="Resident">{report.reportedByName}</Row>
-                <Row label="Contact" mono>
-                  {contactLoading ? 'Looking up…' : contact?.phone}
-                </Row>
-              </dl>
-              {contact?.phone ? (
-                <a href={`tel:${contact.phone}`} className="btn btn-drawer btn-outline mt-1">
-                  <Phone size="sm" aria-hidden="true" />
-                  Call
-                </a>
-              ) : null}
-            </div>
-          </Section>
-
-          {/* ── WHAT THE RESIDENT SENT, IN ONE CONTAINER ─────────────────
-              The description and the photos were two cards with two headers,
-              and they are one submission: the resident typed the sentence and
-              attached the pictures in the same breath, about the same thing.
-              Reading them apart is the officer doing a join the panel should
-              have done.
-
-              It also fixes a worse case than the tidiness one. The photos
-              frequently ARRIVE after the text — a phone on estate wi-fi
-              finishes the write before the uploads — so "Reported
-              description" and an "Evidence · 0 files" card saying "Media
-              still uploading…" were two separate claims about one report, and
-              the officer had to work out they were about the same thing. In
-              one container the count is a caption on the content it counts.
-
-              The divider, not a gap: a hairline says "same card, next part",
-              where whitespace at this width reads as the edge of the card. */}
-          <Section
-            icon={FileText}
-            title="Photos & details"
-            meta={media.length ? `${media.length} file${media.length === 1 ? '' : 's'}` : null}
-          >
-            {report.description ? (
-              // `[overflow-wrap:anywhere]`: a resident's text can be one
-              // unbroken string ("jakajjJsjsjsksksk…"), and pre-wrap alone
-              // only breaks at spaces, so it ran out of the card.
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-primary [overflow-wrap:anywhere]">
-                {report.description}
-              </p>
-            ) : (
-              <p className="text-sm text-text-muted">The resident submitted no written description.</p>
-            )}
-
-            {media.length || report.hasMedia ? (
-              <div className="mt-3.5 border-t border-hairline pt-3.5">
-                <EvidenceGrid
-                  media={media}
-                  stamp={stamp}
-                  onOpen={setLightboxIndex}
-                  emptyText="Media still uploading…"
-                />
-              </div>
-            ) : null}
-          </Section>
-
+        {/* ══ BODY ══ stacked cards, the only band that scrolls. */}
+        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain bg-base-950/40 p-4">
           {pickerOpen ? (
-            <Section
+            <DetailCard
+              compact
               icon={Radio}
-              /* Only the reassignment names itself, because "reassign FROM
-                 Officer Reyes" carries a fact the buttons below do not. The
-                 plain dispatch case has no heading at all — see Section. */
-              title={stage === 'dispatched' ? `Reassign from ${guardLabel}` : null}
-              meta={`${units.filter((u) => u.state === 'available').length} available`}
+              title={stage === 'dispatched' ? `Reassign from ${guardLabel}` : 'Acknowledge & assign a unit'}
+              action={
+                <Pill tone="success">
+                  {units.filter((u) => u.state === 'available').length} available
+                </Pill>
+              }
             >
               <UnitPicker
                 units={units}
@@ -723,102 +462,97 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
                 excludeUid={stage === 'dispatched' ? report.assignedGuardUid : null}
                 disabled={Boolean(busy)}
               />
-            </Section>
+            </DetailCard>
           ) : null}
 
-          {/* ── WHAT CAME OUT OF HERE ─────────────────────────────────
-              "Assigned unit & telemetry", and the investigation panel.
+          {/* EVIDENCE & NOTES — one card (2026-10-19, by request): what the
+              resident showed and what they said belong together. */}
+          <MediaEvidenceCard report={report} compact title="Evidence & notes" onLightboxChange={setMediaLightbox}>
+            <div className="border-t border-hairline pt-3">
+              <span className="mb-1.5 flex items-center gap-1.5 text-[11px] text-text-muted">
+                <FileText size={12} aria-hidden="true" />
+                Resident&rsquo;s notes
+              </span>
+              {/* `[overflow-wrap:anywhere]`: a resident's text can be one
+                  unbroken string, which pre-wrap alone runs out of the card. */}
+              <p className="whitespace-pre-wrap rounded-lg border border-hairline bg-base-950 p-3 text-sm font-medium leading-relaxed text-text-secondary shadow-inner [overflow-wrap:anywhere]">
+                {report.description || 'No written description.'}
+              </p>
+            </div>
+          </MediaEvidenceCard>
 
-              The unit card named the responder, their badge and their
-              distance. All three are already on screen: the route panel over
-              the map carries distance and ETA, and the footer hint below
-              names the officer in a sentence ("Officer Dela Cruz is en
-              route", "On scene since 14:12"). A card restating them spent a
-              fifth of the drawer on what two other surfaces already said.
+          {/* REPORTER & TELEMETRY — one card, one grid (2026-10-19, by
+              request). No contact number: the call is worked from the map. */}
+          <DetailCard compact icon={User} title="Reporter & telemetry" bodyClassName="space-y-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+              <Field label="Reported by" empty={!report.reportedByName}>
+                {report.reportedByName || 'Unknown'}
+              </Field>
+              <Field label="Ticket ID" mono>
+                {reference}
+              </Field>
+              <Field label="Category">{categoryLabel(report.category)}</Field>
+              <Field label="Priority level" accent={PRIORITY_RULE[severityTone] ?? 'border-hairline'}>
+                <Pill tone={severityTone} icon={AlertTriangle} className="mt-0.5">
+                  {PRIORITY_LABELS[severity] ?? 'Medium'}
+                </Pill>
+              </Field>
+              <Field label="Assigned responder" empty={!report.assignedGuardName} className="col-span-2">
+                {report.assignedGuardName ? guardLabel : 'Unassigned'}
+              </Field>
+              <Field label="Property address" className="col-span-2">
+                <span className="mt-0.5 flex items-center gap-1.5">
+                  <Home size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+                  {address}
+                </span>
+              </Field>
+              {report.location && report.location !== address ? (
+                <Field label="Reported location" className="col-span-2">
+                  {report.location}
+                </Field>
+              ) : null}
+            </div>
+            <CoordinatesBlock lat={report.lat} lng={report.lng} />
+          </DetailCard>
 
-              The investigation panel's quick tags moved into the resolution,
-              stated once with the outcome they belong to rather than toggled
-              live mid-response. Its scene photos went with them: resolving
-              already demands a photo, and two trays on one call is a
-              question about which to use rather than extra evidence. */}
-          {/* ── THE READ-ONLY SUMMARY, WHICH WAS INCOMPLETE ────────────
-              It showed the outcome, the notes and the photos, and left out
-              two things it was collecting: WHAT WAS DONE — the tags, added
-              when they moved here from the investigation panel and never
-              rendered anywhere — and WHEN. A form that asks for something
-              and then never shows it back teaches people the field does
-              not matter.
-
-              The photos were also inert: `onOpen` was a no-op, so the one
-              grid in this drawer carrying proof of how a call was left was
-              the one grid you could not open. They go through the same
-              lightbox as the reported photos now, watermarked with the
-              resolution's own time and place rather than the report's. */}
           {stage === 'resolved' && report.resolution ? (
-            <Section
+            <DetailCard
+              compact
               icon={ClipboardList}
               title="Resolution"
-              meta={report.resolvedAt ? clock(report.resolvedAt) : null}
+              action={report.resolvedAt ? <Pill tone="success">{clock(report.resolvedAt)}</Pill> : null}
             >
-              <dl>
-                <Row label="What happened">{outcomeLabel}</Row>
+              <div className="grid grid-cols-1 gap-4">
+                <Field label="What happened">{outcomeLabel}</Field>
                 {report.resolution.tags?.length ? (
-                  <Row label="What was done">
+                  <Field label="What was done">
                     {report.resolution.tags
                       .map((t) => INVESTIGATION_TAGS.find((o) => o.value === t)?.label ?? t)
                       .join(' · ')}
-                  </Row>
+                  </Field>
                 ) : null}
-              </dl>
-              <p className="mt-2 whitespace-pre-wrap border-t border-hairline pt-2.5 text-sm leading-relaxed text-text-primary">
+              </div>
+              <p className="whitespace-pre-wrap rounded-lg border border-hairline bg-base-950 p-3 text-sm leading-relaxed text-text-secondary">
                 {report.resolution.notes}
               </p>
-              <div className="mt-3">
-                <EvidenceGrid
-                  media={resolutionMedia}
-                  stamp={{ ...stamp, label: 'Resolved', at: report.resolvedAt, lat: report.arrival?.lat ?? report.lat, lng: report.arrival?.lng ?? report.lng }}
-                  onOpen={setResolutionLightbox}
-                  emptyText=""
-                />
-              </div>
-            </Section>
+              <EvidenceGrid
+                media={resolutionMedia}
+                stamp={{ ...stamp, label: 'Resolved', at: report.resolvedAt, lat: report.arrival?.lat ?? report.lat, lng: report.arrival?.lng ?? report.lng }}
+                onOpen={setResolutionLightbox}
+                emptyText=""
+              />
+            </DetailCard>
           ) : null}
+
         </div>
 
         {/* ══ THE NEXT ACTION — PINNED ══ */}
-        <footer className="relative shrink-0 border-t border-hairline bg-base-900 px-3.5 pb-3.5 pt-3">
+        <footer className="relative shrink-0 border-t border-hairline bg-base-950 px-4 pb-4 pt-3">
           {feedback ? <Receipt feedback={feedback} onDismiss={dismiss} /> : null}
-          {/* ── NO "NEXT: RESOLVED" HEADING ───────────────────────────────
-              It sat directly under a progress bar reading "Responding" and
-              said the word "Resolved" in the same glance, which reads as the
-              two disagreeing even when they are both right. A heading naming
-              a STAGE, above controls naming an ACTION, inches from a bar
-              that also names stages, is three vocabularies for one thing.
-
-              The button says what pressing it does and the bar says where
-              the call is. Nothing in between needs to speak. */}
-          {/* ── CLOSE SITS WITH THE OTHER ACTIONS ──────────────────────
-              `flex-wrap`, and Close LAST, which together are the whole of why
-              a third control is safe to put in this row.
-
-              The rail is 416px with 28px of padding, and the stage actions
-              already run to two buttons at some stages ("Escalate" +
-              "Resolve incident"). A third on the same line would either
-              overflow or squeeze the commit action, and the commit action is
-              what this footer is for. Wrapping lets Close drop to its own row
-              exactly when there is no space, instead of taking space from the
-              button an officer came here to press.
-
-              Last, not first, for the same reason the X is top-RIGHT: the
-              destructive-to-your-place control should never be where the
-              thumb lands for the thing you meant to do. `ml-auto` holds it
-              clear of the stage buttons while they share a line. */}
-          {status ? <div className="mt-2">{status}</div> : null}
-          {/* ── START NAVIGATION ────────────────────────────────────────
-              Its own full-width row above the stage actions: it is how the
-              officer gets to the call, which comes before any stage action
-              on it, and it must never be the control squeezed off a row. */}
-          {navigation && (stage === 'dispatched' || stage === 'responding') ? (
+          {status ? <div className="mt-1">{status}</div> : null}
+          {/* START NAVIGATION — its own full-width row above the stage
+              actions: getting to the call comes before any stage action. */}
+          {navigation && stage === 'responding' ? (
             <div className="mt-2">
               {navigation.state === 'active' ? (
                 <button type="button" onClick={navigation.onExit} aria-pressed className="btn btn-action btn-danger w-full">
@@ -842,24 +576,13 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               ) : null}
             </div>
           ) : null}
-          {/* ── CENTRED, AND CLOSE NO LONGER PUSHED TO THE EDGE ──────────
-              `ml-auto` held Close against the right rail, which on a
-              416px drawer put a dead strip between it and the commit
-              action that was neither a gap nor a button. Centring the row
-              makes the group read as one set of controls, which is what
-              they are, and the wrap still drops Close to its own line when
-              two stage actions already fill the width.
-
-              Close stays LAST for the reason the X is top-right: the
-              control that takes your place away should never be where the
-              thumb lands for the thing you meant to do. */}
-          {/* Equal halves: the commit action and Close share the row at the
-              same size, so neither reads as the afterthought, and Close alone
-              (no stage action available) spans the width. */}
+          {/* The stage action and Close share the row at equal size; Close is
+              last so the thumb never lands on it for the thing it meant. The
+              header ✕ is the same control for a pointer; this one is where a
+              phone thumb already is. */}
           <div className="mt-2 flex flex-wrap items-center gap-2 [&>*]:min-w-[8.5rem] [&>*]:flex-1">
             {footer}
             <button type="button" onClick={onClose} className="btn btn-action btn-outline">
-              <X size="sm" aria-hidden="true" />
               Close
             </button>
           </div>
@@ -867,30 +590,15 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         </footer>
       </aside>
 
-      {lightboxIndex !== null ? (
-        <Lightbox
-          media={media}
-          startIndex={lightboxIndex}
-          watermark={{
-            name: `${reference} · ${report.reportedByName ?? 'Unknown resident'}`,
-            address: `${address || 'Location not recorded'} · ${forensicCoordinates(report.lat, report.lng)}`,
-            timestamp: forensicTimestamp(report.reportedAt),
-          }}
-          onClose={() => setLightboxIndex(null)}
-        />
-      ) : null}
-
       {/* The resolution's own photos, watermarked with the resolution's time
-          and the position the arrival was recorded at — not the report's.
-          They are proof of how the call was LEFT, and a watermark naming the
-          moment it was reported would be stamping them with the wrong one. */}
+          and the arrival position — not the report's. */}
       {resolutionLightbox !== null ? (
         <Lightbox
           media={resolutionMedia}
           startIndex={resolutionLightbox}
           watermark={{
             name: `${reference} · resolved by ${report.resolvedByName || 'security'}`,
-            address: `${address || 'Location not recorded'} · ${forensicCoordinates(report.arrival?.lat ?? report.lat, report.arrival?.lng ?? report.lng)}`,
+            address: `${address} · ${forensicCoordinates(report.arrival?.lat ?? report.lat, report.arrival?.lng ?? report.lng)}`,
             timestamp: forensicTimestamp(report.resolvedAt),
           }}
           onClose={() => setResolutionLightbox(null)}

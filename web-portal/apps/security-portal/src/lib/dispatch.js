@@ -262,3 +262,22 @@ export function formatAgo(ms) {
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min ago`
   return `${Math.round(ms / 3_600_000)} h ago`
 }
+
+/**
+ * The Guardhouse's names for the three steps (by request, 2026-10-19; renamed
+ * again the same day: Acknowledge → Start navigation → Guard dispatched).
+ * Display only — the stored stages, their stamps and the rules are unchanged:
+ *   dispatched  → "Acknowledged": the call is taken or assigned (dispatchedAt)
+ *   responding  → "Guard dispatched": the officer is en route (respondingAt)
+ *   resolved    → "Resolved" (resolvedAt)
+ * Used by the drawer's stepper and status history and the route sheet's stage
+ * badge. Admin and the resident app keep STAGE_LABELS.
+ */
+export const GUARD_STAGE_LABELS = {
+  none: 'Awaiting acknowledgement',
+  dispatched: 'Acknowledged',
+  responding: 'Guard dispatched',
+  resolved: 'Resolved',
+  on_site: 'Guard dispatched',
+  investigating: 'Guard dispatched',
+}

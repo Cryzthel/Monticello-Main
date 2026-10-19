@@ -1,5 +1,6 @@
 import StatusBadge from '@shared/components/StatusBadge'
 import { STAGE_LABELS } from '@shared/lib/dispatchStage'
+import { GUARD_STAGE_LABELS } from '@/lib/dispatch'
 
 /**
  * Small pieces of the dispatch drawer, kept apart from it so the drawer file
@@ -33,10 +34,10 @@ export const STAGE_TONES = {
   investigating: 'info',
 }
 
-export function StageBadge({ stage, size = 'sm' }) {
+export function StageBadge({ stage, size = 'md' }) {
   return (
     <StatusBadge tone={STAGE_TONES[stage] ?? 'neutral'} size={size} dot>
-      {STAGE_LABELS[stage] ?? STAGE_LABELS.none}
+      {GUARD_STAGE_LABELS[stage] ?? STAGE_LABELS[stage] ?? STAGE_LABELS.none}
     </StatusBadge>
   )
 }
@@ -49,29 +50,4 @@ export function StageBadge({ stage, size = 'sm' }) {
  * from shared; `CategoryIconBadge` is a default export there.
  */
 
-/**
- * One bordered block of the drawer.
- *
- * A null `title` drops the header row entirely rather than rendering an
- * empty one. Most blocks need naming; the unit picker does not — it sits
- * directly above a footer that says "Dispatch" and a button that says
- * "Dispatch Officer Reyes", so a third heading saying "Dispatch a unit" was
- * the same word three times in 120px of rail.
- */
-export function Section({ icon: Icon, title, meta, children, tone = '' }) {
-  return (
-    <section className={`rounded-xl border border-hairline bg-slate-50 ${tone}`}>
-      {title ? (
-        <header className="flex items-center justify-between gap-3 border-b border-hairline px-3.5 py-2">
-          <h3 className="flex min-w-0 items-center gap-2 text-xs font-semibold text-text-secondary">
-            <Icon size="sm" className="shrink-0 text-brand-400" aria-hidden="true" />
-            <span className="truncate">{title}</span>
-          </h3>
-          {meta ? <span className="shrink-0 text-2xs text-text-muted">{meta}</span> : null}
-        </header>
-      ) : null}
-      <div className="p-3.5">{children}</div>
-    </section>
-  )
-}
 

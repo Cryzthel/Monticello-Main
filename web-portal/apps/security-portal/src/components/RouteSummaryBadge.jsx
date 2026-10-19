@@ -94,6 +94,7 @@ export default function RouteSummaryBadge({
   stage,
   navigating = false,
   onToggleNavigation,
+  onOpenDirections = null,
   offRoute = false,
 }) {
   /**
@@ -384,15 +385,25 @@ export default function RouteSummaryBadge({
              "never white on a solid danger fill" — the two consoles reserve
              solid red for the SOS plate alone. It is still the loudest
              control in this bar: it is the only coloured one. */
-          <button
-            type="button"
-            onClick={onToggleNavigation}
-            aria-pressed
-            className="btn btn-action btn-danger w-full"
-          >
-            <X size="sm" aria-hidden="true" />
-            Exit navigation
-          </button>
+          <>
+            {/* The turn-by-turn overlay, minimised to this sheet; one tap
+                brings it back. */}
+            {onOpenDirections ? (
+              <button type="button" onClick={onOpenDirections} className="btn btn-action btn-brand flex-1">
+                <Navigation size="sm" aria-hidden="true" />
+                Directions
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onToggleNavigation}
+              aria-pressed
+              className="btn btn-action btn-danger flex-1"
+            >
+              <X size="sm" aria-hidden="true" />
+              Exit navigation
+            </button>
+          </>
         ) : result && onToggleNavigation ? (
           /* Pressing this is also what transforms the map marker — the
              standby ring around the unit becomes a heading arrow (see

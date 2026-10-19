@@ -1,33 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
-import { doc } from 'firebase/firestore'
 import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
+import { doc } from 'firebase/firestore'
 import {
   AlertTriangle,
-  Calendar,
-  Camera,
-  Check,
-  CheckCircle2,
-  Clock,
-  Copy,
   Crosshair,
   FileText,
   History,
   Home,
-  ImageOff,
   Info,
-  MapPin,
-  Maximize2,
   Printer,
   ShieldAlert,
   ShieldCheck,
   User,
   X,
 } from '@shared/icons'
-import Lightbox from '@shared/components/Lightbox'
-import EvidenceImage from '@shared/components/EvidenceImage'
 import Pill from '@shared/components/Pill'
-import { DetailCard, DetailField as Field, DetailTimeline } from '@shared/components/detail/DetailCard'
-import { captureTimestamp } from '@shared/components/dispatch/EvidenceGrid'
+import { DetailCard, DetailField as Field } from '@shared/components/detail/DetailCard'
+import {
+  CoordinatesBlock,
+  IncidentStatusTimeline,
+  MediaEvidenceCard,
+} from '@shared/components/detail/IncidentDetailCards'
+import { incidentAddress, ticketCode } from '@shared/lib/incidentDetail'
 import { buildMediaItems, mapIncidentDoc } from '@shared/lib/incidents'
 import { db } from '@shared/lib/firebase'
 import { formatCategory } from '@shared/lib/wpda'
@@ -36,7 +30,6 @@ import { SEVERITY_TONES, categoryTone } from '@shared/theme/badgeStyles'
 import { statusStyle } from '@shared/theme/statusStyles'
 import { exportReportPdf } from '@shared/lib/reportPdf'
 import { toast } from '@shared/lib/toast'
-import { formatDate, formatTime } from '@shared/lib/dates'
 
 // The pill sits under a "Priority level" label, so it says only the level —
 // "Medium priority" repeated the label and overflowed the narrow 3-column grid.
@@ -55,60 +48,6 @@ const PRIORITY_RULE = {
   info: 'border-info/50',
   success: 'border-success/50',
   neutral: 'border-hairline',
-}
-
-/** Human-quotable code, derived from the document id — the same one IncidentsTable prints. */
-const ticketCode = (id) => (id ? `MV-${String(id).slice(0, 8).toUpperCase()}` : '')
-
-const validDate = (value) => {
-  if (!value) return null
-  const date = value?.toDate ? value.toDate() : value instanceof Date ? value : new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
-// The shared formatters, so timeline stamps follow the organisation's time
-// zone (Settings › System) like every other date — these were browser-local.
-const stampOf = (date) => `${formatDate(date)} • ${formatTime(date)}`
-
-/** "+4 min", "+2 h 05 min", "+3 d" — the gap a stage took after the one before it. */
-function elapsed(fromMs, toMs) {
-  const minutes = Math.max(0, Math.round((toMs - fromMs) / 60000))
-  if (minutes < 1) return '+<1 min'
-  if (minutes < 60) return `+${minutes} min`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 48) return `+${hours} h ${String(minutes % 60).padStart(2, '0')} min`
-  return `+${Math.floor(hours / 24)} d`
-}
-
-/**
- * Every stage the report has a timestamp for, oldest first.
- *
- * Built from the recorded fields, never from the status: a report closed
- * straight from Pending has no `dispatchedAt`, and drawing "Dispatched" for it
- * would state something that did not happen. Legacy stages appear only on the
- * reports that have them.
- */
-function statusHistory(report) {
-  const steps = [
-    { key: 'reported', label: 'Reported', at: report.reportedAt, detail: report.reportedByName },
-    {
-      key: 'dispatched',
-      label: 'Dispatched',
-      at: report.dispatchedAt,
-      detail: report.assignedGuardName ? `To ${report.assignedGuardName}` : report.dispatchedByName,
-    },
-    { key: 'acknowledged', label: 'Acknowledged', at: report.acknowledgedAt },
-    { key: 'responding', label: 'Dispatch in progress', at: report.respondingAt },
-    { key: 'onScene', label: 'On scene', at: report.onSceneAt },
-    { key: 'investigating', label: 'Investigating', at: report.investigatingAt },
-    { key: 'escalated', label: 'Escalated', at: report.escalatedAt, tone: 'warning' },
-    { key: 'swept', label: 'Flagged by scheduled sweep', at: report.slaBreach?.at, detail: 'SLA breach recorded', tone: 'warning' },
-    { key: 'resolved', label: 'Resolved', at: report.resolvedAt, detail: report.resolvedByName },
-  ]
-  return steps
-    .map((step) => ({ ...step, date: validDate(step.at) }))
-    .filter((step) => step.date)
-    .sort((a, b) => a.date - b.date)
 }
 
 /** `incidents/{id}`, live while open. `undefined` until it reports (or if the read is refused). */
@@ -137,37 +76,6 @@ function stageLabel(report) {
   if (String(report.status ?? 'Pending').toLowerCase() === 'pending')
     return { text: 'Pending acknowledgement', tone: 'warning', pulse: true }
   return { text: status.label ?? report.status, tone: status.tone, pulse: false }
-}
-
-/**
- * STATUS HISTORY — every recorded stage as a filled node (amber for an
- * escalation or a sweep flag) with who and when beneath it, the gap since the
- * stage before, and — until resolved — a hollow "Awaiting resolution" node.
- * Drawn by the shared DetailTimeline, which the Report details uses too.
- */
-function StatusTimeline({ report }) {
-  const steps = statusHistory(report)
-  const resolved = steps.some((step) => step.key === 'resolved')
-  const items = steps.map((step, index) => {
-    const previous = steps[index - 1]
-    return {
-      key: step.key,
-      label: step.label,
-      detail: step.detail,
-      tone: step.tone === 'warning' ? 'warning' : 'done',
-      stamp: `${stampOf(step.date)}${previous ? ` · ${elapsed(previous.date.getTime(), step.date.getTime())}` : ''}`,
-      dateTime: step.date.toISOString(),
-    }
-  })
-  if (!resolved) {
-    items.push({
-      key: 'awaiting',
-      label: 'Awaiting resolution',
-      detail: report.dispatchedAt ? 'Officer on the call' : 'Pending officer dispatch',
-      tone: 'pending',
-    })
-  }
-  return <DetailTimeline items={items} />
 }
 
 /**
@@ -214,34 +122,20 @@ export default function IncidentDetailModal({
   primaryAction = null,
   footerNote = 'Monticello Villas · incident record',
 }) {
-  const [activeIndex, setActiveIndex] = useState(0)
-  const [lightboxIndex, setLightboxIndex] = useState(null)
-  const [copied, setCopied] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
 
   const live = useLiveIncident(passedReport?.id)
   const report = passedReport ? live ?? passedReport : null
 
-  useEffect(() => {
-    setActiveIndex(0)
-    setLightboxIndex(null)
-    setCopied(false)
-  }, [report?.id])
-
-  useEffect(() => {
-    if (!copied) return undefined
-    const timer = setTimeout(() => setCopied(false), 1600)
-    return () => clearTimeout(timer)
-  }, [copied])
-
   // Escape closes, unless the Lightbox is up — it owns Escape while open.
   useEffect(() => {
-    if (!report || lightboxIndex !== null) return undefined
+    if (!report || lightboxOpen) return undefined
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [report, lightboxIndex, onClose])
+  }, [report, lightboxOpen, onClose])
 
   const panelRef = useRef(null)
   useDialogFocus({ open: Boolean(report), containerRef: panelRef })
@@ -249,38 +143,15 @@ export default function IncidentDetailModal({
   if (!report) return null
 
   const media = buildMediaItems(report)
-  const active = media[Math.min(activeIndex, Math.max(media.length - 1, 0))]
   const severity = String(report.severity ?? 'medium').toLowerCase()
   const urgencyLabel = URGENCY_LABELS[severity] ?? URGENCY_LABELS.medium
   const severityTone = SEVERITY_TONES[severity] ?? 'warning'
-  const address = `Phase ${report.phase ?? '—'} • Block ${report.block ?? '—'} • Lot ${report.lot ?? '—'}`
-  const coordinates =
-    typeof report.lat === 'number' && typeof report.lng === 'number'
-      ? `${report.lat.toFixed(5)}, ${report.lng.toFixed(5)}`
-      : ''
-
-  // "Captured", not "Reported": with evidence attached, the mobile app files
-  // `reportedAt` as the OLDEST attachment's camera time.
-  const capturedAt = captureTimestamp(report.reportedAt)
-  const watermark = {
-    name: report.reportedByName ?? 'Unknown resident',
-    address,
-    timestamp: report.reportedAt ? `Captured ${capturedAt}` : 'Timestamp unavailable',
-  }
+  const address = incidentAddress(report)
 
   const category = formatCategory(report.category)
   const title = report.title || `${category} report`
   const stage = stageLabel(report)
   const attachmentCount = media.length + (report.attachmentUrls?.length ?? 0)
-
-  async function copyCoordinates() {
-    try {
-      await navigator.clipboard.writeText(coordinates)
-      setCopied(true)
-    } catch {
-      toast.error('Could not copy the coordinates', { description: 'Select them and copy by hand.' })
-    }
-  }
 
   function exportSummary() {
     try {
@@ -358,91 +229,7 @@ export default function IncidentDetailModal({
           <div className="flex flex-col gap-6">
             {/* ═══ MEDIA EVIDENCE · NOTES ═══ */}
             <div className="contents">
-              <DetailCard
-                aria-label="Media evidence"
-                icon={Camera}
-                title="Media evidence"
-                bodyClassName="space-y-4"
-                action={
-                    media.length ? (
-                      <Pill tone="success" icon={CheckCircle2}>
-                        {media.length} file{media.length === 1 ? '' : 's'} verified
-                      </Pill>
-                    ) : (
-                      <Pill tone="warning" icon={Clock}>
-                        {report.hasMedia ? 'Uploading' : 'No files'}
-                      </Pill>
-                    )
-                  }
-              >
-
-                <div className="group relative flex h-64 w-full items-center justify-center overflow-hidden rounded-lg border border-hairline bg-zinc-900 sm:h-80">
-                  {active?.type === 'video' ? (
-                    <video key={active.url} src={active.url} controls className="absolute inset-0 h-full w-full object-contain" />
-                  ) : active ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setLightboxIndex(media.indexOf(active))}
-                        aria-label="Open evidence full screen"
-                        className="absolute inset-0 opacity-80 transition-opacity duration-300 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
-                      >
-                        <EvidenceImage src={active.url} alt="Incident evidence" eager />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLightboxIndex(media.indexOf(active))}
-                        aria-label="View full resolution"
-                        title="View full resolution"
-                        className="absolute right-3 top-3 rounded-lg border border-white/15 bg-black/60 p-2 text-white opacity-0 shadow-lg backdrop-blur-md transition-opacity hover:bg-black/80 focus-visible:opacity-100 group-hover:opacity-100"
-                      >
-                        <Maximize2 size="sm" />
-                      </button>
-                      {/* Caption — white on the photo's own scrim in both themes. */}
-                      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-4 text-xs">
-                        <p className="flex items-center gap-2 text-zinc-300">
-                          <Calendar size={14} className="shrink-0 text-zinc-400" aria-hidden="true" />
-                          <span className="font-mono">Captured: {capturedAt}</span>
-                        </p>
-                        <p className="mt-1 flex items-center gap-2 text-zinc-400">
-                          <MapPin size={14} className="shrink-0" aria-hidden="true" />
-                          <span className="truncate">
-                            {watermark.name} • {address}
-                          </span>
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <span className="flex flex-col items-center gap-2 text-sm text-zinc-400">
-                      <ImageOff size="lg" aria-hidden="true" />
-                      {report.hasMedia ? 'Media still uploading…' : 'No media attached'}
-                    </span>
-                  )}
-                </div>
-
-                {media.length > 1 ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {media.map((item, index) => (
-                      <button
-                        key={`${index}:${item.url}`}
-                        type="button"
-                        onClick={() => setActiveIndex(index)}
-                        aria-label={`Show evidence ${index + 1} of ${media.length}`}
-                        aria-current={item === active ? 'true' : undefined}
-                        className={`relative h-12 w-12 shrink-0 overflow-hidden rounded transition-[border-color,opacity] duration-150 ${
-                          item === active ? 'border-2 border-brand-500' : 'border border-hairline opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        {item.type === 'video' ? (
-                          <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
-                        ) : (
-                          <EvidenceImage src={item.url} />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </DetailCard>
+              <MediaEvidenceCard report={report} onLightboxChange={setLightboxOpen} />
 
               <DetailCard icon={FileText} title="Incident notes / description">
                 <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-secondary shadow-inner">
@@ -487,29 +274,13 @@ export default function IncidentDetailModal({
                     {report.assignedGuardName || 'Unassigned'}
                   </Field>
                 </div>
-                <div className="border-l-2 border-hairline pl-3 pt-2">
-                  <span className="mb-1.5 block text-[11px] text-text-muted">GPS coordinates</span>
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-base-950 px-3 py-2">
-                    <span className="select-all font-mono text-xs text-brand-500">{coordinates || 'No GPS fix'}</span>
-                    {coordinates ? (
-                      <button
-                        type="button"
-                        onClick={copyCoordinates}
-                        aria-label={copied ? 'Coordinates copied' : 'Copy coordinates'}
-                        className="inline-flex items-center gap-1 rounded text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
-                      >
-                        {copied ? <Check size={14} className="text-success" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                        <span className="text-[10px] font-medium uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
+                <CoordinatesBlock lat={report.lat} lng={report.lng} />
               </DetailCard>
             </div>
 
             {/* ═══ STATUS HISTORY ═══ */}
             <DetailCard aria-label="Status history" icon={History} title="Status history" bodyClassName="">
-              <StatusTimeline report={report} />
+              <IncidentStatusTimeline report={report} />
               <div className="mt-6 space-y-4 border-t border-hairline pt-6">
                 <p className="flex items-start gap-2 text-xs leading-relaxed text-text-muted">
                   <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -551,9 +322,6 @@ export default function IncidentDetailModal({
         </footer>
       </div>
 
-      {lightboxIndex !== null ? (
-        <Lightbox media={media} startIndex={lightboxIndex} watermark={watermark} onClose={() => setLightboxIndex(null)} />
-      ) : null}
     </div>
   )
 }
