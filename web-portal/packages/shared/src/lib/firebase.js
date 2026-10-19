@@ -4,13 +4,14 @@ import {
   getFirestore,
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager,
+  persistentSingleTabManager,
 } from 'firebase/firestore'
 import { getDatabase } from 'firebase/database'
 import { getStorage } from 'firebase/storage'
 import { getFunctions } from 'firebase/functions'
 import { getMessaging, isSupported as isMessagingSupported } from 'firebase/messaging'
 import { PORTAL } from '@shared/config/portal'
+import { installFirestoreWake } from '@shared/lib/firestoreWake'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -79,8 +80,21 @@ export const auth = getAuth(app)
  * on the far side of the estate with no signal can still open it, see its
  * stage, and press the next action: the write is applied locally at once and
  * queued until the device reconnects. See lib/dispatchWorkflow.js in the
- * security portal. The multi-tab manager lets a second tab share one cache
- * rather than fail to open it.
+ * security portal.
+ *
+ * ── ONE TAB OWNS THE CACHE; EVERY TAB OWNS ITS STREAM (2026-10-19) ────────
+ * This was `persistentMultipleTabManager`, under which only one "primary"
+ * tab holds the network stream and every other tab is fed by it through
+ * IndexedDB. On a laptop the primary is often a BACKGROUND console tab, and
+ * the browser throttles and freezes background tabs — so the tab the guard
+ * was looking at received new reports late, or not until a refresh made it
+ * primary. That was "instant on the phone, needs a refresh on the laptop".
+ *
+ * Now the first tab takes the IndexedDB cache (`forceOwnership: false`), and
+ * any other tab gets `failed-precondition`, which the SDK answers by falling
+ * back to an in-memory cache with ITS OWN live stream. No tab waits on
+ * another; only the first keeps the offline cache, which is the one a guard
+ * opens in a dead zone.
  *
  * The Admin console keeps the default in-memory cache. It is a desk tool, and
  * persisting every resident's records in a shared office browser is a cost
@@ -95,7 +109,7 @@ function createFirestore() {
   if (PORTAL !== 'security') return getFirestore(app)
   try {
     return initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      localCache: persistentLocalCache({ tabManager: persistentSingleTabManager({ forceOwnership: false }) }),
     })
   } catch {
     return getFirestore(app)
@@ -103,6 +117,9 @@ function createFirestore() {
 }
 
 export const db = createFirestore()
+// Restart the live stream after sleep, a frozen tab or a dropped network,
+// so a laptop console never sits on a dead stream (lib/firestoreWake.js).
+installFirestoreWake(db)
 export const storage = getStorage(app)
 
 /**
