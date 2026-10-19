@@ -40,9 +40,7 @@ dependencies:
   cloud_firestore: ^6.8.0
   cloud_functions: ^6.3.6
   firebase_storage: ^13.4.6
-  http: ^1.1.2
   intl: ^0.19.0
-  provider: ^6.1.1
   shared_preferences: ^2.2.2
   connectivity_plus: ^5.0.2
   # Backs the offline SOS queue. iOS Keychain / Android EncryptedSharedPreferences
@@ -52,8 +50,6 @@ dependencies:
   # See lib/features/panic_button/services/sos_queue.dart.
   flutter_secure_storage: ^9.2.2
   url_launcher: ^6.2.2
-  flutter_sms: ^3.0.1
-  google_sign_in: ^7.2.0
   phosphor_flutter: ^2.1.0
   cached_network_image: ^3.4.1
   audioplayers: ^6.1.0

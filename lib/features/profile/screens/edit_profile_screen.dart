@@ -172,6 +172,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
     final svc = UserProfileService.instance;
     final current = svc.profile ?? await svc.load();
+    // The load above can take a round trip; the resident may have left.
+    if (!mounted) return;
     if (user == null || current == null) {
       _showToast('Please sign in again to update your profile.',
           isError: true);

@@ -394,7 +394,7 @@ export function AuthProvider({
     reconcilePasswordResetFlags()
     // The first sign-in after a verified email change is when the staff
     // record learns the new address (see lib/staffEmail.js). Not awaited.
-    syncStaffEmail()
+    syncStaffEmail({ force: true })
 
     return approvedRole
   }, [])

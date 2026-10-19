@@ -52,7 +52,8 @@ export function useAccountEmail() {
     if (prev.email !== next.email || prev.verified !== next.verified) {
       identityRef.current = next
       setIdentity(next)
-      syncStaffEmail()
+      // The address or its verification really changed: always sync.
+      syncStaffEmail({ force: true })
     }
   }, [])
 
@@ -67,7 +68,8 @@ export function useAccountEmail() {
     adopt(current)
   }, [adopt])
 
-  // Once per visit, so a staff record left stale before this existed catches up.
+  // Once per visit, so a staff record left stale before this existed catches
+  // up. Deduplicated in syncStaffEmail, so remounting per section is free.
   useEffect(() => {
     syncStaffEmail()
   }, [])

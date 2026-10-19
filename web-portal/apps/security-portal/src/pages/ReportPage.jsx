@@ -1,7 +1,7 @@
 import { toast } from '@shared/lib/toast'
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { collection, query } from 'firebase/firestore'
+import { collection, query, where } from 'firebase/firestore'
 import { Plus } from '@shared/icons'
 import SectionHeading from '@shared/components/SectionHeading'
 import IncidentTicketDetailsModal from '@/components/IncidentTicketDetailsModal'
@@ -55,7 +55,14 @@ export default function ReportPage() {
   const [composerOpen, setComposerOpen] = useState(false)
   const [selectedId, setSelectedId] = useState(null)
 
-  const reportsQuery = useMemo(() => query(collection(db, 'incidents')), [])
+  // Only this officer's own filings, filtered by the SERVER (2026-10-20). It
+  // listened to the whole incidents collection — every resident report ever
+  // filed — to keep the handful this page shows. Same rows, a fraction of the
+  // reads; a single-field equality needs no composite index.
+  const reportsQuery = useMemo(
+    () => (user?.uid ? query(collection(db, 'incidents'), where('reporterUid', '==', user.uid)) : null),
+    [user?.uid],
+  )
   // `feedError` was previously destructured away. A snapshot listener that is
   // denied (rules change, session expiring mid-shift) resolves to an empty
   // array with `loading: false` — indistinguishable from "you have filed

@@ -91,9 +91,9 @@ void main() {
     expect(find.text('history 0'), findsOneWidget);
 
     final homeElement = tester.element(find.text('home 0', skipOffstage: false));
-    expect(TickerMode.of(homeElement), isFalse);
+    expect(TickerMode.valuesOf(homeElement).enabled, isFalse);
     final historyElement = tester.element(find.text('history 0'));
-    expect(TickerMode.of(historyElement), isTrue);
+    expect(TickerMode.valuesOf(historyElement).enabled, isTrue);
   });
 
   testWidgets('the incoming tab fades in, then settles fully opaque',
