@@ -137,10 +137,39 @@ const STATUS_HEADLINES = {
  * cannot put a timestamp in its own column if the timestamp is spliced into
  * the middle of a paragraph.
  */
-export function incidentNotification(incident) {
+export function incidentNotification(incident, { viewerUid = null } = {}) {
   const display = STATUS_TO_DISPLAY[incident.status] ?? incident.status
   const category = normalizeCategory(incident.category)
   const reporter = incident.reporterName || 'a resident'
+
+  /**
+   * ── A CALL BOOKED TO THE READER (2026-10-19) ────────────────────────────
+   * The floating "You have been dispatched" cards were removed (by request:
+   * the feed is the one place alerts live), so the feed itself now says it.
+   * A call dispatched to the signed-in officer and not yet acknowledged reads
+   * as theirs, and its id carries the dispatch's audit entry, so a fresh
+   * booking — a reassignment back to them included — arrives unread.
+   */
+  const stage = incident.dispatchStage
+  if (viewerUid && incident.assignedGuardUid === viewerUid && stage === 'dispatched') {
+    return {
+      id: `incident-${incident.id}-assigned-${incident.lastLogId ?? ''}`,
+      sourceId: incident.id,
+      kind: 'incident',
+      tone: NOTIFICATION_TONES.warning,
+      category,
+      categoryLabel: categoryLabel(category),
+      categoryTone: categoryTone(category),
+      title: 'You have been dispatched',
+      detail: `${categoryLabel(category)}. Open it to acknowledge and respond.`,
+      at: toDate(incident.dispatchedAt) ?? incidentTime(incident),
+      priority: incident.priority ?? 'medium',
+      status: display,
+      propertyLabel: propertyLabelOf(incident),
+      reporterName: incident.reporterName || 'Unknown resident',
+      actionLabel: 'View incident',
+    }
+  }
 
   return {
     id: `incident-${incident.id}`,
@@ -250,7 +279,7 @@ export function buildNotificationFeed({
   viewerUid = null,
   limit = 30,
 } = {}) {
-  const incidentItems = incidents.map(incidentNotification).filter((item) => {
+  const incidentItems = incidents.map((incident) => incidentNotification(incident, { viewerUid })).filter((item) => {
     if (audience === 'admin') {
       const urgent = item.priority === 'high' || item.priority === 'critical'
       return urgent || item.status === 'Dispatched' || item.status === 'Dispatch in progress'

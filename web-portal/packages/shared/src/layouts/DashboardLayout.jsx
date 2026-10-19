@@ -127,8 +127,9 @@ export default function DashboardLayout({
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [confirmingLogout, setConfirmingLogout] = useState(false)
 
-  // Live incident/status toasts for whichever portal is mounted.
-  useIncidentAlerts({ detailPath: alertPath })
+  // Live incident alert SOUNDS for whichever portal is mounted; the rows
+  // themselves are in the notification bell's feed.
+  useIncidentAlerts()
 
   useEffect(() => {
     localStorage.setItem(collapseKey, collapsed ? '1' : '0')

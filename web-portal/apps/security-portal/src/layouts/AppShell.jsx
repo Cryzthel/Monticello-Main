@@ -25,7 +25,6 @@ import { useAuth } from '@shared/auth/AuthContext'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { useDutyStatus } from '@/hooks/useDutyStatus'
 import LocationAccessNotice from '@/components/LocationAccessNotice'
-import LocationAccessToast from '@/components/LocationAccessToast'
 import { useGuardTelemetryState } from '@/components/GuardTelemetryProvider'
 import { portalKey } from '@shared/config/portal'
 import { ROUTES } from '@/config/portal'
@@ -187,11 +186,6 @@ function ShellFrame({ children, dutyLock = true, ...props }) {
           push a full-height map past the bottom of the shell. */}
       <div className="flex h-full min-h-0 flex-col">
         <LocationAccessNotice {...telemetry} />
-        {/* Renders nothing; raises the same fact as the banner into the toast
-            stack, which is portalled above the map. The banner lives at the
-            top of a full-height console and an officer driving to a call is
-            looking at the bottom of their phone — see LocationAccessToast. */}
-        <LocationAccessToast {...telemetry} />
         <div className="relative min-h-0 flex-1">
           {children}
           {dutyLock ? <DutyLockOverlay /> : null}

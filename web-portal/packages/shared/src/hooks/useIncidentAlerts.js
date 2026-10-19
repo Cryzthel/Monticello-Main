@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
-import { useNavigate } from 'react-router-dom'
 import { db } from '@shared/lib/firebase'
-import { useToast } from '@shared/components/ToastProvider'
-import { incidentNotification } from '@shared/lib/notifications'
 import { playAlert } from '@shared/lib/alertSound'
 
 /**
- * Turns live Firestore changes into top-right incident notification cards.
+ * Turns live Firestore changes into the console's ALERT SOUNDS. It used to
+ * raise a top-right card for each as well; those were removed (2026-10-19,
+ * by request) because the notification bell shows the same rows live. The
+ * sound is what calls the operator to the bell.
  *
  * Uses a raw onSnapshot rather than useLiveCollection because this needs
  * `snapshot.docChanges()` — the *diff* — not the current array. Diffing a
@@ -26,10 +26,7 @@ import { playAlert } from '@shared/lib/alertSound'
  * @param {string}  options.detailPath Route the "View Incident" action opens.
  * @param {boolean} options.enabled    Pass false to keep the listener closed.
  */
-export function useIncidentAlerts({ detailPath, enabled = true } = {}) {
-  const { notify } = useToast()
-  const navigate = useNavigate()
-
+export function useIncidentAlerts({ enabled = true } = {}) {
   const primed = useRef(false)
   const lastStatus = useRef(new Map())
 
@@ -73,17 +70,6 @@ export function useIncidentAlerts({ detailPath, enabled = true } = {}) {
           if (change.type === 'modified' && lastStatus.current.get(id) === data.status) return
           lastStatus.current.set(id, data.status)
 
-          // Built by the same function the bell panel uses, so a toast and the
-          // row it later becomes are the same notification — same tone, same
-          // subject, same sentence — rather than two parallel formatters that
-          // drift.
-          const notification = incidentNotification({ id, ...data })
-          notify({
-            ...notification,
-            dedupeKey: notification.id,
-            onView: detailPath ? () => navigate(`${detailPath}?incident=${id}`) : undefined,
-          })
-
           // ── AUDIBLE ALERT ────────────────────────────────────────────────
           //
           // Fired here rather than inside the toast component so it inherits
@@ -110,5 +96,5 @@ export function useIncidentAlerts({ detailPath, enabled = true } = {}) {
     )
 
     return unsubscribe
-  }, [incidentsQuery, enabled, notify, navigate, detailPath])
+  }, [incidentsQuery, enabled])
 }

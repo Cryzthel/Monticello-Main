@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@shared/auth/AuthContext'
-import { useToast } from '@shared/components/ToastProvider'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
-import { describeIncidentLocation } from '@shared/lib/incidents'
-import { formatCategory } from '@shared/lib/wpda'
 import { playAlert } from '@shared/lib/alertSound'
 import { ACK_TIMEOUT_MS } from '@shared/lib/dispatchStage'
-import { ROUTES } from '@/config/portal'
-import { incidentReference } from '@/lib/dispatch'
 import { activeCallsQuery } from '@/hooks/useGuardTelemetry'
 
 /** An escalation older than this when the console loads is history, not news. */
@@ -20,13 +14,17 @@ const toMillis = (value) => (value?.toMillis ? value.toMillis() : null)
  * The console-wide dispatch alarms, mounted once above the routes so they
  * fire on whichever page is open.
  *
- *   New assignment    the officer a call is booked to is told at once, with
- *                     the critical tone. This is how a guard learns they
- *                     have been dispatched.
+ *   New assignment    the officer a call is booked to hears the critical
+ *                     tone at once; the bell's feed carries "You have been
+ *                     dispatched" (lib/notifications incidentNotification).
  *   Dead-man switch   a call still DISPATCHED 90 s after it was booked means
  *                     the officer has not seen it or cannot answer. Every
- *                     console is told, so a dispatcher can reassign.
+ *                     console sounds again, so a dispatcher can reassign;
+ *                     the call's drawer shows "No acknowledgement".
  *   Escalation        an officer on scene pressed Emergency escalation.
+ *
+ * SOUNDS ONLY since 2026-10-19: the floating cards these used to raise were
+ * removed by request, because the bell already lists the same calls live.
  *
  * ── CLIENT-SIDE, AND WHY ────────────────────────────────────────────────────
  * The watchdog belongs on a server: a scheduled function that checks every
@@ -42,8 +40,6 @@ const toMillis = (value) => (value?.toMillis ? value.toMillis() : null)
 export default function DispatchWatchdog() {
   const { user, isAuthenticated } = useAuth()
   const uid = isAuthenticated ? user?.uid : null
-  const { notify } = useToast()
-  const navigate = useNavigate()
 
   // The telemetry stream itself is mounted by GuardTelemetryProvider, which
   // wraps this component — one watch for the console, and a value the shell
@@ -69,13 +65,8 @@ export default function DispatchWatchdog() {
   useEffect(() => {
     if (!uid) return
     const alerted = alertedRef.current
-    const open = (id) => () => navigate(`${ROUTES.dashboard}?incident=${id}`)
 
     watched.forEach((incident) => {
-      const place = describeIncidentLocation(incident) || 'Location not recorded'
-      const category = formatCategory(incident.category)
-      const reference = incidentReference(incident.id)
-
       if (incident.dispatchStage === 'dispatched') {
         // One booking per dispatch write, named by its audit entry, so a
         // reassignment (even back to the same officer) alerts again and
@@ -89,36 +80,11 @@ export default function DispatchWatchdog() {
 
         if (incident.assignedGuardUid === uid && !alerted.has(`assigned:${booking}`)) {
           alerted.add(`assigned:${booking}`)
-          notify({
-            tone: 'warning',
-            priority: 'critical',
-            title: `You have been dispatched · ${reference}`,
-            detail: `${category}. Open it and press Acknowledge & respond.`,
-            propertyLabel: place,
-            at: new Date(dispatchedAt),
-            dedupeKey: `assigned:${incident.id}`,
-            onView: open(incident.id),
-          })
           playAlert('critical')
         }
 
         if (now - dispatchedAt >= ACK_TIMEOUT_MS && !alerted.has(`timeout:${booking}`)) {
           alerted.add(`timeout:${booking}`)
-          const mine = incident.assignedGuardUid === uid
-          notify({
-            tone: 'error',
-            priority: 'critical',
-            title: mine
-              ? `Acknowledge now · ${reference}`
-              : `No acknowledgement from ${incident.assignedGuardName || 'the unit'}`,
-            detail: mine
-              ? 'The dispatcher has been alerted that you have not responded.'
-              : `${category} · ${reference}. Dispatched over 90 s ago. Reassign the call.`,
-            propertyLabel: place,
-            at: new Date(dispatchedAt + ACK_TIMEOUT_MS),
-            dedupeKey: `timeout:${incident.id}`,
-            onView: open(incident.id),
-          })
           playAlert('critical')
         }
       }
@@ -127,20 +93,10 @@ export default function DispatchWatchdog() {
       if (escalatedAt && !alerted.has(`escalated:${incident.id}`)) {
         alerted.add(`escalated:${incident.id}`)
         if (Date.now() - escalatedAt > ESCALATION_FRESH_MS) return
-        notify({
-          tone: 'error',
-          priority: 'critical',
-          title: `Escalated by ${incident.escalation.byName || 'the officer on scene'}`,
-          detail: `${incident.escalation.reason} · ${reference}`,
-          propertyLabel: place,
-          at: new Date(escalatedAt),
-          dedupeKey: `escalated:${incident.id}`,
-          onView: open(incident.id),
-        })
         playAlert('critical')
       }
     })
-  }, [watched, uid, now, notify, navigate])
+  }, [watched, uid, now])
 
   return null
 }
