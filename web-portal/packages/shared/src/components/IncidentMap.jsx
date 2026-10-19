@@ -508,22 +508,12 @@ function setupLayers(map, initialData, opts) {
   })
 
   map.on('click', 'incident-hit', (event) => {
-    // ── AN SOS OUTRANKS AN ORDINARY REPORT ────────────────────────────────
-    // The two hit discs are 25px and 32px against markers of 7px and 10px, so
-    // widening them to match their rings also made them overlap: a report
-    // filed at the same lot an SOS was raised from now shares a click. Without
-    // a rule, that click opens BOTH panels — the panic modal and the incident
-    // drawer, stacked, over the emergency.
-    //
-    // The emergency wins. `panic-hit` is queried at the click point rather
-    // than relying on layer order, because z-order does not decide which
-    // handlers fire — both do, independently — and the panic layer's own
-    // handler is about to open the alert.
-    if (map.getLayer('panic-hit') && map.queryRenderedFeatures(event.point, { layers: ['panic-hit'] }).length) {
-      return
-    }
+    // Overlapping an SOS: the nearest marker owns the click (clickOwner).
+    if (clickOwner(map, event.point) !== 'incident') return
 
-    const feature = event.features?.[0]
+    // The NEAREST report under the click, not whichever the renderer listed
+    // first — two rings overlap often on a busy lot.
+    const feature = nearestFeature(map, event.point, 'incident-hit')?.feature ?? event.features?.[0]
     const incident = incidentsRef.current.find((i) => i.id === feature?.properties?.id)
     if (!incident) return
 
@@ -546,16 +536,11 @@ function setupLayers(map, initialData, opts) {
     map.getCanvas().style.cursor = 'pointer'
 
     // ── THE PREVIEW, AND WHO OWNS IT ────────────────────────────────────────
-    // Same precedence as the click handler: the two hit discs overlap, so a
-    // report filed at the lot an SOS was raised from shares a hover, and the
-    // emergency takes it. Without this the ordinary report's card would draw
-    // over the alert's, because `incident-hit` is the lower layer and fires
-    // last.
-    if (map.getLayer('panic-hit') && map.queryRenderedFeatures(event.point, { layers: ['panic-hit'] }).length) {
-      return
-    }
+    // Same owner as the click (clickOwner), so the card previews exactly what
+    // a click here would open.
+    if (clickOwner(map, event.point) !== 'incident') return
 
-    const feature = event.features?.[0]
+    const feature = nearestFeature(map, event.point, 'incident-hit')?.feature ?? event.features?.[0]
     const incident = incidentsRef.current.find((i) => i.id === feature?.properties?.id)
     if (!incident) return
     // Anchored to the marker's own coordinates, NOT to the cursor. A card that
@@ -568,6 +553,45 @@ function setupLayers(map, initialData, opts) {
     map.getCanvas().style.cursor = ''
     onHoverRef?.current?.(null)
   })
+}
+
+/**
+ * ── WHO OWNS A CLICK WHERE AN SOS AND A REPORT OVERLAP ─────────────────────
+ *
+ * Both hit discs are far wider than their markers (25px and 32px), so a report
+ * near an SOS shares clicks with it, and both layers' handlers fire. The rule
+ * used to be "the emergency always wins", and that made reports unopenable:
+ *   • an SOS with no GPS fix is ANCHORED at the premises centre, so every
+ *     report filed near the middle of the estate opened the SOS instead;
+ *   • a report a few metres from a live SOS could never be opened at all,
+ *     because every pixel of its ring was also inside the SOS disc.
+ *
+ * Now the nearest MARKER wins, by screen distance from the click to each
+ * centre, with the SOS taking ties within a few pixels. An anchored (no-fix)
+ * SOS never outranks a report: its position is a placeholder, not a place,
+ * and it stays reachable from its own centre and from the SOS rail.
+ *
+ * Returns 'panic', 'incident' or null. Both handlers ask the same question of
+ * the same point, so exactly one of them acts.
+ */
+const SOS_TIE_PX = 4
+function nearestFeature(map, point, layer) {
+  if (!map.getLayer(layer)) return null
+  let best = null
+  for (const feature of map.queryRenderedFeatures(point, { layers: [layer] })) {
+    const at = map.project(feature.geometry.coordinates)
+    const d = Math.hypot(at.x - point.x, at.y - point.y)
+    if (!best || d < best.d) best = { feature, d }
+  }
+  return best
+}
+function clickOwner(map, point) {
+  const panic = nearestFeature(map, point, 'panic-hit')
+  const incident = nearestFeature(map, point, 'incident-hit')
+  if (!panic) return incident ? 'incident' : null
+  if (!incident) return 'panic'
+  if (panic.feature.properties?.located === false) return 'incident'
+  return panic.d <= incident.d + SOS_TIE_PX ? 'panic' : 'incident'
 }
 
 // Optional — only set up when the caller actually passes a `panicAlerts`
@@ -653,7 +677,8 @@ function setupPanicLayer(map, initialData, opts) {
   })
 
   map.on('click', 'panic-hit', (event) => {
-    const feature = event.features?.[0]
+    if (clickOwner(map, event.point) !== 'panic') return
+    const feature = nearestFeature(map, event.point, 'panic-hit')?.feature ?? event.features?.[0]
     const alert = panicAlertsRef.current.find((a) => a.id === feature?.properties?.id)
     if (!alert) return
 
@@ -669,7 +694,8 @@ function setupPanicLayer(map, initialData, opts) {
   })
   map.on('mousemove', 'panic-hit', (event) => {
     map.getCanvas().style.cursor = 'pointer'
-    const feature = event.features?.[0]
+    if (clickOwner(map, event.point) !== 'panic') return
+    const feature = nearestFeature(map, event.point, 'panic-hit')?.feature ?? event.features?.[0]
     const alert = panicAlertsRef.current.find((a) => a.id === feature?.properties?.id)
     if (!alert) return
     onHoverRef?.current?.({ kind: 'panic', id: alert.id, lngLat: feature.geometry.coordinates })

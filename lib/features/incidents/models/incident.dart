@@ -304,7 +304,9 @@ class IncidentStatusInfo {
       case IncidentStatus.dispatched:
         return 'Dispatched';
       case IncidentStatus.inProgress:
-        return 'In Progress';
+        // Shared with both web consoles (2026-10-19): from Acknowledge &
+        // respond, en route as well as on scene.
+        return 'Dispatch in progress';
       case IncidentStatus.resolved:
         return 'Resolved';
       case IncidentStatus.closed:

@@ -167,7 +167,12 @@ export async function acknowledgeAndRespond(incident, { role }) {
     toStage: 'responding',
     role,
     forensics,
-    fields: { dispatchStage: 'responding', respondingAt: serverTimestamp() },
+    fields: {
+      dispatchStage: 'responding',
+      // Every surface reads `status`; see STAGE_TO_WIRE_STATUS.
+      status: STAGE_TO_WIRE_STATUS.responding,
+      respondingAt: serverTimestamp(),
+    },
   })
 }
 

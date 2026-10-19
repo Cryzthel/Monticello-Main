@@ -97,7 +97,7 @@ function statusHistory(report) {
       detail: report.assignedGuardName ? `To ${report.assignedGuardName}` : report.dispatchedByName,
     },
     { key: 'acknowledged', label: 'Acknowledged', at: report.acknowledgedAt },
-    { key: 'responding', label: 'Responding', at: report.respondingAt },
+    { key: 'responding', label: 'Dispatch in progress', at: report.respondingAt },
     { key: 'onScene', label: 'On scene', at: report.onSceneAt },
     { key: 'investigating', label: 'Investigating', at: report.investigatingAt },
     { key: 'escalated', label: 'Escalated', at: report.escalatedAt, tone: 'warning' },

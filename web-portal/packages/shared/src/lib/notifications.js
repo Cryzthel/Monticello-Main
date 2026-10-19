@@ -100,7 +100,7 @@ function propertyLabelOf(data) {
 function incidentTone(incident, display) {
   if (display === 'Resolved') return NOTIFICATION_TONES.success
   if (incident.priority === 'critical' || incident.priority === 'high') return NOTIFICATION_TONES.error
-  if (display === 'Dispatched' || display === 'On-Site') return NOTIFICATION_TONES.info
+  if (display === 'Dispatched' || display === 'Dispatch in progress') return NOTIFICATION_TONES.info
   return NOTIFICATION_TONES.warning
 }
 
@@ -122,7 +122,7 @@ const STATUS_HEADLINES = {
   Pending: 'New report awaiting dispatch',
   Verified: 'Report verified',
   Dispatched: 'Security dispatched',
-  'On-Site': 'Officer on site',
+  'Dispatch in progress': 'Officer on the way',
   Resolved: 'Report resolved and closed',
 }
 
@@ -253,7 +253,7 @@ export function buildNotificationFeed({
   const incidentItems = incidents.map(incidentNotification).filter((item) => {
     if (audience === 'admin') {
       const urgent = item.priority === 'high' || item.priority === 'critical'
-      return urgent || item.status === 'Dispatched' || item.status === 'On-Site'
+      return urgent || item.status === 'Dispatched' || item.status === 'Dispatch in progress'
     }
     if (audience === 'security') return item.status !== 'Resolved'
     return true

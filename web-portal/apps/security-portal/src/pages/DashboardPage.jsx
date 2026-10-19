@@ -169,7 +169,20 @@ export default function DashboardPage() {
    * not quietly re-plot the line under them mid-response. Clearing the SOS is
    * an explicit act — Exit navigation, or the alert being resolved.
    */
-  const routeIncident = sosRouteTarget ?? selectedReport ?? myActive
+  /**
+   * A call navigation was started on from its drawer. It holds the route
+   * after the drawer closes — without it, closing the panel on anything but
+   * the officer's own active call dropped the route and ended the session the
+   * button had just started. Live from the list, so a call that resolves or is
+   * deleted ends the session with it. While a session runs it outranks the
+   * drawer, for the same reason an SOS does: a call clicked mid-drive must not
+   * re-plot the line under the driver.
+   */
+  const [navTargetId, setNavTargetId] = useState(null)
+  const navTarget = navTargetId ? reports.find((r) => r.id === navTargetId) ?? null : null
+  const routeIncident = sosRouteTarget ?? navTarget ?? selectedReport ?? myActive
+  const routeIncidentRef = useRef(routeIncident)
+  routeIncidentRef.current = routeIncident
 
   const target = useMemo(
     () => (typeof routeIncident?.lng === 'number' ? [routeIncident.lng, routeIncident.lat] : null),
@@ -530,6 +543,11 @@ export default function DashboardPage() {
     if (!followUid) setNavigating(false)
   }, [followUid])
 
+  // A session that ends (any way) releases the call it was started on.
+  useEffect(() => {
+    if (!navigating) setNavTargetId(null)
+  }, [navigating])
+
 
   /**
    * NAVIGATING IS ITS OWN STATE, and the previous version got this wrong.
@@ -596,6 +614,12 @@ export default function DashboardPage() {
     // `routeIncident`) — without this the line would stay drawn to an
     // emergency the officer has just stepped away from.
     setRespondingAlertId((id) => (navigatingRef.current ? null : id))
+    // Starting a session on a call pins it, from either control (the route
+    // sheet or the drawer), so closing the drawer keeps the route.
+    if (!navigatingRef.current) {
+      const target = routeIncidentRef.current
+      if (target && target.kind !== 'sos') setNavTargetId(target.id)
+    }
   }, [requestCompass, route.originSource])
 
   // Read inside the callback above without making `navigating` a dependency,
@@ -657,6 +681,41 @@ export default function DashboardPage() {
     setSelectedId(null)
     setPreviewUid(null)
   }, [])
+
+  /**
+   * Start navigation from the call's drawer: hold the call as the route
+   * target, start the session, and close the drawer so the map — which the
+   * drawer covers on a phone — is what the officer sees.
+   */
+  const drawerNavigation = (() => {
+    if (!selectedReport) return null
+    const forThisCall = routeIncident?.id === selectedReport.id && !sosRouteTarget
+    if (forThisCall && navigating) return { state: 'active', onExit: toggleNavigation }
+    const state = !forThisCall
+      ? 'unavailable'
+      : route.phase === 'ready'
+        ? 'ready'
+        : route.phase === 'routing'
+          ? 'routing'
+          : 'unavailable'
+    const reason = !forThisCall
+      ? sosRouteTarget
+        ? 'You are responding to an SOS. Exit that navigation first.'
+        : 'Another call is being navigated. Exit that navigation first.'
+      : route.phase === 'no-origin'
+        ? 'Waiting for a location fix to plot the route from.'
+        : route.phase === 'error'
+          ? route.error || 'Could not plot a route to this call.'
+          : null
+    return {
+      state,
+      reason,
+      onStart: () => {
+        if (!navigating) toggleNavigation()
+        closeDetail()
+      },
+    }
+  })()
 
   // ── DEEP LINKS ───────────────────────────────────────────────────────────
   // `?panic=<id>` flies to an SOS from the Panic Alerts page without opening
@@ -839,6 +898,7 @@ export default function DashboardPage() {
         previewUid={previewUid}
         onPreviewUnit={setPreviewUid}
         onClose={closeDetail}
+        navigation={drawerNavigation}
       />
       <PanicAlertModal
         alert={selectedPanic}

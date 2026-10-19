@@ -286,7 +286,7 @@ class ResidentNotification {
       case IncidentStatus.dispatched:
         return 'Dispatched';
       case IncidentStatus.inProgress:
-        return 'On Scene';
+        return 'Dispatch in progress';
       case IncidentStatus.resolved:
         return 'Resolved';
       case IncidentStatus.closed:

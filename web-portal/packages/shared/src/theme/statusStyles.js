@@ -43,7 +43,10 @@ export const STATUS_STYLES = {
   // it, and equally true of one sitting in a queue. "On-Site" is the fact a
   // dispatcher and a resident both actually care about, and it is what the
   // button that sets it now says.
-  'On-Site': {
+  // Renamed again 2026-10-19: `in_progress` now starts at Acknowledge &
+  // respond (en route as well as on scene), so "On-Site" became untrue for
+  // most of the stage. "Dispatch in progress" is the name all three surfaces share.
+  'Dispatch in progress': {
     icon: Navigation,
     dot: 'bg-brand-500',
     tone: 'brand',
@@ -72,8 +75,9 @@ export const STATUS_STYLES = {
 // The cost of an alias is one line. The cost of missing one is a status pill
 // that silently falls through to the neutral grey fallback — which does not
 // look like a bug, it looks like a status nobody has set.
-STATUS_STYLES['In Progress'] = STATUS_STYLES['On-Site']
-STATUS_STYLES['On-Scene'] = STATUS_STYLES['On-Site']
+STATUS_STYLES['On-Site'] = STATUS_STYLES['Dispatch in progress']
+STATUS_STYLES['In Progress'] = STATUS_STYLES['Dispatch in progress']
+STATUS_STYLES['On-Scene'] = STATUS_STYLES['Dispatch in progress']
 
 // Anything unrecognised (e.g. the "All" entry a filter dropdown adds) reads as
 // neutral rather than borrowing another status's colour.
@@ -102,7 +106,7 @@ export const INCIDENT_STATUSES = [
   'Pending',
   'Verified',
   'Dispatched',
-  'On-Site',
+  'Dispatch in progress',
   'Resolved',
 ]
 
@@ -119,7 +123,7 @@ export const INCIDENT_STATUSES = [
 // "what an operator may SET" with no consumer would describe an authority no
 // screen in either portal still offers.
 
-export const STATUS_ACTIONS = ['On-Site', 'Resolved']
+export const STATUS_ACTIONS = ['Dispatch in progress', 'Resolved']
 
 // Everything that is not finished. Derived from INCIDENT_STATUSES rather than
 // hand-listed, which is the whole point: the two pages that count "active

@@ -7,6 +7,7 @@
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '@shared/lib/firebase'
 import { staffLabel } from '@shared/lib/identity'
+import { readLatLng } from '@shared/lib/coordinates'
 
 export function mapPanicAlertDoc(d) {
   const createdAt = d.createdAt?.toDate ? d.createdAt.toDate() : d.createdAt
@@ -26,8 +27,8 @@ export function mapPanicAlertDoc(d) {
     block: d.propertyBlock,
     lot: d.propertyLot,
     address: d.propertyLabel || 'Address unavailable',
-    lat: d.location?.lat,
-    lng: d.location?.lng,
+    // Validated and shape-tolerant; see lib/coordinates.
+    ...readLatLng(d),
     status: d.status || 'active',
     acknowledgedByName: d.acknowledgedByName,
     acknowledgedAt,

@@ -15,6 +15,7 @@ import { auth, db, functions } from '@shared/lib/firebase'
 export { computeCategoryBreakdown } from '@shared/lib/incidentCategories'
 import { normalizeCategory } from '@shared/lib/incidentCategories'
 import { deriveDispatchStage } from '@shared/lib/dispatchStage'
+import { readLatLng } from '@shared/lib/coordinates'
 
 // Mobile's IncidentStatus wire values -> the dashboard's display buckets.
 //
@@ -36,7 +37,7 @@ export const STATUS_TO_DISPLAY = {
   pending: 'Pending',
   verifying: 'Verified',
   dispatched: 'Dispatched',
-  in_progress: 'On-Site',
+  in_progress: 'Dispatch in progress',
   resolved: 'Resolved',
   closed: 'Resolved',
   false_alarm: 'Resolved',
@@ -555,8 +556,8 @@ export function mapIncidentDoc(d) {
     deletedAt,
     reviewedAt,
     archivedAt,
-    lat: d.location?.lat,
-    lng: d.location?.lng,
+    // Validated and shape-tolerant; see lib/coordinates.
+    ...readLatLng(d),
     severity: d.priority ?? 'medium',
     status: STATUS_TO_DISPLAY[d.status] ?? 'Pending',
     location: describeIncidentLocation(d) || undefined,

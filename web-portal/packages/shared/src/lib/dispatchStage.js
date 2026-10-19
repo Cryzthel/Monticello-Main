@@ -63,11 +63,14 @@ export const UNASSIGNED_STAGE = 'none'
 export const STAGE_LABELS = {
   none: 'Awaiting dispatch',
   dispatched: 'Dispatched',
-  responding: 'Responding',
+  // The same three words on every surface — Guardhouse, Admin and the
+  // resident app — for the one stage a guard is en route or on scene
+  // (2026-10-19, by request).
+  responding: 'Dispatch in progress',
   resolved: 'Resolved',
   // Read-only, for a document stored before the machine was shortened.
-  on_site: 'Responding',
-  investigating: 'Responding',
+  on_site: 'Dispatch in progress',
+  investigating: 'Dispatch in progress',
 }
 
 /**
@@ -76,17 +79,22 @@ export const STAGE_LABELS = {
  * arrive, and "On-Site" for as long as the guard is with them.
  */
 /**
- * ── THE RESIDENT'S VIEW DID NOT COLLAPSE WITH THE STAGES ──────────────────
- * `responding` maps to `dispatched` here and the resident is moved on to
- * `in_progress` by the ARRIVAL stamp instead — which still happens, now
- * automatically (see `autoArrival`). Collapsing the wire status along with
- * the stage would have taken the "a guard is here now" signal off the
- * resident's phone, which is the one update in this whole machine they
- * actually feel, and nobody asked for that.
+ * ── ONE STATUS PER STAGE, SO EVERY SURFACE AGREES (2026-10-19) ─────────────
+ * `responding` used to write `dispatched` and leave `in_progress` to the
+ * arrival stamp. Admin and the resident app read `status`, so for the whole
+ * drive they said "Dispatched" while the Guardhouse said the guard was on
+ * the way — three screens, two answers. Now Acknowledge & respond writes
+ * `in_progress` itself: Dispatched → Dispatch in progress → Resolved, the
+ * same step at the same moment everywhere.
+ *
+ * The "a guard is here now" signal is not lost: the arrival stamp still
+ * sends the resident its on-site push (`notifyStatus` in autoArrival).
+ * firestore.rules `isRespond` accepts both values, so a console still on
+ * the old build is not refused mid-rollout.
  */
 export const STAGE_TO_WIRE_STATUS = {
   dispatched: 'dispatched',
-  responding: 'dispatched',
+  responding: 'in_progress',
   resolved: 'resolved',
   on_site: 'in_progress',
   investigating: 'in_progress',

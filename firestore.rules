@@ -222,15 +222,18 @@ service cloud.firestore {
           ]);
       }
 
-      // dispatched → responding: the guard's Acknowledge & Respond.
+      // dispatched → responding: the guard's Acknowledge & Respond. It now
+      // also moves `status` to in_progress, so Admin and the resident app
+      // show "Dispatch in progress" from that moment (2026-10-19). Still
+      // accepts `dispatched` so a console on the previous build keeps working.
       function isRespond(cur) {
         let d = request.resource.data;
         return cur == 'dispatched'
           && d.dispatchStage == 'responding'
-          && d.status == 'dispatched'
+          && d.status in ['dispatched', 'in_progress']
           && d.respondingAt == request.time
           && isAssignedOrSupervisor()
-          && changedKeys().hasOnly(['dispatchStage', 'stageUpdatedAt', 'lastLogId', 'respondingAt']);
+          && changedKeys().hasOnly(['status', 'dispatchStage', 'stageUpdatedAt', 'lastLogId', 'respondingAt']);
       }
 
       // The rules measure the distance themselves. A guard who claims to be

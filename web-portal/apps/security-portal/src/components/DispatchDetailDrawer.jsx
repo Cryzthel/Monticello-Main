@@ -10,6 +10,7 @@ import {
   History,
   Loader2,
   MapPin,
+  Navigation,
   Phone,
   Radio,
   Timer,
@@ -170,7 +171,13 @@ function useAckClock(report) {
  * it is a bottom sheet with a scrim, because there is no "beside" at that
  * width.
  */
-export default function DispatchDetailDrawer({ report, units = [], previewUid, onPreviewUnit, onClose }) {
+/**
+ * `navigation` (from the dispatch page), for an active call:
+ *   { state: 'ready' | 'active' | 'routing' | 'unavailable', reason?, onStart, onExit }
+ * The route sheet over the map carries the same control, but on a phone this
+ * drawer covers it — so the call's own panel must be able to start the drive.
+ */
+export default function DispatchDetailDrawer({ report, units = [], previewUid, onPreviewUnit, onClose, navigation = null }) {
   const navigate = useNavigate()
   const { user, role } = useAuth()
   const uid = user?.uid
@@ -784,6 +791,34 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               thumb lands for the thing you meant to do. `ml-auto` holds it
               clear of the stage buttons while they share a line. */}
           {status ? <div className="mt-2">{status}</div> : null}
+          {/* ── START NAVIGATION ────────────────────────────────────────
+              Its own full-width row above the stage actions: it is how the
+              officer gets to the call, which comes before any stage action
+              on it, and it must never be the control squeezed off a row. */}
+          {navigation && (stage === 'dispatched' || stage === 'responding') ? (
+            <div className="mt-2">
+              {navigation.state === 'active' ? (
+                <button type="button" onClick={navigation.onExit} aria-pressed className="btn btn-action btn-danger w-full">
+                  <X size="sm" aria-hidden="true" />
+                  Exit navigation
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={navigation.onStart}
+                  disabled={navigation.state !== 'ready'}
+                  title={navigation.state === 'ready' ? undefined : navigation.reason}
+                  className="btn btn-action btn-outline w-full"
+                >
+                  {navigation.state === 'routing' ? spinner : <Navigation size="sm" aria-hidden="true" />}
+                  {navigation.state === 'routing' ? 'Plotting route…' : 'Start navigation'}
+                </button>
+              )}
+              {navigation.state === 'unavailable' && navigation.reason ? (
+                <p className="mt-1.5 text-caption leading-snug text-text-muted">{navigation.reason}</p>
+              ) : null}
+            </div>
+          ) : null}
           {/* ── CENTRED, AND CLOSE NO LONGER PUSHED TO THE EDGE ──────────
               `ml-auto` held Close against the right rail, which on a
               416px drawer put a dead strip between it and the commit
