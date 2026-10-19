@@ -110,7 +110,7 @@ export default function IdleSignOut() {
     const id = setInterval(() => {
       const idleFor = Date.now() - lastActiveRef.current
       if (idleFor >= idleMs) {
-        logout()
+        logout().catch((err) => console.error('Idle sign-out failed', err))
       } else if (idleFor >= idleMs - WARN_MS) {
         if (!warningRef.current) setWarning(true)
       }

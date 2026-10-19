@@ -228,11 +228,11 @@ export default function IncidentReviewModal({ report, onClose }) {
                       a black gradient in BOTH themes, and tint is slate-900 in
                       light mode — a dark ring on a dark photo, i.e. no ring. */}
                   <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent p-3">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-2xs font-semibold text-white/90 ring-1 ring-inset ring-white/20">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white/90 ring-1 ring-inset ring-white/20">
                       <ShieldCheck size="sm" className="text-success" />
                       Watermark verified
                     </span>
-                    <span className="rounded-full bg-black/50 px-2.5 py-1 text-2xs font-medium text-white/80 ring-1 ring-inset ring-white/20">
+                    <span className="rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-inset ring-white/20">
                       {activeIndex + 1} / {media.length}
                     </span>
                   </div>

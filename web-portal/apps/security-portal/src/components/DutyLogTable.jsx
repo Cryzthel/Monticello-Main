@@ -202,10 +202,10 @@ export default function DutyLogTable() {
       {/* The totals strip. Derived from `rows`, so it always describes the
           table beneath it rather than the unfiltered history. */}
       <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge tone="neutral" size="sm">
+        <StatusBadge tone="neutral" size="md">
           {rows.length} shift{rows.length === 1 ? '' : 's'}
         </StatusBadge>
-        <StatusBadge tone="neutral" size="sm">
+        <StatusBadge tone="neutral" size="md">
           {duration(totalMinutes)} on duty
         </StatusBadge>
       </div>
@@ -266,7 +266,7 @@ export default function DutyLogTable() {
                     <td className="px-4 py-3.5 text-text-secondary">{timeCell(shift.timeIn)}</td>
                     <td className="px-4 py-3.5 text-text-secondary">
                       {shift.open ? (
-                        <StatusBadge tone="success" size="sm">
+                        <StatusBadge tone="success" size="md">
                           On duty
                         </StatusBadge>
                       ) : (

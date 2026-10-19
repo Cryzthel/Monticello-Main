@@ -509,7 +509,14 @@ export function AuthProvider({
     approvedRoleRef.current = null
     // While the session can still write: an explicit sign-out flips the admin
     // roster to Offline now, not when this tab is eventually closed.
-    await stopPresenceRef.current?.()
+    // A failed presence write must not keep the session open: sign-out is
+    // the part that matters (an idle console that stays signed in is the
+    // risk IdleSignOut exists for).
+    try {
+      await stopPresenceRef.current?.()
+    } catch (err) {
+      console.warn('Could not mark the session offline before sign-out', err)
+    }
     await firebaseSignOut(auth)
   }, [])
 
