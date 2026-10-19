@@ -1,10 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { CheckCircle2, CircleAlert, Loader2, Mail, MailCheck, Pencil, ShieldCheck, UserRound } from '@shared/icons'
 import Pill from '@shared/components/Pill'
 import FormField from '@shared/components/settings/FormField'
 import { ROLE_LABELS } from '@shared/auth/roles'
 import { useAccountEmail } from '@/hooks/useAccountEmail'
-import Disclosure from './Disclosure'
+import SettingsDialog from './SettingsDialog'
 import SettingsItem from './SettingsItem'
 import SettingsSection from './SettingsSection'
 
@@ -16,34 +16,32 @@ const ROLE_SCOPE = {
 /**
  * Profile: the signed-in administrator's email and role.
  *
- * The email is shown read-only; "Edit email address" opens the change form
- * inline beneath it (2026-10-19, by request — no open input by default).
- * Cancelling, or a sent link, closes it and clears what was typed. The change
- * is a Firebase Auth action with its own button, not part of the page's Save.
+ * The email is shown read-only; "Edit email address" opens the change in a
+ * MODAL (2026-10-19, by request — it was an inline dropdown). Two steps:
+ *
+ *   1. New address + current password. The password re-authenticates the
+ *      session (Firebase requires a recent sign-in), and the button stays
+ *      off until the address is valid and different.
+ *   2. "Check your inbox": Firebase's verifyBeforeUpdateEmail has sent a
+ *      one-time confirmation link to the NEW address. Nothing changes until
+ *      that link is opened, so the step says so and names the address.
+ *
+ * Cancel, Escape or the backdrop clear what was typed. The change is a
+ * Firebase Auth action with its own button, never part of the page's Save.
  */
 export default function ProfileSettingsCard({ role }) {
   const account = useAccountEmail()
-  const [editing, setEditing] = useState(false)
-  const formId = useId()
-  const toggleRef = useRef(null)
+  // null (closed) | 'form' | 'sent'
+  const [step, setStep] = useState(null)
   const firstFieldRef = useRef(null)
 
-  // Focus follows the form: into it on open, back to the (re-rendered) Edit
-  // button on close, so a keyboard user is never dropped at the page top.
-  const wasEditing = useRef(false)
-  useEffect(() => {
-    if (editing) firstFieldRef.current?.focus({ preventScroll: true })
-    else if (wasEditing.current) toggleRef.current?.focus({ preventScroll: true })
-    wasEditing.current = editing
-  }, [editing])
-
   function close() {
-    setEditing(false)
+    setStep(null)
     account.cancel()
   }
 
   async function send() {
-    if (await account.submit()) setEditing(false)
+    if (await account.submit()) setStep('sent')
   }
 
   return (
@@ -99,69 +97,18 @@ export default function ProfileSettingsCard({ role }) {
             </p>
           ) : null}
 
-          {editing ? null : (
-            <div>
-              <button
-                ref={toggleRef}
-                type="button"
-                onClick={() => setEditing(true)}
-                disabled={!account.available}
-                aria-expanded={editing}
-                aria-controls={formId}
-                className="btn btn-sm btn-outline"
-              >
-                <Pencil size="sm" aria-hidden="true" />
-                Edit email address
-              </button>
-            </div>
-          )}
-
-          <Disclosure id={formId} open={editing}>
-            <div className="flex flex-col gap-4 rounded-lg border border-hairline bg-base-900/30 p-4">
-              <FormField
-                inputRef={firstFieldRef}
-                id="new-email"
-                label="New email address"
-                type="email"
-                inputMode="email"
-                value={account.nextEmail}
-                autoComplete="email"
-                disabled={account.busy}
-                invalid={account.invalid || account.same}
-                hint={
-                  account.invalid
-                    ? 'Enter a valid email address.'
-                    : account.same
-                      ? 'That is already your sign-in email.'
-                      : 'A confirmation link goes to this address; nothing changes until it is opened.'
-                }
-                onChange={account.setNextEmail}
-              />
-              <FormField
-                id="email-current-password"
-                label="Current password"
-                type="password"
-                value={account.password}
-                autoComplete="current-password"
-                disabled={account.busy}
-                onChange={account.setPassword}
-              />
-              {account.error ? (
-                <p role="alert" className="text-xs text-danger">
-                  {account.error}
-                </p>
-              ) : null}
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={send} disabled={account.busy || !account.ready} className="btn btn-sm btn-brand">
-                  {account.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
-                  {account.busy ? 'Sending…' : 'Send confirmation link'}
-                </button>
-                <button type="button" onClick={close} disabled={account.busy} className="btn btn-sm btn-outline">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </Disclosure>
+          <div>
+            <button
+              type="button"
+              onClick={() => setStep('form')}
+              disabled={!account.available}
+              aria-haspopup="dialog"
+              className="btn btn-sm btn-outline"
+            >
+              <Pencil size="sm" aria-hidden="true" />
+              Edit email address
+            </button>
+          </div>
         </div>
       </SettingsItem>
 
@@ -170,6 +117,90 @@ export default function ProfileSettingsCard({ role }) {
           {ROLE_LABELS[role] ?? 'Staff'}
         </Pill>
       </SettingsItem>
+
+      <SettingsDialog
+        open={step === 'form'}
+        icon={Mail}
+        title="Change email address"
+        description="Confirm with your password. A one-time link is sent to the new address."
+        busy={account.busy}
+        onClose={close}
+        onSubmit={send}
+        initialRef={firstFieldRef}
+        footer={
+          <>
+            <button type="button" onClick={close} disabled={account.busy} className="btn btn-sm btn-outline">
+              Cancel
+            </button>
+            <button type="submit" disabled={account.busy || !account.ready} className="btn btn-sm btn-brand">
+              {account.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
+              {account.busy ? 'Sending…' : 'Send confirmation link'}
+            </button>
+          </>
+        }
+      >
+        <div className="flex items-center gap-2 text-xs text-text-muted">
+          <span>Current:</span>
+          <span className="min-w-0 truncate font-medium text-text-secondary">{account.email || '—'}</span>
+        </div>
+        <FormField
+          inputRef={firstFieldRef}
+          id="new-email"
+          label="New email address"
+          type="email"
+          inputMode="email"
+          value={account.nextEmail}
+          autoComplete="email"
+          disabled={account.busy}
+          invalid={account.invalid || account.same}
+          hint={
+            account.invalid
+              ? 'Enter a valid email address.'
+              : account.same
+                ? 'That is already your sign-in email.'
+                : 'Nothing changes until the link sent here is opened.'
+          }
+          onChange={account.setNextEmail}
+        />
+        <FormField
+          id="email-current-password"
+          label="Current password"
+          type="password"
+          value={account.password}
+          autoComplete="current-password"
+          disabled={account.busy}
+          hint="Required to confirm it is you."
+          onChange={account.setPassword}
+        />
+        {account.error ? (
+          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-xs text-danger">
+            <CircleAlert size="sm" aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>{account.error}</span>
+          </p>
+        ) : null}
+      </SettingsDialog>
+
+      <SettingsDialog
+        open={step === 'sent'}
+        icon={MailCheck}
+        title="Check your inbox"
+        description="One more step, from the new address."
+        onClose={close}
+        onSubmit={close}
+        footer={
+          <button type="submit" className="btn btn-sm btn-brand">
+            Done
+          </button>
+        }
+      >
+        <p className="text-sm leading-relaxed text-text-secondary">
+          A confirmation link was sent to <span className="font-medium text-text-primary">{account.pending}</span>.
+          Your sign-in email changes when it is opened, and you will sign in again with the new address.
+        </p>
+        <p className="text-xs leading-relaxed text-text-muted">
+          No email after a few minutes? Check spam, or send it again from Edit email address.
+        </p>
+      </SettingsDialog>
     </SettingsSection>
   )
 }
