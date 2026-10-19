@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
 import { CheckCircle2, CircleAlert, KeyRound, Loader2, Mail, Pencil, ShieldCheck, UserRound } from '@shared/icons'
 import Pill from '@shared/components/Pill'
-import FormField from '@shared/components/settings/FormField'
 import { ROLE_LABELS } from '@shared/auth/roles'
 import OtpInput from '@shared/auth/OtpInput'
 import { EMAIL_CODE_LENGTH, useAccountEmail } from '@/hooks/useAccountEmail'
-import SettingsDialog from './SettingsDialog'
+import { AccountField, PasswordField } from './AccountField'
+import SettingsDialog, { DIALOG_PRIMARY, DIALOG_SECONDARY } from './SettingsDialog'
 import SettingsItem from './SettingsItem'
 import SettingsSection from './SettingsSection'
 
@@ -119,10 +119,10 @@ export default function ProfileSettingsCard({ role }) {
         initialRef={firstFieldRef}
         footer={
           <>
-            <button type="button" onClick={close} disabled={account.busy} className="btn btn-sm btn-outline">
+            <button type="button" onClick={close} disabled={account.busy} className={DIALOG_SECONDARY}>
               Cancel
             </button>
-            <button type="submit" disabled={account.busy || !account.ready} className="btn btn-sm btn-brand">
+            <button type="submit" disabled={account.busy || !account.ready} className={DIALOG_PRIMARY}>
               {account.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
               {account.busy ? 'Sending…' : 'Send code'}
             </button>
@@ -133,7 +133,7 @@ export default function ProfileSettingsCard({ role }) {
           <span>Current:</span>
           <span className="min-w-0 truncate font-medium text-text-secondary">{account.email || '—'}</span>
         </div>
-        <FormField
+        <AccountField
           inputRef={firstFieldRef}
           id="new-email"
           label="New email address"
@@ -152,10 +152,9 @@ export default function ProfileSettingsCard({ role }) {
           }
           onChange={account.setNextEmail}
         />
-        <FormField
+        <PasswordField
           id="email-current-password"
           label="Current password"
-          type="password"
           value={account.password}
           autoComplete="current-password"
           disabled={account.busy}
@@ -180,10 +179,10 @@ export default function ProfileSettingsCard({ role }) {
         onSubmit={() => confirm()}
         footer={
           <>
-            <button type="button" onClick={() => setStep('form')} disabled={account.busy} className="btn btn-sm btn-outline">
+            <button type="button" onClick={() => setStep('form')} disabled={account.busy} className={DIALOG_SECONDARY}>
               Change address
             </button>
-            <button type="submit" disabled={account.busy || !account.codeReady} className="btn btn-sm btn-brand">
+            <button type="submit" disabled={account.busy || !account.codeReady} className={DIALOG_PRIMARY}>
               {account.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
               {account.busy ? 'Verifying…' : 'Confirm change'}
             </button>

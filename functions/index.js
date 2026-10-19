@@ -877,6 +877,7 @@ exports.onPresenceWrite = presence.onPresenceWrite;
 const accountSync = require("./accountSync");
 
 exports.syncStaffEmail = accountSync.syncStaffEmail;
+exports.recordPasswordChange = accountSync.recordPasswordChange;
 
 // The OTP-verified email change (replaces verifyBeforeUpdateEmail; see the file).
 const emailChange = require("./emailChange");

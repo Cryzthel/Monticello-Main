@@ -2,10 +2,9 @@ import { useRef, useState } from 'react'
 import { Check, CircleAlert, KeyRound, Loader2, Lock, ShieldCheck } from '@shared/icons'
 import { auth } from '@shared/lib/firebase'
 import { useChangePassword } from '@shared/hooks/useChangePassword'
-import FormField from '@shared/components/settings/FormField'
 import PasswordRules from '@shared/components/settings/PasswordRules'
-import RevealToggle from '@shared/components/settings/RevealToggle'
-import SettingsDialog from './SettingsDialog'
+import { PasswordField } from './AccountField'
+import SettingsDialog, { DIALOG_PRIMARY, DIALOG_SECONDARY } from './SettingsDialog'
 import SettingsItem from './SettingsItem'
 import SettingsSection from './SettingsSection'
 
@@ -32,7 +31,6 @@ export default function SecuritySettingsCard() {
   const firstFieldRef = useRef(null)
   const pw = useChangePassword({ onChanged: () => setStep('done') })
   const hasEmail = Boolean(auth.currentUser?.email)
-  const type = pw.reveal ? 'text' : 'password'
 
   function close() {
     setStep(null)
@@ -77,44 +75,41 @@ export default function SecuritySettingsCard() {
         initialRef={firstFieldRef}
         footer={
           <>
-            <button type="button" onClick={close} disabled={pw.busy} className="btn btn-sm btn-outline">
+            <button type="button" onClick={close} disabled={pw.busy} className={DIALOG_SECONDARY}>
               Cancel
             </button>
-            <button type="submit" disabled={pw.busy || !pw.next} className="btn btn-sm btn-brand">
+            <button type="submit" disabled={pw.busy || !pw.next} className={DIALOG_PRIMARY}>
               {pw.busy ? <Loader2 size="sm" aria-hidden="true" className="animate-spin" /> : null}
               {pw.busy ? 'Updating…' : 'Update password'}
             </button>
           </>
         }
       >
-        <FormField
+        <PasswordField
           inputRef={firstFieldRef}
           id="current-password"
           label="Current password"
-          type={type}
           value={pw.current}
           autoComplete="current-password"
           disabled={pw.busy}
           onChange={pw.setCurrent}
         />
         <div className="flex flex-col gap-2.5">
-          <FormField
+          <PasswordField
             id="next-password"
             label="New password"
-            type={type}
             value={pw.next}
             autoComplete="new-password"
             disabled={pw.busy}
             invalid={pw.showRuleError}
+            hint={pw.showRuleError ? 'Meet every requirement below.' : ''}
             onChange={pw.setNext}
-            trailing={<RevealToggle on={pw.reveal} onToggle={pw.toggleReveal} />}
           />
           <PasswordRules value={pw.next} failed={pw.showRuleError} />
         </div>
-        <FormField
+        <PasswordField
           id="confirm-password"
           label="Confirm new password"
-          type={type}
           value={pw.confirmation}
           autoComplete="new-password"
           disabled={pw.busy}
@@ -138,7 +133,7 @@ export default function SecuritySettingsCard() {
         onClose={close}
         onSubmit={close}
         footer={
-          <button type="submit" className="btn btn-sm btn-brand">
+          <button type="submit" className={DIALOG_PRIMARY}>
             Done
           </button>
         }

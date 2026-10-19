@@ -64,6 +64,8 @@ const ACTION_STYLE = {
   // A staff member's own change: functions/emailChange.js (code-verified) and
   // the sign-in sync in functions/accountSync.js.
   'staff.email.changed': { icon: Mail, tone: 'info', label: 'Email changed' },
+  // functions/accountSync.js recordPasswordChange, after a Settings change.
+  'staff.password.changed': { icon: KeyRound, tone: 'info', label: 'Password changed' },
 }
 
 const FALLBACK_STYLE = { icon: FileClock, tone: 'neutral', label: 'Event' }

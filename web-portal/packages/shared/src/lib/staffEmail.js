@@ -15,3 +15,18 @@ export function syncStaffEmail() {
       return null
     })
 }
+
+/**
+ * Asks the server to record this account's own password change in the audit
+ * trail (functions/accountSync.js recordPasswordChange). The server checks the
+ * change itself, so this carries no arguments. Never throws.
+ */
+export function recordPasswordChange() {
+  const call = httpsCallable(functions, 'recordPasswordChange')
+  return call({})
+    .then((result) => result?.data ?? null)
+    .catch((err) => {
+      console.warn('Password change not recorded', err?.code ?? err)
+      return null
+    })
+}

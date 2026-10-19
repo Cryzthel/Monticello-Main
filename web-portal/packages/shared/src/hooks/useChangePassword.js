@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth'
 import { auth } from '@shared/lib/firebase'
 import { reconcilePasswordResetFlags } from '@shared/lib/passwordFlags'
+import { recordPasswordChange } from '@shared/lib/staffEmail'
 import { meetsPolicy, passwordReady } from '@shared/auth/passwordPolicy'
 import { toast } from '@shared/lib/toast'
 
@@ -58,6 +59,8 @@ export function useChangePassword({ onChanged } = {}) {
       await updatePassword(user, next)
       toast.success('Password updated', { description: 'Other devices signed in to this account were signed out.' })
       reconcilePasswordResetFlags()
+      // Audit History: the server confirms the change before logging it.
+      recordPasswordChange()
       reset()
       setDone(true)
       onChanged?.()

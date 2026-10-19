@@ -33,6 +33,16 @@ import { useDialogFocus } from '@shared/hooks/useDialogFocus'
  * rise, reduced-motion off); there is no exit animation, on purpose — a
  * dismissed dialog should get out of the way at once.
  */
+/**
+ * The sign-in page's two buttons, sized for a dialog footer: the CTA capsule
+ * and the outlined secondary (shared/auth/authStyles), side by side at equal
+ * width. Exported so both account dialogs use the same pair.
+ */
+export const DIALOG_PRIMARY =
+  'btn h-11 flex-1 rounded-full bg-brand-cta px-5 text-sm font-semibold text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover disabled:opacity-60'
+export const DIALOG_SECONDARY =
+  'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-hairline bg-transparent px-5 text-sm font-semibold text-text-secondary transition-[background-color,border-color,color] duration-150 ease-out hover:border-brand-500/30 hover:bg-tint/5 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50'
+
 export default function SettingsDialog({
   open,
   icon: Icon,
@@ -78,7 +88,7 @@ export default function SettingsDialog({
           if (!busy) onSubmit?.()
         }}
         onClick={(event) => event.stopPropagation()}
-        className="dialog-panel relative flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-950/95 shadow-2xl shadow-black/60 backdrop-blur-xl sm:rounded-2xl"
+        className="dialog-panel relative flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-950 shadow-2xl shadow-black/60 sm:rounded-2xl"
       >
         <header className="relative shrink-0 border-b border-hairline px-6 py-5 pr-14">
           <div className="flex min-w-0 items-start gap-4">
@@ -88,10 +98,10 @@ export default function SettingsDialog({
               </span>
             ) : null}
             <div className="min-w-0">
-              <h2 id={titleId} className="text-base font-semibold tracking-tight text-text-primary">
+              <h2 id={titleId} className="font-display text-xl font-extrabold leading-tight tracking-[-0.025em] text-text-primary">
                 {title}
               </h2>
-              {description ? <p className="mt-0.5 text-xs leading-relaxed text-text-muted">{description}</p> : null}
+              {description ? <p className="mt-1 text-sm leading-relaxed text-text-muted">{description}</p> : null}
             </div>
           </div>
           <button
@@ -106,11 +116,11 @@ export default function SettingsDialog({
         </header>
 
         <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
-          <div className="flex flex-col gap-4">{children}</div>
+          <div className="flex flex-col gap-5">{children}</div>
         </div>
 
         {footer ? (
-          <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-hairline bg-base-900/40 px-6 py-4">
+          <footer className="flex shrink-0 items-center gap-3 border-t border-hairline px-6 py-4">
             {footer}
           </footer>
         ) : null}

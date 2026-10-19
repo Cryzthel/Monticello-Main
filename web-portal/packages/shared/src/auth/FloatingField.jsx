@@ -55,6 +55,18 @@ const FLOATED_TONE = 'text-[#059669]'
 const FLOATED =
   `-top-2.5 left-4 translate-y-0 bg-white px-2 text-xs font-medium ${FLOATED_TONE}`
 
+/**
+ * `surface="theme"`: the same field on a THEMED surface — the Settings
+ * dialogs, which follow the console's light/dark switch where the sign-in
+ * card is pinned white (2026-10-19, by request: the Settings modals match the
+ * Login page). Only the two things that assumed white change: the floated
+ * label's chip takes the dialog's own base-950, and the resting border is the
+ * hairline token rather than slate-200, which glows on a dark panel. Capsule,
+ * padding, type scale, label motion and the brand focus ring are identical.
+ */
+const FLOATED_THEME =
+  `-top-2.5 left-4 translate-y-0 bg-base-950 px-2 text-xs font-medium ${FLOATED_TONE}`
+
 /** Resting: inside the field, vertically centred, on the text's left edge. */
 const RESTING = 'top-1/2 left-6 -translate-y-1/2 px-0 text-sm text-text-muted'
 
@@ -74,6 +86,8 @@ const FLOATED_ON_FOCUS = [
   'group-focus-within:text-[#059669]',
 ].join(' ')
 
+const FLOATED_ON_FOCUS_THEME = FLOATED_ON_FOCUS.replace('group-focus-within:bg-white', 'group-focus-within:bg-base-950')
+
 /**
  * @param filled    Whether the field has a value. Keeps the label up once the
  *                  user has typed and moved on — see the note above.
@@ -92,9 +106,14 @@ export default function FloatingField({
    *  input with `aria-describedby` so a screen reader reads the field and its
    *  problem together rather than announcing an error that floats free of it. */
   error = '',
+  /** A quiet note under the field when there is no error (Settings uses it). */
+  hint = '',
+  /** 'card' (default, the white sign-in card) or 'theme' (a themed dialog). */
+  surface = 'card',
   inputClassName = '',
   ...inputProps
 }) {
+  const themed = surface === 'theme'
   return (
     <div className="group relative">
       {/* Focus lands on the WELL, not the input, so the border, the ring and
@@ -108,13 +127,15 @@ export default function FloatingField({
         className={`flex items-center gap-3 rounded-full border bg-field px-6 transition-[border-color,box-shadow] duration-200 ease-in-out ${
           error
             ? 'border-danger group-focus-within:border-danger group-focus-within:ring-2 group-focus-within:ring-danger/20'
-            : 'border-slate-200/80 hover:border-slate-300 group-focus-within:border-brand-500 group-focus-within:ring-2 group-focus-within:ring-brand-500/20'
+            : themed
+              ? 'border-hairline hover:border-brand-500/30 group-focus-within:border-brand-500 group-focus-within:ring-2 group-focus-within:ring-brand-500/20'
+              : 'border-slate-200/80 hover:border-slate-300 group-focus-within:border-brand-500 group-focus-within:ring-2 group-focus-within:ring-brand-500/20'
         }`}
       >
         <input
           id={id}
           aria-invalid={error ? 'true' : undefined}
-          aria-describedby={error ? `${id}-error` : undefined}
+          aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
           className={`min-w-0 flex-1 bg-transparent py-3.5 text-sm text-text-primary outline-none placeholder:text-transparent focus:placeholder:text-text-muted ${inputClassName}`}
           {...inputProps}
         />
@@ -127,8 +148,8 @@ export default function FloatingField({
       <label
         htmlFor={id}
         className={`pointer-events-none absolute transition-all duration-200 ease-in-out ${
-          filled ? FLOATED : RESTING
-        } ${FLOATED_ON_FOCUS}`}
+          filled ? (themed ? FLOATED_THEME : FLOATED) : RESTING
+        } ${themed ? FLOATED_ON_FOCUS_THEME : FLOATED_ON_FOCUS}`}
       >
         {label}
       </label>
@@ -138,6 +159,10 @@ export default function FloatingField({
       {error ? (
         <p id={`${id}-error`} className="mt-1.5 px-6 text-xs font-medium text-danger">
           {error}
+        </p>
+      ) : hint ? (
+        <p id={`${id}-hint`} className="mt-1.5 px-6 text-xs leading-snug text-text-muted">
+          {hint}
         </p>
       ) : null}
     </div>

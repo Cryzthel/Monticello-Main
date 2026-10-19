@@ -66,3 +66,51 @@ exports.syncStaffEmail = functions.https.onCall(async (data, context) => {
 
   return { ok: true, changed: true, email, emailVerified };
 });
+
+/**
+ * recordPasswordChange — put a staff member's own password change in the
+ * audit trail (2026-10-19). Settings calls it right after `updatePassword`.
+ *
+ * Argument-free, like syncStaffEmail: the evidence is the server's own.
+ * Firebase Auth moves `tokensValidAfterTime` forward on a password change, so
+ * an entry is written only when that moved within the last RECENT_MS, and at
+ * most once per change — the log document's id is the uid plus that instant,
+ * written with `create()`, so a repeated call is refused by Firestore itself.
+ */
+const RECENT_MS = 10 * 60 * 1000;
+
+exports.recordPasswordChange = functions.https.onCall(async (data, context) => {
+  const uid = context.auth && context.auth.uid;
+  if (!uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in required.");
+  }
+  const snap = await db.collection("staff_accounts").doc(uid).get();
+  if (!snap.exists || snap.data().status !== "approved") return { ok: true, logged: false };
+  const staff = snap.data();
+
+  const user = await admin.auth().getUser(uid);
+  const changedAt = Date.parse(user.tokensValidAfterTime || "");
+  if (!Number.isFinite(changedAt) || Date.now() - changedAt > RECENT_MS) {
+    return { ok: true, logged: false };
+  }
+
+  try {
+    await db.collection("provisioning_logs").doc(`pw_${uid}_${changedAt}`).create({
+      action: "staff.password.changed",
+      category: "security",
+      actorUid: uid,
+      actorName: staff.name || user.email || "",
+      targetUid: uid,
+      targetName: staff.name || "",
+      targetEmail: user.email || "",
+      summary: `${staff.name || user.email || "A staff member"} changed their password`,
+      metadata: { changedAt: new Date(changedAt).toISOString() },
+      at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    // ALREADY_EXISTS (6): this change is logged already.
+    if (err && (err.code === 6 || err.code === "already-exists")) return { ok: true, logged: false };
+    throw err;
+  }
+  return { ok: true, logged: true };
+});
