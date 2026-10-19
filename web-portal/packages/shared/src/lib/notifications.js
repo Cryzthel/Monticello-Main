@@ -250,10 +250,11 @@ export function panicNotification(alert) {
  * handed the same list — so each of them read past most of it to find their own
  * half. `audience` splits it:
  *
- *   admin      what ESCALATED or MOBILISED someone. High-priority reports and
- *              anything that reached a guard. A routine filing that the
- *              guardhouse absorbed without incident is not an administrator's
- *              event; it is already on the tickets page if they want it.
+ *   admin      every NEW filing (2026-10-19, by request: a mobile report must
+ *              reach the bell the moment its pin reaches the Hazard Map), plus
+ *              what ESCALATED or MOBILISED someone — high-priority reports and
+ *              anything that reached a guard. A routine call already closed
+ *              out by the guardhouse still stays off it.
  *   security   the WORK QUEUE. New filings and calls in progress. A report that
  *              is closed is not an action, so it drops off.
  *
@@ -282,7 +283,7 @@ export function buildNotificationFeed({
   const incidentItems = incidents.map((incident) => incidentNotification(incident, { viewerUid })).filter((item) => {
     if (audience === 'admin') {
       const urgent = item.priority === 'high' || item.priority === 'critical'
-      return urgent || item.status === 'Dispatched' || item.status === 'Dispatch in progress'
+      return urgent || item.status === 'Pending' || item.status === 'Dispatched' || item.status === 'Dispatch in progress'
     }
     if (audience === 'security') return item.status !== 'Resolved'
     return true

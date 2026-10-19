@@ -31,6 +31,7 @@ import DutyLogTable from '@/components/DutyLogTable'
 import { ROUTES } from '@/config/portal'
 import { useGuardProfile } from '@/hooks/useGuardProfile'
 import { loadGuardPrefs, saveGuardPrefs, subscribeGuardPrefs } from '@/lib/guardPrefs'
+import { Skeleton } from '@shared/components/Skeleton'
 
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -128,7 +129,7 @@ function ProfileCard() {
       </SettingsItem>
       <SettingsItem title="Role" description="Decides which consoles you may sign in to.">
         {loading ? (
-          <Skeleton />
+          <Skeleton className="h-4 w-32" />
         ) : (
           <Pill tone="neutral" icon={ShieldCheck}>
             {ROLE_LABELS[officer.role || role] ?? 'Security staff'}
@@ -143,7 +144,7 @@ function ProfileCard() {
         <div className="flex min-w-0 items-center gap-3 rounded-lg border border-hairline bg-base-900/40 p-3">
           <Mail size="sm" aria-hidden="true" className="shrink-0 text-text-muted" />
           {loading ? (
-            <Skeleton />
+            <Skeleton className="h-4 w-32" />
           ) : (
             <span className="min-w-0 truncate text-sm font-medium text-text-secondary">{officer.email || '—'}</span>
           )}
@@ -266,17 +267,13 @@ function SystemCard() {
   )
 }
 
-function Skeleton() {
-  return <span className="block h-4 w-32 animate-pulse rounded bg-tint/10" aria-hidden="true" />
-}
-
 /**
  * One read-only account fact. A skeleton while loading rather than a dash: a
  * dash is an answer ("no badge number"), and it would be wrong for a moment
  * on every visit.
  */
 function AccountValue({ loading, value, empty = '—' }) {
-  if (loading) return <Skeleton />
+  if (loading) return <Skeleton className="h-4 w-32" />
   if (!value) return <span className="text-sm text-text-muted">{empty}</span>
   return <span className="block truncate text-sm font-medium text-text-primary">{value}</span>
 }
