@@ -94,6 +94,17 @@ shows as verified.
 
 ## 6. Vercel production deploy
 
+**Live since 2026-10-20:** <https://monticello-admin.vercel.app> and
+<https://monticello-guardhouse.vercel.app> (Vercel team `cryzthels-projects`,
+projects `monticello-admin` / `monticello-guardhouse`, deployed with the CLI from
+the repo root; `.vercelignore` limits the upload to `web-portal/` and `assets/geo/`).
+`VITE_AUTH_RETURN_ORIGINS` is set to both origins. The CSP allows each portal's
+inline theme script by SHA-256 hash — if `index.html`'s inline script changes, the
+browser console prints the new hash; update `vercel.json` with it.
+
+Note: Vercel's Hobby plan is for personal, non-commercial use; a subdivision's
+production console may need the Pro plan.
+
 Two Vercel projects, both from the GitHub repo `Cryzthel/Monticello-Main`:
 
 | | Admin | Guardhouse |
