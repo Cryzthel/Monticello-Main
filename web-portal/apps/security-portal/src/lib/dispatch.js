@@ -258,6 +258,9 @@ export function describeConflict(current, { uid, label } = {}) {
           : `Acknowledged by ${who}. This call is theirs now.`,
     }
   }
+  if (label === 'Arrived on scene' && current.onSceneAt) {
+    return { tone: 'info', text: 'Arrival was already registered for this call.' }
+  }
   return {
     tone: 'info',
     text: `${label ?? 'That action'} was not applied — the call was updated a moment ago. Check its stage and try again.`,
@@ -299,11 +302,12 @@ export function formatAgo(ms) {
 }
 
 /**
- * The Guardhouse's names for the three steps (by request, 2026-10-19; renamed
- * again the same day: Acknowledge → Start navigation → Guard dispatched).
- * Display only — the stored stages, their stamps and the rules are unchanged:
+ * The Guardhouse's names for the FOUR steps (by request, 2026-10-19:
+ * Acknowledge → En route → Arrived on scene → Resolve). Display only — the
+ * stored stages stay three; arrival is the `onSceneAt` stamp:
  *   dispatched  → "Acknowledged": the call is taken or assigned (dispatchedAt)
- *   responding  → "Guard dispatched": the officer is en route (respondingAt)
+ *   responding  → "En route": the officer is on the way (respondingAt)
+ *   on_site     → "Arrived on scene": responding + onSceneAt
  *   resolved    → "Resolved" (resolvedAt)
  * Used by the drawer's stepper and status history and the route sheet's stage
  * badge. Admin and the resident app keep STAGE_LABELS.
@@ -311,8 +315,9 @@ export function formatAgo(ms) {
 export const GUARD_STAGE_LABELS = {
   none: 'Awaiting acknowledgement',
   dispatched: 'Acknowledged',
-  responding: 'Guard dispatched',
+  responding: 'En route',
   resolved: 'Resolved',
-  on_site: 'Guard dispatched',
-  investigating: 'Guard dispatched',
+  // The third step is drawn from `onSceneAt`, not a stored stage (StageStepper).
+  on_site: 'Arrived on scene',
+  investigating: 'Arrived on scene',
 }

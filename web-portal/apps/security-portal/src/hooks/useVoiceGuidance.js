@@ -43,13 +43,16 @@ const IMMINENT_M = 25
 const ARRIVED_M = 30
 
 /**
- * ── THE REPEAT, AND WHY IT IS BOUNDED ──────────────────────────────────────
+ * ── THE REPEAT ONLY FIRES FOR A UNIT THAT IS MOVING (2026-10-19) ──────────
  *
- * A unit that has not moved has heard its instruction once, possibly while
- * still parking, possibly over a slammed door. The distance thresholds above
- * will not fire again — they are keyed per step and the distance has not
- * changed — so without this the console says one sentence and then goes quiet
- * for as long as the officer sits there.
+ * It used to repeat for as long as the step did not change — which is exactly
+ * a parked unit, so a guard waiting at a gate heard the same sentence every
+ * 30 s until they exited navigation (the "stationary loop"). Now a repeat also
+ * needs the unit to have travelled REPEAT_MOVE_M along the route since the
+ * last thing it said. Parked, or GPS jitter at a standstill: silence. Driving
+ * a long leg between the distance thresholds: a reminder every 30 s.
+ *
+ * The history below is kept for why the cap stayed off.
  *
  * ── THE CAP IS GONE, BECAUSE THE BUTTON IS GONE ───────────────────────────
  * This was capped at three repeats per step, and the cap was defensible only
@@ -74,6 +77,13 @@ const ARRIVED_M = 30
  * prompt.
  */
 const REPEAT_MS = 30_000
+
+/**
+ * Metres travelled along the route since the last utterance before a repeat
+ * may fire. Above the drift of a stationary phone fix (10–20 m), below one
+ * 30-second leg at walking pace.
+ */
+const REPEAT_MOVE_M = 30
 
 /**
  * A distance the way a navigator SAYS it: "100 meters", "1.2 kilometers".
@@ -144,8 +154,13 @@ export function useVoiceGuidance(progress, { enabled, routeKey, destinationLabel
   // last instruction in words for anyone who cannot hear it.
   const onSpokenRef = useRef(onSpoken)
   onSpokenRef.current = onSpoken
+  // Distance to the maneuver on the latest fix, and when something was last
+  // said — the movement gate for the repeat.
+  const distanceRef = useRef(null)
+  const spokenAtDistanceRef = useRef(null)
   const say = (text) => {
     speak(text)
+    spokenAtDistanceRef.current = distanceRef.current
     onSpokenRef.current?.(text)
   }
   // Which prompts have already been spoken, as `${stepIndex}@${threshold}`.
@@ -210,6 +225,7 @@ export function useVoiceGuidance(progress, { enabled, routeKey, destinationLabel
     if (!instruction) return
 
     const spoken = spokenRef.current
+    distanceRef.current = distanceToManeuver
 
     // Kept current for the repeat timer and the button, whether or not
     // anything is spoken on this fix.
@@ -304,11 +320,19 @@ export function useVoiceGuidance(progress, { enabled, routeKey, destinationLabel
   const stepIndex = progress?.step?.index ?? null
   useEffect(() => {
     if (!enabled || stepIndex == null) return undefined
+    // A new step measures movement from HERE, not from a sentence about the
+    // previous corner — otherwise the step change itself would count as
+    // travel and the first tick would repeat to a parked unit.
+    spokenAtDistanceRef.current = distanceRef.current
     const id = setInterval(() => {
       // Never talk over a prompt already in flight: if the synth is
       // mid-sentence this tick simply passes, which also means a slow device
       // cannot build a backlog of identical instructions.
       if (window.speechSynthesis?.speaking) return
+      // Stationary: say nothing. See REPEAT_MOVE_M.
+      const now = distanceRef.current
+      const then = spokenAtDistanceRef.current
+      if (!Number.isFinite(now) || !Number.isFinite(then) || Math.abs(then - now) < REPEAT_MOVE_M) return
       const phrase = phraseRef.current
       if (phrase) say(phrase)
     }, REPEAT_MS)

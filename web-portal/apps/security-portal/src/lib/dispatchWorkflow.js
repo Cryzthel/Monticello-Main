@@ -273,7 +273,13 @@ export async function checkArrival(incident) {
   if (typeof incident?.lat !== 'number' || typeof incident?.lng !== 'number') {
     return { fix: null, distanceM: null, accuracyM: null, verdict: 'no-pin' }
   }
-  const { fix, error } = await locateDevice({ fresh: true, timeout: 10_000 })
+  // A hard deadline over the browser's own `timeout`: that timer does not run
+  // while a location-permission prompt is still open, so an unanswered prompt
+  // left "Arrived on scene" spinning forever.
+  const { fix, error } = await Promise.race([
+    locateDevice({ fresh: true, timeout: 10_000 }),
+    new Promise((resolve) => setTimeout(() => resolve({ fix: null, error: 'timeout' }), 12_000)),
+  ])
   if (!fix) return { fix: null, distanceM: null, accuracyM: null, verdict: 'no-fix', error }
 
   const distanceM = Math.round(distanceMeters([fix.lng, fix.lat], [incident.lng, incident.lat]) * 10) / 10
@@ -345,6 +351,48 @@ export async function autoArrival(incident, check, { role }) {
 }
 
 /**
+ * "Arrived on scene", pressed (2026-10-19, by request). Resolve is now locked
+ * until arrival is registered — here and in firestore.rules — so a guard whose
+ * GPS never comes inside the radius must have a way to say they are there.
+ *
+ * `check` is a fresh `checkArrival`. Inside the radius on a trustworthy fix,
+ * it is the same stamp `autoArrival` makes. Otherwise it needs `reason`
+ * (3–280 chars) and is written as an OVERRIDE, which the rules accept only
+ * with that reason and which the log keeps — the officer is asserting an
+ * arrival the GPS did not see, and the record says so rather than pretending.
+ */
+export async function confirmArrival(incident, check, { role, reason = '' }) {
+  const within = check?.verdict === 'within'
+  const why = String(reason ?? '').trim()
+  if (!within && why.length < 3) {
+    throw new Error('Say why your position could not be confirmed at the pin.')
+  }
+  const forensics = await captureForensics({ fix: check?.fix ?? null })
+  return commitStage({
+    incident,
+    action: 'arrive',
+    toStage: 'responding',
+    role,
+    forensics,
+    fields: {
+      status: 'in_progress',
+      onSceneAt: serverTimestamp(),
+      arrival: {
+        lat: check?.fix?.lat ?? null,
+        lng: check?.fix?.lng ?? null,
+        accuracyM: check?.accuracyM ?? null,
+        distanceM: check?.distanceM ?? null,
+        withinRadius: within,
+        override: !within,
+        overrideReason: within ? '' : why.slice(0, 280),
+      },
+    },
+    detail: { verdict: check?.verdict ?? 'no-fix', automatic: false },
+    notifyStatus: 'On-Site',
+  })
+}
+
+/**
  * ── WHAT USED TO BE HERE ────────────────────────────────────────────────
  * `currentInvestigation`, `toggleInvestigationTag`, `addInvestigationPhotos`
  * and `escalateIncident`.
@@ -368,8 +416,9 @@ export async function autoArrival(incident, check, { role }) {
  */
 
 /**
- * Stage 3. Closes the call. The outcome, notes and at least one photo are
- * required here and by the rules. `ratingRequestedAt` is what the resident
+ * Stage 3. Closes the call. Only once arrival is registered (`onSceneAt`) —
+ * the drawer hides the action before then and the rules refuse it. The
+ * outcome, notes and at least one photo are required here and by the rules. `ratingRequestedAt` is what the resident
  * app watches to ask for a rating. The resolved report leaves the live map
  * (the dashboard only queries open calls) and appears in Incident history.
  * The officer's device drops back to idle telemetry when it sees the stage

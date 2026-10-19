@@ -1,5 +1,5 @@
 import { Check } from '@shared/icons'
-import { DISPATCH_STAGES, STAGE_LABELS, deriveDispatchStage, stageIndex } from '@shared/lib/dispatchStage'
+import { STAGE_LABELS, deriveDispatchStage, stageIndex } from '@shared/lib/dispatchStage'
 import { formatTime } from '@shared/lib/dates'
 
 /**
@@ -39,6 +39,9 @@ import { formatTime } from '@shared/lib/dates'
  * way round.
  */
 
+/** Step names where the stage vocabulary has none of its own. */
+const STEP_LABELS = { on_site: 'Arrived on scene' }
+
 const STAGE_STAMPS = {
   dispatched: 'dispatchedAt',
   responding: 'respondingAt',
@@ -55,8 +58,24 @@ const STAGE_STAMPS = {
  * step began.
  */
 const stampFor = (report, key) => {
-  if (key === 'responding') return report.respondingAt ?? report.acknowledgedAt ?? report.onSceneAt
+  if (key === 'responding') return report.respondingAt ?? report.acknowledgedAt
   return report[STAGE_STAMPS[key]]
+}
+
+/**
+ * The four steps both consoles draw (2026-10-19, by request): Acknowledged →
+ * En route → Arrived on scene → Resolved. ARRIVAL IS NOT A STORED STAGE — the
+ * machine keeps three (dispatchStage.js), and arriving stamps `onSceneAt`
+ * without moving it — so the third step is read off that stamp. No document
+ * changes shape, and the resident app is untouched.
+ */
+const STEPS = ['dispatched', 'responding', 'on_site', 'resolved']
+
+/** 0 before acknowledgement, then 1–4. */
+function stepIndex(stage, report) {
+  if (stage === 'resolved') return 4
+  if (stage === 'responding') return report?.onSceneAt ? 3 : 2
+  return stageIndex(stage)
 }
 
 /**
@@ -64,7 +83,7 @@ const stampFor = (report, key) => {
  * steps); anything it leaves out falls back to STAGE_LABELS.
  */
 export default function StageStepper({ report, stage, labels = null }) {
-  const current = stageIndex(stage ?? deriveDispatchStage(report))
+  const current = stepIndex(stage ?? deriveDispatchStage(report), report)
   return (
     /* ── CENTRED, AND NOT A FIVE-COLUMN GRID ─────────────────────────────
        It was `grid grid-cols-5`, one column per stage, stretched across the
@@ -79,10 +98,10 @@ export default function StageStepper({ report, stage, labels = null }) {
        416px of the rail, where three items read as three unrelated columns
        rather than one pipeline. */
     <ol
-      className="mx-auto flex w-full max-w-sm items-start justify-center"
+      className="mx-auto flex w-full max-w-md items-start justify-center"
       aria-label="Dispatch stage"
     >
-      {DISPATCH_STAGES.map((key, i) => {
+      {STEPS.map((key, i) => {
         const step = i + 1
         const done = step < current || (step === current && key === 'resolved')
         const active = step === current && !done
@@ -125,7 +144,7 @@ export default function StageStepper({ report, stage, labels = null }) {
                 active ? 'text-text-primary' : done ? 'text-text-secondary' : 'text-text-muted'
               }`}
             >
-              {labels?.[key] ?? STAGE_LABELS[key]}
+              {labels?.[key] ?? STEP_LABELS[key] ?? STAGE_LABELS[key]}
             </span>
             <span className={`text-2xs tabular-nums ${at ? 'text-text-secondary' : 'text-text-muted/60'}`}>
               {formatTime(at)}

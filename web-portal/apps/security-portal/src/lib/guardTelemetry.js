@@ -36,10 +36,22 @@ export const TELEMETRY_CADENCE = {
  * for the same answer again. Module state on purpose: there is one device.
  */
 let lastFix = null
+const fixListeners = new Set()
 
 /** `{ lat, lng, accuracy, heading, speed, capturedAt }` or null. */
 export function getLastFix() {
   return lastFix
+}
+
+/**
+ * Every usable fix this device takes, as it is taken — NOT on the send
+ * cadence. For the navigating console's own marker and figures, which lagged
+ * a whole send interval (4 s and up) behind the GPS. Returns the unsubscribe.
+ * See useLiveDeviceFix, which throttles it for React.
+ */
+export function subscribeLastFix(listener) {
+  fixListeners.add(listener)
+  return () => fixListeners.delete(listener)
 }
 
 export function rememberFix(position) {
@@ -52,6 +64,7 @@ export function rememberFix(position) {
     speed: Number.isFinite(coords.speed) ? Math.round(coords.speed * 10) / 10 : null,
     capturedAt: timestamp || Date.now(),
   }
+  fixListeners.forEach((listener) => listener(lastFix))
   return lastFix
 }
 

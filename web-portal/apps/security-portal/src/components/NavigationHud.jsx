@@ -13,7 +13,7 @@ import {
   Volume2,
   X,
 } from '@shared/icons'
-import { arrivalAt, formatClockTime, formatDistance, formatDuration } from '@/lib/directions'
+import { arrivalAt, formatClockTime, formatDistance } from '@/lib/directions'
 import { useMetricsClock } from '@/hooks/useMetricsClock'
 
 /**
@@ -22,14 +22,16 @@ import { useMetricsClock } from '@/hooks/useMetricsClock'
  *   ┌ [↰]  In 120 m                                    [✕ Exit] ┐
  *   │      Turn left onto Acacia Street                         │
  *   ├───────────────────────────────────────────────────────────┤
- *   │  ETA 10:42 PM     1.2 km left     4 min          🔊        │
- *   │  ● Phase 1 · Block 2 · Lot 1     10.76012, 122.50034      │
+ *   │  ETA            DISTANCE                          ● 🔊     │
+ *   │  10:42 PM       1.2 km                                    │
  *   └───────────────────────────────────────────────────────────┘
  *
- * Route telemetry, by request (2026-10-19): the current step, ETA, distance
- * left and the destination with its coordinates — nothing else. The same
- * step is spoken aloud by useVoiceGuidance; the speaker glyph only says that
- * voice is on (there is deliberately no mute — see DashboardPage).
+ * Strictly essential telemetry, by request (2026-10-19, second pass): the
+ * current turn, the ETA and the distance left. Destination, coordinates and
+ * time-left were cut; the destination is in the report modal and on the map.
+ * The status corner says "Waiting for GPS" / "Off route" only when the
+ * figures cannot be trusted, and otherwise that voice is on (no mute — see
+ * DashboardPage). The same step is spoken by useVoiceGuidance.
  *
  * Every figure comes from `progress` (lib/routeProgress), computed from the
  * officer's REAL fix — nothing advances because time passed. With no fix yet
@@ -66,7 +68,7 @@ function currentStep(progress, plotted) {
   return { instruction: next.instruction, icon: next.icon, distanceM: steps[1] ? steps[0]?.distance : null }
 }
 
-export default function NavigationHud({ route, progress, offRoute = false, targetLabel, destination = null, voice = true, onExit }) {
+export default function NavigationHud({ route, progress, offRoute = false, targetLabel = '', voice = true, onExit }) {
   const now = useMetricsClock(15_000)
   const plotted = route?.route ?? null
   const remainingM = progress?.remainingM ?? plotted?.distance ?? null
@@ -77,11 +79,10 @@ export default function NavigationHud({ route, progress, offRoute = false, targe
   const step = currentStep(progress, plotted)
   const Glyph = arrived ? Flag : GLYPHS[step?.icon] ?? ArrowUp
   const eta = arrivalAt(remainingS, now)
-  const [lng, lat] = Array.isArray(destination) ? destination : [null, null]
 
   return (
     <section
-      aria-label="Navigation"
+      aria-label={targetLabel ? `Navigation to ${targetLabel}` : 'Navigation'}
       className="pointer-events-auto w-full overflow-hidden rounded-t-2xl border border-white/10 bg-zinc-950/90 text-white shadow-2xl backdrop-blur-2xl animate-[riseIn_220ms_var(--ease-spring)] motion-reduce:animate-none sm:max-w-md sm:rounded-2xl"
     >
       {/* THE STEP — what to do next, and how far away it is. */}
@@ -118,42 +119,31 @@ export default function NavigationHud({ route, progress, offRoute = false, targe
         </button>
       </div>
 
-      {/* THE SUMMARY — ETA, distance left, time left, destination. */}
+      {/* THE TELEMETRY — ETA and distance left, nothing else. A status line
+          appears only when the figures cannot be trusted (no fix, off route). */}
       <div className="border-t border-white/10 bg-white/[0.03] px-4 py-2.5">
-        <dl className="flex items-baseline gap-4 text-xs tabular-nums">
-          <div className="flex items-baseline gap-1.5">
-            <dt className="text-white/50">ETA</dt>
-            <dd className="font-semibold text-white/90">{eta ? formatClockTime(eta) : '—'}</dd>
+        <dl className="flex items-center gap-6 tabular-nums">
+          <div>
+            <dt className="text-[11px] font-medium uppercase tracking-wider text-white/45">ETA</dt>
+            <dd className="text-base font-semibold text-white">{eta ? formatClockTime(eta) : '—'}</dd>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <dd className="font-semibold text-white/90">{formatDistance(remainingM)}</dd>
-            <dt className="text-white/50">left</dt>
+          <div>
+            <dt className="text-[11px] font-medium uppercase tracking-wider text-white/45">Distance</dt>
+            <dd className="text-base font-semibold text-white">{formatDistance(remainingM)}</dd>
           </div>
-          <div className="flex items-baseline gap-1.5">
-            <dd className="font-semibold text-white/90">{formatDuration(remainingS)}</dd>
-          </div>
-          {voice ? (
-            <Volume2 size={14} className="ml-auto self-center text-white/45" aria-label="Voice guidance on" />
-          ) : null}
-        </dl>
-        <p className="mt-1.5 flex min-w-0 items-center gap-2 text-xs">
           <span
-            aria-hidden="true"
-            className={`h-2 w-2 shrink-0 rounded-full ${
-              live ? 'animate-pulse bg-emerald-400 motion-reduce:animate-none' : 'bg-amber-300'
-            }`}
-          />
-          <span className="min-w-0 truncate font-medium text-white/85">
-            {offRoute ? <span className="text-amber-300">Off route · </span> : null}
-            {!progress ? <span className="text-amber-300">Waiting for GPS · </span> : null}
-            {targetLabel}
+            className={`ml-auto inline-flex items-center gap-1.5 text-[11px] font-medium ${live ? 'text-white/45' : 'text-amber-300'}`}
+            aria-live="polite"
+          >
+            <span
+              aria-hidden="true"
+              className={`h-2 w-2 shrink-0 rounded-full ${
+                live ? 'animate-pulse bg-emerald-400 motion-reduce:animate-none' : 'bg-amber-300'
+              }`}
+            />
+            {!progress ? 'Waiting for GPS' : offRoute ? 'Off route' : voice ? <Volume2 size={14} aria-label="Voice guidance on" /> : 'Live'}
           </span>
-          {Number.isFinite(lat) && Number.isFinite(lng) ? (
-            <span className="ml-auto shrink-0 font-mono text-[11px] text-white/45">
-              {lat.toFixed(5)}, {lng.toFixed(5)}
-            </span>
-          ) : null}
-        </p>
+        </dl>
       </div>
     </section>
   )

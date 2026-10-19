@@ -9,6 +9,7 @@ import {
   History,
   Home,
   Loader2,
+  MapPinCheck,
   Navigation,
   Radio,
   ShieldCheck,
@@ -24,6 +25,7 @@ import { useAuth } from '@shared/auth/AuthContext'
 import { categoryLabel } from '@shared/lib/incidentCategories'
 import {
   ACK_TIMEOUT_MS,
+  ARRIVAL_RADIUS_M,
   INVESTIGATION_TAGS,
   deriveDispatchStage,
   RESOLUTION_OUTCOMES,
@@ -32,6 +34,8 @@ import {
   acknowledgeAndRespond,
   canActOn,
   dispatchUnit,
+  checkArrival,
+  confirmArrival,
   resolveIncident,
 } from '@/lib/dispatchWorkflow'
 import { GUARD_STAGE_LABELS, formatStopwatch, residentMessageForStage } from '@/lib/dispatch'
@@ -72,7 +76,7 @@ const PRIORITY_RULE = {
  * `claimedBy` is set when another officer holds the call: it then says whose
  * it is rather than inviting this console to navigate.
  */
-function stagePill(stage, ackExpired, claimedBy) {
+function stagePill(stage, ackExpired, claimedBy, onScene = false) {
   if (stage === 'none') return { text: 'Awaiting acknowledgement', tone: 'warning', pulse: true, icon: Radio }
   if (stage === 'dispatched')
     return ackExpired
@@ -80,7 +84,10 @@ function stagePill(stage, ackExpired, claimedBy) {
       : claimedBy
         ? { text: `Acknowledged by ${claimedBy}`, tone: 'info', pulse: false, icon: ShieldCheck }
         : { text: 'Acknowledged · ready to navigate', tone: 'info', pulse: true, icon: ShieldCheck }
-  if (stage === 'responding') return { text: 'Guard dispatched · en route', tone: 'info', pulse: true, icon: Navigation }
+  if (stage === 'responding')
+    return onScene
+      ? { text: 'Arrived on scene', tone: 'success', pulse: true, icon: MapPinCheck }
+      : { text: 'En route', tone: 'info', pulse: true, icon: Navigation }
   return { text: 'Resolved', tone: 'success', pulse: false, icon: CheckCircle2 }
 }
 
@@ -116,7 +123,7 @@ function useAckClock(report) {
  *   │ ASSIGN A UNIT (before verification) · RESOLUTION · STATUS HISTORY    │
  *   ├──────────────────────────────────────────────────────────────────────┤
  *   │ [Start navigation]                                                   │
- *   │ [ the ONE next action for this stage ]  [Close]            pinned    │
+ *   │ [ the ONE next action for this stage ]                     pinned    │
  *   └──────────────────────────────────────────────────────────────────────┘
  *
  * ONE ACTION AT A TIME (2026-10-19, by request): the footer offers only the
@@ -190,12 +197,29 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
   const [resolutionLightbox, setResolutionLightbox] = useState(null)
   const [reassigning, setReassigning] = useState(false)
   const [resolving, setResolving] = useState(false)
+  /**
+   * The Arrived-on-scene press: `checking` while a fresh GPS fix is taken,
+   * then `arrivalPrompt` holds a check that did NOT place the officer at the
+   * pin, so they can confirm with a reason or back out.
+   */
+  const [checking, setChecking] = useState(false)
+  const [arrivalPrompt, setArrivalPrompt] = useState(null)
+  const [arrivalReason, setArrivalReason] = useState('')
 
   useEffect(() => {
     setResolutionLightbox(null)
     setReassigning(false)
     setResolving(false)
+    setArrivalPrompt(null)
+    setArrivalReason('')
   }, [report?.id])
+
+  // Arrival registered (by this press, the geofence or another device): the
+  // question is answered.
+  const onScene = Boolean(report?.onSceneAt)
+  useEffect(() => {
+    if (onScene) setArrivalPrompt(null)
+  }, [onScene])
 
   // One stage, derived, for every part of this panel — never the raw stored
   // value, which reads the retired `on_site` / `investigating` as nothing.
@@ -266,7 +290,20 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
   // drawn read-only, with their name, instead of offering actions the server
   // would refuse.
   const claimedByOther = !canAct && Boolean(report.assignedGuardUid) && (stage === 'dispatched' || stage === 'responding')
-  const pill = stagePill(stage, ack?.expired, claimedByOther ? guardLabel : null)
+  const pill = stagePill(stage, ack?.expired, claimedByOther ? guardLabel : null, Boolean(report.onSceneAt))
+
+  /** Arrived on scene: a fresh fix first; inside the radius it stamps at once. */
+  const markArrived = async () => {
+    setChecking(true)
+    let check
+    try {
+      check = await checkArrival(report)
+    } finally {
+      setChecking(false)
+    }
+    if (check.verdict === 'within') run('arrive', 'Arrived on scene', () => confirmArrival(report, check, { role }))
+    else setArrivalPrompt(check)
+  }
 
   // ── THE FOOTER: THE ONE NEXT ACTION ──────────────────────────────────────
   let footer = null
@@ -380,27 +417,32 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
       : ack?.expired
         ? `${guardLabel} has not acknowledged within ${ACK_TIMEOUT_MS / 1000} s, and every console has been alerted. Reassign the call to another unit.`
         : `${guardLabel} has ${ACK_TIMEOUT_MS / 1000} s to acknowledge before every console is alerted.`
+  } else if (stage === 'responding' && !report.onSceneAt) {
+    // STEP 3: ARRIVED ON SCENE. Resolve does not exist yet — it is locked
+    // until arrival is registered, here and in firestore.rules. The geofence
+    // (useAutoArrival) usually registers it first; this button is the
+    // explicit path, and it asks for a reason when the GPS disagrees.
+    footer =
+      canAct && !arrivalPrompt ? (
+        <button type="button" onClick={markArrived} disabled={Boolean(busy) || checking} className="btn btn-action btn-brand">
+          {checking || busy === 'arrive' ? spinner : <MapPinCheck size="sm" aria-hidden="true" />}
+          {checking ? 'Checking your position…' : 'Arrived on scene'}
+        </button>
+      ) : null
+    hint = canAct
+      ? `Resolve unlocks once your arrival is registered — automatically within ${ARRIVAL_RADIUS_M} m of the pin, or press Arrived on scene.`
+      : `${guardLabel} is en route.`
   } else if (stage === 'responding') {
-    // Arrival is stamped from the officer's own GPS; the button turns primary
-    // on arrival but is never taken away, so a bad fix cannot strand a call.
+    // STEP 4: RESOLVE — only now that the officer is on scene.
     footer = canAct ? (
-      <button
-        type="button"
-        onClick={() => setResolving(true)}
-        disabled={Boolean(busy)}
-        className={`btn btn-action ${report.onSceneAt ? 'btn-brand' : 'btn-outline'}`}
-      >
+      <button type="button" onClick={() => setResolving(true)} disabled={Boolean(busy)} className="btn btn-action btn-brand">
         <CheckCircle2 size="sm" aria-hidden="true" />
         Resolve incident
       </button>
     ) : null
     hint = canAct
-      ? report.onSceneAt
-        ? `On scene since ${clock(report.onSceneAt)}. Resolving needs an outcome, notes and at least one photo.`
-        : 'Arrival is stamped automatically when your position reaches the pin. Resolving needs an outcome, notes and at least one photo.'
-      : report.onSceneAt
-        ? `${guardLabel} arrived at ${clock(report.onSceneAt)}.`
-        : `${guardLabel} is en route.`
+      ? `On scene since ${clock(report.onSceneAt)}. Resolving needs an outcome, notes and at least one photo.`
+      : `${guardLabel} arrived at ${clock(report.onSceneAt)}.`
   } else if (stage === 'resolved') {
     footer = (
       <button
@@ -600,7 +642,7 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
           {status ? <div className="mt-1">{status}</div> : null}
           {/* START NAVIGATION — its own full-width row above the stage
               actions: getting to the call comes before any stage action. */}
-          {navigation && stage === 'responding' ? (
+          {navigation && stage === 'responding' && !report.onSceneAt ? (
             <div className="mt-2">
               {navigation.state === 'active' ? (
                 <button type="button" onClick={navigation.onExit} aria-pressed className="btn btn-action btn-danger w-full">
@@ -624,16 +666,28 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
               ) : null}
             </div>
           ) : null}
-          {/* The stage action and Close share the row at equal size; Close is
-              last so the thumb never lands on it for the thing it meant. The
-              header ✕ is the same control for a pointer; this one is where a
-              phone thumb already is. */}
-          <div className="mt-2 flex flex-wrap items-center gap-2 [&>*]:min-w-[8.5rem] [&>*]:flex-1">
-            {footer}
-            <button type="button" onClick={onClose} className="btn btn-action btn-outline">
-              Close
-            </button>
-          </div>
+          {arrivalPrompt ? (
+            <ArrivalOverride
+              check={arrivalPrompt}
+              reason={arrivalReason}
+              onReason={setArrivalReason}
+              busy={busy === 'arrive'}
+              onCancel={() => {
+                setArrivalPrompt(null)
+                setArrivalReason('')
+              }}
+              onConfirm={() =>
+                run('arrive', 'Arrived on scene', () =>
+                  confirmArrival(report, arrivalPrompt, { role, reason: arrivalReason }),
+                ).then((ok) => ok && setArrivalReason(''))
+              }
+            />
+          ) : null}
+          {/* The ONE stage action, full width. No Close here (2026-10-19, by
+              request): the header ✕, Escape and the scrim all dismiss. */}
+          {footer ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 [&>*]:min-w-[8.5rem] [&>*]:flex-1">{footer}</div>
+          ) : null}
           {offline && stage !== 'resolved' ? (
             <p className="mt-2 flex items-center gap-1.5 text-caption font-semibold leading-snug text-warning" role="status">
               <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
@@ -670,6 +724,60 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
           )
         }
       />
+    </div>
+  )
+}
+
+/** Why the fresh fix did not place the officer at the pin, in their words. */
+function arrivalVerdictText(check) {
+  switch (check?.verdict) {
+    case 'far':
+      return `Your position reads ${Math.round(check.distanceM)} m from the pin${
+        Number.isFinite(check.accuracyM) ? ` (±${Math.round(check.accuracyM)} m)` : ''
+      }.`
+    case 'imprecise':
+      return `Your GPS is too coarse${Number.isFinite(check.accuracyM) ? ` (±${Math.round(check.accuracyM)} m)` : ''} to confirm you are at the pin.`
+    case 'no-pin':
+      return 'This report has no pinned location to check against.'
+    default:
+      return 'No position fix — location may be switched off or blocked.'
+  }
+}
+
+/**
+ * The override for an arrival the GPS did not confirm. A reason is required
+ * (3–280 chars, as the rules demand) and is stored on the call, so a stamp
+ * the device could not back up is recorded as exactly that.
+ */
+function ArrivalOverride({ check, reason, onReason, busy, onCancel, onConfirm }) {
+  const ready = reason.trim().length >= 3
+  return (
+    <div className="mt-2 rounded-xl border border-warning/30 bg-warning/10 p-3" role="group" aria-label="Confirm arrival">
+      <p className="flex items-start gap-2 text-sm font-semibold text-text-primary">
+        <AlertTriangle size="sm" className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+        {arrivalVerdictText(check)}
+      </p>
+      <label className="mt-2 block text-caption font-medium text-text-secondary" htmlFor="arrival-reason">
+        Confirm you are on scene anyway — why couldn&rsquo;t GPS confirm it?
+      </label>
+      <textarea
+        id="arrival-reason"
+        rows={2}
+        maxLength={280}
+        value={reason}
+        onChange={(event) => onReason(event.target.value)}
+        placeholder="e.g. Inside the clubhouse, no GPS signal"
+        className="field-textarea mt-1.5 resize-none leading-relaxed"
+      />
+      <div className="mt-2 flex gap-2 [&>*]:flex-1">
+        <button type="button" onClick={onCancel} disabled={busy} className="btn btn-action btn-outline">
+          Cancel
+        </button>
+        <button type="button" onClick={onConfirm} disabled={!ready || busy} className="btn btn-action btn-brand">
+          {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <MapPinCheck size="sm" aria-hidden="true" />}
+          Confirm arrival
+        </button>
+      </div>
     </div>
   )
 }

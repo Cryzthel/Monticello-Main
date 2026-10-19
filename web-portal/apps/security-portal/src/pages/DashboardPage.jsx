@@ -31,6 +31,7 @@ import { isOffRoute, routeProgress } from '@/lib/routeProgress'
 import { useDeviceHeading } from '@/hooks/useDeviceHeading'
 import { useOffRoute } from '@/hooks/useOffRoute'
 import { useAutoArrival } from '@/hooks/useAutoArrival'
+import { useLiveDeviceFix } from '@/hooks/useLiveDeviceFix'
 
 /** How long a pending auto-start waits for the route (see `autoNav`). */
 const AUTO_NAV_WINDOW_MS = 45_000
@@ -232,9 +233,20 @@ export default function DashboardPage() {
    * places.
    */
   const publishedSelf = units.find((unit) => unit.uid === (user?.uid ?? null))?.position ?? null
+  /**
+   * ── A LIVE FEED WHILE THIS OFFICER HAS A CALL OF THEIR OWN ──────────────
+   * `deviceFix` moves on the telemetry SEND cadence (4 s and up), which made
+   * the officer's own marker, the step countdown and the arrival geofence
+   * advance in jumps while navigating. With an active call — their own, an
+   * SOS they are answering, or one they started navigation on — the raw GPS
+   * is read at ~1 Hz instead (useLiveDeviceFix). Publishing is unchanged.
+   * Still put through `pickBestFix`, so a better fix from the officer's own
+   * phone keeps winning over this laptop's.
+   */
+  const liveDeviceFix = useLiveDeviceFix(Boolean(myActive || sosRouteTarget || navTargetId))
   const selfFix = useMemo(
-    () => pickBestFix(deviceFix, publishedSelf),
-    [deviceFix, publishedSelf],
+    () => pickBestFix(liveDeviceFix ?? deviceFix, publishedSelf),
+    [liveDeviceFix, deviceFix, publishedSelf],
   )
 
   /**
@@ -974,7 +986,6 @@ export default function DashboardPage() {
                 progress={progress}
                 offRoute={offRoute}
                 targetLabel={routeTargetLabel}
-                destination={target}
                 voice={voiceSupported}
                 onExit={toggleNavigation}
               />

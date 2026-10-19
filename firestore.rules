@@ -261,11 +261,12 @@ service cloud.firestore {
       // so a console that re-fires its geofence (a reload mid-call, two
       // tabs open) cannot rewrite the arrival time to something later.
       //
-      // `withinRadius` must be true and the rules re-measure it. The
-      // override branch of `validArrival` is now unreachable from this
-      // path and is kept only for the legacy `on_site` documents below:
-      // nothing is asserting an arrival any more, so nothing needs to
-      // account for a GPS that disagrees.
+      // Two ways in (2026-10-19): the geofence, with `withinRadius` true and
+      // re-measured here; or the officer's explicit "Arrived on scene" when
+      // the GPS disagrees, which `validArrival` accepts only as an override
+      // WITH a reason. That path is needed again because resolving now
+      // requires an arrival (isResolve) — without it a guard indoors or on a
+      // coarse fix could never close the call.
       function isArrive(cur) {
         let d = request.resource.data;
         return cur == 'responding'
@@ -273,7 +274,6 @@ service cloud.firestore {
           && d.status == 'in_progress'
           && d.onSceneAt == request.time
           && !('onSceneAt' in resource.data)
-          && d.arrival.withinRadius == true
           && validArrival(d.arrival)
           && isAssignedOrSupervisor()
           && changedKeys().hasOnly(['status', 'stageUpdatedAt', 'lastLogId', 'onSceneAt', 'arrival']);
@@ -331,9 +331,13 @@ service cloud.firestore {
       // otherwise have had NO legal path to resolved and would have been
       // stuck open forever, with the rules refusing every attempt to close
       // it. Both are unreachable going forward.
+      //
+      // ARRIVAL FIRST (2026-10-19, by request): from `responding` a call can
+      // only be resolved once `onSceneAt` is stamped — the console hides
+      // Resolve until then and this makes that true for any client.
       function isResolve(cur) {
         let d = request.resource.data;
-        return cur in ['responding', 'on_site', 'investigating']
+        return (cur in ['on_site', 'investigating'] || (cur == 'responding' && 'onSceneAt' in resource.data))
           && d.dispatchStage == 'resolved'
           && d.status == 'resolved'
           && d.resolvedAt == request.time

@@ -2379,7 +2379,26 @@ export default function IncidentMap({
    * state: this runs a frame at a time, and re-rendering the dashboard sixty
    * times a second to move a dot would cost far more than it shows.
    */
-  const unitTweenRef = useRef({ frame: 0, positions: new Map(), bearings: new Map() })
+  const unitTweenRef = useRef({ frame: 0, positions: new Map(), bearings: new Map(), drawn: new Map(), lastTargetAt: 0 })
+
+  /**
+   * ── THE NAVIGATION CAMERA RIDES THE MARKER'S FRAMES (2026-10-19) ─────────
+   * It used to be a separate `easeTo` per fix, on Mapbox's default curve,
+   * restarted whenever ANY unit's data changed — while the marker glided on
+   * easeOutQuad. Two animations on two curves, each restarting on its own
+   * schedule, is what read as stutter: the dot slid ahead of the centre, the
+   * centre lurched to catch up. Now, while a session runs, the tween below
+   * places the camera on the drawn marker every frame (`jumpTo`), so the two
+   * cannot drift apart.
+   *
+   *   free       the operator panned or zoomed: hands off until the next fix
+   *              ("a pan is a look, not a decision" — DashboardPage)
+   *   holdUntil  the session's opening flight owns the camera until then
+   */
+  const navCameraRef = useRef({ followId: null, navigating: false, free: false, holdUntil: 0 })
+  navCameraRef.current.followId = followUnitId
+  navCameraRef.current.navigating = navigating
+
   useEffect(() => {
     const map = mapRef.current
     if (!map || !ready || !hasUnitLayer) return undefined
@@ -2398,8 +2417,12 @@ export default function IncidentMap({
 
     // A unit appearing for the first time, or returning after its fix went
     // stale, is placed rather than flown in from wherever it used to be.
+    //
+    // From where the marker is DRAWN, not where the last glide was heading:
+    // a fix that lands mid-glide used to restart from the old target, so the
+    // dot jumped forward (or back) before setting off again.
     const starts = new Map()
-    target.forEach((coords, id) => starts.set(id, tween.positions.get(id) ?? coords))
+    target.forEach((coords, id) => starts.set(id, tween.drawn.get(id) ?? tween.positions.get(id) ?? coords))
 
     // Same rule for heading: a unit that had no bearing a moment ago gets the
     // new one outright. Spinning up from a default of 0 would animate a turn
@@ -2409,9 +2432,37 @@ export default function IncidentMap({
 
     cancelAnimationFrame(tween.frame)
 
+    // A new fix ends a look: the camera comes back to the unit.
+    const camera = navCameraRef.current
+    camera.free = false
+
+    /**
+     * Places the camera on the followed unit's drawn position. Zoom, pitch and
+     * bearing are eased toward the navigation camera a little each frame, so
+     * a zoom the operator left behind is recovered smoothly rather than
+     * snapped. The bearing is the ROUTE's (the unit's `bearing`), as before —
+     * never the jittery device compass.
+     */
+    const followCamera = (coords) => {
+      if (!camera.navigating || !camera.followId || camera.free || performance.now() < camera.holdUntil) return
+      if (!coords) return
+      const unit = unitsRef.current.find((u) => u.uid === camera.followId)
+      const zoom = map.getZoom()
+      const pitch = map.getPitch()
+      const bearing = map.getBearing()
+      const delta = Number.isFinite(unit?.bearing) ? ((unit.bearing - bearing + 540) % 360) - 180 : 0
+      map.jumpTo({
+        center: coords,
+        zoom: zoom + (NAV_CAMERA.zoom - zoom) * 0.12,
+        pitch: pitch + (NAV_CAMERA.pitch - pitch) * 0.12,
+        bearing: bearing + delta * 0.15,
+      })
+    }
+
     const settle = () => {
       tween.positions = target
       tween.bearings = targetBearing
+      tween.drawn = new Map(target)
     }
 
     /**
@@ -2425,11 +2476,24 @@ export default function IncidentMap({
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       source.setData(unitsGeojson)
       settle()
+      followCamera(target.get(camera.followId))
       return undefined
     }
 
-    const DURATION_MS = UNIT_TWEEN_MS
+    /**
+     * STEADY MOTION WHILE NAVIGATING. Off a session each fix is a discrete
+     * update and easeOutQuad over 900 ms reads well. During one, fixes arrive
+     * about once a second (useLiveDeviceFix), and an ease-out per fix makes
+     * the unit surge and brake on every one. So the glide is linear and lasts
+     * as long as the gap since the previous fix (clamped), which joins the
+     * segments into continuous movement. It still never passes the latest
+     * real fix.
+     */
     const startedAt = performance.now()
+    const gap = tween.lastTargetAt ? startedAt - tween.lastTargetAt : UNIT_TWEEN_MS
+    tween.lastTargetAt = startedAt
+    const steady = camera.navigating && Boolean(camera.followId)
+    const DURATION_MS = steady ? Math.min(1600, Math.max(600, gap)) : UNIT_TWEEN_MS
 
     /**
      * Shortest way round the compass.
@@ -2445,9 +2509,11 @@ export default function IncidentMap({
     }
 
     const paint = (t) => {
-      const eased = t >= 1 ? 1 : 1 - (1 - t) * (1 - t) // easeOutQuad
+      const eased = t >= 1 ? 1 : steady ? t : 1 - (1 - t) * (1 - t) // linear | easeOutQuad
       if (eased >= 1) {
         source.setData(unitsGeojson)
+        tween.drawn = new Map(target)
+        followCamera(target.get(camera.followId))
         return
       }
       const features = unitsGeojson.features.map((feature) => {
@@ -2474,6 +2540,10 @@ export default function IncidentMap({
         }
       })
       source.setData({ type: 'FeatureCollection', features })
+      const drawn = new Map()
+      features.forEach((f) => drawn.set(f.properties.id, f.geometry.coordinates))
+      tween.drawn = drawn
+      followCamera(drawn.get(camera.followId))
     }
 
     const step = (now) => {
@@ -2634,6 +2704,19 @@ export default function IncidentMap({
    * the state, which is what lets a "Resume" control know it has something to
    * resume — and keeps this component from owning a mode it cannot show.
    */
+  // A human pan, zoom or rotate frees the camera until the next fix (see
+  // `navCameraRef`). Only gestures carry `originalEvent`; the follow's own
+  // `jumpTo` does not, so it never frees itself.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !ready) return undefined
+    const onMoveStart = (event) => {
+      if (event?.originalEvent) navCameraRef.current.free = true
+    }
+    map.on('movestart', onMoveStart)
+    return () => map.off('movestart', onMoveStart)
+  }, [ready])
+
   const wasNavigatingRef = useRef(navigating)
   useEffect(() => {
     const map = mapRef.current
@@ -2679,7 +2762,9 @@ export default function IncidentMap({
     const unit = (unitsRef.current ?? []).find((u) => u.uid === followUnitId)
     const lng = unit?.position?.lng
     const lat = unit?.position?.lat
-    if (!justToggled && typeof lng === 'number' && typeof lat === 'number') {
+    // While navigating the unit tween drives the camera frame by frame (see
+    // `navCameraRef`); this ease is only for following without a session.
+    if (!justToggled && !navigating && typeof lng === 'number' && typeof lat === 'number') {
       /**
        * ── THE FOLLOW EASE MUST RESTATE THE NAVIGATION CAMERA ──────────────
        * This was `easeTo({ center })` alone, which is correct for watching a
@@ -2770,7 +2855,9 @@ export default function IncidentMap({
           : null
     // No position at all: tilt and zoom where the operator is already looking
     // rather than refusing. The route is drawn, the session is on, and the
-    // first fix will centre it.
+    // first fix will centre it. The frame-driven follow waits for the flight.
+    navCameraRef.current.holdUntil = performance.now() + NAV_ENTER_MS
+    navCameraRef.current.free = false
     map.flyTo({
       ...(center ? { center } : null),
       zoom: NAV_CAMERA.zoom,
