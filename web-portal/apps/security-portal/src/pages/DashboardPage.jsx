@@ -6,7 +6,7 @@ import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import IncidentMap from '@shared/components/IncidentMap'
 import AppShell from '@/layouts/AppShell'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
-import PanicAlertModal from '@/components/PanicAlertModal'
+import ConditionalPanicResolutionModal from '@/components/ConditionalPanicResolutionModal'
 import DispatchDetailDrawer from '@/components/DispatchDetailDrawer'
 import NavigationHud from '@/components/NavigationHud'
 import DispatchStatusBanner from '@/components/DispatchStatusBanner'
@@ -1017,9 +1017,10 @@ export default function DashboardPage() {
         onClose={closeDetail}
         navigation={drawerNavigation}
       />
-      <PanicAlertModal
+      <ConditionalPanicResolutionModal
         alert={selectedPanic}
         onClose={() => setSelectedPanicId(null)}
+        respondingId={respondingAlertId}
         /**
          * Respond to SOS: take the alert as the route target, close the
          * modal, and start the session in one go.

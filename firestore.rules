@@ -527,7 +527,27 @@ service cloud.firestore {
       // surface moves together and no field-level carve-out is needed here.
       allow read: if isSignedIn()
         && (resource.data.residentUid == request.auth.uid || isStaff());
-      allow update: if isSecurityStaff();
+
+      // ── THE SOS STATE MACHINE (2026-10-19) ───────────────────────────
+      //   active → acknowledged → resolved, each edge once, in order.
+      // Mirrors `transition` in web-portal/packages/shared/src/lib/panicAlerts.js.
+      // Resolved is terminal, an alert cannot skip acknowledgement, and the
+      // officer recorded as acknowledging cannot be replaced — two guards
+      // pressing Acknowledge at once used to both succeed, the second
+      // silently overwriting the first. The client checks in a transaction
+      // when online; this is what refuses a queued offline write too.
+      // (The scheduled sweep writes with the Admin SDK and is not bound by it.)
+      function validPanicUpdate() {
+        let before = resource.data.get('status', 'active');
+        let after = request.resource.data.get('status', 'active');
+        return before != 'resolved'
+          && (after == before
+            || (before == 'active' && after == 'acknowledged')
+            || (before == 'acknowledged' && after == 'resolved'))
+          && (resource.data.get('acknowledgedBy', null) == null
+            || request.resource.data.get('acknowledgedBy', null) == resource.data.acknowledgedBy);
+      }
+      allow update: if isSecurityStaff() && validPanicUpdate();
     }
 
     // Staff directory backing the admin/security web dashboard. A row is

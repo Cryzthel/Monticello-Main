@@ -246,7 +246,9 @@ export default function PanicAlertsTable({
                   onDispatch && alert.status === 'active'
                     ? { label: 'Dispatch', icon: Send, onSelect: () => onDispatch(alert) }
                     : null,
-                  onResolve && signal.live
+                  // Resolve only after acknowledgement (the SOS state machine
+                  // in lib/panicAlerts): never straight from active.
+                  onResolve && signal.live && alert.status === 'acknowledged'
                     ? { label: 'Resolve', icon: CheckCircle2, onSelect: () => onResolve(alert) }
                     : null,
                 ].filter(Boolean)

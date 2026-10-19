@@ -3460,7 +3460,7 @@ export default function IncidentMap({
                         now names the marker, and the reason a particular one is
                         amber is stated in full where it is actionable — the
                         alert modal, which leads with "No GPS fix" and the lot to
-                        respond to. See PanicAlertModal. */}
+                        respond to. See ConditionalPanicResolutionModal. */}
                     {hasPanicLayer ? (
                       <div className="flex items-center gap-2">
                         <span
