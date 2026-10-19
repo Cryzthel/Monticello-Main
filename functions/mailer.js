@@ -206,6 +206,16 @@ function buildEmailChangeCodeEmail(otp, ttlMinutes) {
   return { subject, text, html };
 }
 
+/** Text made safe to place inside HTML (security audit, 2026-10-20). */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /** Told to the OLD address once a change completes, so a takeover is noticed. */
 function buildEmailChangedNotice(from, to) {
   const subject = "Your Monticello Villas sign-in email was changed";
@@ -223,7 +233,7 @@ function buildEmailChangedNotice(from, to) {
     `<p style="margin:0 0 20px;font-size:13px;font-weight:700;letter-spacing:.08em;` +
     `color:#047857;text-transform:uppercase">Monticello Villas</p>` +
     `<p style="margin:0 0 12px">The sign-in email for your staff account was changed ` +
-    `from <strong>${from}</strong> to <strong>${to}</strong>.</p>` +
+    `from <strong>${escapeHtml(from)}</strong> to <strong>${escapeHtml(to)}</strong>.</p>` +
     `<p style="margin:0 0 8px;color:#475569">If you made this change, there is nothing to do. ` +
     `If you did not, contact the HOA office immediately so the account can be secured.</p>` +
     `<p style="margin:0;font-size:12px;color:#94A3B8">Monticello Villas HOA · automated message</p>` +

@@ -17,11 +17,17 @@
          Foreground only: no ACCESS_BACKGROUND_LOCATION is requested. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- allowBackup="false" (security audit, 2026-10-20): Android backs up an
+         app's private storage by default, which here includes the Firebase
+         sign-in session and the resident's cached incidents. A restored backup
+         on another device would carry them over. -->
     <application
         android:label="Monticello Villas"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <!-- Where a push lands when the app is not running. Without a named
              channel Android files background notifications under a
              "Miscellaneous" default the resident cannot configure

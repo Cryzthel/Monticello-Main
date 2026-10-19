@@ -47,6 +47,7 @@ import { toast } from '@shared/lib/toast'
 import { exportReportPdf } from '@/lib/reportPdf'
 import Pill from '@shared/components/Pill'
 import { DetailCard, DetailField, DetailTimeline } from '@shared/components/detail/DetailCard'
+import { safeHttpUrl } from '@shared/lib/safeUrl'
 
 const stamp = (value) => formatDateTime(value, '')
 
@@ -471,7 +472,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                           {documents.map((url, index) => (
                             <li key={`${index}:${url}`}>
                               <a
-                                href={url}
+                                href={safeHttpUrl(url) ?? undefined}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="flex min-h-10 items-center gap-2.5 rounded-lg border border-hairline bg-base-950 px-3 py-2 transition-colors hover:bg-tint/[0.04]"

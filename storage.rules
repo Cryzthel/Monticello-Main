@@ -7,14 +7,51 @@ rules_version = '2';
 //   profile_photos/{uid}.jpg → resident profile pictures
 //
 // Only authenticated residents can upload, and only into their own folder.
-// Any signed-in resident may read (so reports/avatars are viewable in-app).
+//
+// ── SECURITY AUDIT, 2026-10-20 ──────────────────────────────────────────────
+// Incident evidence was readable — and LISTABLE — by any signed-in account,
+// so one resident could download another resident's photos and videos. It is
+// now the uploader plus staff. Government IDs are the uploader plus ADMIN
+// staff only: security officers never review applications. SVG is refused
+// wherever an image is accepted — it is a document that can carry script.
+//
+// The download URLs stored on Firestore documents carry their own token and
+// are NOT checked by these rules: such a file is exactly as private as the
+// document holding its URL, which firestore.rules restricts. These rules gate
+// listing, SDK reads and minting new URLs.
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // One definition of "staff" for this file, read from the same
+    // staff_accounts doc firestore.rules uses.
+    function staffAccount() {
+      return firestore.get(/databases/(default)/documents/staff_accounts/$(request.auth.uid)).data;
+    }
+
+    function isStaff() {
+      return request.auth != null
+        && staffAccount().status == 'approved'
+        && staffAccount().role in ['super_admin', 'hoa_admin', 'security_head', 'security_officer'];
+    }
+
+    function isAdminStaff() {
+      return request.auth != null
+        && staffAccount().status == 'approved'
+        && staffAccount().role in ['super_admin', 'hoa_admin'];
+    }
+
+    // A picture, not a document: any image type except SVG.
+    function isRasterImage() {
+      return request.resource.contentType.matches('image/.*')
+        && !request.resource.contentType.matches('image/svg.*');
+    }
+
     // ── Incident evidence: photos & videos ──────────────────────────────────
     match /incidents/{userId}/{fileName} {
-      // Any signed-in resident can view evidence.
-      allow read: if request.auth != null;
+      // The uploader, and staff working the call. Officers upload resolution
+      // photos and attachments to their OWN folder here, so staff read covers
+      // those for the other console too.
+      allow read: if request.auth != null && (request.auth.uid == userId || isStaff());
 
       // The owner may upload to their own folder, up to 200 MB.
       //
@@ -30,7 +67,7 @@ service firebase.storage {
         && request.auth.uid == userId
         && request.resource.size < 200 * 1024 * 1024
         && (
-          request.resource.contentType.matches('image/.*') ||
+          isRasterImage() ||
           request.resource.contentType.matches('video/.*') ||
           request.resource.contentType == 'application/pdf' ||
           request.resource.contentType.matches('text/plain.*')
@@ -48,24 +85,16 @@ service firebase.storage {
       allow write: if request.auth != null
         && fileName.matches(request.auth.uid + '\\..*')
         && request.resource.size < 10 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isRasterImage();
     }
 
     // ── Verification IDs: verification_ids/{uid}/{fileName} ─────────────────
-    // Government-issued IDs submitted at registration. Unlike incident
-    // evidence and avatars above, these are NOT readable by every signed-in
-    // resident — only the uploader and approved staff reviewing the
-    // application. Staff membership is checked against the same
-    // staff_accounts doc firestore.rules uses, so there is one definition of
-    // "is staff" across both rule sets.
+    // Government-issued IDs submitted at registration: the uploader and the
+    // ADMIN staff who review applications, nobody else. This used to accept
+    // any approved staff account, security officers included.
     match /verification_ids/{userId}/{fileName} {
       allow read: if request.auth != null
-        && (
-          request.auth.uid == userId
-          || firestore.get(
-               /databases/(default)/documents/staff_accounts/$(request.auth.uid)
-             ).data.status == 'approved'
-        );
+        && (request.auth.uid == userId || isAdminStaff());
 
       // The applicant may upload their own HOA ID / proof of residency:
       // an image or a PDF, < 10 MB. PDF because proof of residency is often a
@@ -74,7 +103,7 @@ service firebase.storage {
       allow create, update: if request.auth != null
         && request.auth.uid == userId
         && request.resource.size < 10 * 1024 * 1024
-        && (request.resource.contentType.matches('image/.*')
+        && (isRasterImage()
             || request.resource.contentType == 'application/pdf');
 
       allow delete: if request.auth != null && request.auth.uid == userId;
@@ -89,28 +118,16 @@ service firebase.storage {
     // also written to `imageUrl` for the mobile reader, which the home feed
     // renders — so every signed-in resident must be able to read them.
     //
-    // Writing is admin-staff only, checked against the same staff_accounts doc
-    // firestore.rules gates `/announcements` on — one definition of "is admin"
-    // across both rule sets. Note this is a broader check than the folder uid:
-    // an admin may replace media on a notice a colleague authored.
+    // Writing is admin-staff only. Note this is a broader check than the
+    // folder uid: an admin may replace media on a notice a colleague authored.
     match /announcements/{userId}/{fileName} {
-      function isAdminStaff() {
-        return request.auth != null
-          && firestore.get(
-               /databases/(default)/documents/staff_accounts/$(request.auth.uid)
-             ).data.status == 'approved'
-          && firestore.get(
-               /databases/(default)/documents/staff_accounts/$(request.auth.uid)
-             ).data.role in ['super_admin', 'hoa_admin'];
-      }
-
       allow read: if request.auth != null;
 
       // Images only, ≤ 5 MB — the same ceiling the composer enforces
       // client-side (MAX_IMAGE_BYTES).
       allow create, update: if isAdminStaff()
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isRasterImage();
 
       allow delete: if isAdminStaff();
     }

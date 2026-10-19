@@ -32,6 +32,7 @@ import { formatAddress } from '@shared/lib/addressQuery'
 import { describeError, toast } from '@shared/lib/toast'
 import Pill from '@shared/components/Pill'
 import { DetailCard, DetailField, DetailTimeline } from '@shared/components/detail/DetailCard'
+import { safeHttpUrl } from '@shared/lib/safeUrl'
 
 /**
  * Resident verification — who they are, the lot they claim, the ID they
@@ -444,7 +445,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
                       {pdfs.map((d, i) => (
                         <a
                           key={`${i}:${d.url}`}
-                          href={d.url}
+                          href={safeHttpUrl(d.url) ?? undefined}
                           target="_blank"
                           rel="noopener noreferrer"
                           title={fileNameOf(d.url) || 'Open PDF'}

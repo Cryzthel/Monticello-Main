@@ -46,6 +46,9 @@
 const crypto = require("crypto");
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+// Imported directly for the audit fixes below: the namespaced
+// `admin.firestore.FieldValue` is undefined under the functions emulator.
+const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 // Transactional mail: Resend or Gmail SMTP, chosen in functions/.env.
 const { sendMail, mailSecrets, buildResetCodeEmail } = require("./mailer");
 
@@ -140,6 +143,58 @@ function hashOtp(otp, salt) {
   return crypto.createHash("sha256").update(`${salt}:${otp}`).digest("hex");
 }
 
+/** Constant-time comparison of two hex digests. */
+function sameDigest(a, b) {
+  const x = Buffer.from(String(a || ""), "hex");
+  const y = Buffer.from(String(b || ""), "hex");
+  return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y);
+}
+
+/**
+ * ── A PER-CALLER CEILING ON CODE REQUESTS (security audit, 2026-10-20) ───
+ * `sendPasswordOtp` is unauthenticated and, by the estate's decision, says
+ * whether an address is registered. The per-address cooldown does not slow a
+ * caller probing MANY addresses, and each registered hit also sends a real
+ * email. So each source IP gets IP_SEND_LIMIT requests per IP_WINDOW_MS,
+ * counted in a transaction (concurrent calls cannot all slip under it).
+ *
+ * Keyed by a salted hash of the address, never the raw IP, in a server-only
+ * collection (firestore.rules' catch-all denies every client). A request with
+ * no resolvable IP is not throttled here — it is still bounded per address.
+ */
+const IP_THROTTLE_COLLECTION = "password_reset_ip_throttle";
+const IP_SEND_LIMIT = 20;
+const IP_WINDOW_MS = 60 * 60 * 1000;
+
+async function throttleByIp(context) {
+  const ip = requestIpOf(context);
+  if (!ip) return;
+  const key = crypto.createHash("sha256").update(`otp-ip:${ip}`).digest("hex");
+  const ref = db.collection(IP_THROTTLE_COLLECTION).doc(key);
+  const allowed = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const now = Date.now();
+    const rec = snap.exists ? snap.data() : null;
+    const started = rec?.windowStartedAt?.toMillis?.() ?? 0;
+    const fresh = !rec || now - started >= IP_WINDOW_MS;
+    const count = fresh ? 0 : rec.count || 0;
+    if (count >= IP_SEND_LIMIT) return false;
+    tx.set(ref, {
+      count: count + 1,
+      windowStartedAt: fresh ? Timestamp.fromMillis(now) : rec.windowStartedAt,
+      purgeAt: Timestamp.fromMillis(now + PURGE_AFTER_MS),
+    });
+    return true;
+  });
+  if (!allowed) {
+    throw new functions.https.HttpsError(
+      "resource-exhausted",
+      "Too many requests from this network. Try again later.",
+      { reason: "rate-limited" }
+    );
+  }
+}
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -154,6 +209,10 @@ exports.sendPasswordOtp = functions
       "A valid email is required."
     );
   }
+
+  // Before the account lookup, so probing for registered addresses is
+  // bounded too — see throttleByIp.
+  await throttleByIp(context);
 
   // ── AN UNREGISTERED ADDRESS IS TOLD SO (decision, 2026-10-16) ─────────
   // This used to answer `{ ok: true }` for every address so that nobody could
@@ -300,47 +359,46 @@ exports.verifyPasswordOtp = functions.https.onCall(async (data, context) => {
   }
 
   const ref = db.collection(COLLECTION).doc(email);
-  const snap = await ref.get();
-  if (!snap.exists) {
-    throw new functions.https.HttpsError(
-      "not-found",
-      "No active code. Please request a new one."
-    );
-  }
 
-  const rec = snap.data();
-  if (rec.used) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "This code was already used. Request a new one."
-    );
-  }
-  if (rec.expiresAt && rec.expiresAt.toMillis() < Date.now()) {
-    throw new functions.https.HttpsError(
-      "deadline-exceeded",
-      "Code expired. Please request a new one."
-    );
-  }
-  if ((rec.attempts || 0) >= MAX_ATTEMPTS) {
-    throw new functions.https.HttpsError(
-      "resource-exhausted",
-      "Too many attempts. Please request a new code."
-    );
-  }
-
-  if (hashOtp(otp, rec.salt) !== rec.hash) {
-    await ref.update({ attempts: admin.firestore.FieldValue.increment(1) });
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Incorrect code. Please try again."
-    );
-  }
-
-  await ref.update({
-    used: true,
-    usedAt: admin.firestore.FieldValue.serverTimestamp(),
-    usedIp: requestIpOf(context),
+  // ── ONE GUESS AT A TIME (security audit, 2026-10-20) ─────────────────────
+  // This read `attempts`, compared, and only then incremented — three
+  // separate steps. A caller firing guesses IN PARALLEL had every one read
+  // "fewer than five" before any increment landed, so the five-guess budget
+  // on a 4-digit code was no budget at all. The check, the comparison and the
+  // write now happen in one transaction: concurrent guesses on the same
+  // record serialise, and each one sees the attempts the others spent.
+  // Errors are decided inside and thrown outside, so a refusal still commits
+  // the attempt it counted.
+  const outcome = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return "missing";
+    const rec = snap.data();
+    if (rec.used) return "used";
+    if (rec.expiresAt && rec.expiresAt.toMillis() < Date.now()) return "expired";
+    if ((rec.attempts || 0) >= MAX_ATTEMPTS) return "exhausted";
+    if (!sameDigest(hashOtp(otp, rec.salt), rec.hash)) {
+      tx.update(ref, { attempts: FieldValue.increment(1) });
+      return "wrong";
+    }
+    tx.update(ref, {
+      used: true,
+      usedAt: FieldValue.serverTimestamp(),
+      usedIp: requestIpOf(context),
+    });
+    return "ok";
   });
+
+  const refusals = {
+    missing: ["not-found", "No active code. Please request a new one."],
+    used: ["failed-precondition", "This code was already used. Request a new one."],
+    expired: ["deadline-exceeded", "Code expired. Please request a new one."],
+    exhausted: ["resource-exhausted", "Too many attempts. Please request a new code."],
+    wrong: ["permission-denied", "Incorrect code. Please try again."],
+  };
+  if (outcome !== "ok") {
+    const [code, message] = refusals[outcome];
+    throw new functions.https.HttpsError(code, message);
+  }
 
   // Hand the client a one-time reset link so they can set a new password.
   const link = await admin.auth().generatePasswordResetLink(email);

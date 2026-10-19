@@ -95,9 +95,25 @@ service cloud.firestore {
     // verificationStatus (see AccountApprovalService, resident.controller.js
     // verifyResident/rejectResident, both use the Admin SDK anyway, but this
     // also lets the dashboard's own signed-in staff session update it).
+    // Fields only the office's review writes. An owner may never set or
+    // change them — see ownerResidentWrite.
+    function residentReviewFields() {
+      return ['reviewedAt', 'reviewedBy', 'reviewedByName', 'rejectionReason'];
+    }
+
     match /residents/{userId} {
       allow read: if isOwner(userId) || isStaff();
-      allow create: if isOwner(userId) || isAdminStaff();
+      // ── SELF-VERIFICATION CLOSED (security audit, 2026-10-20) ─────────
+      // This was `isOwner(userId) || isAdminStaff()` with no field checks,
+      // so a brand-new account could create its own record already reading
+      // `verificationStatus: 'verified'` (or the legacy `status: 'verified'`
+      // that isVerifiedResident also accepts) and pass the gate on SOS and
+      // incident reports. An owner's record must now be created PENDING and
+      // carry no review fields; the mobile app only ever writes that.
+      allow create: if isAdminStaff()
+        || (isOwner(userId)
+          && residentState(request.resource.data) == 'pending'
+          && !request.resource.data.keys().hasAny(residentReviewFields()));
       // A resident may update their own profile/property fields, but never
       // their own verificationStatus — only admin staff can approve/reject
       // (verifyResident/rejectResident), otherwise a resident could just
@@ -117,12 +133,21 @@ service cloud.firestore {
       // portal reads it, so a legacy label cannot slip past. Keeping the
       // state is allowed, so the owner can still save their profile fields.
       // lib/residents.js (writeReview) checks the same lock first.
+      //
+      // OWNER UPDATES (audit, 2026-10-20): the derived state must not move AT
+      // ALL — the old check compared only `verificationStatus`, so on a record
+      // created without it an owner could write `status: 'verified'` and
+      // self-verify through the legacy field — and the review fields are the
+      // office's alone.
       allow update: if (residentState(resource.data) == 'pending'
           || residentState(request.resource.data) == residentState(resource.data))
         && (isAdminStaff()
           || (isOwner(userId)
+            && residentState(request.resource.data) == residentState(resource.data)
             && request.resource.data.get('verificationStatus', 'pending')
-               == resource.data.get('verificationStatus', 'pending')));
+               == resource.data.get('verificationStatus', 'pending')
+            && request.resource.data.get('status', '') == resource.data.get('status', '')
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny(residentReviewFields())));
     }
 
     // Incidents: residents create and read their own reports, add evidence to
@@ -414,8 +439,14 @@ service cloud.firestore {
       // retains dispatch authority at the RULES layer even though the Admin
       // portal's UI never offers it.
       allow update: if isSignedIn() && (
+        // The reporter may add EVIDENCE and their one RATING — the only
+        // updates the mobile app makes (report_incident_screen's media
+        // upload, LocalDataStore.rateIncident). It was "anything but the
+        // workflow", which let a resident write the office's own fields
+        // (deletedAt, archivedAt, reviewedAt) or hand the report to another
+        // reporterUid (security audit, 2026-10-20).
         (resource.data.reporterUid == request.auth.uid
-          && !touchesWorkflow()
+          && changedKeys().hasOnly(['hasMedia', 'photoUrls', 'videoUrls', 'residentRating'])
           && (!changedKeys().hasAny(['residentRating']) || validRating()))
         || (isSecurityStaff()
           && !changedKeys().hasAny(['residentRating'])
@@ -425,8 +456,12 @@ service cloud.firestore {
           && !changedKeys().hasAny(['residentRating']))
       );
 
+      // A reporter may delete only a CLOSED report, which is all the app
+      // offers (Incident.isDeletable). A live call could be deleted from
+      // under the guard driving to it (audit, 2026-10-20).
       allow delete: if isSignedIn()
-        && (resource.data.reporterUid == request.auth.uid || isAdminStaff());
+        && ((resource.data.reporterUid == request.auth.uid && currentStage() == 'resolved')
+          || isAdminStaff());
 
       // ── THE FORENSIC LOG ─────────────────────────────────────────────────
       //
@@ -585,10 +620,18 @@ service cloud.firestore {
     // is actually for — `timeOut` and the officer's handover.
     match /guard_shifts/{shiftId} {
       allow read: if isStaff();
-      allow create: if isStaff() && request.resource.data.guardUid == request.auth.uid;
+      // The clock is the SERVER's (audit, 2026-10-20): both stamps were
+      // client-supplied, so a guard could backdate a clock-in or post-date a
+      // clock-out on the timesheet the office pays from. The console already
+      // writes serverTimestamp() for both (shared/lib/shifts.js).
+      allow create: if isStaff()
+        && request.resource.data.guardUid == request.auth.uid
+        && request.resource.data.timeIn == request.time
+        && request.resource.data.get('timeOut', null) == null;
       allow update: if isStaff()
         && resource.data.guardUid == request.auth.uid
         && resource.data.timeOut == null
+        && (request.resource.data.timeOut == null || request.resource.data.timeOut == request.time)
         && request.resource.data.keys().hasOnly([
           'guardUid', 'name', 'email', 'role', 'shift', 'timeIn', 'timeOut', 'createdAt',
           'handover', 'clockInLocation', 'clockOutLocation'
