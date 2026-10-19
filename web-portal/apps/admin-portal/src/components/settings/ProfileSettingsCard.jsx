@@ -4,10 +4,10 @@ import Pill from '@shared/components/Pill'
 import { ROLE_LABELS } from '@shared/auth/roles'
 import OtpInput from '@shared/auth/OtpInput'
 import { EMAIL_CODE_LENGTH, useAccountEmail } from '@/hooks/useAccountEmail'
-import { AccountField, PasswordField } from './AccountField'
-import SettingsDialog, { DIALOG_PRIMARY, DIALOG_SECONDARY } from './SettingsDialog'
-import SettingsItem from './SettingsItem'
-import SettingsSection from './SettingsSection'
+import { AccountField, PasswordField } from '@shared/components/settings/AccountField'
+import SettingsDialog, { DIALOG_PRIMARY, DIALOG_SECONDARY } from '@shared/components/settings/SettingsDialog'
+import SettingsItem from '@shared/components/settings/SettingsItem'
+import SettingsSection from '@shared/components/settings/SettingsSection'
 
 const ROLE_SCOPE = {
   super_admin: 'Full access, including guard accounts and these settings.',

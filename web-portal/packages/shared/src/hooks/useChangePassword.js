@@ -8,8 +8,8 @@ import { toast } from '@shared/lib/toast'
 
 /**
  * Changing the signed-in account's own password — the state and the Firebase
- * calls, without any layout. The Guardhouse's ChangePasswordPanel and the
- * Admin's Security settings both render it.
+ * calls, without any layout. The shared SecuritySettingsCard renders it in
+ * both consoles' Settings.
  *
  *   • Re-authenticates first: Firebase refuses `updatePassword` on an old
  *     session, and the current password is what stops a passer-by at an

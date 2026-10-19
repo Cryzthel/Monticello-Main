@@ -1,3 +1,4 @@
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import {
   Map as MapIcon,
   ActivitySquare,
@@ -17,7 +18,7 @@ import {
   usePersistentChrome,
 } from '@shared/layouts/PageChrome'
 import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
 import { db } from '@shared/lib/firebase'
 import { STAFF_COLLECTION } from '@shared/auth/roles'
 import { useAuth } from '@shared/auth/AuthContext'
@@ -29,6 +30,7 @@ import { useGuardTelemetryState } from '@/components/GuardTelemetryProvider'
 import { portalKey } from '@shared/config/portal'
 import { ROUTES } from '@/config/portal'
 import DutyLockOverlay from '@/components/DutyLockOverlay'
+import GuardPrefsSync from '@/components/GuardPrefsSync'
 
 // Grouped on the same Platform/System split the Admin sidebar uses, so the two
 // portals' navigation reads identically: live operational surfaces first, then
@@ -121,7 +123,7 @@ function useOfficerName() {
 
   useEffect(() => {
     if (!user?.uid) return undefined
-    return onSnapshot(
+    return subscribeWithRetry(
       doc(db, STAFF_COLLECTION, user.uid),
       (snap) => setName({ uid: user.uid, value: String(snap.data()?.name ?? '').trim() }),
       () => {},
@@ -163,6 +165,7 @@ function ShellFrame({ children, dutyLock = true, ...props }) {
       {...props}
     >
       <LogoutGate open={logoutGate} onCancel={() => setLogoutGate(false)} />
+      <GuardPrefsSync />
 
       {/* ── THE DUTY LOCK ────────────────────────────────────────────────
           Mounted in the SHELL, not on each page, so a surface added later is
@@ -213,6 +216,7 @@ export function AppShellLayout() {
         scroll={page.scroll}
         bleed={page.bleed}
         inlineTitle={page.inlineTitle}
+        stickyHeader={page.stickyHeader}
         dutyLock={page.dutyLock}
         {...slotProps}
       >

@@ -2,8 +2,8 @@ import { Settings } from '@shared/icons'
 import Select from '@shared/components/Select'
 import { AUDIT_RETENTION_DAYS } from '@shared/lib/systemSettingsStore'
 import TimeZoneSelect from '@/components/TimeZoneSelect'
-import SettingsItem from './SettingsItem'
-import SettingsSection from './SettingsSection'
+import SettingsItem from '@shared/components/settings/SettingsItem'
+import SettingsSection from '@shared/components/settings/SettingsSection'
 
 /**
  * System: the organisation's time zone and audit retention. Edits the page's

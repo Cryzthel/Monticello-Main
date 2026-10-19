@@ -1,7 +1,7 @@
 import { Bell, Volume2 } from '@shared/icons'
 import Switch from '@shared/components/Switch'
-import SettingsItem from './SettingsItem'
-import SettingsSection from './SettingsSection'
+import SettingsItem from '@shared/components/settings/SettingsItem'
+import SettingsSection from '@shared/components/settings/SettingsSection'
 
 /**
  * Notifications: the guardhouse siren, resident pushes and alarm volume.

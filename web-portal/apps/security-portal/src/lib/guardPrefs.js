@@ -5,12 +5,12 @@ const KEY = portalKey('guard-prefs')
 /**
  * Guardhouse display preferences.
  *
- * ── DEVICE-LOCAL, AND SAID OUT LOUD ────────────────────────────────────────
- * Stored in localStorage, like the admin portal's notification toggles. That is
- * a real limitation and the settings page states it rather than implying these
- * follow the account: a guard signing in at a different terminal starts from
- * the defaults. Moving them to the account needs a per-user preferences
- * document and a Firestore rule to match, neither of which exists.
+ * ── A LOCAL CACHE OF THE ACCOUNT'S VALUE (2026-10-19) ──────────────────────
+ * Stored in localStorage so the console reads it synchronously and keeps it
+ * offline. `shareIdleLocation` is also kept on the account
+ * (`users/{uid}.guardPreferences`) by GuardPrefsSync, which applies the
+ * account's value here and writes a change made here back up, so it follows
+ * the officer to every console.
  *
  * Every key here CHANGES SOMETHING. A settings page whose switches are
  * decorative is worse than no settings page, so anything that could not be
