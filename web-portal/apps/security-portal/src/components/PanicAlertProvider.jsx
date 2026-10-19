@@ -25,7 +25,7 @@ import PanicAlertBeacon from '@/components/PanicAlertBeacon'
  * and nothing whatsoever would happen on their screen.
  *
  * So this does not reverse the map's decision; it covers the case that
- * decision left open. The visual half now lives in `PanicAlertRail`, a column
+ * decision left open. The visual half now lives in `SidebarSOSAlertsFeed`, a column
  * beside the dispatch map; the floating banner that used to sit over every
  * page is gone.
  *
@@ -44,7 +44,9 @@ import PanicAlertBeacon from '@/components/PanicAlertBeacon'
  * map's `status in ('active','acknowledged')` filter — the set of emergencies
  * that still need somebody.
  */
-const PanicAlertContext = createContext(null)
+// Exported as a test seam, like `AuthContext`: a harness can hand the feed
+// fixture alerts without a Firestore session.
+export const PanicAlertContext = createContext(null)
 
 /**
  * The live panic alerts, shared.
@@ -158,7 +160,7 @@ export default function PanicAlertProvider({ children }) {
 
   /**
    * NO FLOATING BANNER ANY MORE. `GlobalPanicBanner` was a pulsing red capsule
-   * pinned over the top of the viewport; it is replaced by `PanicAlertRail`, a
+   * pinned over the top of the viewport; it is replaced by `SidebarSOSAlertsFeed`, a
    * column beside the map — see that file for why a list beats a count, and
    * why taking space from the map beats covering it.
    *

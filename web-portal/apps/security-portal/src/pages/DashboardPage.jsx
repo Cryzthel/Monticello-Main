@@ -13,7 +13,7 @@ import GuidanceBanner from '@/components/GuidanceBanner'
 import NavigationModal from '@/components/NavigationModal'
 import DispatchVoiceBanner from '@/components/DispatchVoiceBanner'
 import { useRouteSimulation } from '@/hooks/useRouteSimulation'
-import PanicAlertRail from '@/components/PanicAlertRail'
+import SidebarSOSAlertsFeed from '@/components/SidebarSOSAlertsFeed'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
@@ -951,7 +951,7 @@ export default function DashboardPage() {
           Below `lg` they STACK, map first — a 320px rail beside a 320px map
           would leave neither usable. The rail lands under the map and collapses
           itself to a 56px summary bar there, so the map keeps 91% of a 812px
-          screen and the queue is one tap away (measured; see PanicAlertRail).
+          screen and the queue is one tap away (measured; see SidebarSOSAlertsFeed).
 
           The rail renders nothing at all when there are no alerts, so the map
           is full-bleed in the state the console is in almost all of the
@@ -1064,7 +1064,7 @@ export default function DashboardPage() {
         />
         </div>
 
-        <PanicAlertRail
+        <SidebarSOSAlertsFeed
           onOpenAlert={(alert) => setSelectedPanicId(alert.id)}
           /* The officer's own position, for the distance on each card. The
              best-of-both fix, so the rail measures from the same place the

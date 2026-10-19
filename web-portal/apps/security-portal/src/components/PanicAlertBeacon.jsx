@@ -40,7 +40,7 @@ export default function PanicAlertBeacon() {
 
   /**
    * Silent on the two surfaces that already show the alerts in full: the
-   * dispatch map, where `PanicAlertRail` is a column of them, and the SOS page
+   * dispatch map, where `SidebarSOSAlertsFeed` is a column of them, and the SOS page
    * itself, whose entire content is the list. A floating badge pointing at a
    * list you are already reading is noise with a shadow on it.
    */
