@@ -15,6 +15,7 @@ import HistoryPage from '@/pages/HistoryPage'
 import PerformancePage from '@/pages/PerformancePage'
 import SettingsPage from '@/pages/SettingsPage'
 import SessionLoader from '@shared/components/LeafLoader'
+import DownloadAppPage from '@shared/components/DownloadAppPage'
 
 /**
  * Every route the Guardhouse Portal has.
@@ -46,6 +47,8 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to={ROUTES.home} replace />} />
       <Route path={ROUTES.login} element={<LoginPage />} />
+      {/* Public: the Android app download, for residents and staff. */}
+      <Route path="/download" element={<DownloadAppPage />} />
       {/* Public, and deliberately outside RequireAuth: the person opening it
           cannot sign in, which is why they were sent the link. */}
       <Route

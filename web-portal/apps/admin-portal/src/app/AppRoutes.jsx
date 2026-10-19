@@ -18,6 +18,7 @@ import AnnouncementsPage from '@/pages/AnnouncementsPage'
 import HistoryPage from '@/pages/HistoryPage'
 import SettingsPage from '@/pages/SettingsPage'
 import SessionLoader from '@shared/components/LeafLoader'
+import DownloadAppPage from '@shared/components/DownloadAppPage'
 
 /**
  * Every route the Admin Portal has.
@@ -70,6 +71,8 @@ export default function AppRoutes() {
           login and remembers where it came from. */}
       <Route path="/" element={<Navigate to={ROUTES.home} replace />} />
       <Route path={ROUTES.login} element={<LoginPage />} />
+      {/* Public: the Android app download, for residents and staff. */}
+      <Route path="/download" element={<DownloadAppPage />} />
       {/* Public, and deliberately outside RequireAuth: the person opening it
           cannot sign in, which is why they were sent the link. */}
       <Route

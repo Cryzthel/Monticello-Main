@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import BrandMark from '@shared/components/BrandMark'
+import { Smartphone } from '@shared/icons'
 import { useForcedTheme } from '@shared/theme/ThemeProvider'
 
 /**
@@ -375,6 +376,15 @@ export default function LoginSplitLayout({ children, illustration, title, descri
           <div className="mt-9 w-full text-left group-has-[[data-auth-recovery]]/shell:mt-0">
             {children}
           </div>
+          {/* The resident app, for anyone who reached this console without an
+              account — the public /download page needs no sign-in. */}
+          <a
+            href="/download"
+            className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-text-secondary underline-offset-4 transition-colors hover:text-text-primary hover:underline"
+          >
+            <Smartphone size={14} aria-hidden="true" />
+            Get the Android app
+          </a>
         </div>
       </div>
     </div>

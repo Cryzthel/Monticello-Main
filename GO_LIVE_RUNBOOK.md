@@ -133,3 +133,30 @@ CORS change is needed.
 1. Google Cloud → Credentials → the **Browser key** → HTTP referrers: both Vercel domains (+ `localhost:3000`, `localhost:3001` for development).
 2. Mapbox → Tokens → the `pk.` token → URL restrictions: the same domains.
 3. Open both portals, sign in as the admin, check the browser console for CSP reports; when clean for a few days, rename `Content-Security-Policy-Report-Only` to `Content-Security-Policy` in both `vercel.json`.
+
+## 7. Android app releases (direct APK, no Play Store)
+
+Residents and staff install the app from a link, not the Play Store:
+
+- **Public page:** `/download` on either portal (<https://monticello-admin.vercel.app/download>), linked from both login screens as "Get the Android app". It shows the current version, date, size and SHA-256, a QR code for scanning from a computer, and a plain-language install guide.
+- **Files:** Firebase Hosting, `https://monticello-villas-f600e.web.app/downloads/` — `monticello-v<version>-release.apk`, its `.sha256`, and `latest.json` (the manifest the page reads). The site root is a small standalone download page too.
+- **Headers** (`firebase.json` → `hosting`): APKs are served as `application/vnd.android.package-archive` with `Content-Disposition: attachment` (always a download, never binary text), `nosniff`, and year-long immutable caching (file names are versioned). `latest.json` is `no-cache` with CORS open so the portals always see the newest release.
+
+**One-time setup — you:**
+1. Create the upload keystore (keep it and its passwords in a password manager — a lost key means existing installs can never be updated):
+   `keytool -genkeypair -v -keystore "%USERPROFILE%\monticello-upload.jks" -keyalg RSA -keysize 2048 -validity 10000 -alias upload`
+2. Create `android/key.properties` (git-ignored):
+   ```
+   storeFile=C:/Users/<you>/monticello-upload.jks
+   storePassword=…
+   keyAlias=upload
+   keyPassword=…
+   ```
+
+**Each release:**
+1. Bump `version:` in `pubspec.yaml` — name **and** build number (`1.0.0+1` → `1.0.1+2`). Phones refuse an update whose build number does not increase.
+2. `bash scripts/deploy-apk.sh --no-deploy` — builds with R8 shrinking and Dart obfuscation, refuses a debug-signed APK, writes the checksum and manifest. Check the output.
+3. `bash scripts/deploy-apk.sh` — the same, then `firebase deploy --only hosting`. The download page updates immediately.
+4. Keep `release-symbols/<version>/` (git-ignored): it is what turns an obfuscated crash trace back into readable code.
+
+Known limit: the application ID is `com.example.monticello_villas_app`. Fine for sideloading, but changing it later means re-registering the Android app in Firebase and a fresh install for everyone — decide before the first public release.

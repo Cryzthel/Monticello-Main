@@ -69,3 +69,8 @@ scripts/purge-manifest-*.json
 
 # Local pre-purge backups: personal data and password hashes. Never commit.
 backups/
+
+# Release APKs, checksums and the manifest are published, not committed.
+hosting/public/downloads/
+# Obfuscation symbols for each release (needed to read crash reports).
+release-symbols/

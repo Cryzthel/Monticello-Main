@@ -15,4 +15,103 @@
       "codebase": "default"
     }
   ],
-  "flutter":{"platforms":{"android":{"buildConfigurations":{".":{"projectId":"monticello-villas-f600e","appId":"1:787092385070:android:ab380b50bfe5a02bea9ebf","fileOutput":"android/app/google-services.json"}}},"dart":{"lib/firebase_options.dart":{"projectId":"monticello-villas-f600e","configurations":{"ios":"1:787092385070:ios:45f2d68833a297d4ea9ebf"}}}}}}
+  "flutter": {
+    "platforms": {
+      "android": {
+        "buildConfigurations": {
+          ".": {
+            "projectId": "monticello-villas-f600e",
+            "appId": "1:787092385070:android:ab380b50bfe5a02bea9ebf",
+            "fileOutput": "android/app/google-services.json"
+          }
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "monticello-villas-f600e",
+          "configurations": {
+            "ios": "1:787092385070:ios:45f2d68833a297d4ea9ebf"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "hosting/public",
+    "ignore": [
+      "**/.*",
+      "**/*.sha256.tmp"
+    ],
+    "cleanUrls": true,
+    "headers": [
+      {
+        "source": "**/*.apk",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/vnd.android.package-archive"
+          },
+          {
+            "key": "Content-Disposition",
+            "value": "attachment"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "**/*.sha256",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "text/plain; charset=utf-8"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/downloads/latest.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
+          },
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          }
+        ]
+      },
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "Strict-Transport-Security",
+            "value": "max-age=31536000; includeSubDomains"
+          }
+        ]
+      }
+    ]
+  }
+}
