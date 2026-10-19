@@ -63,3 +63,6 @@ db/test/node_modules/
 # Build-time values passed with --dart-define-from-file (Mapbox token etc.).
 # Copy dart_defines.example.json and fill it in; never commit the real one.
 dart_defines.json
+
+# purge-test-data.js dry-run/execute manifests list account emails and uids.
+scripts/purge-manifest-*.json
