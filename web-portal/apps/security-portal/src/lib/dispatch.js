@@ -230,6 +230,41 @@ export function describeStageError(err, label) {
 }
 
 /**
+ * A press that lost a race, said as what happened rather than as a failure.
+ *
+ * `current` is the call as the server has it now (StageConflictError, or a
+ * re-read after a refused queued write). Nothing went wrong on this console:
+ * somebody else got there first, and the drawer is already showing their
+ * claim read-only. So this is an `info` receipt, never a red one.
+ *
+ * Returns null when the call is still where this officer left it — the
+ * refusal was something else, and describeStageError should explain it.
+ */
+export function describeConflict(current, { uid, label } = {}) {
+  if (!current) {
+    return { tone: 'info', text: 'This call is no longer open. It may have been closed or removed.' }
+  }
+  const stage = current.dispatchStage
+  const who = staffLabel(current.assignedGuardName, '') || 'another officer'
+  if (stage === 'resolved') {
+    return { tone: 'info', text: `Already resolved by ${staffLabel(current.resolvedByName, '') || who}.` }
+  }
+  if (current.assignedGuardUid && current.assignedGuardUid !== uid) {
+    return {
+      tone: 'info',
+      text:
+        stage === 'responding'
+          ? `${who} is already en route to this call.`
+          : `Acknowledged by ${who}. This call is theirs now.`,
+    }
+  }
+  return {
+    tone: 'info',
+    text: `${label ?? 'That action'} was not applied — the call was updated a moment ago. Check its stage and try again.`,
+  }
+}
+
+/**
  * "Block 7 · Lot 14", or '' when neither is recorded.
  *
  * Phase is left out on purpose. Block and lot are what a responding unit

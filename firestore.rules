@@ -452,16 +452,26 @@ service cloud.firestore {
         // expressions" before any of the stage logic was even consulted.
         // Binding it once is not a tidy-up, it is the difference between the
         // machine working and every transition being refused.
+        // ── OPTIMISTIC LOCK (2026-10-19) ──────────────────────────────
+        // `prevLogId` is the version the officer pressed against; it must
+        // still be the incident's `lastLogId` BEFORE this batch. Two officers
+        // acknowledging the same report used to both succeed — the second as
+        // a silent reassignment — because none→dispatched and
+        // dispatched→dispatched are both legal edges. Now the second is
+        // refused. `get`, not `getAfter`: it reads the stored document and
+        // does not re-enter the incident's update rule (see below).
         allow create: if isSecurityStaff()
           && isLogFor(getAfter(/databases/$(database)/documents/incidents/$(incidentId)).data, logId)
+          && request.resource.data.prevLogId
+            == get(/databases/$(database)/documents/incidents/$(incidentId)).data.get('lastLogId', '')
           && request.resource.data.keys().hasOnly([
-            'action', 'fromStage', 'toStage', 'status',
+            'action', 'fromStage', 'toStage', 'status', 'prevLogId',
             'userId', 'userName', 'userRole', 'assignedGuardUid',
             'at', 'clientAt', 'queuedOffline',
             'geolocation', 'batteryLevel', 'charging', 'deviceTelemetry', 'detail'
           ])
           && request.resource.data.keys().hasAll([
-            'action', 'fromStage', 'toStage', 'userId', 'at',
+            'action', 'fromStage', 'toStage', 'userId', 'at', 'prevLogId',
             'geolocation', 'batteryLevel', 'deviceTelemetry'
           ])
           && request.resource.data.userId == request.auth.uid

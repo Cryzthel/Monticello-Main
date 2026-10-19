@@ -7,7 +7,7 @@ import IncidentMap from '@shared/components/IncidentMap'
 import AppShell from '@/layouts/AppShell'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
 import PanicAlertModal from '@/components/PanicAlertModal'
-import DispatchDetailDrawer, { DRAWER_WIDTH_PX } from '@/components/DispatchDetailDrawer'
+import DispatchDetailDrawer from '@/components/DispatchDetailDrawer'
 import NavigationHud from '@/components/NavigationHud'
 import DispatchStatusBanner from '@/components/DispatchStatusBanner'
 import SidebarSOSAlertsFeed from '@/components/SidebarSOSAlertsFeed'
@@ -31,15 +31,6 @@ import { isOffRoute, routeProgress } from '@/lib/routeProgress'
 import { useDeviceHeading } from '@/hooks/useDeviceHeading'
 import { useOffRoute } from '@/hooks/useOffRoute'
 import { useAutoArrival } from '@/hooks/useAutoArrival'
-
-/**
- * How much of the map the details panel covers, handed to IncidentMap so a
- * clicked marker, and a framed route, sit in what is LEFT of the canvas
- * rather than under the panel. Only `right`: below `lg` the panel is a bottom
- * sheet over most of the screen, and the map discards an inset it cannot
- * honour (see centerOnFeature).
- */
-const DETAIL_PANEL_INSET = { right: DRAWER_WIDTH_PX }
 
 /** How long a pending auto-start waits for the route (see `autoNav`). */
 const AUTO_NAV_WINDOW_MS = 45_000
@@ -550,8 +541,34 @@ export default function DashboardPage() {
    */
   useAutoArrival({ report: myActive, fix: selfFix, uid: user?.uid ?? null, role })
 
+  /**
+   * WHERE the unit is going, and WHAT it is going to — two labels, not one.
+   *
+   * This used to be a single string that fell back through block/lot, then the
+   * stored location, then the category, so a call with no block recorded put
+   * "Medical" in the slot reserved for an address and the panel lost the
+   * category line entirely. They are different facts and the panel has a row
+   * for each.
+   *
+   * `describeIncidentLocation` rather than `blockLotLabel`, because it carries
+   * the PHASE as well — and inside a gated subdivision the phase is the part
+   * that tells an officer which gate to come in by. It also prefers a stored
+   * `propertyLabel` when the resident's property has one, which block and lot
+   * alone would have thrown away.
+   *
+   * Declared ABOVE useVoiceGuidance, which speaks it — below would be a
+   * temporal-dead-zone throw at render (see the note on `followUid`).
+   */
+  const routeTargetLabel = routeIncident
+    ? describeIncidentLocation(routeIncident) || blockLotLabel(routeIncident) || 'Location not recorded'
+    : ''
+
   // Spoken guidance IS the session: there is no mute to disagree with it.
-  useVoiceGuidance(progress, { enabled: navigating && voiceSupported, routeKey: guidanceKey })
+  useVoiceGuidance(progress, {
+    enabled: navigating && voiceSupported,
+    routeKey: guidanceKey,
+    destinationLabel: routeTargetLabel,
+  })
 
   // A route that ends, or hands off to a different unit, leaves a session
   // pointing at nobody.
@@ -663,25 +680,6 @@ export default function DashboardPage() {
    * theirs until they ask for something else.
    */
   const cameraUnit = navigating ? followUid : null
-
-  /**
-   * WHERE the unit is going, and WHAT it is going to — two labels, not one.
-   *
-   * This used to be a single string that fell back through block/lot, then the
-   * stored location, then the category, so a call with no block recorded put
-   * "Medical" in the slot reserved for an address and the panel lost the
-   * category line entirely. They are different facts and the panel has a row
-   * for each.
-   *
-   * `describeIncidentLocation` rather than `blockLotLabel`, because it carries
-   * the PHASE as well — and inside a gated subdivision the phase is the part
-   * that tells an officer which gate to come in by. It also prefers a stored
-   * `propertyLabel` when the resident's property has one, which block and lot
-   * alone would have thrown away.
-   */
-  const routeTargetLabel = routeIncident
-    ? describeIncidentLocation(routeIncident) || blockLotLabel(routeIncident) || 'Location not recorded'
-    : ''
 
   // ── ONE CLICK, ONE PANEL ─────────────────────────────────────────────────
   // A pin click opens the details drawer directly. The popup card that used
@@ -922,9 +920,18 @@ export default function DashboardPage() {
           panicAlerts={panicAlerts}
           onSelectPanicAlert={(alert) => setSelectedPanicId(alert.id)}
           units={mapUnits}
+          /* A unit marker click takes the camera to that unit — the page's
+             own promise below ("a dispatcher who wants to watch a unit clicks
+             its marker"), which had no handler behind it: the marker showed a
+             pointer and the click did nothing. */
+          onSelectUnit={(unit) => {
+            if (!Number.isFinite(unit?.position?.lat) || !Number.isFinite(unit?.position?.lng)) return
+            setFocus({ id: `unit:${unit.uid}:${Date.now()}`, lat: unit.position.lat, lng: unit.position.lng })
+          }}
           focus={focus}
-          focusInset={DETAIL_PANEL_INSET}
-          panelInset={selectedReport ? DETAIL_PANEL_INSET : null}
+          /* No panel insets: the report details are a centred modal over
+             the map now (2026-10-19), not a rail beside it, so a clicked
+             marker centres in the whole canvas. */
           centerOnSelect
           selfUnitId={user?.uid ?? null}
           followUnitId={cameraUnit}
@@ -967,6 +974,8 @@ export default function DashboardPage() {
                 progress={progress}
                 offRoute={offRoute}
                 targetLabel={routeTargetLabel}
+                destination={target}
+                voice={voiceSupported}
                 onExit={toggleNavigation}
               />
             )

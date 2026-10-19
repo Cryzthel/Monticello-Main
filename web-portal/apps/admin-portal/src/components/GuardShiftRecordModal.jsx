@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import { jsPDF } from 'jspdf'
 import { ClipboardList, FileText, ShieldCheck, X } from '@shared/icons'
 import Pill from '@shared/components/Pill'
@@ -63,7 +64,7 @@ function useStaffRecord(uid) {
   useEffect(() => {
     setRecord(null)
     if (!uid) return undefined
-    return onSnapshot(
+    return subscribeWithRetry(
       doc(db, 'staff_accounts', uid),
       (snap) => setRecord(snap.exists() ? snap.data() : null),
       () => setRecord(null),

@@ -1677,7 +1677,10 @@ function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef }) {
    */
   UNIT_HIT_LAYERS.forEach((layer) => {
     map.on('mousemove', layer, (event) => {
-      map.getCanvas().style.cursor = 'pointer'
+      // The pointer only where a click does something: a page that passes no
+      // `onSelectUnit` gets the hover card and an ordinary cursor, never a
+      // hand over a marker that ignores the click.
+      map.getCanvas().style.cursor = onSelectUnitRef.current ? 'pointer' : ''
       const feature = event.features?.[0]
       const unit = unitsRef.current.find((u) => u.uid === feature?.properties?.id)
       if (!unit) return
@@ -1757,21 +1760,6 @@ export default function IncidentMap({
    */
   focusInset = null,
   /**
-   * Edges a panel covers RIGHT NOW, in px — `{ right }` — or null.
-   *
-   * Not the same as `focusInset`. That one describes where a panel WILL be
-   * once a click opens it, so a clicked marker is centred clear of it before
-   * it exists. This one describes a panel that is open: the route badge is
-   * centred in what it leaves, and a new route is framed clear of it. Pass it
-   * only while the panel is open, or the badge sits off-centre over an empty
-   * map.
-   *
-   * The overlay honours it from `lg` up, where the Guardhouse drawer is a
-   * rail, and there it also clears the map's own controls panel while that
-   * is open. Below `lg` the drawer is a bottom sheet over the whole map.
-   */
-  panelInset = null,
-  /**
    * Should clicking a marker also centre it?
    *
    * OFF by default, which keeps the Admin Hazard Map exactly as it was. The
@@ -1847,12 +1835,6 @@ export default function IncidentMap({
    * else's unit has no better source than the marker, and the camera uses it.
    */
   navAnchor = null,
-  /**
-   * Called the moment the operator takes the camera back — a drag, a scroll, a
-   * pinch. The parent owns the follow state, so it decides what that means;
-   * this component only reports the gesture.
-   */
-  onFollowBreak,
   onSelectUnit,
   /**
    * The response route as a GeoJSON FeatureCollection, or null. Features are
@@ -1987,9 +1969,6 @@ export default function IncidentMap({
   focusInsetRef.current = { left: !isCompact && controlsOpen ? CONTROL_PANEL_CLEARANCE : 0, ...focusInset }
   const centerOnSelectRef = useRef(centerOnSelect)
   centerOnSelectRef.current = centerOnSelect
-  const panelRight = panelInset?.right ?? 0
-  const panelRightRef = useRef(panelRight)
-  panelRightRef.current = panelRight
   const routeRef = useRef(route)
   routeRef.current = route
   const hasUnitLayer = units !== undefined
@@ -2529,12 +2508,9 @@ export default function IncidentMap({
     if (!bounds) return
 
     const { clientWidth, clientHeight } = map.getContainer()
-    // Clear of the details drawer when one is open over the right edge, on
-    // the same "only if the map is twice as wide" rule centerOnFeature uses.
-    const insetRight = panelRightRef.current
     let padding = {
       top: 72,
-      right: 64 + (insetRight > 0 && clientWidth > insetRight * 2 ? insetRight : 0),
+      right: 64,
       bottom: barClearance + 16,
       left: !isCompact && controlsOpen ? CONTROL_PANEL_CLEARANCE : 64,
     }
@@ -2741,17 +2717,6 @@ export default function IncidentMap({
       })
     }
 
-    const release = (event) => {
-      if (event?.originalEvent) onFollowBreak?.()
-    }
-    map.on('dragstart', release)
-    map.on('zoomstart', release)
-    map.on('rotatestart', release)
-    return () => {
-      map.off('dragstart', release)
-      map.off('zoomstart', release)
-      map.off('rotatestart', release)
-    }
     // `unitsGeojson` rather than `units`: it is the memo that actually changes
     // when a position does, so this re-runs per fix and not per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3431,7 +3396,7 @@ export default function IncidentMap({
         <div
           style={{
             '--overlay-left': `${!isCompact && controlsOpen ? CONTROL_PANEL_CLEARANCE : 12}px`,
-            '--overlay-right': `${12 + panelRight}px`,
+            '--overlay-right': '12px',
           }}
           /* Spans the map so `mt-auto` has somewhere to push to, and stays
              `pointer-events-none` throughout — every child opts back in. A

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import {
   Archive,
   ArchiveRestore,
@@ -122,7 +123,7 @@ function useLiveReport(id) {
   useEffect(() => {
     if (!id) return undefined
     setState({ id, report: undefined })
-    return onSnapshot(
+    return subscribeWithRetry(
       doc(db, 'incidents', id),
       (snap) => setState({ id, report: snap.exists() ? mapIncidentDoc({ id: snap.id, ...snap.data() }) : null }),
       // A denied read falls back to whatever the page resolved.

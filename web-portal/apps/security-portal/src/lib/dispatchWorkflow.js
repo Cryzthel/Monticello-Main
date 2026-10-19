@@ -1,6 +1,7 @@
-import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { collection, doc, getDocFromServer, runTransaction, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { auth, db } from '@shared/lib/firebase'
-import { notifyResident } from '@shared/lib/incidents'
+import { isOffline } from '@shared/lib/connectivity'
+import { mapIncidentDoc, notifyResident } from '@shared/lib/incidents'
 import {
   ARRIVAL_RADIUS_M,
   STAGE_TO_DISPLAY_STATUS,
@@ -35,6 +36,10 @@ import { distanceMeters } from '@/lib/directions'
  * call has moved on in the meantime (another officer acted first), the rules
  * refuse the queued write when it arrives, and the local change is rolled
  * back by the next snapshot.
+ *
+ * The one exception is a CLAIM made online (Acknowledge, assign, reassign):
+ * that is where two officers really do race each other, so it reads the call
+ * fresh inside a transaction first. See StageConflictError.
  *
  * Every command returns `{ committed, notify }`:
  *   committed  a Promise that settles when the SERVER accepts or refuses the
@@ -77,23 +82,26 @@ const NOTIFY_STAGES = new Set(['responding', 'on_site', 'resolved'])
  *   actually feels, and it was the thing most at risk from shortening the
  *   stages. This is what keeps it.
  */
-async function commitStage({ incident, action, toStage, fields, role, forensics, detail, notifyStatus }) {
+async function commitStage({ incident, action, toStage, fields, role, forensics, detail, notifyStatus, claim = false }) {
   const user = auth.currentUser
   if (!user) throw new Error('Not signed in.')
 
   const incidentRef = doc(db, 'incidents', incident.id)
   const logRef = doc(collection(incidentRef, 'status_log'))
-  const batch = writeBatch(db)
-  batch.update(incidentRef, {
+  const update = {
     ...fields,
     lastLogId: logRef.id,
     stageUpdatedAt: serverTimestamp(),
-  })
-  batch.set(logRef, {
+  }
+  const entry = {
     action,
     fromStage: incident.dispatchStage,
     toStage,
     status: STAGE_TO_WIRE_STATUS[toStage],
+    // The version this press was made against. firestore.rules refuses the
+    // entry unless it is still the incident's `lastLogId` — see the note on
+    // optimistic locking below.
+    prevLogId: incident.lastLogId ?? '',
     userId: user.uid,
     userName: actorName(),
     userRole: role ?? '',
@@ -106,15 +114,74 @@ async function commitStage({ incident, action, toStage, fields, role, forensics,
     charging: forensics.charging,
     deviceTelemetry: forensics.deviceTelemetry,
     detail: detail ?? {},
-  })
+  }
 
-  const committed = batch.commit()
   const derived = NOTIFY_STAGES.has(toStage) && toStage !== incident.dispatchStage
   const status = notifyStatus ?? (derived ? STAGE_TO_DISPLAY_STATUS[toStage] : null)
   const notify = status
     ? () => notifyResident(incident.id, { status, stage: toStage })
     : null
-  return { committed, notify }
+
+  // A CLAIM, ONLINE: a transaction. It reads the call fresh from the server,
+  // so a guard who lost the race is told who won before anything is drawn —
+  // no optimistic "Acknowledged" that rolls back a second later. Resolves
+  // once the server has it; a conflict throws StageConflictError.
+  if (claim && !isOffline()) {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(incidentRef)
+      if (!snap.exists()) throw new StageConflictError(null)
+      const current = snap.data()
+      if ((current.lastLogId ?? '') !== (incident.lastLogId ?? '')) {
+        throw new StageConflictError(mapIncidentDoc({ id: snap.id, ...current }))
+      }
+      tx.update(incidentRef, update)
+      tx.set(logRef, entry)
+    })
+    return { committed: Promise.resolve(), notify, logId: logRef.id }
+  }
+
+  const batch = writeBatch(db)
+  batch.update(incidentRef, update)
+  batch.set(logRef, entry)
+  return { committed: batch.commit(), notify, logId: logRef.id }
+}
+
+/**
+ * ── OPTIMISTIC LOCKING (2026-10-19) ────────────────────────────────────────
+ * Every stage write carries `prevLogId`, the `lastLogId` the officer was
+ * looking at when they pressed. The rules accept it only if that is STILL the
+ * incident's `lastLogId`, so a write made against a stale view is refused on
+ * the server whatever path it took — a queued offline batch included.
+ *
+ * Without it, two officers pressing Acknowledge on the same report BOTH
+ * succeeded: `none → dispatched` and `dispatched → dispatched` (a reassign)
+ * are both legal edges, so the second press silently took the call from the
+ * first. The refusal the console used to show was only the lucky case.
+ *
+ * Claims (Acknowledge, assign, reassign) also run as a transaction when
+ * online — see commitStage. Thrown when the call moved on first; `current` is
+ * the call as the server has it now (mapped), or null if it is gone.
+ */
+export class StageConflictError extends Error {
+  constructor(current) {
+    super('The call moved on before this action reached it.')
+    this.name = 'StageConflictError'
+    this.code = 'stage-conflict'
+    this.current = current
+  }
+}
+
+/**
+ * The server's copy of a call, for explaining a refused write. Null when it
+ * cannot be read (offline, deleted). Never throws.
+ */
+export async function readCurrentIncident(id) {
+  try {
+    const snap = await getDocFromServer(doc(db, 'incidents', id))
+    return snap.exists() ? mapIncidentDoc({ id: snap.id, ...snap.data() }) : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -137,6 +204,7 @@ export async function dispatchUnit(incident, guard, { role }) {
     toStage: 'dispatched',
     role,
     forensics,
+    claim: true,
     fields: {
       status: 'dispatched',
       dispatchStage: 'dispatched',

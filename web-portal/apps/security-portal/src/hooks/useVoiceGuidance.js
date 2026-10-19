@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { formatDistance } from '@/lib/directions'
 
 /**
  * Speaks the turn-by-turn instructions aloud.
@@ -76,6 +75,49 @@ const ARRIVED_M = 30
  */
 const REPEAT_MS = 30_000
 
+/**
+ * A distance the way a navigator SAYS it: "100 meters", "1.2 kilometers".
+ *
+ * Not `formatDistance`: "100 m" is right on the card and wrong aloud — engines
+ * read the unit as the letter "m", or skip it. Rounded harder than the card,
+ * to the figures a driver can use: 50 m steps under half a kilometre, 100 m
+ * steps under one, tenths of a kilometre above.
+ */
+export function spokenDistance(meters) {
+  if (!Number.isFinite(meters)) return ''
+  if (meters < 1000) {
+    const step = meters < 500 ? 50 : 100
+    const rounded = Math.max(step, Math.round(meters / step) * step)
+    return rounded >= 1000 ? '1 kilometer' : `${rounded} meters`
+  }
+  const km = Math.round(meters / 100) / 10
+  return `${km} ${km === 1 ? 'kilometer' : 'kilometers'}`
+}
+
+/**
+ * One voice, chosen once per page and kept: an English voice matching the
+ * console's locale, preferring one that runs on the device (no network
+ * round-trip before the turn is announced). The engine's default otherwise —
+ * on some machines that is a non-English voice that mangles every street
+ * name. `getVoices()` is empty until `voiceschanged`, so this is retried on
+ * every prompt until it finds one.
+ */
+let chosenVoice = null
+function pickVoice(synth) {
+  if (chosenVoice) return chosenVoice
+  const voices = synth.getVoices?.() ?? []
+  if (!voices.length) return null
+  const lang = (typeof navigator !== 'undefined' && navigator.language) || 'en-US'
+  const english = voices.filter((v) => /^en\b/i.test(v.lang))
+  chosenVoice =
+    english.find((v) => v.lang === lang && v.localService) ??
+    english.find((v) => v.lang === lang) ??
+    english.find((v) => v.localService) ??
+    english[0] ??
+    null
+  return chosenVoice
+}
+
 function speak(text) {
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
   if (!synth) return
@@ -83,6 +125,11 @@ function speak(text) {
   // worse than silence, and these are seconds apart by design.
   synth.cancel()
   const utterance = new SpeechSynthesisUtterance(text)
+  const voice = pickVoice(synth)
+  if (voice) {
+    utterance.voice = voice
+    utterance.lang = voice.lang
+  }
   utterance.rate = 1.05
   utterance.volume = 1
   synth.speak(utterance)
@@ -92,7 +139,7 @@ function speak(text) {
  * Returns nothing. It briefly handed out a `repeat()` for the panel's Repeat
  * button; that button is gone and the timer below covers what it was for.
  */
-export function useVoiceGuidance(progress, { enabled, routeKey, onSpoken }) {
+export function useVoiceGuidance(progress, { enabled, routeKey, destinationLabel = '', onSpoken }) {
   // Every phrase is also handed to `onSpoken`, so the top banner can show the
   // last instruction in words for anyone who cannot hear it.
   const onSpokenRef = useRef(onSpoken)
@@ -133,6 +180,16 @@ export function useVoiceGuidance(progress, { enabled, routeKey, onSpoken }) {
     spokenRef.current = new Set()
     lastIndexRef.current = null
   }
+  // A session that is exited and started again on the same route is a new
+  // drive: it gets its opening announcement and its prompts back.
+  const wasEnabledRef = useRef(enabled)
+  if (enabled && !wasEnabledRef.current) {
+    spokenRef.current = new Set()
+    lastIndexRef.current = null
+  }
+  wasEnabledRef.current = enabled
+  const destinationRef = useRef(destinationLabel)
+  destinationRef.current = destinationLabel
 
   useEffect(() => {
     if (!enabled) {
@@ -158,8 +215,28 @@ export function useVoiceGuidance(progress, { enabled, routeKey, onSpoken }) {
     // anything is spoken on this fix.
     phraseRef.current =
       distanceToManeuver > IMMINENT_M
-        ? `In ${formatDistance(distanceToManeuver)}, ${instruction}`
+        ? `In ${spokenDistance(distanceToManeuver)}, ${instruction}`
         : instruction
+
+    /**
+     * THE OPENING ANNOUNCEMENT. Pressing Start navigation used to be met with
+     * silence until the unit came within 400 m of the first corner — on a
+     * long first leg, minutes of nothing, which reads as "voice is broken".
+     * Now the session opens the way Google's does: where to, then the first
+     * instruction. Every threshold already passed is marked spoken with it,
+     * so the distance prompt below does not repeat it a second later.
+     */
+    if (!spoken.has('start')) {
+      spoken.add('start')
+      THRESHOLDS.filter((t) => distanceToManeuver <= t).forEach((t) => spoken.add(`${index}@${t}`))
+      if (distanceToManeuver <= IMMINENT_M) spoken.add(`${index}@now`)
+      lastIndexRef.current = index
+      const where = destinationRef.current
+      const arrivedNow = isLast && progress.remainingM != null && progress.remainingM <= ARRIVED_M
+      if (arrivedNow) spoken.add(`${index}@arrived`)
+      say(arrivedNow ? 'You have arrived.' : `Starting route${where ? ` to ${where}` : ''}. ${phraseRef.current}.`)
+      return
+    }
 
     /**
      * THE PROMPT RIGHT AFTER A TURN.
@@ -213,7 +290,7 @@ export function useVoiceGuidance(progress, { enabled, routeKey, onSpoken }) {
     const key = `${index}@${due}`
     if (spoken.has(key)) return
     spoken.add(key)
-    say(`In ${formatDistance(distanceToManeuver)}, ${instruction}`)
+    say(`In ${spokenDistance(distanceToManeuver)}, ${instruction}`)
   }, [enabled, progress])
 
   /**

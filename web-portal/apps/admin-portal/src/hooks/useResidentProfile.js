@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { doc } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import { db } from '@shared/lib/firebase'
 
 // A resident's data is deliberately split across three collections by the
@@ -38,7 +39,7 @@ export function useResidentProfile(uid) {
     }
 
     const listen = (collectionName, set) =>
-      onSnapshot(
+      subscribeWithRetry(
         doc(db, collectionName, uid),
         (snap) => {
           set(snap.exists() ? snap.data() : null)

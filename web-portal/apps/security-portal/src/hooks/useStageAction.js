@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { describeDelivery, describeStageError } from '@/lib/dispatch'
+import { describeConflict, describeDelivery, describeStageError } from '@/lib/dispatch'
+import { readCurrentIncident } from '@/lib/dispatchWorkflow'
+import { auth } from '@shared/lib/firebase'
 import { toast } from '@shared/lib/toast'
 import { isOffline, primeConnectivity, subscribeConnectivity } from '@shared/lib/connectivity'
 import { reconnectFirestore } from '@shared/lib/firebase'
@@ -27,7 +29,10 @@ const IDLE = { busy: null, feedback: null }
  * background:
  *
  *   accepted   a success toast (plus the resident's push, if any)
- *   refused    a danger receipt + toast; the next snapshot rolls the stage back
+ *   refused    the call is re-read from the server: if it moved on (another
+ *              officer won the race — see StageConflictError) an info receipt
+ *              names who; otherwise a danger receipt + toast. Either way the
+ *              next snapshot rolls the stage back
  *   offline    a warning that it is saved on the device and will sync
  *   online but unconfirmed after KICK_AFTER_MS
  *              the Firestore stream is restarted (disableNetwork/enableNetwork).
@@ -91,6 +96,20 @@ export function useStageAction(incidentId) {
       try {
         handle = await start()
       } catch (err) {
+        // Lost a race (a claim's transaction saw the call had moved on): not
+        // an error, just news. The live snapshot is already redrawing the
+        // drawer read-only with whoever won.
+        if (err?.code === 'stage-conflict') {
+          settle(forId, { busy: null, feedback: describeConflict(err.current, { uid: auth.currentUser?.uid, label }) })
+          return false
+        }
+        // A transaction refused at commit: the call moved between its read
+        // and its write. Same news, found out one step later.
+        if (err?.code === 'permission-denied') {
+          const current = await readCurrentIncident(forId)
+          settle(forId, { busy: null, feedback: describeConflict(current, { uid: auth.currentUser?.uid, label }) })
+          return false
+        }
         console.error(`${label} failed before writing`, err)
         settle(forId, { busy: null, feedback: { tone: 'danger', text: describeStageError(err, label) } })
         return false
@@ -123,16 +142,32 @@ export function useStageAction(incidentId) {
     try {
       await handle.committed
     } catch (err) {
+      clearTimeout(first)
+      clearTimeout(second)
+      pendingRef.current.delete(lock)
+      // A refusal is almost always the optimistic lock: the call moved on
+      // between the press and the write landing (a queued offline press,
+      // another officer, a supervisor). Ask the server where it is now, and
+      // if it moved, say who moved it instead of showing a red error.
+      if (err?.code === 'permission-denied') {
+        const current = await readCurrentIncident(forId)
+        const moved = !current || current.lastLogId !== handle.logId
+        const conflict = moved ? describeConflict(current, { uid: auth.currentUser?.uid, label }) : null
+        if (conflict) {
+          settle(forId, { feedback: conflict })
+          toast.info(conflict.text)
+          return
+        }
+      }
       console.error(`${label} was refused`, err)
       const text = describeStageError(err, label)
       settle(forId, { feedback: { tone: 'danger', text } })
       toast.error(text)
       return
-    } finally {
-      clearTimeout(first)
-      clearTimeout(second)
-      pendingRef.current.delete(lock)
     }
+    clearTimeout(first)
+    clearTimeout(second)
+    pendingRef.current.delete(lock)
 
     // A clean success is a toast, not a receipt: the drawer often closes on
     // it, and toasts also reach an officer who has moved to another call.

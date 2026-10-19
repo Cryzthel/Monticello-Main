@@ -53,13 +53,8 @@ import ResolveIncidentModal from '@/components/dispatch/ResolveIncidentModal'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { formatTime } from '@shared/lib/dates'
 
-/**
- * Width of the desktop rail, in px, exported so the dispatch page can tell the
- * map how much of its right edge is spoken for. It IS this component's
- * `lg:w-[26rem]`. Two places holding it independently is how a centred
- * marker ends up under the panel.
- */
-export const DRAWER_WIDTH_PX = 416
+/** How long the exit runs; matches `.dialog-panel-out` in the shared CSS. */
+const EXIT_MS = 150
 
 const PRIORITY_LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
 
@@ -72,13 +67,19 @@ const PRIORITY_RULE = {
   success: 'border-success/50',
 }
 
-/** Where the call stands, as the header pill (the Admin ticket's stage pill). */
-function stagePill(stage, ackExpired) {
+/**
+ * Where the call stands, as the header pill (the Admin ticket's stage pill).
+ * `claimedBy` is set when another officer holds the call: it then says whose
+ * it is rather than inviting this console to navigate.
+ */
+function stagePill(stage, ackExpired, claimedBy) {
   if (stage === 'none') return { text: 'Awaiting acknowledgement', tone: 'warning', pulse: true, icon: Radio }
   if (stage === 'dispatched')
     return ackExpired
       ? { text: 'No acknowledgement', tone: 'danger', pulse: true, icon: Timer }
-      : { text: 'Acknowledged · ready to navigate', tone: 'info', pulse: true, icon: ShieldCheck }
+      : claimedBy
+        ? { text: `Acknowledged by ${claimedBy}`, tone: 'info', pulse: false, icon: ShieldCheck }
+        : { text: 'Acknowledged · ready to navigate', tone: 'info', pulse: true, icon: ShieldCheck }
   if (stage === 'responding') return { text: 'Guard dispatched · en route', tone: 'info', pulse: true, icon: Navigation }
   return { text: 'Resolved', tone: 'success', pulse: false, icon: CheckCircle2 }
 }
@@ -129,22 +130,59 @@ function useAckClock(report) {
  *      told, the moment step 2 reaches the server.
  * Each press moves the drawer on as soon as the write is applied on this
  * device; the server's answer follows in the background (useStageAction),
- * which restarts a stalled stream and rolls back on a refusal.
+ * which restarts a stalled stream and rolls back on a refusal. A CLAIM made
+ * online is the exception: it waits for a transaction, so an officer who
+ * lost the race to Acknowledge sees "Acknowledged by …" and never a claim of
+ * their own that rolls back.
  *
- * From `lg` up this is a right-hand rail with no scrim (the map stays live);
- * below `lg` it is a bottom sheet with a scrim.
+ * A CENTRED MODAL (2026-10-19, by request; was a right-hand rail / bottom
+ * sheet). A dark glass plate in BOTH themes — the panel carries `.dark`, so
+ * every token inside resolves to its dark value — over a blurred scrim. It
+ * enters with the shared dialogIn and leaves with dialogOut: the wrapper
+ * below keeps the last report mounted for EXIT_MS after the page clears it.
+ *
+ * READ-ONLY WHEN SOMEONE ELSE HOLDS THE CALL: an officer who is neither the
+ * assigned unit nor a supervisor sees whose it is and no stage action. Only a
+ * call whose 90-second acknowledgement has lapsed offers Reassign.
  *
  * `navigation` (from the dispatch page), for an active call:
  *   { state: 'ready' | 'active' | 'routing' | 'unavailable', reason?, onStart, onExit, onCommitted }
  */
-export default function DispatchDetailDrawer({ report, units = [], previewUid, onPreviewUnit, onClose, navigation = null }) {
+export default function DispatchDetailDrawer({ report, ...rest }) {
+  // The report on screen, held through the exit so the panel can leave
+  // rather than vanish. Synced during render (the derived-state pattern), so
+  // a newly opened call is drawn on the same frame it was clicked.
+  const [held, setHeld] = useState(report)
+  const [closing, setClosing] = useState(false)
+  if (report && held !== report) {
+    setHeld(report)
+    setClosing(false)
+  } else if (!report && held && !closing) {
+    setClosing(true)
+  }
+  // A timer, not `animationend`: a hidden pane or reduced motion never fires
+  // the event, and a modal that cannot finish closing blocks the map.
+  useEffect(() => {
+    if (!closing) return undefined
+    const timer = setTimeout(() => {
+      setHeld(null)
+      setClosing(false)
+    }, EXIT_MS)
+    return () => clearTimeout(timer)
+  }, [closing])
+
+  if (!held) return null
+  return <ReportDetailsModal report={held} closing={closing} {...rest} />
+}
+
+function ReportDetailsModal({ report, closing, units = [], previewUid, onPreviewUnit, onClose, navigation = null }) {
   const navigate = useNavigate()
   const { user, role } = useAuth()
   const uid = user?.uid
   const { busy, feedback, offline, run, dismiss } = useStageAction(report?.id)
 
   const panelRef = useRef(null)
-  useDialogFocus({ open: Boolean(report), containerRef: panelRef })
+  useDialogFocus({ open: !closing, containerRef: panelRef })
   const ack = useAckClock(report)
 
   const [mediaLightbox, setMediaLightbox] = useState(false)
@@ -169,13 +207,13 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
 
   const anyDialog = mediaLightbox || resolutionLightbox !== null || resolving
   useEffect(() => {
-    if (!report || anyDialog || busy) return undefined
+    if (!report || closing || anyDialog || busy) return undefined
     const onKeyDown = (event) => {
       if (event.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [report, anyDialog, busy, onClose])
+  }, [report, closing, anyDialog, busy, onClose])
 
   const pickerOpen = stage === 'none' || (stage === 'dispatched' && reassigning)
   const selectedUnit = pickerOpen && previewUid ? units.find((u) => u.uid === previewUid) ?? null : null
@@ -224,7 +262,11 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
     { dispatched: 'responding', responding: 'resolved' }[stage],
     guardLabel,
   )
-  const pill = stagePill(stage, ack?.expired)
+  // Another officer holds this call and this console may not act for them:
+  // drawn read-only, with their name, instead of offering actions the server
+  // would refuse.
+  const claimedByOther = !canAct && Boolean(report.assignedGuardUid) && (stage === 'dispatched' || stage === 'responding')
+  const pill = stagePill(stage, ack?.expired, claimedByOther ? guardLabel : null)
 
   // ── THE FOOTER: THE ONE NEXT ACTION ──────────────────────────────────────
   let footer = null
@@ -287,16 +329,22 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         className={`flex min-w-0 items-center gap-1.5 text-xs font-semibold ${ack?.expired ? 'text-danger' : 'text-text-secondary'}`}
         aria-live="polite"
       >
-        <Timer size="sm" className="shrink-0" aria-hidden="true" />
+        {claimedByOther && !ack?.expired ? (
+          <ShieldCheck size="sm" className="shrink-0 text-info" aria-hidden="true" />
+        ) : (
+          <Timer size="sm" className="shrink-0" aria-hidden="true" />
+        )}
         <span className="truncate">
-          {ack?.expired ? 'No acknowledgement' : 'Awaiting acknowledgement'} ·{' '}
+          {ack?.expired ? 'No acknowledgement' : claimedByOther ? `Acknowledged by ${guardLabel}` : 'Awaiting acknowledgement'} ·{' '}
           <span className="font-mono tabular-nums">{formatStopwatch(ack?.waited ?? 0)}</span>
         </span>
       </div>
     )
     footer = (
       <>
-        {!isMine ? (
+        {/* Reassign: a supervisor any time; anyone else only once the
+            holder has let the acknowledgement window lapse. */}
+        {!isMine && (canAct || ack?.expired) ? (
           <button
             type="button"
             onClick={() => setReassigning(true)}
@@ -367,36 +415,31 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
     hint = `Resolved at ${clock(report.resolvedAt)} by ${report.resolvedByName || 'security'}. It has left the live map.`
   }
 
-  if (!canAct && stage !== 'none' && stage !== 'resolved' && !pickerOpen) {
-    hint = `${hint} Only ${guardLabel} or a supervisor can advance this call.`
+  if (claimedByOther && !pickerOpen) {
+    hint = `${hint} Read-only here — only ${guardLabel} or a supervisor can advance this call.`
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[var(--z-modal)] flex items-end justify-end lg:items-stretch">
+    <div
+      className={`fixed inset-0 z-[var(--z-modal)] flex items-center justify-center p-3 sm:p-6 ${
+        closing ? 'pointer-events-none' : ''
+      }`}
+    >
       <div
-        className="dialog-scrim pointer-events-auto absolute inset-0 bg-scrim lg:hidden"
+        className={`${closing ? 'dialog-scrim-out' : 'dialog-scrim'} absolute inset-0 bg-black/55 backdrop-blur-sm`}
         onClick={onClose}
         role="presentation"
       />
 
-      <aside
+      <section
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={`Incident ${reference}`}
-        className="pointer-events-auto relative flex h-[88dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-modal animate-[riseIn_220ms_var(--ease-spring)] lg:h-full lg:w-[26rem] lg:animate-[drawerInRight_260ms_var(--ease-spring)] lg:rounded-none lg:border-y-0 lg:border-r-0"
+        className={`dark ${closing ? 'dialog-panel-out' : 'dialog-panel'} relative flex max-h-[min(90dvh,56rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-800/80 bg-zinc-950/90 text-text-primary shadow-2xl backdrop-blur-2xl`}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close incident details"
-          className="flex h-6 shrink-0 items-center justify-center pt-2 lg:hidden"
-        >
-          <span className="h-1 w-9 rounded-full bg-tint/25" />
-        </button>
-
-        {/* ══ HEADER ══ the Admin ticket's header, sized for a rail. */}
-        <header className="relative shrink-0 border-b border-hairline px-4 pb-4 pt-4 pr-12">
+        {/* ══ HEADER ══ the Admin ticket's header. */}
+        <header className="relative shrink-0 border-b border-zinc-800/80 px-5 pb-4 pt-5 pr-14">
           <div className="flex items-start gap-3">
             <CategoryIconBadge category={report.category} />
             <div className="min-w-0 flex-1">
@@ -414,7 +457,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
             type="button"
             onClick={onClose}
             aria-label="Close incident details"
-            className="absolute right-3 top-3 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+            className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
           >
             <X size={20} />
           </button>
@@ -444,9 +487,12 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         </header>
 
         {/* ══ BODY ══ stacked cards, the only band that scrolls. */}
-        <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain bg-base-950/40 p-4">
+        {/* Two columns from `md`: what the resident sent beside who sent it
+            and where. The unit picker and the resolution span both. */}
+        <div className="custom-scrollbar grid min-h-0 flex-1 grid-cols-1 content-start gap-4 overflow-y-auto overscroll-contain p-4 sm:p-5 md:grid-cols-2">
           {pickerOpen ? (
             <DetailCard
+              className="md:col-span-2"
               compact
               icon={Radio}
               title={stage === 'dispatched' ? `Reassign from ${guardLabel}` : 'Acknowledge & assign a unit'}
@@ -518,6 +564,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
 
           {stage === 'resolved' && report.resolution ? (
             <DetailCard
+              className="md:col-span-2"
               compact
               icon={ClipboardList}
               title="Resolution"
@@ -548,7 +595,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         </div>
 
         {/* ══ THE NEXT ACTION — PINNED ══ */}
-        <footer className="relative shrink-0 border-t border-hairline bg-base-950 px-4 pb-4 pt-3">
+        <footer className="relative shrink-0 border-t border-zinc-800/80 bg-zinc-950/70 px-4 pb-4 pt-3 sm:px-5">
           {feedback ? <Receipt feedback={feedback} onDismiss={dismiss} /> : null}
           {status ? <div className="mt-1">{status}</div> : null}
           {/* START NAVIGATION — its own full-width row above the stage
@@ -595,7 +642,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
           ) : null}
           {hint ? <p className="mt-2 text-caption leading-snug text-text-muted">{hint}</p> : null}
         </footer>
-      </aside>
+      </section>
 
       {/* The resolution's own photos, watermarked with the resolution's time
           and the arrival position — not the report's. */}

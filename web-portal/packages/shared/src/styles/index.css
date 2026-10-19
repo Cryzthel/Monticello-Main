@@ -1644,6 +1644,29 @@
   }
 }
 
+/* The exits. Shorter than the entrances and travelling less — a dismissal is
+   the user's own decision, so it should get out of the way rather than
+   perform. See .dialog-scrim-out / .dialog-panel-out. */
+@keyframes scrimOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes dialogOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
 /* Side-drawer entrance, for a panel that arrives from the right edge rather
    than appearing in the middle of the screen.
 
@@ -1745,6 +1768,8 @@
   .popover,
   .dialog-scrim,
   .dialog-panel,
+  .dialog-scrim-out,
+  .dialog-panel-out,
   /* The panic banner pulses through a class that does not carry `animate-` in
      its name, so it would have escaped the selector above. It is listed here
      explicitly, and it loses nothing that matters: the red plate, the siren
@@ -2930,6 +2955,16 @@
 
   .dialog-panel {
     animation: dialogIn 220ms var(--ease-out-strong);
+  }
+
+  /* Exit pair, for a dialog that stays mounted long enough to leave (the
+     dispatch report modal). `forwards` holds the end frame until unmount. */
+  .dialog-scrim-out {
+    animation: scrimOut 150ms ease-out forwards;
+  }
+
+  .dialog-panel-out {
+    animation: dialogOut 150ms ease-out forwards;
   }
 
   /* Each route's content fades in as it mounts (see DashboardLayout). */
