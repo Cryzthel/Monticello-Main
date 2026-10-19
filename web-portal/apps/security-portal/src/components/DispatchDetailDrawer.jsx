@@ -63,6 +63,22 @@ import { formatTime } from '@shared/lib/dates'
  */
 export const DRAWER_WIDTH_PX = 416
 
+/**
+ * The Guardhouse's names for the three steps (by request, 2026-10-19). Display
+ * only — the stored stages, their stamps and the rules are unchanged:
+ *   dispatched  → "Verified by Security": security has taken the report and
+ *                 assigned it (dispatchedAt)
+ *   responding  → "Dispatched": the officer accepted and is routed to it
+ *                 (respondingAt)
+ *   resolved    → "Resolved" (resolvedAt)
+ * Admin and the resident app keep STAGE_LABELS.
+ */
+const GUARD_STAGE_LABELS = {
+  dispatched: 'Verified by Security',
+  responding: 'Dispatched',
+  resolved: 'Resolved',
+}
+
 const SEVERITY_LABELS = {
   critical: 'Critical',
   high: 'High',
@@ -256,9 +272,12 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
       if (ok) {
         setReassigning(false)
         onPreviewUnit?.(null)
+        // Dispatching yourself is taking the call: navigation opens as soon
+        // as the route plots (DashboardPage `autoNav`).
+        if (selectedUnit.uid === uid) navigation?.onCommitted?.()
       }
     })
-  }, [selectedUnit, stage, run, report, role, onPreviewUnit])
+  }, [selectedUnit, stage, run, report, role, onPreviewUnit, uid, navigation])
 
   if (!report) return null
 
@@ -371,7 +390,11 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
         {canAct ? (
           <button
             type="button"
-            onClick={() => run('respond', 'Acknowledged — responding', () => acknowledgeAndRespond(report, { role }))}
+            onClick={() =>
+              run('respond', 'Acknowledged — responding', () => acknowledgeAndRespond(report, { role })).then(
+                (ok) => ok && isMine && navigation?.onCommitted?.(),
+              )
+            }
             disabled={Boolean(busy)}
             className="btn btn-action btn-brand"
           >
@@ -551,7 +574,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
                 reads "Dispatch <name>", so a second Assign control would be
                 a third way to start one action. */}
             {stage === 'none' ? (
-              <StatusBadge tone="warning" size="sm" icon={Radio}>
+              <StatusBadge tone="warning" size="md" icon={Radio}>
                 Unassigned — awaiting dispatch
               </StatusBadge>
             ) : null}
@@ -565,19 +588,19 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               {SEVERITY_LABELS[report.severity] ?? 'Medium'} priority
             </StatusBadge>
             {ack?.expired ? (
-              <StatusBadge tone="danger" size="sm" icon={Timer}>
+              <StatusBadge tone="danger" size="md" icon={Timer}>
                 No acknowledgement
               </StatusBadge>
             ) : null}
             {report.escalation ? (
-              <StatusBadge tone="danger" size="sm" icon={AlertOctagon}>
+              <StatusBadge tone="danger" size="md" icon={AlertOctagon}>
                 Escalated
               </StatusBadge>
             ) : null}
           </div>
 
           <div className="mt-3">
-            <StageStepper report={report} stage={stage} />
+            <StageStepper report={report} stage={stage} labels={GUARD_STAGE_LABELS} />
           </div>
         </header>
 

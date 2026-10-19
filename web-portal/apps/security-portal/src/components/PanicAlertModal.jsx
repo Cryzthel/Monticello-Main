@@ -184,7 +184,7 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
             </p>
           </div>
 
-          <span className="inline-flex h-6 items-center rounded-full bg-danger/15 px-2.5 text-caption font-semibold text-danger ring-1 ring-inset ring-danger/30">
+          <span className="inline-flex h-6 items-center rounded-full bg-danger/15 px-3 text-xs font-semibold capitalize text-danger ring-1 ring-inset ring-danger/30">
             {alert.status}
           </span>
         </div>

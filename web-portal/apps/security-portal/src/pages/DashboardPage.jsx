@@ -41,6 +41,9 @@ import { useAutoArrival } from '@/hooks/useAutoArrival'
  */
 const DETAIL_PANEL_INSET = { right: DRAWER_WIDTH_PX }
 
+/** How long a pending auto-start waits for the route (see `autoNav`). */
+const AUTO_NAV_WINDOW_MS = 45_000
+
 export default function DashboardPage() {
   const { user, role } = useAuth()
   const [selectedId, setSelectedId] = useState(null)
@@ -588,44 +591,44 @@ export default function DashboardPage() {
    */
   const [navAnchor, setNavAnchor] = useState(null)
 
-  const toggleNavigation = useCallback(() => {
-    setNavigating((current) => {
-      const next = !current
-      if (next) {
-        const live = route.originSource === 'self' ? getLastFix() : null
-        setNavAnchor(
-          Number.isFinite(live?.lat) && Number.isFinite(live?.lng)
-            ? { lat: live.lat, lng: live.lng }
-            : null,
-        )
-      } else {
-        setNavAnchor(null)
-      }
-      // Safari will not deliver orientation events unless permission was
-      // asked for from a user gesture, and there is no second chance — this
-      // press is the gesture. Fired without awaiting: a refusal leaves the
-      // cone off and changes nothing else, so the navigation session must not
-      // wait on a permission dialog to start.
-      if (next) requestCompass()
-      return next
-    })
-    // Ending a session also ends an SOS response. Exit navigation is the
-    // explicit act that releases the alert's hold on the route (see
-    // `routeIncident`) — without this the line would stay drawn to an
-    // emergency the officer has just stepped away from.
-    setRespondingAlertId((id) => (navigatingRef.current ? null : id))
-    // Starting a session on a call pins it, from either control (the route
-    // sheet or the drawer), so closing the drawer keeps the route.
-    if (!navigatingRef.current) {
-      const target = routeIncidentRef.current
-      if (target && target.kind !== 'sos') setNavTargetId(target.id)
-    }
-  }, [requestCompass, route.originSource])
-
-  // Read inside the callback above without making `navigating` a dependency,
+  // Read inside the callback below without making `navigating` a dependency,
   // which would rebuild the handler on every toggle.
   const navigatingRef = useRef(navigating)
   navigatingRef.current = navigating
+
+  /**
+   * Start or end the session. Side effects run HERE, in the handler, not
+   * inside a `setNavigating` updater as they used to: React runs updaters
+   * during the next render, outside the click, so Safari's compass prompt —
+   * which needs the gesture — was refused, and StrictMode ran each one twice.
+   */
+  const toggleNavigation = useCallback(() => {
+    const next = !navigatingRef.current
+    if (next) {
+      const live = route.originSource === 'self' ? getLastFix() : null
+      setNavAnchor(
+        Number.isFinite(live?.lat) && Number.isFinite(live?.lng)
+          ? { lat: live.lat, lng: live.lng }
+          : null,
+      )
+      // Safari will not deliver orientation events unless permission was
+      // asked for from a user gesture, and there is no second chance — this
+      // press is the gesture. Fired without awaiting: a refusal leaves the
+      // cone off and changes nothing else.
+      requestCompass()
+      // Starting a session on a call pins it, from either control (the route
+      // sheet or the drawer), so closing the drawer keeps the route.
+      const target = routeIncidentRef.current
+      if (target && target.kind !== 'sos') setNavTargetId(target.id)
+    } else {
+      setNavAnchor(null)
+      // Ending a session also ends an SOS response — Exit navigation is the
+      // explicit act that releases the alert's hold on the route.
+      setRespondingAlertId(null)
+    }
+    navigatingRef.current = next
+    setNavigating(next)
+  }, [requestCompass, route.originSource])
 
   /**
    * WHILE NAVIGATING, THE CAMERA ALWAYS FOLLOWS — there is no Re-centre button
@@ -714,8 +717,61 @@ export default function DashboardPage() {
         if (!navigating) toggleNavigation()
         closeDetail()
       },
+      // The officer just took this call (dispatched it to themselves, or
+      // pressed Accept & go): navigation opens on its own once the route is
+      // plotted. See `autoNav`.
+      onCommitted: () => armNavigation(selectedReport.id),
     }
   })()
+
+  /**
+   * ── NAVIGATION OPENS BY ITSELF ONCE THE OFFICER TAKES A CALL ───────────
+   *
+   * Dispatching a call to yourself, or pressing Accept & go, used to leave
+   * the officer on the drawer with a Start navigation button that was often
+   * still disabled — the route plots a moment AFTER the write, from a fix
+   * that may not have arrived yet. So the press arms a pending start, and the
+   * session begins the moment this call's route is ready, exactly as Respond
+   * to SOS does. Dropped after AUTO_NAV_WINDOW_MS, on a routing error, or if
+   * the officer is already navigating somewhere (nothing is hijacked).
+   *
+   * The drawer closes with it only once the call is past Accept & go; a call
+   * still at Dispatched keeps the panel, because its Accept button is there.
+   */
+  const [autoNav, setAutoNav] = useState(null)
+  const armNavigation = useCallback(
+    (id) => {
+      // This press is the user gesture Safari's compass prompt needs.
+      requestCompass()
+      setAutoNav({ id, at: Date.now() })
+    },
+    [requestCompass],
+  )
+  const routeIncidentStage = routeIncident?.dispatchStage
+  useEffect(() => {
+    if (!autoNav) return undefined
+    if (navigating) {
+      setAutoNav(null)
+      return undefined
+    }
+    if (route.incidentId === autoNav.id && route.phase === 'ready') {
+      setAutoNav(null)
+      toggleNavigation()
+      if (routeIncidentStage === 'responding') closeDetail()
+      return undefined
+    }
+    if (route.incidentId === autoNav.id && route.phase === 'error') {
+      setAutoNav(null)
+      return undefined
+    }
+    const left = AUTO_NAV_WINDOW_MS - (Date.now() - autoNav.at)
+    if (left <= 0) {
+      setAutoNav(null)
+      return undefined
+    }
+    const timer = setTimeout(() => setAutoNav(null), left)
+    return () => clearTimeout(timer)
+  }, [autoNav, navigating, route.incidentId, route.phase, routeIncidentStage, toggleNavigation, closeDetail])
 
   // ── DEEP LINKS ───────────────────────────────────────────────────────────
   // `?panic=<id>` flies to an SOS from the Panic Alerts page without opening

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ONE_SHOT_POSITION_OPTIONS, isUsableFix } from '@shared/lib/geolocation'
-import { rememberFix } from '@/lib/guardTelemetry'
+import { announceLocationGranted, rememberFix } from '@/lib/guardTelemetry'
 import { locationState } from '@/lib/locationState'
 
 /**
@@ -159,6 +159,8 @@ export function useLocationAccess({ mode, locationError, fix }) {
          * just because a person pressed a button to get it.
          */
         if (isUsableFix(position.coords)) rememberFix(position)
+        // Restart the telemetry watch, which a pre-grant denial killed.
+        announceLocationGranted()
       },
       () => setAsking(false),
       ONE_SHOT_POSITION_OPTIONS,

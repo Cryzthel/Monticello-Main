@@ -56,6 +56,24 @@ export function rememberFix(position) {
 }
 
 /**
+ * "This browser just handed over a position on request" — raised by the
+ * Allow-location button (useLocationAccess) so the telemetry watch can restart.
+ * A `watchPosition` that failed with PERMISSION_DENIED is dead for good:
+ * granting access afterwards does not revive it, so without this the console
+ * kept "no fix" after the officer had allowed location.
+ */
+const grantListeners = new Set()
+
+export function announceLocationGranted() {
+  grantListeners.forEach((listener) => listener())
+}
+
+export function onLocationGranted(listener) {
+  grantListeners.add(listener)
+  return () => grantListeners.delete(listener)
+}
+
+/**
  * `navigator.getBattery()`, or null where the browser has none.
  *
  * Chromium browsers implement the Battery Status API. Firefox and Safari

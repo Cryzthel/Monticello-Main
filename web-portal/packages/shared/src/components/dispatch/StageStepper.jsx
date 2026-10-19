@@ -59,7 +59,11 @@ const stampFor = (report, key) => {
   return report[STAGE_STAMPS[key]]
 }
 
-export default function StageStepper({ report, stage }) {
+/**
+ * `labels` overrides the step names per console (the Guardhouse names its own
+ * steps); anything it leaves out falls back to STAGE_LABELS.
+ */
+export default function StageStepper({ report, stage, labels = null }) {
   const current = stageIndex(stage ?? deriveDispatchStage(report))
   return (
     /* ── CENTRED, AND NOT A FIVE-COLUMN GRID ─────────────────────────────
@@ -97,8 +101,16 @@ export default function StageStepper({ report, stage }) {
                 }`}
               />
             ) : null}
+            {/* The step in progress pulses, so "where the call is now" reads
+                at a glance; done steps carry a check, later ones stay muted. */}
+            {active ? (
+              <span
+                aria-hidden="true"
+                className="absolute left-1/2 top-0 z-[1] h-6 w-6 -translate-x-1/2 animate-ping rounded-full bg-brand-500/40 motion-reduce:hidden"
+              />
+            ) : null}
             <span
-              className={`relative z-[1] flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold ${
+              className={`relative z-[1] flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold transition-colors duration-200 ${
                 done
                   ? 'bg-brand-500 text-base-900'
                   : active
@@ -109,11 +121,11 @@ export default function StageStepper({ report, stage }) {
               {done ? <Check size="sm" strokeWidth={3} aria-hidden="true" /> : step}
             </span>
             <span
-              className={`mt-1.5 w-full truncate px-1 text-2xs font-semibold ${
+              className={`mt-1.5 line-clamp-2 w-full px-1 text-2xs font-semibold leading-tight ${
                 active ? 'text-text-primary' : done ? 'text-text-secondary' : 'text-text-muted'
               }`}
             >
-              {STAGE_LABELS[key]}
+              {labels?.[key] ?? STAGE_LABELS[key]}
             </span>
             <span className={`text-2xs tabular-nums ${at ? 'text-text-secondary' : 'text-text-muted/60'}`}>
               {formatTime(at)}

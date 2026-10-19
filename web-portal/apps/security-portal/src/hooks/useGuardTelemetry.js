@@ -12,6 +12,8 @@ import {
   describeDevice,
   deviceId,
   publishTelemetry,
+  getLastFix,
+  onLocationGranted,
   readBattery,
   rememberFix,
 } from '@/lib/guardTelemetry'
@@ -226,6 +228,44 @@ export function useGuardTelemetry() {
       .catch((err) => console.warn('Could not clear unit telemetry', err))
   }, [uid, mode, dutyLoading, identity])
 
+  /**
+   * Bumped to restart the watch below once location is granted.
+   *
+   * A `watchPosition` that has failed with PERMISSION_DENIED never recovers,
+   * even after the officer allows location, so the console used to sit at
+   * "no fix" — and the route, and Start navigation with it, never came —
+   * until a reload. Restarted when the Permissions API reports the grant, or
+   * when the Allow-location button gets a position.
+   */
+  const [watchEpoch, setWatchEpoch] = useState(0)
+  useEffect(() => {
+    if (!uid || mode === 'off') return undefined
+    const restart = () => {
+      const last = getLastFix()
+      if (last) setFix(last)
+      if (!grantedRef.current || stateRef.current.locationError) setWatchEpoch((n) => n + 1)
+    }
+    const stopListening = onLocationGranted(restart)
+    let status = null
+    let cancelled = false
+    const onChange = () => {
+      if (status?.state === 'granted') restart()
+    }
+    globalThis.navigator?.permissions
+      ?.query({ name: 'geolocation' })
+      .then((result) => {
+        if (cancelled) return
+        status = result
+        result.addEventListener('change', onChange)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+      stopListening()
+      status?.removeEventListener('change', onChange)
+    }
+  }, [uid, mode])
+
   // On duty: stream the position at the cadence the mode allows.
   useEffect(() => {
     if (!uid || mode === 'off') return undefined
@@ -259,13 +299,11 @@ export function useGuardTelemetry() {
       }).catch((err) => console.warn('Unit telemetry write failed', err))
     }
 
-    // Idle with sharing off: a heartbeat with no position, so the dispatcher
-    // still sees the officer on duty, with their battery.
-    if (!sharing) {
-      send(null)
-      const heartbeat = setInterval(() => send(null), cadence.heartbeatMs)
-      return () => clearInterval(heartbeat)
-    }
+    // Idle with sharing off still WATCHES — `send` publishes no position while
+    // `sharing` is false, so the dispatcher sees only that the officer is on
+    // duty. The fix stays on this device, where the console needs it: without
+    // it a call dispatched to this officer had no origin to route from, and
+    // Start navigation stayed disabled until they pressed Accept & go.
 
     const geolocation = globalThis.navigator?.geolocation
     if (!geolocation) {
@@ -448,7 +486,7 @@ export function useGuardTelemetry() {
       geolocation.clearWatch(watchId)
       clearInterval(heartbeat)
     }
-  }, [uid, mode, sharing])
+  }, [uid, mode, sharing, watchEpoch])
 
   return { mode, sharing, locationError, activeIncidentId, fix, deferring }
 }
