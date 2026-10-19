@@ -138,9 +138,10 @@ CORS change is needed.
 
 Residents and staff install the app from a link, not the Play Store:
 
-- **Public page:** `/download` on either portal (<https://monticello-admin.vercel.app/download>), linked from both login screens as "Get the Android app". It shows the current version, date, size and SHA-256, a QR code for scanning from a computer, and a plain-language install guide.
-- **Files:** Firebase Hosting, `https://monticello-villas-f600e.web.app/downloads/` — `monticello-v<version>-release.apk`, its `.sha256`, and `latest.json` (the manifest the page reads). The site root is a small standalone download page too.
-- **Headers** (`firebase.json` → `hosting`): APKs are served as `application/vnd.android.package-archive` with `Content-Disposition: attachment` (always a download, never binary text), `nosniff`, and year-long immutable caching (file names are versioned). `latest.json` is `no-cache` with CORS open so the portals always see the newest release.
+- **Public page:** `/download` on either portal (<https://monticello-admin.vercel.app/download>). It is not linked from the login screens (removed 2026-10-20 — the consoles are staff-only); share the link or the QR instead. It shows the current version, date, size and SHA-256, a QR code for scanning from a computer, and a plain-language install guide.
+- **Permanent link:** <https://monticello-villas-f600e.web.app/downloads/monticello-release.apk> — always the newest build (each release overwrites it). This is the URL for flyers and printed QR codes. In the portals it is `APK_DOWNLOAD_URL` (`@shared/lib/appDownload`); render a code with `<QrCode value={APK_DOWNLOAD_URL} label="…" size={240} />` (`@shared/components/QrCode`).
+- **Files:** Firebase Hosting, `https://monticello-villas-f600e.web.app/downloads/` — the permanent `monticello-release.apk`, the versioned `monticello-v<version>-release.apk` (kept for every release), its `.sha256`, and `latest.json` (the manifest the page reads). The site root is a small standalone download page too.
+- **Headers** (`firebase.json` → `hosting`): APKs are served as `application/vnd.android.package-archive` with `Content-Disposition: attachment` (always a download, never binary text), `nosniff`, and year-long immutable caching for the versioned files; the permanent `monticello-release.apk` is `no-cache` so it never serves an old build. `latest.json` is `no-cache` with CORS open so the portals always see the newest release.
 
 **One-time setup — you:**
 1. Create the upload keystore (keep it and its passwords in a password manager — a lost key means existing installs can never be updated):
@@ -159,4 +160,6 @@ Residents and staff install the app from a link, not the Play Store:
 3. `bash scripts/deploy-apk.sh` — the same, then `firebase deploy --only hosting`. The download page updates immediately.
 4. Keep `release-symbols/<version>/` (git-ignored): it is what turns an obfuscated crash trace back into readable code.
 
-Known limit: the application ID is `com.example.monticello_villas_app`. Fine for sideloading, but changing it later means re-registering the Android app in Firebase and a fresh install for everyone — decide before the first public release.
+**App ID:** `com.monticello_villas_app` (changed from `com.example.monticello_villas_app` on 2026-10-20, before the first public release; registered in Firebase as Android app `1:787092385070:android:c218efb8f23f7da1ea9ebf`). The old `com.example` registration can be deleted in the Firebase console once no test devices use it.
+
+**Upload key (created 2026-10-20):** `C:\Users\Lian's laptop\monticello-release\monticello-upload.jks` (outside OneDrive), alias `upload`, RSA 4096, valid 10,000 days. SHA-256 certificate fingerprint `01:50:A6:27:A3:CC:44:58:22:43:D2:11:83:D3:F2:3B:7B:9B:AC:A6:45:0B:C5:BA:60:3D:A3:78:94:6F:F9:35` — register it for App Check (Play Integrity). Its password is in `android/key.properties`: copy the keystore **and** that password into your password manager or an offline backup now. Lose either, and installed copies can never be updated.

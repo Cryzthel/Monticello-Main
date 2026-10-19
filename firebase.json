@@ -21,7 +21,7 @@
         "buildConfigurations": {
           ".": {
             "projectId": "monticello-villas-f600e",
-            "appId": "1:787092385070:android:ab380b50bfe5a02bea9ebf",
+            "appId": "1:787092385070:android:c218efb8f23f7da1ea9ebf",
             "fileOutput": "android/app/google-services.json"
           }
         }
@@ -58,10 +58,24 @@
           {
             "key": "X-Content-Type-Options",
             "value": "nosniff"
-          },
+          }
+        ]
+      },
+      {
+        "source": "/downloads/monticello-v*.apk",
+        "headers": [
           {
             "key": "Cache-Control",
             "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/downloads/monticello-release.apk",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache"
           }
         ]
       },

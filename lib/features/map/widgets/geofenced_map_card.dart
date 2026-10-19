@@ -236,7 +236,7 @@ class _GeofencedMapCardState extends State<GeofencedMapCard> {
               urlTemplate: _satellite
                   ? MapConstants.satelliteTileUrl
                   : MapConstants.tileUrl,
-              userAgentPackageName: 'com.example.monticello_villas_app',
+              userAgentPackageName: 'com.monticello_villas_app',
               // maxNativeZoom, NOT maxZoom — see subdivision_map_picker.
               maxNativeZoom: 19,
             ),

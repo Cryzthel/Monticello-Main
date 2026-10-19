@@ -1,26 +1,19 @@
 {
   "project_info": {
     "project_number": "787092385070",
+    "firebase_url": "https://monticello-villas-f600e-default-rtdb.asia-southeast1.firebasedatabase.app",
     "project_id": "monticello-villas-f600e",
     "storage_bucket": "monticello-villas-f600e.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:787092385070:android:ab380b50bfe5a02bea9ebf",
+        "mobilesdk_app_id": "1:787092385070:android:c218efb8f23f7da1ea9ebf",
         "android_client_info": {
-          "package_name": "com.example.monticello_villas_app"
+          "package_name": "com.monticello_villas_app"
         }
       },
       "oauth_client": [
-        {
-          "client_id": "787092385070-t5kkigho4v6ubkouue4qoqprb2cav5l8.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.example.monticello_villas_app",
-            "certificate_hash": "5247464c9e7c71cc33791f2d23c5c7181e30db36"
-          }
-        },
         {
           "client_id": "787092385070-om0onh6cktc86asbj69vgd09l0asb57i.apps.googleusercontent.com",
           "client_type": 3
@@ -29,6 +22,9 @@
       "api_key": [
         {
           "current_key": "AIzaSyC5Vbf-ys4IiG12WhBfeimrA3JUmdIhGaU"
+        },
+        {
+          "current_key": "AIzaSyAcb-qk8biyo3JHvM62e21x-kre6Ajs_rU"
         }
       ],
       "services": {

@@ -33,7 +33,7 @@ if (hasReleaseKey) {
 }
 
 android {
-    namespace = "com.example.monticello_villas_app"
+    namespace = "com.monticello_villas_app"
     compileSdk = flutter.compileSdkVersion
 
     // `flutter.ndkVersion` is a non-null String (FlutterExtension.kt), so the
@@ -54,7 +54,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.monticello_villas_app"
+        applicationId = "com.monticello_villas_app"
 
         // Mapbox Maps SDK requires a minimum SDK version of 21 or higher
         minSdk = maxOf(flutter.minSdkVersion, 21)

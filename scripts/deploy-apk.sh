@@ -2,6 +2,7 @@
 # Builds the Android release APK, checks its signature, writes its SHA-256
 # checksum and the download manifest, and publishes it on Firebase Hosting:
 #
+#   https://monticello-villas-f600e.web.app/downloads/monticello-release.apk   (permanent: always the newest)
 #   https://monticello-villas-f600e.web.app/downloads/monticello-v<version>-release.apk
 #   https://monticello-villas-f600e.web.app/downloads/latest.json
 #
@@ -39,6 +40,9 @@ VERSION_NAME="${VERSION_LINE%%+*}"
 BUILD_NUMBER="${VERSION_LINE##*+}"
 [[ -n "$VERSION_NAME" && "$BUILD_NUMBER" =~ ^[0-9]+$ ]] || fail "could not read 'version: x.y.z+N' from pubspec.yaml."
 FILE="monticello-v${VERSION_NAME}-release.apk"
+# The permanent name printed on flyers and QR codes (APK_DOWNLOAD_URL in the
+# portals). Each release overwrites it; firebase.json serves it no-cache.
+STABLE_FILE="monticello-release.apk"
 
 mkdir -p "$DOWNLOADS"
 if [[ -f "$DOWNLOADS/$FILE" ]]; then
@@ -75,24 +79,26 @@ echo "Signature OK: $(grep -m1 'certificate DN' <<<"$CERT" | sed 's/.*certificat
 
 # ── publish files ────────────────────────────────────────────────────────────
 cp "$APK" "$DOWNLOADS/$FILE"
+cp "$APK" "$DOWNLOADS/$STABLE_FILE"
 SHA256="$(sha256sum "$DOWNLOADS/$FILE" | awk '{print $1}')"
 echo "$SHA256  $FILE" > "$DOWNLOADS/$FILE.sha256"
 SIZE="$(wc -c < "$DOWNLOADS/$FILE" | tr -d ' ')"
 RELEASED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 node -e '
-  const [file, version, build, size, sha256, releasedAt, base, out] = process.argv.slice(1)
+  const [file, stable, version, build, size, sha256, releasedAt, base, out] = process.argv.slice(1)
   require("fs").writeFileSync(out, JSON.stringify({
     app: "Monticello Villas",
     version, buildNumber: Number(build),
     fileName: file,
     url: `${base}/downloads/${file}`,
+    permanentUrl: `${base}/downloads/${stable}`,
     sizeBytes: Number(size),
     sha256,
     releasedAt,
     minAndroid: "5.0",
   }, null, 2) + "\n")
-' "$FILE" "$VERSION_NAME" "$BUILD_NUMBER" "$SIZE" "$SHA256" "$RELEASED_AT" "$HOSTING_URL" "$DOWNLOADS/latest.json"
+' "$FILE" "$STABLE_FILE" "$VERSION_NAME" "$BUILD_NUMBER" "$SIZE" "$SHA256" "$RELEASED_AT" "$HOSTING_URL" "$DOWNLOADS/latest.json"
 
 echo
 echo "  file     $FILE"
@@ -106,4 +112,4 @@ if (( DEPLOY == 0 )); then
 fi
 
 npx --yes firebase-tools deploy --only hosting --project "$PROJECT_ID"
-echo -e "\nReleased: ${HOSTING_URL}/downloads/${FILE}\n"
+echo -e "\nReleased:  ${HOSTING_URL}/downloads/${FILE}\nPermanent: ${HOSTING_URL}/downloads/${STABLE_FILE}\n"

@@ -1,4 +1,4 @@
-package com.example.monticello_villas_app
+package com.monticello_villas_app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

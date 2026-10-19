@@ -107,7 +107,7 @@ class _SubdivisionMapPickerState extends State<SubdivisionMapPicker> {
                   urlTemplate: _satellite
                       ? MapConstants.satelliteTileUrl
                       : MapConstants.tileUrl,
-                  userAgentPackageName: 'com.example.monticello_villas_app',
+                  userAgentPackageName: 'com.monticello_villas_app',
                   // maxNativeZoom, NOT maxZoom — `maxZoom` stops the layer
                   // drawing past 19 and leaves a blank grid on over-zoom.
                   maxNativeZoom: 19,

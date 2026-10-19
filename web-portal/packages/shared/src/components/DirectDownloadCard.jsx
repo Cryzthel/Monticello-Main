@@ -1,21 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { encode } from 'uqr'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Calendar, Check, Copy, Download, Info, Loader2, ShieldCheck, Smartphone, X } from '@shared/icons'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
-
-/**
- * Where releases are published by scripts/deploy-apk.sh. The manifest is
- * fetched live, so a new release shows here without redeploying the portal.
- * Overridable for a staging bucket with VITE_APP_DOWNLOAD_BASE.
- */
-const DOWNLOAD_BASE = (import.meta.env.VITE_APP_DOWNLOAD_BASE || 'https://monticello-villas-f600e.web.app/downloads').replace(/\/$/, '')
+import { APK_DOWNLOAD_URL, RELEASE_MANIFEST_URL } from '@shared/lib/appDownload'
+import QrCode from '@shared/components/QrCode'
 
 /** `{ status: 'loading' | 'ready' | 'none' | 'error', release }` */
 function useLatestRelease() {
   const [state, setState] = useState({ status: 'loading', release: null })
   useEffect(() => {
     const controller = new AbortController()
-    fetch(`${DOWNLOAD_BASE}/latest.json`, { cache: 'no-cache', signal: controller.signal })
+    fetch(RELEASE_MANIFEST_URL, { cache: 'no-cache', signal: controller.signal })
       .then((res) => {
         if (res.status === 404) return null
         if (!res.ok) throw new Error(String(res.status))
@@ -28,33 +22,6 @@ function useLatestRelease() {
     return () => controller.abort()
   }, [])
   return state
-}
-
-/**
- * A QR code drawn as React SVG — no raw HTML. One path for every dark module
- * keeps the DOM to a single node however large the code is. The quiet zone
- * (4 modules) is part of the drawing, so it scans on any background.
- */
-function QrCode({ value, size = 168, label }) {
-  const path = useMemo(() => {
-    const { data } = encode(value, { ecc: 'M', border: 4 })
-    let d = ''
-    data.forEach((row, y) => row.forEach((dark, x) => { if (dark) d += `M${x} ${y}h1v1h-1z` }))
-    return { d, n: data.length }
-  }, [value])
-  return (
-    <svg
-      role="img"
-      aria-label={label}
-      width={size}
-      height={size}
-      viewBox={`0 0 ${path.n} ${path.n}`}
-      shapeRendering="crispEdges"
-      className="rounded-lg bg-white"
-    >
-      <path d={path.d} fill="#0F172A" />
-    </svg>
-  )
 }
 
 function formatSize(bytes) {
@@ -175,8 +142,8 @@ function InstallGuide({ open, onClose, release }) {
  *   │ How to install ·  SHA-256 9f2c…  [copy]                   │
  *   └───────────────────────────────────────────────────────────┘
  *
- * The QR encodes the APK's URL itself, so scanning it with a phone starts the
- * download directly. Everything shown comes from latest.json, written by
+ * The QR encodes the permanent APK_DOWNLOAD_URL, so scanning it with a phone
+ * starts the download directly, and a printed copy never goes stale. Everything shown comes from latest.json, written by
  * scripts/deploy-apk.sh alongside the APK.
  */
 export default function DirectDownloadCard() {
@@ -274,7 +241,7 @@ export default function DirectDownloadCard() {
           // computer's screen to a phone, and a phone cannot scan itself.
           <figure className="hidden shrink-0 flex-col items-center gap-2 sm:flex sm:self-start">
             <div className="rounded-xl border border-hairline bg-white p-2">
-              <QrCode value={release.url} label={`QR code: download Monticello Villas v${release.version}`} />
+              <QrCode value={APK_DOWNLOAD_URL} label="QR code: download the Monticello Villas Android app" />
             </div>
             <figcaption className="max-w-[11rem] text-center text-xs text-text-muted">
               On a computer? Scan with your phone&rsquo;s camera to download.
