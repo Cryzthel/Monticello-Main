@@ -1,9 +1,7 @@
 import {
   Archive,
   ArchiveRestore,
-  Eye,
   Megaphone,
-  Pencil,
   Pin,
   PinOff,
   Trash2,
@@ -21,7 +19,6 @@ import {
   STATE_META,
   announcementImages,
   announcementState,
-  announcementViews,
   categoryLabel,
   goLiveDate,
   timeUntil,
@@ -31,7 +28,6 @@ const COLUMNS = [
   { header: 'Announcement', minWidth: '18rem' },
   { header: 'Status' },
   { header: 'Category' },
-  { header: 'Analytics', align: 'right' },
   { header: 'Date' },
   { header: <span className="sr-only">Actions</span>, align: 'right' },
 ]
@@ -55,17 +51,21 @@ function IconButton({ icon: Icon, label, onClick, tone = 'default' }) {
   )
 }
 
-function AnnouncementRow({ announcement: a, onView, onEdit, onDelete, onPin, onArchive, onPublishNow }) {
+/**
+ * One announcement. Clicking the row opens its details, which carry Edit —
+ * so the row offers neither an Edit icon nor a "View details" menu item
+ * (2026-10-19, by request: the same action three times was clutter). The
+ * view-count column went in the same pass.
+ */
+function AnnouncementRow({ announcement: a, onView, onDelete, onPin, onArchive, onPublishNow }) {
   const state = announcementState(a)
   const meta = STATE_META[state]
-  const views = announcementViews(a)
   const goLive = goLiveDate(a)
   const thumb = announcementImages(a)[0]
   const category = a.type ?? 'General'
   const title = a.title || 'Untitled announcement'
 
   const menu = [
-    { label: 'View details', icon: Eye, onSelect: () => onView(a) },
     state === 'scheduled' ? { label: 'Publish now', icon: Zap, onSelect: () => onPublishNow(a) } : null,
     {
       label: a.isPinned ? 'Unpin' : 'Pin to top',
@@ -132,18 +132,6 @@ function AnnouncementRow({ announcement: a, onView, onEdit, onDelete, onPin, onA
         <StatusBadge tone={CATEGORY_TONES[category] ?? 'neutral'}>{categoryLabel(category)}</StatusBadge>
       </td>
 
-      <td className="px-4 py-3 text-right">
-        {/* "—", not 0, while nothing tracks views: an untracked notice has not
-            been ignored by every resident. */}
-        <span
-          className="inline-flex items-center gap-1.5 tabular-nums text-text-secondary"
-          title={views == null ? 'View tracking not enabled yet' : `${views.toLocaleString()} resident views`}
-        >
-          <Eye size="sm" className="shrink-0 text-text-muted" />
-          {views == null ? '—' : views.toLocaleString()}
-        </span>
-      </td>
-
       <td className="whitespace-nowrap px-4 py-3">
         {goLive ? (
           <span className="text-xs text-text-secondary" title={formatDateTime(goLive)}>
@@ -159,7 +147,6 @@ function AnnouncementRow({ announcement: a, onView, onEdit, onDelete, onPin, onA
 
       <td className="px-4 py-3" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
-          <IconButton icon={Pencil} label="Edit" onClick={() => onEdit(a)} />
           <IconButton icon={Trash2} label="Delete" tone="danger" onClick={() => onDelete(a)} />
           <OverflowMenu ariaLabel={`More actions for ${title}`} items={menu} />
         </div>
@@ -174,7 +161,7 @@ function AnnouncementRow({ announcement: a, onView, onEdit, onDelete, onPin, onA
  * scrolls sideways instead of squeezing the columns.
  *
  * Rows come straight from the page's onSnapshot listener, so a publish,
- * archive, delete or view-count change elsewhere re-renders the affected row
+ * archive, pin or delete elsewhere re-renders the affected row
  * with no refresh.
  */
 export default function AnnouncementsTable({ rows, loading, emptyMessage, footer, ...handlers }) {
@@ -182,14 +169,13 @@ export default function AnnouncementsTable({ rows, loading, emptyMessage, footer
     <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
       <DataTable
         columns={COLUMNS}
-        minWidth="56rem"
+        minWidth="50rem"
         colgroup={
           <colgroup>
-            <col className="w-[40%]" />
-            <col className="w-[13%]" />
-            <col className="w-[13%]" />
-            <col className="w-[10%]" />
-            <col className="w-[12%]" />
+            <col className="w-[46%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
             <col className="w-[12%]" />
           </colgroup>
         }
@@ -201,7 +187,6 @@ export default function AnnouncementsTable({ rows, loading, emptyMessage, footer
               { identity: true },
               { variant: 'pill' },
               { variant: 'pill' },
-              { width: 'w-10', className: 'text-right' },
               { width: 'w-20' },
               { empty: true },
             ]}

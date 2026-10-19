@@ -10,7 +10,6 @@ import {
   IdCard,
   Info,
   Loader2,
-  Lock,
   ShieldCheck,
   User,
   X,
@@ -44,7 +43,7 @@ import { DetailCard, DetailField, DetailTimeline } from '@shared/components/deta
  *   │         roldanrazel2004@gmail.com                                       │
  *   │         (✓ Verified) (• Homeowner)                                      │
  *   ├─────────────────────────────────────────────────────────────────────────┤
- *   │ PERSONAL DETAILS        name · email · resident type · contact · bio    │
+ *   │ PERSONAL DETAILS        name · email · resident type                    │
  *   │ PROPERTY & LOCATION     phase · block · lot                             │
  *   │ VERIFICATION DOCUMENTS  ID preview · thumbnails · PDFs     (n files)    │
  *   │ VERIFICATION HISTORY    ● Submitted ● Approved / ○ Awaiting review      │
@@ -241,7 +240,6 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
   // the users/properties profile are written by different mobile flows.
   const name = profile?.fullName || profile?.name || current.name || 'Unnamed resident'
   const email = current.email || profile?.email || ''
-  const phone = current.phone || profile?.phone || ''
   const photoUrl = current.photoUrl || profile?.photoUrl || ''
   const phase = current.phase || property?.phase || ''
   const block = current.block || property?.block || ''
@@ -303,7 +301,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
       ? {
           key: 'reviewed',
           label: approved ? 'Approved' : 'Rejected',
-          detail: [current.reviewedByName && `By ${current.reviewedByName}`, 'Final'].filter(Boolean).join(' · '),
+          detail: current.reviewedByName ? `By ${current.reviewedByName}` : undefined,
           stamp: formatDateTime(current.reviewedAt, ''),
           tone: approved ? 'done' : 'warning',
         }
@@ -390,16 +388,9 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
                 <DetailField label="Resident type" empty={!current.residentType}>
                   {current.residentType ? residentTypeLabel(current.residentType) : 'Not set'}
                 </DetailField>
-                {/* Most applicants never enter a number; say so rather than
-                    leave a dash. */}
-                <DetailField label="Contact number" mono={Boolean(phone)} empty={!phone}>
-                  {phone || 'Not provided'}
-                </DetailField>
-                {profile?.bio ? (
-                  <DetailField label="Bio" className="sm:col-span-2">
-                    {profile.bio}
-                  </DetailField>
-                ) : null}
+                {/* Contact number and bio left this view (2026-10-19, by request):
+                    a resident's phone is the guardhouse's to see, on its own
+                    call and SOS screens, not the HOA office's review. */}
               </div>
             </DetailCard>
 
@@ -485,6 +476,9 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
         </div>
 
         {/* ═══ FOOTER ═══ the decision, pinned. */}
+        {/* A decided record has nothing to decide: no footer at all, and the
+            header's status badge says where it stands. */}
+        {final && !error ? null : (
         <footer className="shrink-0 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
           {error ? (
             <p role="alert" className="mb-3 rounded-xl border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
@@ -492,24 +486,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
             </p>
           ) : null}
 
-          {final ? (
-            // Checked before `rejecting`, so a decision landing live from
-            // another admin replaces an open reject form.
-            <div role="status" className="flex flex-wrap items-center justify-between gap-3">
-              <p className="flex min-w-0 items-start gap-2 text-xs leading-relaxed text-text-muted">
-                <Lock size={14} className={`mt-0.5 shrink-0 ${approved ? 'text-success/80' : 'text-danger/80'}`} aria-hidden="true" />
-                <span>
-                  <strong className="font-semibold text-text-secondary">Decision final.</strong>{' '}
-                  {approved
-                    ? 'This resident is verified; the review is closed.'
-                    : 'Rejected applications cannot be approved; the resident must register again to be reviewed.'}
-                </span>
-              </p>
-              <Pill tone={approved ? 'success' : 'danger'} icon={Lock}>
-                {approved ? 'Verified' : 'Rejected'}
-              </Pill>
-            </div>
-          ) : rejecting ? (
+          {final ? null : rejecting ? (
             <div className="space-y-3 py-1">
               <label htmlFor="resident-reject-reason" className="block text-[11px] font-medium text-text-muted">
                 Reason (optional, shown to the resident)
@@ -563,6 +540,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
             </div>
           )}
         </footer>
+        )}
       </div>
 
       {lightboxIndex !== null ? (

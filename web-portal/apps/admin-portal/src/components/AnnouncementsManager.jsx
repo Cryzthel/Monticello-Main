@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { collection, orderBy, query } from 'firebase/firestore'
 import {
   CheckCircle2,
-  Eye,
   Loader2,
   Megaphone,
   Pencil,
@@ -36,7 +35,6 @@ import {
   announcementImages,
   categoryLabel,
   announcementState,
-  announcementViews,
   createAnnouncement,
   deleteAnnouncement,
   formatTimestamp,
@@ -896,7 +894,6 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
   const stateMeta = STATE_META[state]
   const goLive = goLiveDate(a)
   const images = announcementImages(a)
-  const views = announcementViews(a)
 
   return (
     <div
@@ -952,10 +949,6 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <UserRound size="sm" className="shrink-0 text-text-muted" />
               <span className="truncate">{a.authorName || 'Admin'}</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 tabular-nums text-text-muted">
-              <Eye size="sm" className="shrink-0" />
-              {views == null ? '—' : views.toLocaleString()}
             </span>
           </div>
 
@@ -1274,7 +1267,6 @@ export default function AnnouncementsManager() {
         loading={loading}
         emptyMessage={emptyMessage}
         onView={setViewing}
-        onEdit={startEdit}
         onDelete={setConfirming}
         onPin={(a, pinned) =>
           toast.run(() => setPinned(a.id, pinned), {
