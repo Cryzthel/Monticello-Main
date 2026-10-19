@@ -10,6 +10,7 @@ import {
   IdCard,
   Info,
   Loader2,
+  Lock,
   ShieldCheck,
   User,
   X,
@@ -21,7 +22,9 @@ import { useResidentProfile } from '@/hooks/useResidentProfile'
 import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_LABELS,
+  REVIEW_LOCKED_HINT,
   approveResident,
+  isReviewLocked,
   rejectResident,
   residentTypeLabel,
 } from '@shared/lib/residents'
@@ -253,7 +256,13 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
   const images = documents.filter((d) => d.type === 'image')
   const pdfs = documents.filter((d) => d.type === 'pdf')
 
+  // Rejected is final: nothing here can decide a locked record again. The
+  // library and firestore.rules refuse it too; this keeps a stale click quiet.
+  const rejected = isReviewLocked(status)
+  const approved = status === RESIDENT_STATUS.verified
+
   async function decide(kind) {
+    if (rejected || busy) return
     setBusy(kind)
     setError('')
     try {
@@ -276,9 +285,6 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
     }
   }
 
-  const approved = status === RESIDENT_STATUS.verified
-  const rejected = status === RESIDENT_STATUS.rejected
-
   // Registered → reviewed, in the Incident details' timeline.
   const timeline = [
     {
@@ -291,7 +297,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
       ? {
           key: 'reviewed',
           label: approved ? 'Approved' : 'Rejected',
-          detail: current.reviewedByName ? `By ${current.reviewedByName}` : undefined,
+          detail: [current.reviewedByName && `By ${current.reviewedByName}`, rejected && 'Final, locked'].filter(Boolean).join(' · ') || undefined,
           stamp: formatDateTime(current.reviewedAt, ''),
           tone: approved ? 'done' : 'warning',
         }
@@ -339,7 +345,11 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
               </div>
               <p className="mt-0.5 break-all text-xs text-text-muted">{email || 'No email on file'}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Pill tone={STATUS_TONE[status] ?? 'warning'} icon={StatusIcon}>
+                <Pill
+                  tone={STATUS_TONE[status] ?? 'warning'}
+                  icon={rejected ? Lock : StatusIcon}
+                  title={rejected ? REVIEW_LOCKED_HINT : undefined}
+                >
                   {RESIDENT_STATUS_LABELS[status] ?? status}
                 </Pill>
                 {current.residentType ? (
@@ -476,7 +486,20 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
             </p>
           ) : null}
 
-          {rejecting ? (
+          {rejected ? (
+            <div role="status" className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex min-w-0 items-start gap-2 text-xs leading-relaxed text-text-muted">
+                <Lock size={14} className="mt-0.5 shrink-0 text-danger/80" aria-hidden="true" />
+                <span>
+                  <strong className="font-semibold text-text-secondary">Decision locked.</strong> Rejected applications
+                  cannot be approved; the resident must register again to be reviewed.
+                </span>
+              </p>
+              <Pill tone="danger" icon={Lock}>
+                Locked
+              </Pill>
+            </div>
+          ) : rejecting ? (
             <div className="space-y-3 py-1">
               <label htmlFor="resident-reject-reason" className="block text-[11px] font-medium text-text-muted">
                 Reason (optional, shown to the resident)
@@ -509,12 +532,12 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  disabled={Boolean(busy) || rejected}
+                  disabled={Boolean(busy)}
                   onClick={() => setRejecting(true)}
                   className={DANGER_BTN}
                 >
                   <X size="sm" aria-hidden="true" />
-                  {rejected ? 'Rejected' : 'Reject'}
+                  Reject
                 </button>
                 <button
                   type="button"

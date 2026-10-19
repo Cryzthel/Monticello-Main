@@ -2,7 +2,7 @@
 // lib/features/settings/services/account_approval_service.dart — same
 // `residents/{uid}` docs, same `verificationStatus` wire values — so an
 // account created on mobile is the exact record staff act on here.
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, runTransaction, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '@shared/lib/firebase'
 
 export const RESIDENT_STATUS = {
@@ -191,24 +191,70 @@ function identitySeed(resident) {
   }
 }
 
+// ── REJECTED IS FINAL ──────────────────────────────────────────────────────
+//
+// A rejected application is locked for good (2026-10-19, by request): it can
+// never be approved — by a stale row, a second tab, or a mis-click — and a
+// later review needs a fresh registration. Enforced three times over:
+//   • the UI never offers Approve on a rejected row (isReviewLocked);
+//   • writeReview re-reads the document inside a transaction and refuses to
+//     move a rejected record, so a row that went stale under another admin's
+//     decision cannot overwrite it;
+//   • firestore.rules refuses any write that takes a residents doc out of
+//     `rejected`, whatever client sends it.
+// Verified → Rejected stays allowed: revoking a verification is legitimate.
+
+export const REVIEW_LOCKED_HINT =
+  'Rejected applications are locked. The resident must register again to be reviewed.'
+
+/** True once a resident row (or a raw status) can no longer be decided. */
+export function isReviewLocked(residentOrStatus) {
+  const status = typeof residentOrStatus === 'string' ? residentOrStatus : residentOrStatus?.status
+  return normalizeResidentStatus(status) === RESIDENT_STATUS.rejected
+}
+
+/** Thrown when a decision would move a locked record; describeError prints its message. */
+export class ReviewLockedError extends Error {
+  constructor() {
+    super('This application was rejected and is locked. The resident must register again.')
+    this.name = 'ReviewLockedError'
+    this.code = 'resident/review-locked'
+  }
+}
+
 // Both review actions take the resident ROW, not just an id, so they can
-// merge-create for an account that has no residents/{uid} doc yet. Using
-// setDoc(merge) rather than updateDoc is the whole point: updateDoc rejects a
-// missing document, which is what previously forced the separate "import to
-// queue" step before anyone could be approved.
+// merge-create for an account that has no residents/{uid} doc yet. A merge
+// write rather than an update is the whole point: an update rejects a missing
+// document, which is what previously forced the separate "import to queue"
+// step before anyone could be approved.
+//
+// It runs in a transaction so the lock is checked against the SERVER's copy:
+// the row passed in may be a snapshot old enough to predate a rejection.
 function writeReview(resident, fields) {
   const id = resident.id ?? resident.uid
-  const reviewer = {
-    reviewedBy: auth.currentUser?.uid ?? '',
-    reviewedByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
-    reviewedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  }
-  const seed = resident.source === RESIDENT_SOURCE.profile ? identitySeed(resident) : {}
-  return setDoc(doc(db, 'residents', id), { ...seed, ...fields, ...reviewer }, { merge: true })
+  const ref = doc(db, 'residents', id)
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref)
+    const stored = snap.exists() ? snap.data() : null
+    // Nothing moves a rejected record — not an approval, and not a second
+    // rejection that would overwrite the first reviewer, time and reason.
+    if (stored && isReviewLocked(stored.verificationStatus ?? stored.status)) {
+      throw new ReviewLockedError()
+    }
+    const reviewer = {
+      reviewedBy: auth.currentUser?.uid ?? '',
+      reviewedByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }
+    // Seed identity only when the record does not exist yet.
+    const seed = !stored ? identitySeed(resident) : {}
+    tx.set(ref, { ...seed, ...fields, ...reviewer }, { merge: true })
+  })
 }
 
 export async function approveResident(resident) {
+  if (isReviewLocked(resident)) throw new ReviewLockedError()
   await writeReview(resident, {
     verificationStatus: RESIDENT_STATUS.verified,
     rejectionReason: '',
@@ -216,6 +262,7 @@ export async function approveResident(resident) {
 }
 
 export async function rejectResident(resident, reason) {
+  if (isReviewLocked(resident)) throw new ReviewLockedError()
   await writeReview(resident, {
     verificationStatus: RESIDENT_STATUS.rejected,
     // Surfaced verbatim on the resident's locked screen, so a blank reason

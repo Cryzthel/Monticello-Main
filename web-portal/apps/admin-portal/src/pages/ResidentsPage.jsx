@@ -1,6 +1,6 @@
 import { toast } from '@shared/lib/toast'
 import { useMemo, useState } from 'react'
-import { UserCheck, UserPlus, Info } from '@shared/icons'
+import { UserCheck, UserPlus, Info, Lock, UserRoundCheck, X } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
 import ResidentVerificationModal from '@/components/ResidentVerificationModal'
@@ -14,7 +14,9 @@ import { useResidents } from '@shared/hooks/useResidents'
 import {
   residentAddress,
   residentTypeLabel,
+  REVIEW_LOCKED_HINT,
   approveResident,
+  isReviewLocked,
   rejectResident,
   importResidentFromUser,
   RESIDENT_STATUS,
@@ -45,7 +47,17 @@ const TABS = [
 // Resident statuses reuse the shared badge so "Verified" here is the same
 // green as "Resolved" on an incident, and "Pending" the same amber — one
 // status colour language across both portals (see StatusControl.jsx).
+// Rejected is final (lib/residents.js, firestore.rules): it can never be
+// approved, so its badge carries a padlock rather than the status glyph, and
+// the row menu's Approve is locked, not just greyed.
 function ResidentStatusBadge({ status }) {
+  if (isReviewLocked(status)) {
+    return (
+      <span title={REVIEW_LOCKED_HINT} className="inline-flex">
+        <StatusBadge status={RESIDENT_STATUS_LABELS[status] ?? status} icon={Lock} />
+      </span>
+    )
+  }
   return <StatusBadge status={RESIDENT_STATUS_LABELS[status] ?? status} />
 }
 
@@ -286,8 +298,16 @@ export default function ResidentsPage() {
                           onResolve={() => runAction(() => rejectResident(resident, ''), { success: 'Application rejected', error: 'Could not reject the application' })}
                           dispatchLabel="Approve"
                           resolveLabel="Reject"
-                          dispatchDisabled={resident.status === RESIDENT_STATUS.verified}
-                          resolveDisabled={resident.status === RESIDENT_STATUS.rejected}
+                          dispatchIcon={UserRoundCheck}
+                          resolveIcon={X}
+                          dispatchIconClass="text-success"
+                          resolveIconClass="text-danger"
+                          dispatchDisabled={resident.status === RESIDENT_STATUS.verified || isReviewLocked(resident)}
+                          dispatchLocked={isReviewLocked(resident)}
+                          dispatchHint={isReviewLocked(resident) ? REVIEW_LOCKED_HINT : 'Already verified'}
+                          resolveDisabled={isReviewLocked(resident)}
+                          resolveLocked={isReviewLocked(resident)}
+                          resolveHint="Already rejected. The decision is final."
                         />
                       </td>
                     </tr>

@@ -77,6 +77,14 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
 
+    // The resident status as the portal normalises it (lib/residents.js
+    // normalizeResidentStatus): only the "rejected" half matters here.
+    function isRejectedResident(data) {
+      let raw = data.get('verificationStatus', data.get('status', 'pending'));
+      return raw is string
+        && raw.lower().matches('.*(reject|declin|denie|deny|refus|flag).*');
+    }
+
     // Signup / verification workflow. A resident reads & upserts their own
     // row (name/email/property fields); only staff may change
     // verificationStatus (see AccountApprovalService, resident.controller.js
@@ -97,10 +105,20 @@ service cloud.firestore {
       // leaving residents with no status/name/email and therefore missing or
       // blank on the admin Residents page. Self-approval is still blocked:
       // once a real status exists, the owner can only write that same value.
-      allow update: if isAdminStaff()
-        || (isOwner(userId)
-          && request.resource.data.get('verificationStatus', 'pending')
-             == resource.data.get('verificationStatus', 'pending'));
+      //
+      // REJECTED IS FINAL (2026-10-19). No write — admin or owner — may take a
+      // record out of `rejected`; a later review needs a fresh registration.
+      // The status is read the way the portal reads it (verificationStatus,
+      // else status; any reject/decline spelling), so a legacy label cannot
+      // slip past. Staying rejected is allowed, so the owner can still save
+      // their own profile fields. See web-portal/packages/shared/src/lib/
+      // residents.js (writeReview), which checks the same lock first.
+      allow update: if (!isRejectedResident(resource.data)
+          || isRejectedResident(request.resource.data))
+        && (isAdminStaff()
+          || (isOwner(userId)
+            && request.resource.data.get('verificationStatus', 'pending')
+               == resource.data.get('verificationStatus', 'pending')));
     }
 
     // Incidents: residents create and read their own reports, add evidence to
