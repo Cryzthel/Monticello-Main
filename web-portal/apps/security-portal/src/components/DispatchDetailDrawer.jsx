@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Timer,
   User,
-  UserRoundCog,
   X,
 } from '@shared/icons'
 import Pill from '@shared/components/Pill'
@@ -52,7 +51,6 @@ import {
   MediaEvidenceCard,
 } from '@shared/components/detail/IncidentDetailCards'
 import { incidentAddress, ticketCode } from '@shared/lib/incidentDetail'
-import UnitPicker from '@/components/dispatch/UnitPicker'
 import ResolveIncidentModal from '@/components/dispatch/ResolveIncidentModal'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { formatTime } from '@shared/lib/dates'
@@ -80,7 +78,7 @@ function stagePill(stage, ackExpired, claimedBy, onScene = false) {
   if (stage === 'none') return { text: 'Awaiting acknowledgement', tone: 'warning', pulse: true, icon: Radio }
   if (stage === 'dispatched')
     return ackExpired
-      ? { text: 'No acknowledgement', tone: 'danger', pulse: true, icon: Timer }
+      ? { text: 'Not en route yet', tone: 'danger', pulse: true, icon: Timer }
       : claimedBy
         ? { text: `Acknowledged by ${claimedBy}`, tone: 'info', pulse: false, icon: ShieldCheck }
         : { text: 'Acknowledged · ready to navigate', tone: 'info', pulse: true, icon: ShieldCheck }
@@ -120,7 +118,7 @@ function useAckClock(report) {
  *   │ ①──②──③  Verified by Security → Dispatched → Resolved               │
  *   ├──────────────────────────────────────────────────────────────────────┤
  *   │ MEDIA EVIDENCE · NOTES · REPORTER · TELEMETRY (GPS + Copy)           │
- *   │ ASSIGN A UNIT (before verification) · RESOLUTION · STATUS HISTORY    │
+ *   │ RESOLUTION (once closed)                                             │
  *   ├──────────────────────────────────────────────────────────────────────┤
  *   │ [Start navigation]                                                   │
  *   │ [ the ONE next action for this stage ]                     pinned    │
@@ -182,7 +180,7 @@ export default function DispatchDetailDrawer({ report, ...rest }) {
   return <ReportDetailsModal report={held} closing={closing} {...rest} />
 }
 
-function ReportDetailsModal({ report, closing, units = [], previewUid, onPreviewUnit, onClose, navigation = null }) {
+function ReportDetailsModal({ report, closing, units = [], onClose, navigation = null }) {
   const navigate = useNavigate()
   const { user, role } = useAuth()
   const uid = user?.uid
@@ -195,7 +193,6 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
   const [mediaLightbox, setMediaLightbox] = useState(false)
   /** The resolution grid has its own, because it shows different media. */
   const [resolutionLightbox, setResolutionLightbox] = useState(null)
-  const [reassigning, setReassigning] = useState(false)
   const [resolving, setResolving] = useState(false)
   /**
    * The Arrived-on-scene press: `checking` while a fresh GPS fix is taken,
@@ -208,7 +205,6 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
 
   useEffect(() => {
     setResolutionLightbox(null)
-    setReassigning(false)
     setResolving(false)
     setArrivalPrompt(null)
     setArrivalReason('')
@@ -225,7 +221,6 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
   // value, which reads the retired `on_site` / `investigating` as nothing.
   const stage = deriveDispatchStage(report)
   useEffect(() => {
-    if (stage !== 'dispatched') setReassigning(false)
     if (stage !== 'responding') setResolving(false)
   }, [stage])
 
@@ -239,29 +234,28 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [report, closing, anyDialog, busy, onClose])
 
-  const pickerOpen = stage === 'none' || (stage === 'dispatched' && reassigning)
-  const selectedUnit = pickerOpen && previewUid ? units.find((u) => u.uid === previewUid) ?? null : null
-  /** This officer as a unit, when they are on duty — for "Acknowledge". */
+  /**
+   * ── THE CLAIM BINDS TO THE SIGNED-IN ACCOUNT (2026-10-20, by request) ──
+   * The unit picker, "Acknowledge & assign" and Reassign are gone: the
+   * officer pressing Acknowledge IS the unit, because their session already
+   * says who they are. They no longer have to be on the on-duty unit list
+   * (open shift + telemetry) to take a call — the identity comes from the
+   * account, and the badge and position from their unit when it exists.
+   * Navigation opens by itself once the route plots (DashboardPage `autoNav`).
+   */
   const selfUnit = uid ? units.find((u) => u.uid === uid) ?? null : null
-
-  const dispatchTo = useCallback(
-    (unit) => {
-      if (!unit) return
-      // `unitLabel`, not the raw name: this string is shown as a receipt and
-      // an email-provisioned account would put an address in it.
-      const picked = unitLabel(unit).label
-      const label = stage === 'dispatched' ? `Reassigned to ${picked}` : unit.uid === uid ? 'Acknowledged' : `Acknowledged — ${picked} assigned`
-      run('dispatch', label, () => dispatchUnit(report, unit, { role })).then((ok) => {
-        if (ok) {
-          setReassigning(false)
-          onPreviewUnit?.(null)
-          // Taking the call yourself: navigation opens as soon as the route
-          // plots (DashboardPage `autoNav`).
-          if (unit.uid === uid) navigation?.onCommitted?.()
-        }
-      })
+  const claim = useCallback(
+    (label) => {
+      if (!uid) return
+      const me = {
+        uid,
+        name: selfUnit?.name || user?.displayName?.trim() || 'Security officer',
+        badgeNumber: selfUnit?.badgeNumber ?? '',
+        position: selfUnit?.position ?? null,
+      }
+      run('dispatch', label, () => dispatchUnit(report, me, { role })).then((ok) => ok && navigation?.onCommitted?.())
     },
-    [stage, run, report, role, onPreviewUnit, uid, navigation],
+    [uid, selfUnit, user?.displayName, run, report, role, navigation],
   )
 
   if (!report) return null
@@ -312,54 +306,15 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
   let hint = null
   const spinner = <Loader2 size="sm" className="animate-spin" aria-hidden="true" />
 
-  if (pickerOpen) {
-    const takeSelf = stage === 'none' && selfUnit && !selectedUnit
-    footer = (
-      <>
-        {stage === 'dispatched' ? (
-          <button type="button" onClick={() => { setReassigning(false); onPreviewUnit?.(null) }} className="btn btn-action btn-outline">
-            Cancel
-          </button>
-        ) : null}
-        {takeSelf ? (
-          // STEP 1, the fast path: an officer acknowledging a report they
-          // will attend themselves, without picking their own name from a list.
-          <button
-            type="button"
-            disabled={Boolean(busy)}
-            onClick={() => dispatchTo(selfUnit)}
-            className="btn btn-action btn-brand flex-1"
-          >
-            {busy === 'dispatch' ? spinner : <ShieldCheck size="sm" aria-hidden="true" />}
-            Acknowledge
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={!selectedUnit || Boolean(busy)}
-            onClick={() => dispatchTo(selectedUnit)}
-            className="btn btn-action btn-brand flex-1"
-          >
-            {busy === 'dispatch' ? spinner : stage === 'dispatched' ? <Radio size="sm" aria-hidden="true" /> : <ShieldCheck size="sm" aria-hidden="true" />}
-            {selectedUnit
-              ? `${stage === 'dispatched' ? 'Reassign to' : 'Acknowledge & assign'} ${selectedUnit.name}`
-              : stage === 'dispatched'
-                ? 'Reassign unit'
-                : 'Acknowledge & assign unit'}
-          </button>
-        )}
-      </>
-    )
-    hint =
-      stage === 'dispatched'
-        ? selectedUnit
-          ? `${selectedUnit.name} is alerted and has ${ACK_TIMEOUT_MS / 1000} s to acknowledge.`
-          : 'Pick an available unit above. Its road route previews on the map.'
-        : takeSelf
-          ? 'Takes the call. Start navigation comes next. Or pick another unit above.'
-          : selectedUnit
-            ? `Acknowledges the report and assigns it. ${selectedUnit.name} has ${ACK_TIMEOUT_MS / 1000} s to respond.`
-            : 'Pick an available unit above to acknowledge and assign the report.'
+  if (stage === 'none') {
+    // STEP 1: ACKNOWLEDGE — one press, bound to this account.
+    footer = uid ? (
+      <button type="button" disabled={Boolean(busy)} onClick={() => claim('Acknowledged')} className="btn btn-action btn-brand">
+        {busy === 'dispatch' ? spinner : <ShieldCheck size="sm" aria-hidden="true" />}
+        Acknowledge
+      </button>
+    ) : null
+    hint = 'Takes the call as yours. Start navigation comes next.'
   } else if (stage === 'dispatched') {
     status = (
       <div
@@ -372,24 +327,19 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
           <Timer size="sm" className="shrink-0" aria-hidden="true" />
         )}
         <span className="truncate">
-          {ack?.expired ? 'No acknowledgement' : claimedByOther ? `Acknowledged by ${guardLabel}` : 'Awaiting acknowledgement'} ·{' '}
+          {ack?.expired ? 'Not en route yet' : claimedByOther ? `Acknowledged by ${guardLabel}` : 'Acknowledged · start navigation'} ·{' '}
           <span className="font-mono tabular-nums">{formatStopwatch(ack?.waited ?? 0)}</span>
         </span>
       </div>
     )
     footer = (
       <>
-        {/* Reassign: a supervisor any time; anyone else only once the
-            holder has let the acknowledgement window lapse. */}
-        {!isMine && (canAct || ack?.expired) ? (
-          <button
-            type="button"
-            onClick={() => setReassigning(true)}
-            disabled={Boolean(busy)}
-            className={`btn btn-action ${ack?.expired ? 'btn-danger' : 'btn-outline'}`}
-          >
-            <UserRoundCog size="sm" aria-hidden="true" />
-            Reassign
+        {/* A call its holder has not moved on within the window can be
+            taken over — by whoever presses, bound to their account. */}
+        {!isMine && ack?.expired ? (
+          <button type="button" onClick={() => claim('Call taken over')} disabled={Boolean(busy)} className="btn btn-action btn-danger">
+            {busy === 'dispatch' ? spinner : <ShieldCheck size="sm" aria-hidden="true" />}
+            Take over this call
           </button>
         ) : null}
         {canAct ? (
@@ -415,8 +365,8 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
     hint = canAct
       ? `${isMine ? 'Opens turn-by-turn navigation to the call' : `Marks ${guardLabel} en route`}. Sends: “${nextMessage}”`
       : ack?.expired
-        ? `${guardLabel} has not acknowledged within ${ACK_TIMEOUT_MS / 1000} s, and every console has been alerted. Reassign the call to another unit.`
-        : `${guardLabel} has ${ACK_TIMEOUT_MS / 1000} s to acknowledge before every console is alerted.`
+        ? `${guardLabel} has not started en route within ${ACK_TIMEOUT_MS / 1000} s, and every console has been alerted. You can take the call over.`
+        : `${guardLabel} has ${ACK_TIMEOUT_MS / 1000} s to start en route before every console is alerted.`
   } else if (stage === 'responding' && !report.onSceneAt) {
     // STEP 3: ARRIVED ON SCENE. Resolve does not exist yet — it is locked
     // until arrival is registered, here and in firestore.rules. The geofence
@@ -457,7 +407,7 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
     hint = `Resolved at ${clock(report.resolvedAt)} by ${report.resolvedByName || 'security'}. It has left the live map.`
   }
 
-  if (claimedByOther && !pickerOpen) {
+  if (claimedByOther) {
     hint = `${hint} Read-only here — only ${guardLabel} or a supervisor can advance this call.`
   }
 
@@ -530,29 +480,8 @@ function ReportDetailsModal({ report, closing, units = [], previewUid, onPreview
 
         {/* ══ BODY ══ stacked cards, the only band that scrolls. */}
         {/* Two columns from `md`: what the resident sent beside who sent it
-            and where. The unit picker and the resolution span both. */}
+            and where. The resolution spans both. */}
         <div className="custom-scrollbar grid min-h-0 flex-1 grid-cols-1 content-start gap-4 overflow-y-auto overscroll-contain p-4 sm:p-5 md:grid-cols-2">
-          {pickerOpen ? (
-            <DetailCard
-              className="md:col-span-2"
-              compact
-              icon={Radio}
-              title={stage === 'dispatched' ? `Reassign from ${guardLabel}` : 'Acknowledge & assign a unit'}
-              action={
-                <Pill tone="success">
-                  {units.filter((u) => u.state === 'available').length} available
-                </Pill>
-              }
-            >
-              <UnitPicker
-                units={units}
-                value={previewUid}
-                onChange={(next) => onPreviewUnit?.(next)}
-                excludeUid={stage === 'dispatched' ? report.assignedGuardUid : null}
-                disabled={Boolean(busy)}
-              />
-            </DetailCard>
-          ) : null}
 
           {/* EVIDENCE & NOTES — one card (2026-10-19, by request): what the
               resident showed and what they said belong together. */}

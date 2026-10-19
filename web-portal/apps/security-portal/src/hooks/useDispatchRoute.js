@@ -49,8 +49,6 @@ const IDLE = { phase: 'idle', route: null, error: null, originSource: null, tone
  * Which unit:
  *   the call's assigned officer, while DISPATCHED or RESPONDING. Once on site
  *                there is nothing left to route.
- *   the unit the dispatcher is previewing in the picker, before dispatch. This
- *                shows how far each candidate really is by road.
  *
  * Where it starts: the unit's live telemetry. A unit with no position falls
  * back to the configured guardhouse (VITE_GUARDHOUSE_LNGLAT), flagged, because
@@ -60,7 +58,7 @@ const IDLE = { phase: 'idle', route: null, error: null, originSource: null, tone
  * `tone` is 'live' once the officer has acknowledged and is moving, and
  * 'preview' before that. The map draws them emerald and blue.
  */
-export function useDispatchRoute({ incident, units, previewUid, profile, offRoute = false, selfFix = null }) {
+export function useDispatchRoute({ incident, units, profile, offRoute = false, selfFix = null }) {
   const [state, setState] = useState(IDLE)
   const lastRef = useRef({ key: null, origin: null, at: 0 })
   const controllerRef = useRef(null)
@@ -91,9 +89,6 @@ export function useDispatchRoute({ incident, units, previewUid, profile, offRout
   if (incident && (stage === 'dispatched' || stage === 'responding') && incident.assignedGuardUid) {
     unitUid = incident.assignedGuardUid
     tone = stage === 'responding' ? 'live' : 'preview'
-  } else if (incident && stage === 'none' && previewUid) {
-    unitUid = previewUid
-    tone = 'preview'
   }
   const unit = unitUid ? units.find((u) => u.uid === unitUid) ?? null : null
   const hasPin = typeof incident?.lng === 'number' && typeof incident?.lat === 'number'

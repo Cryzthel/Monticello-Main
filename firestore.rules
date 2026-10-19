@@ -756,9 +756,12 @@ service cloud.firestore {
     // Online / last-seen per security account, copied from the Realtime
     // Database `presence/{uid}` node by the onPresenceWrite function (RTDB
     // rules cannot see who is an admin, Firestore rules can). Server-written
-    // only; read by the admin roster and by the officer themself.
+    // only. Read by the admin roster, by the officer themself, and — since
+    // 2026-10-20 — by every security console, whose dispatch map draws only
+    // ONLINE officers. Online / last seen / online since: nothing here that
+    // the guardhouse could not already infer from guard_telemetry.
     match /staff_presence/{uid} {
-      allow read: if isAdminStaff() || isOwner(uid);
+      allow read: if isStaff() || isOwner(uid);
       allow write: if false;
     }
 

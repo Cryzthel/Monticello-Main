@@ -40,7 +40,6 @@ export default function DashboardPage() {
   const { user, role } = useAuth()
   const [selectedId, setSelectedId] = useState(null)
   const [selectedPanicId, setSelectedPanicId] = useState(null)
-  const [previewUid, setPreviewUid] = useState(null)
   /**
    * ── THE ROUTING PROFILE IS FIXED, BECAUSE ITS CONTROL IS GONE ───────────
    *
@@ -291,7 +290,6 @@ export default function DashboardPage() {
      * it for the one unit that always has a live position.
      */
     units: liveUnits,
-    previewUid: routeIncident?.id === selectedId ? previewUid : null,
     profile,
     offRoute: offRouteRef.current,
     selfFix,
@@ -493,6 +491,19 @@ export default function DashboardPage() {
           },
     )
   }, [liveUnits, progress, route.unit?.uid])
+
+  /**
+   * ONLINE OFFICERS ONLY on the map (2026-10-20, by request). `online` is
+   * live presence (useGuardUnits); an officer with an open shift whose
+   * console is closed is not drawn, so every pin is a responder who is
+   * actually there. This console's own officer is always drawn — it is
+   * online by definition, even before its presence mirror lands. The unit
+   * list itself is untouched: routing and arrival still read every unit.
+   */
+  const visibleUnits = useMemo(
+    () => mapUnits.filter((unit) => unit.online || unit.uid === selfUid),
+    [mapUnits, selfUid],
+  )
 
   const routeGeojson = useMemo(
     () =>
@@ -700,11 +711,9 @@ export default function DashboardPage() {
   // to say which call.
   const handleMapSelect = useCallback((incident) => {
     setSelectedId(incident.id)
-    setPreviewUid(null)
   }, [])
   const closeDetail = useCallback(() => {
     setSelectedId(null)
-    setPreviewUid(null)
   }, [])
 
   /**
@@ -875,8 +884,7 @@ export default function DashboardPage() {
       const report = reports.find((r) => r.id === incidentFocusId)
       if (!report) return
       setSelectedId(report.id)
-      setPreviewUid(null)
-      if (typeof report.lat === 'number') {
+        if (typeof report.lat === 'number') {
         setFocus({ id: `incident:${report.id}:${Date.now()}`, lat: report.lat, lng: report.lng })
       }
       setSearchParams({}, { replace: true })
@@ -921,8 +929,13 @@ export default function DashboardPage() {
           The rail renders nothing at all when there are no alerts, so the map
           is full-bleed in the state the console is in almost all of the
           time. */}
-      <div className="flex h-full min-h-[20rem] flex-col lg:flex-row">
-        <div className="min-h-0 min-w-0 flex-1">
+      {/* ONE GUTTER (2026-10-20, by request): from `lg` the map and the SOS
+          rail are two framed cards with the same 12px gap between them and
+          around them. The map used to run edge-to-edge while the rail floated
+          12px in from three edges, so the two never lined up. Below `lg` the
+          map stays full-bleed and the rail stacks under it. */}
+      <div className="flex h-full min-h-[20rem] flex-col lg:flex-row lg:gap-3 lg:p-3">
+        <div className="min-h-0 min-w-0 flex-1 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-hairline dark:lg:border-zinc-800/80">
         <IncidentMap
           variant="full"
           showStatusFilter={false}
@@ -931,7 +944,7 @@ export default function DashboardPage() {
           onSelectIncident={handleMapSelect}
           panicAlerts={panicAlerts}
           onSelectPanicAlert={(alert) => setSelectedPanicId(alert.id)}
-          units={mapUnits}
+          units={visibleUnits}
           /* A unit marker click takes the camera to that unit — the page's
              own promise below ("a dispatcher who wants to watch a unit clicks
              its marker"), which had no handler behind it: the marker showed a
@@ -1012,8 +1025,6 @@ export default function DashboardPage() {
            from the last one Firestore echoed back — the same reason the route
            takes it. One list, one answer about where everybody is. */
         units={liveUnits}
-        previewUid={previewUid}
-        onPreviewUnit={setPreviewUid}
         onClose={closeDetail}
         navigation={drawerNavigation}
       />

@@ -85,6 +85,21 @@ export function useGuardUnits(incidents, target = null) {
   const { data: rawShifts, loading: shiftsLoading } = useLiveCollection(shiftsQuery)
   const { data: telemetry } = useLiveCollection(telemetryQuery)
 
+  /**
+   * ── PRESENCE: WHO IS ACTUALLY ONLINE (2026-10-20) ─────────────────────
+   * `staff_presence/{uid}` is the server's mirror of each console's live
+   * Realtime Database connection (functions/presence.js) — the same Online
+   * the Admin roster shows. The map draws ONLY online officers: a guard who
+   * closed the console keeps an open shift and a recent fix, and a pin for
+   * them read as an available responder who was not there.
+   *
+   * If the presence read fails (an older ruleset that did not let guards
+   * read it), `presenceKnown` is false and the map falls back to telemetry
+   * freshness rather than hiding everybody.
+   */
+  const presenceQuery = useMemo(() => collection(db, 'staff_presence'), [])
+  const { data: presence, loading: presenceLoading, error: presenceError } = useLiveCollection(presenceQuery)
+
   // Freshness is measured against the clock, so it has to tick without a
   // Firestore event. 5 s is fine enough for "12 s ago" to be honest.
   const [now, setNow] = useState(() => Date.now())
@@ -101,6 +116,9 @@ export function useGuardUnits(incidents, target = null) {
       if (!known || (shift.timeIn && known.timeIn && shift.timeIn > known.timeIn)) byUid.set(shift.guardUid, shift)
     })
     const telemetryByUid = new Map(telemetry.map((t) => [t.id, t]))
+    const presenceByUid = new Map(presence.map((p) => [p.id, p.online === true]))
+    // Until the first presence snapshot (or if it is refused), telemetry decides.
+    const presenceKnown = !presenceError && !presenceLoading
     const assignmentByUid = new Map()
     incidents.forEach((incident) => {
       if (incident.assignedGuardUid && isActiveStage(incident.dispatchStage)) {
@@ -119,6 +137,7 @@ export function useGuardUnits(incidents, target = null) {
       const position = raw && ageMs != null && ageMs < HIDE_AFTER_MS ? raw : null
       const staleAfter = t?.mode === 'active' ? STALE_AFTER_MS.active : STALE_AFTER_MS.idle
       const lastSeenMs = toMillis(t?.updatedAt)
+      const fresh = Boolean(t?.onDuty) && lastSeenMs != null && now - lastSeenMs < staleAfter
 
       return {
         uid: shift.guardUid,
@@ -135,26 +154,14 @@ export function useGuardUnits(incidents, target = null) {
         mode: t?.mode ?? 'off',
         locationError: t?.device?.locationError ?? null,
         reporting: Boolean(t?.onDuty),
+        /** Connected right now (presence), or — if presence is unreadable — reporting fresh telemetry. */
+        online: presenceKnown ? presenceByUid.get(shift.guardUid) === true : fresh,
         lastSeenAgoMs: lastSeenMs ? Math.max(0, now - lastSeenMs) : null,
         distanceM:
           position && target ? Math.round(distanceMeters([position.lng, position.lat], target)) : null,
       }
     })
-  }, [rawShifts, telemetry, incidents, target, now])
+  }, [rawShifts, telemetry, presence, presenceLoading, presenceError, incidents, target, now])
 
   return { units, loading: shiftsLoading }
-}
-
-/**
- * Units in the order a dispatcher wants to choose from: available first,
- * nearest first, units with no position after units with one.
- */
-export function rankUnits(units) {
-  const order = { available: 0, assigned: 1, responding: 2, on_scene: 3 }
-  return [...units].sort(
-    (a, b) =>
-      order[a.state] - order[b.state] ||
-      (a.distanceM ?? Infinity) - (b.distanceM ?? Infinity) ||
-      a.name.localeCompare(b.name),
-  )
 }

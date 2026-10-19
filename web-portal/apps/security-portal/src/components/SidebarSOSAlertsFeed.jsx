@@ -287,7 +287,7 @@ export default function SidebarSOSAlertsFeed({ onOpenAlert, muted, onToggleMute,
   return (
     <aside
       aria-label="SOS alerts"
-      className={`relative flex w-full shrink-0 flex-col overflow-hidden border-b border-hairline bg-base-900/95 shadow-[0_0_40px_rgba(0,0,0,0.25)] backdrop-blur-3xl lg:my-3 lg:mr-3 lg:w-96 lg:rounded-2xl lg:border dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.8)] ${
+      className={`relative flex w-full shrink-0 flex-col overflow-hidden border-b border-hairline bg-base-900/95 shadow-[0_0_40px_rgba(0,0,0,0.25)] backdrop-blur-3xl lg:w-96 lg:rounded-2xl lg:border dark:border-zinc-800/80 dark:bg-zinc-950/95 dark:shadow-[0_0_40px_rgba(0,0,0,0.8)] ${
         open ? 'max-h-[45vh] lg:max-h-none' : ''
       }`}
     >

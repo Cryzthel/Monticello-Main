@@ -78,7 +78,11 @@ export default function DispatchWatchdog() {
         if (!firstSeenRef.current.has(booking)) firstSeenRef.current.set(booking, Date.now())
         const dispatchedAt = toMillis(incident.dispatchedAt) ?? firstSeenRef.current.get(booking)
 
-        if (incident.assignedGuardUid === uid && !alerted.has(`assigned:${booking}`)) {
+        // Booked to this officer BY SOMEONE ELSE. Since 2026-10-20 a claim
+        // binds the call to whoever pressed Acknowledge, so a call this
+        // officer just took themselves is not news and gets no alarm.
+        const selfClaimed = incident.dispatchedByUid === uid
+        if (incident.assignedGuardUid === uid && !selfClaimed && !alerted.has(`assigned:${booking}`)) {
           alerted.add(`assigned:${booking}`)
           playAlert('critical')
         }
