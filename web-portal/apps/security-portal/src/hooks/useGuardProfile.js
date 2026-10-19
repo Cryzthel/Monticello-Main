@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
+import { doc } from 'firebase/firestore'
 import { db } from '@shared/lib/firebase'
 import { useAuth } from '@shared/auth/AuthContext'
 
@@ -43,7 +44,7 @@ export function useGuardProfile() {
     }
 
     setLoading(true)
-    const unsubscribe = onSnapshot(
+    const unsubscribe = subscribeWithRetry(
       doc(db, 'staff_accounts', uid),
       (snap) => {
         setProfile(snap.exists() ? { id: snap.id, ...snap.data() } : null)

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVoiceGuidance } from '@/hooks/useVoiceGuidance'
 import { useSearchParams } from 'react-router-dom'
-import { collection, doc, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, doc, query, where } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import IncidentMap from '@shared/components/IncidentMap'
 import AppShell from '@/layouts/AppShell'
 import GuardHeaderActions from '@/components/GuardHeaderActions'
@@ -151,7 +152,7 @@ export default function DashboardPage() {
       setSelectedDoc(null)
       return undefined
     }
-    return onSnapshot(
+    return subscribeWithRetry(
       doc(db, 'incidents', selectedId),
       (snap) => setSelectedDoc(snap.exists() ? mapIncidentDoc({ id: snap.id, ...snap.data() }) : null),
       (err) => console.error('Selected incident listener failed', err),

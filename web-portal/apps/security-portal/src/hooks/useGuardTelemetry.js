@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
+import { collection, doc, getDoc, query, where } from 'firebase/firestore'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
@@ -145,7 +146,7 @@ export function useGuardTelemetry() {
   const [deferring, setDeferring] = useState(false)
   useEffect(() => {
     if (!uid) return undefined
-    return onSnapshot(
+    return subscribeWithRetry(
       doc(db, 'guard_telemetry', uid),
       (snap) => {
         const data = snap.data()

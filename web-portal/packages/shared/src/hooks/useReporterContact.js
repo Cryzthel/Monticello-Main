@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { doc, onSnapshot } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
+import { doc } from 'firebase/firestore'
 import { db } from '@shared/lib/firebase'
 
 // Subscribed on demand (not joined into mapIncidentDoc) — most incident list
@@ -22,7 +23,7 @@ export function useReporterContact(reporterUid) {
     }
 
     setLoading(true)
-    return onSnapshot(
+    return subscribeWithRetry(
       doc(db, 'users', reporterUid),
       (snap) => {
         setContact(snap.exists() ? snap.data() : null)

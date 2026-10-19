@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore'
+import { collection, query, orderBy, limit } from 'firebase/firestore'
 import { db } from '@shared/lib/firebase'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import { playAlert } from '@shared/lib/alertSound'
 
 /**
@@ -32,8 +33,13 @@ export function useIncidentAlerts({ enabled = true } = {}) {
 
   // Newest-first with a cap: this listener exists to announce what just
   // happened, so it has no reason to stream the entire history.
+  //
+  // Ordered by `createdAt` — the SERVER's write time — not `reportedAt`. The
+  // mobile app files `reportedAt` as the oldest attached photo's camera time,
+  // so a report sent with a photo taken this morning sorted below the newest
+  // 25 and arrived with no alert at all. `createdAt` is when it reached us.
   const incidentsQuery = useMemo(
-    () => query(collection(db, 'incidents'), orderBy('reportedAt', 'desc'), limit(25)),
+    () => query(collection(db, 'incidents'), orderBy('createdAt', 'desc'), limit(25)),
     [],
   )
 
@@ -43,7 +49,7 @@ export function useIncidentAlerts({ enabled = true } = {}) {
     primed.current = false
     lastStatus.current = new Map()
 
-    const unsubscribe = onSnapshot(
+    const unsubscribe = subscribeWithRetry(
       incidentsQuery,
       (snapshot) => {
         if (!primed.current) {
@@ -92,6 +98,9 @@ export function useIncidentAlerts({ enabled = true } = {}) {
         // Surfaced rather than swallowed: a permission-denied here means the
         // signed-in account isn't staff, which is worth knowing.
         console.error('Incident alert listener failed', error)
+        // Re-attached after a back-off; its first snapshot re-primes rather
+        // than announcing every incident as new.
+        primed.current = false
       },
     )
 

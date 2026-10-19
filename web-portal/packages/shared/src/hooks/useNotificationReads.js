@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
+import { doc, setDoc } from 'firebase/firestore'
 import { db } from '@shared/lib/firebase'
 import { PORTAL, portalKey } from '@shared/config/portal'
 
@@ -50,7 +51,7 @@ export function useNotificationReads(uid) {
 
   useEffect(() => {
     if (!uid) return undefined
-    return onSnapshot(
+    return subscribeWithRetry(
       doc(db, 'users', uid),
       (snap) => {
         const stored = snap.data()?.notificationState?.[PORTAL]

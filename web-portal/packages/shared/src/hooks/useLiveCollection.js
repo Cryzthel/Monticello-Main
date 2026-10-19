@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { onSnapshot } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 
 // Subscribes to a Firestore query and keeps `data` in sync in real time.
 // Both the Security triage panel and the Admin heatmap read reports through this hook.
+// A listener that errors is re-attached with a back-off (see subscribeWithRetry),
+// so one refused read no longer freezes the list for the rest of the session.
 export function useLiveCollection(query) {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
@@ -12,10 +14,11 @@ export function useLiveCollection(query) {
     if (!query) return undefined
 
     setLoading(true)
-    const unsubscribe = onSnapshot(
+    return subscribeWithRetry(
       query,
       (snapshot) => {
         setData(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })))
+        setError(null)
         setLoading(false)
       },
       (snapshotError) => {
@@ -23,8 +26,6 @@ export function useLiveCollection(query) {
         setLoading(false)
       },
     )
-
-    return unsubscribe
   }, [query])
 
   return { data, loading, error }

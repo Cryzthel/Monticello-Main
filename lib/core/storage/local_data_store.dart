@@ -20,6 +20,23 @@ class LocalDataStore extends ChangeNotifier {
   StreamSubscription? _incidentsSub;
   StreamSubscription? _announcementsSub;
 
+  /// Re-attaches the live listeners after an error. Firestore ENDS a
+  /// snapshot stream when it reports one, so a single refused or dropped
+  /// read used to freeze the resident's report list — a guard's status
+  /// change then never arrived until pull-to-refresh. Backs off 2 s, 4 s,
+  /// 8 s … to 30 s; the first good snapshot resets it.
+  Timer? _relistenTimer;
+  int _relistenAttempt = 0;
+
+  void _scheduleRelisten() {
+    if (_relistenTimer?.isActive ?? false) return;
+    final seconds = (2 << _relistenAttempt).clamp(2, 30);
+    _relistenAttempt = (_relistenAttempt + 1).clamp(0, 5);
+    _relistenTimer = Timer(Duration(seconds: seconds), () {
+      if (FirebaseAuth.instance.currentUser != null) startListening();
+    });
+  }
+
   // A report the user just submitted, shown instantly at the top of the
   // list while the write is still in flight to Firestore. Cleared
   // automatically once the live snapshot listener confirms the matching
@@ -101,6 +118,7 @@ class LocalDataStore extends ChangeNotifier {
         .orderBy('reportedAt', descending: true)
         .snapshots()
         .listen((snapshot) {
+      _relistenAttempt = 0;
       _incidents = snapshot.docs.map((d) => Incident.fromFirestore(d)).toList();
       _markIncidentsAnswered();
       final pending = _optimisticIncident;
@@ -114,6 +132,7 @@ class LocalDataStore extends ChangeNotifier {
       // offers pull-to-refresh; a skeleton would offer nothing and never end.
       _markIncidentsAnswered();
       notifyListeners();
+      _scheduleRelisten();
     });
 
     _announcementsSub?.cancel();
@@ -131,10 +150,14 @@ class LocalDataStore extends ChangeNotifier {
       // An error is an answer here too — see the incidents listener.
       _announcementsAnswered = true;
       notifyListeners();
+      _scheduleRelisten();
     });
   }
 
   void stopListening() {
+    _relistenTimer?.cancel();
+    _relistenTimer = null;
+    _relistenAttempt = 0;
     _incidentsSub?.cancel();
     _announcementsSub?.cancel();
     _incidentsSub = null;

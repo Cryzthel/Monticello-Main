@@ -1,4 +1,5 @@
-import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import { auth, db } from '@shared/lib/firebase'
 import {
   SETTINGS_COLLECTION,
@@ -21,7 +22,7 @@ const settingsRef = () => doc(db, SETTINGS_COLLECTION, SETTINGS_DOC)
 /** Subscribe the store to the settings document. Returns the unsubscribe. */
 export function watchSettings() {
   commitSettings({ values: undefined, status: 'loading' })
-  return onSnapshot(
+  return subscribeWithRetry(
     settingsRef(),
     (snap) => {
       const raw = snap.exists() ? snap.data() : null

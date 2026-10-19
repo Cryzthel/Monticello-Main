@@ -54,8 +54,12 @@ export default function NotificationBell({ detailPath, historyPath = '/history',
   const [position, setPosition] = useState(null)
   const [filter, setFilter] = useState('all')
 
+  // By `createdAt`, the server's write time, like useIncidentAlerts and like
+  // the feed itself (notifications.js incidentTime). `reportedAt` is the
+  // phone's evidence capture time, so a report sent now with a photo taken
+  // this morning ranked below the newest 25 and never reached the bell.
   const incidentsQuery = useMemo(
-    () => query(collection(db, 'incidents'), orderBy('reportedAt', 'desc'), limit(25)),
+    () => query(collection(db, 'incidents'), orderBy('createdAt', 'desc'), limit(25)),
     [],
   )
   const { data: incidents } = useLiveCollection(incidentsQuery)
