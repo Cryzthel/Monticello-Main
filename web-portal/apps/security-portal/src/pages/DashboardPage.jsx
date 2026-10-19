@@ -1028,7 +1028,11 @@ export default function DashboardPage() {
           /* THE ROUTE PANEL: a bottom sheet on a phone, a card up here on a
              console. */
           sheet={
-            route.phase === 'idle' || !routeAcknowledged ? null : navigating && navModalOpen ? (
+            // The navigation card (directions, ETA / distance, toggles) appears
+            // only once a session is running — started by "Start navigation"
+            // in the call's drawer (2026-10-19, by request). Before that the
+            // map stays clear; the drawer is where the officer decides.
+            route.phase === 'idle' || !routeAcknowledged || !navigating ? null : navModalOpen ? (
               <NavigationModal
                 route={route}
                 progress={progress}

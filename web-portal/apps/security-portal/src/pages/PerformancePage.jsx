@@ -77,7 +77,7 @@ export default function PerformancePage() {
         ) : (
           <div className="kpi-grid">
             <KpiCard
-              label="Active calls"
+              label="Active reports"
               value={metrics.activeCount}
               helpText="Every report not yet resolved"
             />

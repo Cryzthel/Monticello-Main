@@ -67,6 +67,9 @@ const THEME_OPTIONS = [
  */
 const SECTIONS = ['profile', 'security', 'notifications', 'system', 'duty-log']
 
+/** Shortest gap between two preview chimes while the volume slider is dragged. */
+const PREVIEW_GAP_MS = 180
+
 /** The old /settings/<category> sub-pages, sent to the card that holds them now. */
 const LEGACY_SLUGS = {
   account: 'profile',
@@ -363,6 +366,22 @@ function NotificationsCard({ settings }) {
   const adminPercent = Math.round((adminVolume ?? 0) * 100)
   const muted = value.alertsMuted
 
+  /**
+   * ── HEAR THE LEVEL WHILE CHOOSING IT (2026-10-19, by request) ──────────
+   * Dragging plays a short chime at the level under the thumb, through the
+   * same Web Audio synth the alarms use (lib/alertSound), so what is heard is
+   * what will ring. Throttled to one chime per PREVIEW_GAP_MS so a drag does
+   * not stack tones, and always once more at the value it lands on. The first
+   * press on the slider is the user gesture that unlocks audio.
+   */
+  const lastPreview = useRef(0)
+  const previewAt = (level, force = false) => {
+    const now = Date.now()
+    if (!force && now - lastPreview.current < PREVIEW_GAP_MS) return
+    lastPreview.current = now
+    playAlert('report', { volume: level })
+  }
+
   async function testTone() {
     try {
       // Browsers hold audio until a gesture; this press is that gesture.
@@ -410,7 +429,14 @@ function NotificationsCard({ settings }) {
               step={5}
               value={percent}
               disabled={muted || settings.saving}
-              onChange={(event) => settings.set('sirenVolume', Number(event.target.value) / 100)}
+              onPointerDown={() => unlockAlertSound()}
+              onKeyDown={() => unlockAlertSound()}
+              onChange={(event) => {
+                const level = Number(event.target.value) / 100
+                settings.set('sirenVolume', level)
+                previewAt(level)
+              }}
+              onPointerUp={(event) => previewAt(Number(event.currentTarget.value) / 100, true)}
               className="h-1.5 flex-1 cursor-pointer accent-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             />
             <span className="w-10 shrink-0 text-right text-sm font-medium tabular-nums text-text-secondary">

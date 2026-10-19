@@ -6,6 +6,7 @@ import { useNow } from '@shared/hooks/useNow'
 import { formatDate, formatDateTime, formatTime } from '@shared/lib/dates'
 import { ACCOUNT_STATUS, STATUS_LABELS, postLabel } from '@/lib/securityAccounts'
 import Pill from '@shared/components/Pill'
+import { useStaffAvatar } from '@shared/lib/staffAvatar'
 import { DetailCard, DetailField } from '@shared/components/detail/DetailCard'
 
 /**
@@ -78,6 +79,8 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
   const open = Boolean(account)
   useDialogFocus({ open, containerRef: panelRef })
   const now = useNow()
+  // Live: a guard's new Settings photo appears here without a refresh.
+  const photoUrl = useStaffAvatar(account?.uid ?? null)
 
   useEffect(() => {
     if (!open) return undefined
@@ -119,12 +122,20 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
         {/* ── HEADER ───────────────────────────────────────────────────── */}
         <header className="flex shrink-0 items-center justify-between gap-4 border-b border-hairline px-6 py-5 sm:px-8 sm:py-6">
           <div className="flex min-w-0 items-center gap-4 sm:gap-5">
-            <span
-              aria-hidden="true"
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-xl font-bold text-brand-500 shadow-inner"
-            >
-              {initialsOf(name)}
-            </span>
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt=""
+                className="h-14 w-14 shrink-0 rounded-full border border-brand-500/30 object-cover shadow-inner"
+              />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-xl font-bold text-brand-500 shadow-inner"
+              >
+                {initialsOf(name)}
+              </span>
+            )}
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
               <h2 id="account-inspector-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
                 {name}

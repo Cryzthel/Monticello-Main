@@ -12,7 +12,7 @@ import StatusBadge from '@shared/components/StatusBadge'
 import OverflowMenu from '@shared/components/OverflowMenu'
 import Tooltip from '@shared/components/Tooltip'
 import { SkeletonTableRows } from '@shared/components/Skeleton'
-import ResidentAvatar from '@/components/ResidentAvatar'
+import StaffAvatar from '@/components/StaffAvatar'
 import { relativeTime } from '@shared/lib/notifications'
 import { ACCOUNT_STATUS, STATUS_LABELS, STATUS_TONES } from '@/lib/securityAccounts'
 import { formatDate, formatDateTime, formatInZone, formatTime } from '@shared/lib/dates'
@@ -249,7 +249,7 @@ export default function SecurityDirectoryTable({
                   >
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-3">
-                        <ResidentAvatar name={account.name || account.email} />
+                        <StaffAvatar uid={account.uid} name={account.name || account.email} />
                         <div className="min-w-0">
                           <p className="truncate font-medium text-text-primary">
                             {account.name || 'Unnamed officer'}
