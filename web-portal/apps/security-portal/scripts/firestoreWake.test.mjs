@@ -108,4 +108,13 @@ await check('uninstall removes every listener', async () => {
   assert.deepStrictEqual(r.calls, [])
 })
 
+await check('reconnect() restarts on demand, and shares the in-flight restart', async () => {
+  const r = rig()
+  const a = r.uninstall.reconnect('stuck-write')
+  const b = r.uninstall.reconnect('stuck-write')
+  assert.strictEqual(a, b)
+  await a
+  assert.deepStrictEqual(r.calls, ['disable', 'enable'])
+})
+
 console.log(`\n${passed} passed, ${process.exitCode ? 'failures above' : '0 failed'}`)

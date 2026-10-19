@@ -119,7 +119,12 @@ function createFirestore() {
 export const db = createFirestore()
 // Restart the live stream after sleep, a frozen tab or a dropped network,
 // so a laptop console never sits on a dead stream (lib/firestoreWake.js).
-installFirestoreWake(db)
+const firestoreWake = installFirestoreWake(db)
+/**
+ * Restart the Firestore streams now (single-flight; never rejects). Pending
+ * writes stay queued and are re-sent on the fresh stream.
+ */
+export const reconnectFirestore = (reason = 'manual') => firestoreWake.reconnect?.(reason) ?? Promise.resolve()
 export const storage = getStorage(app)
 
 /**

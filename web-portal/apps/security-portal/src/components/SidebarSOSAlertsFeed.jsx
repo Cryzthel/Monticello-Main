@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Loader2, MapPin, Volume2, VolumeX } from '@shared/icons'
 import { useLivePanicAlerts } from '@/components/PanicAlertProvider'
 import { acknowledgePanicAlert } from '@shared/lib/panicAlerts'
+import { settleWrite } from '@shared/lib/writeSync'
 import { formatDate, formatDateTime, zonedDayNumber } from '@shared/lib/dates'
 import { useAuth } from '@shared/auth/AuthContext'
 import { distanceMeters, formatDistance } from '@/lib/directions'
@@ -243,8 +244,15 @@ export default function SidebarSOSAlertsFeed({ onOpenAlert, muted, onToggleMute,
     async (alert) => {
       setBusyId(alert.id)
       try {
-        await acknowledgePanicAlert(alert.id, user?.displayName)
-        toast.success('SOS acknowledged', { description: 'Every console now shows it as attended.' })
+        const outcome = await settleWrite(acknowledgePanicAlert(alert.id, user?.displayName), {
+          onLateError: () =>
+            toast.error('The server refused the acknowledgement', { description: 'The alert is still open.' }),
+        })
+        if (outcome === 'queued') {
+          toast.warning('SOS acknowledged on this device', { description: 'It will sync when the connection returns.' })
+        } else {
+          toast.success('SOS acknowledged', { description: 'Every console now shows it as attended.' })
+        }
       } catch (err) {
         // The alert stays open, which is the safe failure, but the officer is TOLD.
         console.warn('Panic alert update failed', err)

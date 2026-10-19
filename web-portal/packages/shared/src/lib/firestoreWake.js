@@ -24,7 +24,10 @@ export const WAKE_AFTER_HIDDEN_MS = 20_000
  * (they live in the write queue, not the stream). A quick tab switch does
  * nothing.
  *
- * Returns an uninstall function. `deps` is for tests.
+ * Returns an uninstall function, which also carries `reconnect(reason)` —
+ * the same single-flight restart, for a caller with its own evidence that the
+ * stream is stuck (useStageAction: a write the server has not confirmed
+ * while the console is online). `deps` is for tests.
  */
 export function installFirestoreWake(db, deps = {}) {
   const {
@@ -80,10 +83,12 @@ export function installFirestoreWake(db, deps = {}) {
   win.addEventListener('pageshow', onPageShow)
   win.addEventListener('online', onOnline)
 
-  return () => {
+  const uninstall = () => {
     doc.removeEventListener('visibilitychange', onVisibility)
     doc.removeEventListener('resume', onResume)
     win.removeEventListener('pageshow', onPageShow)
     win.removeEventListener('online', onOnline)
   }
+  uninstall.reconnect = reconnect
+  return uninstall
 }

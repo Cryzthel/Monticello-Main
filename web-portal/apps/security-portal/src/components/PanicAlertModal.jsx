@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Siren, ShieldCheck, MapPin, MapPinOff, Clock, Navigation } from '@shared/icons'
 import { minutesWaiting } from '@shared/lib/wpda'
 import { acknowledgePanicAlert, resolvePanicAlert } from '@shared/lib/panicAlerts'
+import { settleWrite } from '@shared/lib/writeSync'
 import MediaAttachmentField from '@shared/components/MediaAttachmentField'
 import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
 import { RESOLUTION_NOTES_MAX, RESOLUTION_PHOTOS_MAX } from '@shared/lib/dispatchStage'
@@ -119,12 +120,24 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
    */
   const canNavigate = Number.isFinite(alert.lat) && Number.isFinite(alert.lng)
 
-  async function run(action, success) {
+  /**
+   * `write` starts one Firestore write and returns its promise. Settled via
+   * `settleWrite`, so an offline or stalled connection releases the button
+   * with "will sync" instead of holding it on the server's ack forever.
+   * `after` runs once the write is confirmed or queued.
+   */
+  async function run(write, success, after) {
     setBusy(true)
     setError('')
     try {
-      await action()
-      if (success) toast.success(success)
+      const outcome = await settleWrite(write(), {
+        onLateError: (err) => toast.error(describeError(err)),
+      })
+      if (success) {
+        if (outcome === 'queued') toast.warning(success, { description: 'Saved on this device. It will sync when the connection returns.' })
+        else toast.success(success)
+      }
+      after?.()
       // The modal STAYS OPEN. It used to close on success, which meant the
       // guard's only confirmation was the popup vanishing — indistinguishable
       // from a mis-tap on the scrim, on the one action where "did that go
@@ -326,10 +339,11 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
               type="button"
               disabled={busy || photos.uploading}
               onClick={() =>
-                run(async () => {
-                  await resolvePanicAlert(alert.id, { notes, photoUrls: photos.urls })
-                  onClose?.()
-                }, 'SOS alert resolved')
+                run(
+                  () => resolvePanicAlert(alert.id, { notes, photoUrls: photos.urls }),
+                  'SOS alert resolved',
+                  () => onClose?.(),
+                )
               }
               className="btn btn-sm btn-brand mt-3 w-full"
             >
@@ -377,20 +391,22 @@ export default function PanicAlertModal({ alert, onClose, onRespond }) {
                 // A failed write is not lost: the alert simply stays active,
                 // which is the state it was already in, and the sweep that
                 // escalates unattended alerts still runs.
-                setBusy(true)
-                try {
-                  if (isActive) await acknowledgePanicAlert(alert.id, user?.displayName)
-                } catch (err) {
-                  console.warn('Could not acknowledge before responding', err)
-                } finally {
-                  setBusy(false)
+                //
+                // NOT AWAITED (2026-10-19): a Firestore write resolves on the
+                // SERVER's ack, so awaiting it held "Starting…" forever with
+                // no signal — the very case this comment exists for. The
+                // write is applied locally at once and syncs on its own.
+                if (isActive) {
+                  acknowledgePanicAlert(alert.id, user?.displayName).catch((err) =>
+                    console.warn('Could not acknowledge before responding', err),
+                  )
                 }
                 onRespond?.(alert)
               }}
               className="btn btn-sm btn-danger w-full"
             >
               <Navigation size="sm" />
-              {busy ? 'Starting…' : 'Respond to SOS'}
+              Respond to SOS
             </button>
           ) : null}
         </div>

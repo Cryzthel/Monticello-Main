@@ -1889,6 +1889,12 @@ export default function IncidentMap({
    * anything.
    */
   sheet = null,
+  /**
+   * The All / Active / Resolved filter. Off on the guard's dispatch map,
+   * which only ever holds OPEN calls: there "Resolved" was always empty and
+   * "Active" identical to "All" — a control with nothing to do.
+   */
+  showStatusFilter = true,
   variant = 'full',
   zoom = 15,
 }) {
@@ -3265,6 +3271,7 @@ export default function IncidentMap({
                     capsule in the top-right corner of the canvas — see
                     `basemapControl` below for why it was promoted out of a
                     collapsed panel. */}
+                {showStatusFilter ? (
                 <ControlSection label="Response status">
                   {/* One line, always. `flex-wrap` let All / Active /
                       Resolved break to a second row inside the control panel
@@ -3301,10 +3308,11 @@ export default function IncidentMap({
                     })}
                   </div>
                 </ControlSection>
+                ) : null}
 
                 <ControlSection label="Pin — response phase">
                   <div className="flex flex-col gap-2">
-                    {PHASE_LEGEND.map((item) => (
+                    {PHASE_LEGEND.filter((item) => showStatusFilter || item.key !== 'resolved').map((item) => (
                       <div key={item.key} className="flex items-start gap-2">
                         <span
                           className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/70"

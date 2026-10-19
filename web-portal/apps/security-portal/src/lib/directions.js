@@ -33,8 +33,8 @@ import { formatInZone } from '../../../../packages/shared/src/lib/dates.js'
  * its tighter request limits.
  */
 export const ROUTE_PROFILES = {
-  driving: { key: 'driving', label: 'Ride', mapbox: 'mapbox/driving', transport: 'bike', simKmh: 22 },
-  walking: { key: 'walking', label: 'Walk', mapbox: 'mapbox/walking', transport: 'foot', simKmh: 5 },
+  driving: { key: 'driving', label: 'Ride', mapbox: 'mapbox/driving', transport: 'bike' },
+  walking: { key: 'walking', label: 'Walk', mapbox: 'mapbox/walking', transport: 'foot' },
 }
 
 /**
@@ -46,10 +46,6 @@ export const ROUTE_PROFILES = {
  * car said the wrong thing about who is coming. `mapbox/cycling` was NOT
  * substituted — it prefers paths and avoids roads a patrol bike legitimately
  * rides, so it would plan a worse route to make an icon literal.
- *
- * `simKmh` is used ONLY by the route simulator (see useRouteSimulation). It is
- * not an estimate of anything and never reaches a real ETA — those come from
- * Mapbox's own duration for the profile.
  */
 
 export const DEFAULT_ROUTE_PROFILE = 'driving'

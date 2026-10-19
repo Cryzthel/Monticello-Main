@@ -157,10 +157,13 @@ export async function dispatchUnit(incident, guard, { role }) {
 /**
  * Stage 1b. The officer accepts. Their device switches to high-precision GPS
  * (useGuardTelemetry sees the stage change) and the resident is told they are
- * on the way. The fix is taken fresh, since it is the start of the route.
+ * on the way. The audit fix reuses the live telemetry reading (≤30 s old)
+ * rather than waiting up to five seconds on a fresh GPS probe: the press is
+ * the start of navigation and must feel instant. Only when there is no recent
+ * reading does it ask the GPS, briefly.
  */
 export async function acknowledgeAndRespond(incident, { role }) {
-  const forensics = await captureForensics({ fresh: true, timeout: 5000 })
+  const forensics = await captureForensics({ timeout: 2500 })
   return commitStage({
     incident,
     action: 'respond',

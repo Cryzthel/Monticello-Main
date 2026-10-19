@@ -25,6 +25,16 @@ let connected = null
 let watching = false
 let watchStartedAt = 0
 let everConnected = false
+const listeners = new Set()
+let lastNotified = null
+
+/** Tell subscribers when the answer to `isOffline()` flips. */
+function notify() {
+  const offline = isOffline()
+  if (offline === lastNotified) return
+  lastNotified = offline
+  listeners.forEach((fn) => fn(offline))
+}
 
 /**
  * `.info/connected` reports false the instant it is subscribed, before the
@@ -45,14 +55,30 @@ function watch() {
         const up = snap.val() === true
         if (up) everConnected = true
         connected = up || everConnected || Date.now() - watchStartedAt > CONNECT_GRACE_MS ? up : null
+        notify()
       },
       () => {
         connected = null
+        notify()
       },
     )
   } catch {
     connected = null
   }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', notify)
+    window.addEventListener('offline', notify)
+  }
+}
+
+/**
+ * Calls `fn(offline)` whenever the answer flips, for UI that must react to
+ * the signal rather than read it at press time. Returns an unsubscribe.
+ */
+export function subscribeConnectivity(fn) {
+  watch()
+  listeners.add(fn)
+  return () => listeners.delete(fn)
 }
 
 /** Starts watching; call early (module load of a caller) so the answer is ready. */

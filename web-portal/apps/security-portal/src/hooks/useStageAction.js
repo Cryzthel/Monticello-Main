@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { describeDelivery, describeStageError } from '@/lib/dispatch'
 import { toast } from '@shared/lib/toast'
-import { isOffline, primeConnectivity } from '@shared/lib/connectivity'
+import { isOffline, primeConnectivity, subscribeConnectivity } from '@shared/lib/connectivity'
+import { reconnectFirestore } from '@shared/lib/firebase'
+import { KICK_AFTER_MS, RELEASE_AFTER_MS as RETRY_KICK_MS } from '@shared/lib/writeSync'
 
 // Ready before the first press, so the first answer is not "unknown".
 primeConnectivity()
-
-/**
- * How long to wait for the server before checking whether this console is
- * offline. If it is, the press is reported as saved on the device; if not,
- * the spinner stays — see the note in `run`.
- */
-const QUEUE_NOTICE_MS = 2500
-
-/** Online but still unconfirmed this long: release the button and say so. */
-const SLOW_NOTICE_MS = 10_000
 
 const IDLE = { busy: null, feedback: null }
 
@@ -25,36 +17,46 @@ const IDLE = { busy: null, feedback: null }
  *   busy       the key of the action in flight, so the spinner sits on the
  *              button that was pressed
  *   feedback   { tone, text } for the receipt, or null
+ *   offline    live connectivity signal, for copy and button hints
  *
- * ── OFFLINE ────────────────────────────────────────────────────────────────
- * A batch is applied to the local cache at once, so the drawer moves to the
- * next stage straight away, online or not. If the server has not accepted it
- * within QUEUE_NOTICE_MS, the button is released and the receipt says the
- * action is queued. When it does land, the receipt updates and the resident
- * is pushed, provided the drawer is still on the same call. If the server
- * refuses it on arrival, the receipt says so, and the next snapshot rolls the
- * stage back.
+ * ── THE PRESS IS DONE WHEN THE DEVICE HAS IT (2026-10-19) ──────────────────
+ * A batch is applied to the local cache the instant it is committed, so the
+ * drawer, the map and navigation all move to the next stage at once. `run`
+ * now resolves true at THAT point — the guard is never held on a spinner
+ * waiting for a round trip — and the server's answer is followed in the
+ * background:
+ *
+ *   accepted   a success toast (plus the resident's push, if any)
+ *   refused    a danger receipt + toast; the next snapshot rolls the stage back
+ *   offline    a warning that it is saved on the device and will sync
+ *   online but unconfirmed after KICK_AFTER_MS
+ *              the Firestore stream is restarted (disableNetwork/enableNetwork).
+ *              This was the "still saving. The server has not confirmed it
+ *              yet." receipt: a laptop's write stream can sit dead after sleep
+ *              or a Wi-Fi hop with no error reaching the SDK, and the write
+ *              waited for the next unrelated wake-up. Pending writes survive
+ *              the restart and are re-sent on the fresh stream at once.
+ *
+ * Writes are sent in order, so pressing the NEXT step while the previous one
+ * is still unconfirmed is safe — the rules see them in sequence. Only a
+ * repeat of the SAME action on the same call is refused locally: three
+ * presses on a dead connection would otherwise queue three identical batches,
+ * the first lands, and the rules refuse the rest with red receipts for work
+ * that succeeded.
  *
  * Keyed to `incidentId`. Opening another call clears the receipt: "Resident
  * notified" must never appear on a call it was not about.
  */
 export function useStageAction(incidentId) {
   const [state, setState] = useState(IDLE)
+  const [offline, setOffline] = useState(() => isOffline())
   const currentRef = useRef(incidentId)
   currentRef.current = incidentId
 
-  /**
-   * Calls whose batch has not been answered yet, by incident id.
-   *
-   * `busy` is released after QUEUE_NOTICE_MS so an officer with no signal is
-   * not left staring at a spinner — which also re-enables the button while the
-   * write is still queued. Without this, three presses on a dead connection
-   * queue three identical batches: the first lands, the rules refuse the rest,
-   * and the officer gets a burst of red receipts for work that succeeded.
-   *
-   * Keyed by incident, so a queued write on one call never blocks another.
-   */
-  const pendingRef = useRef(new Map())
+  /** `${incidentId}|${key}` for every batch the server has not answered yet. */
+  const pendingRef = useRef(new Set())
+
+  useEffect(() => subscribeConnectivity(setOffline), [])
 
   useEffect(() => {
     setState(IDLE)
@@ -65,131 +67,93 @@ export function useStageAction(incidentId) {
   }, [])
 
   /**
-   * `key` names the button. `label` is what happened, e.g. "Unit dispatched".
+   * `key` names the button. `label` is what happened, e.g. "Acknowledged".
    * `start` runs the command and returns its `{ committed, notify }`.
-   * Resolves true once the server accepts, false if anything failed. A caller
-   * that closes a modal on success should wait for this.
+   * Resolves true once the write is applied on this device (and therefore
+   * queued for the server), false if it could not be made at all.
    */
   const run = useCallback(
     async (key, label, start) => {
       const forId = incidentId
-      if (pendingRef.current.get(forId)) {
+      const lock = `${forId}|${key}`
+      if (pendingRef.current.has(lock)) {
         settle(forId, {
           feedback: {
             tone: 'warning',
-            // Reached only while the previous write is genuinely unconfirmed
-            // (offline or the server not answering) — never because a push is
-            // still on its way.
-            text: 'The last action on this call has not reached the server yet. It will sync when the connection returns.',
+            text: 'That action is already on its way to the server. It will sync when the connection returns.',
           },
         })
         return false
       }
-      pendingRef.current.set(forId, true)
       setState({ busy: key, feedback: null })
 
+      let handle
       try {
-        let handle
-        try {
-          handle = await start()
-        } catch (err) {
-          console.error(`${label} failed before writing`, err)
-          settle(forId, { busy: null, feedback: { tone: 'danger', text: describeStageError(err, label) } })
-          return false
-        }
-
-        // ── "QUEUED" ONLY WHEN ACTUALLY OFFLINE (2026-10-19) ─────────────────
-        // This used to say "saved on this device" for ANY confirmation slower
-        // than QUEUE_NOTICE_MS, so dispatchers on a good connection were told
-        // they were offline. Now the first check asks the connection
-        // (lib/connectivity): offline → queued, as before; online → the
-        // spinner stays, because the server is coming. Only past
-        // SLOW_NOTICE_MS is the button released, with the honest version of
-        // whichever is true then.
-        let queued = false
-        const queue = () => {
-          queued = true
-          settle(forId, {
-            busy: null,
-            feedback: {
-              tone: 'warning',
-              text: `${label}: saved on this device. It will sync when the connection returns.`,
-            },
-          })
-        }
-        let slow = null
-        const notice = setTimeout(() => {
-          if (isOffline()) {
-            queue()
-            return
-          }
-          slow = setTimeout(() => {
-            if (isOffline()) {
-              queue()
-              return
-            }
-            queued = true
-            settle(forId, {
-              busy: null,
-              feedback: { tone: 'info', text: `${label}: still saving. The server has not confirmed it yet.` },
-            })
-          }, SLOW_NOTICE_MS - QUEUE_NOTICE_MS)
-        }, QUEUE_NOTICE_MS)
-        const clearNotices = () => {
-          clearTimeout(notice)
-          clearTimeout(slow)
-        }
-
-        try {
-          await handle.committed
-        } catch (err) {
-          clearNotices()
-          console.error(`${label} was refused`, err)
-          settle(forId, { busy: null, feedback: { tone: 'danger', text: describeStageError(err, label) } })
-          return false
-        } finally {
-          // ── THE CALL IS FREE THE MOMENT THE SERVER HAS THE WRITE ──────────
-          // The lock used to be held until the resident's push (a Cloud
-          // Function round trip, seconds) had also finished, so pressing the
-          // NEXT step straight away — Acknowledge, then Start navigation —
-          // was refused with "The last action on this call is still saving",
-          // on a perfect connection. The server has confirmed the stage here;
-          // the push is a side effect and runs after, without holding the call.
-          pendingRef.current.delete(forId)
-        }
-        clearNotices()
-
-        // A clean success is a toast, not a receipt: the resolve dialog and
-        // often the drawer close on it, and a receipt inside them would go
-        // with them. Toasts also fire when the officer has already moved to
-        // another call. Warnings and failures stay inline, where they persist.
-        settle(forId, { busy: null, feedback: null })
-        if (!handle.notify) {
-          toast.success(`${label}${queued ? ' (synced)' : ''}`)
-          return true
-        }
-        // The resident's push, in the background: the stage is already saved,
-        // so the drawer moves on and the officer can press the next step.
-        handle
-          .notify()
-          .then((result) => {
-            const delivery = describeDelivery(result?.reason)
-            if (delivery.tone === 'success') toast.success(label, { description: delivery.text })
-            else settle(forId, { feedback: { tone: delivery.tone, text: `${label}. ${delivery.text}` } })
-          })
-          .catch((err) => {
-            console.error(`${label}: resident notification failed`, err)
-            settle(forId, { feedback: { tone: 'warning', text: `${label}. The resident could not be notified.` } })
-          })
-        return true
-      } finally {
-        pendingRef.current.delete(forId)
+        handle = await start()
+      } catch (err) {
+        console.error(`${label} failed before writing`, err)
+        settle(forId, { busy: null, feedback: { tone: 'danger', text: describeStageError(err, label) } })
+        return false
       }
+
+      pendingRef.current.add(lock)
+      const queuedOffline = isOffline()
+      settle(forId, {
+        busy: null,
+        feedback: queuedOffline
+          ? { tone: 'warning', text: `${label}: saved on this device. It will sync when the connection returns.` }
+          : null,
+      })
+      void confirm({ handle, forId, lock, label, queuedOffline })
+      return true
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [incidentId, settle],
   )
 
+  /** Follows one write to the server. Never rejects. */
+  async function confirm({ handle, forId, lock, label, queuedOffline }) {
+    const kick = (reason) => {
+      if (!isOffline()) void reconnectFirestore(reason)
+    }
+    // Online and unconfirmed at KICK_AFTER_MS: the stream is presumed wedged
+    // and restarted; once more at RETRY_KICK_MS if still unconfirmed.
+    const first = setTimeout(() => kick('unconfirmed-write'), KICK_AFTER_MS)
+    const second = setTimeout(() => kick('unconfirmed-write-retry'), RETRY_KICK_MS)
+    try {
+      await handle.committed
+    } catch (err) {
+      console.error(`${label} was refused`, err)
+      const text = describeStageError(err, label)
+      settle(forId, { feedback: { tone: 'danger', text } })
+      toast.error(text)
+      return
+    } finally {
+      clearTimeout(first)
+      clearTimeout(second)
+      pendingRef.current.delete(lock)
+    }
+
+    // A clean success is a toast, not a receipt: the drawer often closes on
+    // it, and toasts also reach an officer who has moved to another call.
+    // Clear the "saved on this device" receipt it replaces.
+    if (queuedOffline) settle(forId, { feedback: null })
+    if (!handle.notify) {
+      toast.success(`${label}${queuedOffline ? ' (synced)' : ''}`)
+      return
+    }
+    try {
+      const result = await handle.notify()
+      const delivery = describeDelivery(result?.reason)
+      if (delivery.tone === 'success') toast.success(label, { description: delivery.text })
+      else settle(forId, { feedback: { tone: delivery.tone, text: `${label}. ${delivery.text}` } })
+    } catch (err) {
+      console.error(`${label}: resident notification failed`, err)
+      settle(forId, { feedback: { tone: 'warning', text: `${label}. The resident could not be notified.` } })
+    }
+  }
+
   const dismiss = useCallback(() => setState((prev) => ({ ...prev, feedback: null })), [])
 
-  return { ...state, run, dismiss }
+  return { ...state, offline, run, dismiss }
 }

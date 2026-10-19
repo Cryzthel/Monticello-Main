@@ -127,8 +127,9 @@ function useAckClock(report) {
  *      responding) and opens turn-by-turn for the officer's own call.
  *   3. GUARD DISPATCHED · EN ROUTE — the header says so, and the resident is
  *      told, the moment step 2 reaches the server.
- * Each press waits for the SERVER before the next button is enabled
- * (useStageAction), so the steps never run ahead of the database.
+ * Each press moves the drawer on as soon as the write is applied on this
+ * device; the server's answer follows in the background (useStageAction),
+ * which restarts a stalled stream and rolls back on a refusal.
  *
  * From `lg` up this is a right-hand rail with no scrim (the map stays live);
  * below `lg` it is a bottom sheet with a scrim.
@@ -140,7 +141,7 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
   const navigate = useNavigate()
   const { user, role } = useAuth()
   const uid = user?.uid
-  const { busy, feedback, run, dismiss } = useStageAction(report?.id)
+  const { busy, feedback, offline, run, dismiss } = useStageAction(report?.id)
 
   const panelRef = useRef(null)
   useDialogFocus({ open: Boolean(report), containerRef: panelRef })
@@ -586,6 +587,12 @@ export default function DispatchDetailDrawer({ report, units = [], previewUid, o
               Close
             </button>
           </div>
+          {offline && stage !== 'resolved' ? (
+            <p className="mt-2 flex items-center gap-1.5 text-caption font-semibold leading-snug text-warning" role="status">
+              <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+              Offline — actions save on this device and sync when the signal returns.
+            </p>
+          ) : null}
           {hint ? <p className="mt-2 text-caption leading-snug text-text-muted">{hint}</p> : null}
         </footer>
       </aside>
