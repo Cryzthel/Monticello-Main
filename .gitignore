@@ -59,3 +59,7 @@ crash.txt
 
 # PGlite, installed --no-save to run db/test/*.test.mjs
 db/test/node_modules/
+
+# Build-time values passed with --dart-define-from-file (Mapbox token etc.).
+# Copy dart_defines.example.json and fill it in; never commit the real one.
+dart_defines.json

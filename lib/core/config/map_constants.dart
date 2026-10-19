@@ -9,9 +9,15 @@ class MapConstants {
   // Mapbox credentials & styles
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Public (`pk.*`) Mapbox access token. Public tokens are designed to ship in
-  /// client apps; for production, lock it to your bundle IDs / URLs in the
-  /// Mapbox account dashboard rather than treating it as a secret.
+  /// Public (`pk.*`) Mapbox access token, supplied at BUILD time — never
+  /// committed (GitHub push protection blocked it, 2026-10-19). Build with:
+  ///
+  ///   flutter run --dart-define-from-file=dart_defines.json
+  ///
+  /// where `dart_defines.json` (gitignored) is a copy of
+  /// `dart_defines.example.json` with the real token. Without it the app
+  /// falls back to free basemaps (see [hasMapboxToken]). For production, also
+  /// lock the token to your bundle IDs / URLs in the Mapbox dashboard.
   static const String mapboxAccessToken =
       String.fromEnvironment('MAPBOX_ACCESS_TOKEN');
 
