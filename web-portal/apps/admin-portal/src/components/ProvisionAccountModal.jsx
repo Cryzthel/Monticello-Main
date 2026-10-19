@@ -8,7 +8,6 @@ import {
   Eye,
   EyeOff,
   IdCard,
-  Info,
   KeyRound,
   Loader2,
   Lock,
@@ -16,6 +15,7 @@ import {
   Phone,
   RefreshCw,
   ShieldCheck,
+  UserPlus,
   UserRound,
 } from '@shared/icons'
 import CredentialHandoff from '@/components/CredentialHandoff'
@@ -27,7 +27,9 @@ import { DEFAULT_POST, PATROL_ACCESS_ROLE, ROSTER_SHIFT,
 } from '@/lib/securityAccounts'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { toast } from '@shared/lib/toast'
-import Tooltip from '@shared/components/Tooltip'
+import Pill from '@shared/components/Pill'
+import { DetailCard } from '@shared/components/detail/DetailCard'
+import { DetailFormField, detailInputClass } from '@shared/components/detail/DetailFormField'
 
 /**
  * Add a guardhouse account — two steps (user's reference, 2026-10-18).
@@ -44,6 +46,11 @@ import Tooltip from '@shared/components/Tooltip'
  *   ├─────────────────────────────────────────────────────────────────────────┤
  *   │ Step 1 of 2                                   (Cancel) (Continue →)     │
  *   └─────────────────────────────────────────────────────────────────────────┘
+ *
+ * ── ONE DESIGN WITH THE INCIDENT DETAILS (2026-10-19) ──────────────────────
+ * The shell of the shared IncidentDetailModal (max-w-3xl, icon-tile header
+ * with a pill row, a base-950/40 body of DetailCards, a base-950 footer), and
+ * fields drawn by DetailFormField, so labels and wells match the record views.
  *
  * ── THE LOCK ───────────────────────────────────────────────────────────────
  * Step 2 stays locked until step 1 validates, and pressing it (or Continue)
@@ -88,60 +95,16 @@ const errorsForStep = (all, index) =>
 
 // ── FORM PRIMITIVES ─────────────────────────────────────────────────────────
 
-/** Label, control, and an always-present message slot (so nothing jumps). */
-function Field({ label, htmlFor, error, hint, required, tip = null, action = null, children }) {
-  return (
-    <div className="min-w-0 space-y-1.5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5">
-          <label htmlFor={htmlFor} className="block text-xs font-medium text-text-secondary">
-            {label}
-            {required ? (
-              <span aria-hidden="true" className="ml-0.5 text-brand-500">
-                *
-              </span>
-            ) : null}
-          </label>
-          {tip ? (
-            <Tooltip label={label} hint={tip} side="top">
-              <button
-                type="button"
-                aria-label={`About ${label.toLowerCase()}: ${tip}`}
-                className="flex h-5 w-5 items-center justify-center rounded-full text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
-              >
-                <Info size={14} />
-              </button>
-            </Tooltip>
-          ) : null}
-        </div>
-        {action}
-      </div>
-      {children}
-      <div className="min-h-4">
-        {error ? (
-          <p id={`${htmlFor}-error`} className="text-[11px] font-medium leading-snug text-danger">
-            {error}
-          </p>
-        ) : hint ? (
-          <p className="text-[11px] leading-snug text-text-muted">{hint}</p>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-/** An input with a leading glyph, wired to its own error state. */
-function TextInput({ id, error, icon: Icon, mono = false, className = '', ...rest }) {
+/** An input with a leading glyph, in the Incident details' base-950 well. */
+function TextInput({ id, error, icon: Icon, mono = false, ...rest }) {
   return (
     <div className="relative">
       <Icon size="sm" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
       <input
         id={id}
         aria-invalid={error ? 'true' : undefined}
-        aria-describedby={error ? `${id}-error` : undefined}
-        className={`field h-11 rounded-xl py-0 pl-9 text-sm sm:h-10 sm:text-xs ${mono ? 'font-mono' : ''} ${
-          error ? 'border-danger focus:border-danger focus:ring-danger/20' : ''
-        } ${className}`}
+        aria-describedby={error ? `${id}-error` : `${id}-hint`}
+        className={detailInputClass({ error: Boolean(error), icon: true, mono })}
         {...rest}
       />
     </div>
@@ -350,13 +313,13 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
   if (!open) return null
 
   const primaryBtn =
-    'inline-flex items-center gap-1.5 rounded-full bg-[var(--color-segment-active)] px-5 py-2.5 text-xs font-semibold text-[var(--color-segment-active-fg)] shadow-md transition-[filter,transform] hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50'
+    'inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50'
   const secondaryBtn =
-    'inline-flex items-center gap-1.5 rounded-full border border-hairline bg-tint/[0.05] px-5 py-2.5 text-xs font-medium text-text-secondary transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50'
+    'inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50'
 
   return createPortal(
     <div
-      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/70 backdrop-blur-md sm:items-center sm:p-4"
+      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4 md:p-6"
       onClick={() => !busy && !credentials && onClose?.()}
       role="presentation"
     >
@@ -366,7 +329,9 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
         aria-modal="true"
         aria-label={credentials ? 'Account credentials' : 'Create security account'}
         onClick={(event) => event.stopPropagation()}
-        className="dialog-panel flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl shadow-black/60 sm:rounded-2xl"
+        className={`dialog-panel relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl ${
+          credentials ? 'max-w-xl' : 'max-w-3xl'
+        }`}
       >
         {credentials ? (
           <div className="custom-scrollbar overflow-y-auto">
@@ -374,113 +339,121 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-col">
-            {/* ── Header ── */}
-            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-hairline px-6 py-5">
-              <div className="flex min-w-0 items-start gap-3.5">
-                <span className="mt-0.5 flex shrink-0 items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 p-2.5 text-brand-500">
-                  <ShieldCheck size="md" aria-hidden="true" />
+            {/* ═══ HEADER ═══ The Incident details' header: icon tile, title,
+                record line, then a row of pills — here the role every account
+                is created with. No ✕: Cancel is the one way out (2026-10-18). */}
+            <header className="relative shrink-0 border-b border-hairline px-6 py-5 sm:px-8">
+              <div className="flex min-w-0 items-start gap-4">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 text-brand-500 shadow-inner">
+                  <UserPlus size={22} aria-hidden="true" />
                 </span>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold tracking-tight text-text-primary">
-                    Create security account
-                  </h2>
-                  <p className="mt-0.5 text-xs text-text-secondary">
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate text-xl font-bold tracking-tight text-text-primary">Create security account</h2>
+                  <p className="mt-0.5 text-xs text-text-muted">
                     Fill out guard details before configuring account credentials.
                   </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Pill tone="brand" icon={ShieldCheck}>
+                      Patrol Guard
+                    </Pill>
+                    <Pill className="font-mono tracking-wider">
+                      Step {step + 1} of {STEPS.length}
+                    </Pill>
+                  </div>
                 </div>
               </div>
             </header>
 
             {/* ── Progress ── */}
-            <div className="shrink-0 border-b border-hairline px-6 pb-4 pt-4">
+            <div className="shrink-0 border-b border-hairline px-6 py-4 sm:px-8">
               <ProgressSteps step={step} unlocked={step1Valid} busy={busy} onJump={goTo} />
             </div>
 
-            {/* ── Step body ── keyed so each arrival replays `.step-enter`. */}
-            <div ref={stepBodyRef} key={STEPS[step].key} className="step-enter custom-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto p-6 sm:min-h-[20rem]">
-              {step === 0 ? (
-                <>
-                  {showStepWarning && !step1Valid ? (
-                    <p role="alert" className="flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                      <AlertTriangle size="sm" className="shrink-0" aria-hidden="true" />
-                      <span>
-                        Complete the required fields below to unlock step 2: full name, badge ID and
-                        contact number.
-                      </span>
-                    </p>
-                  ) : null}
+            {/* ═══ BODY ═══ keyed so each arrival replays `.step-enter`. */}
+            <div
+              ref={stepBodyRef}
+              key={STEPS[step].key}
+              className="step-enter custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-base-950/40 p-6 sm:min-h-[20rem] sm:p-8"
+            >
+              <div className="flex flex-col gap-6">
+                {step === 0 ? (
+                  <>
+                    {showStepWarning && !step1Valid ? (
+                      <p role="alert" className="flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                        <AlertTriangle size="sm" className="shrink-0" aria-hidden="true" />
+                        <span>
+                          Complete the required fields below to unlock step 2: full name, badge ID and contact number.
+                        </span>
+                      </p>
+                    ) : null}
 
-                  <div className="space-y-2">
-                    <Field
-                      label="Guard full name"
-                      htmlFor="sa-name"
-                      required
-                      error={errors.fullName}
-                      tip="Every security account is created as a Patrol Guard — the role and patrol posting are assigned automatically."
-                      hint="As printed on their company ID. Joins as a Patrol Guard."
-                    >
-                      <TextInput
-                        id="sa-name"
-                        icon={UserRound}
-                        value={form.fullName}
+                    <DetailCard icon={UserRound} title="Guard details" bodyClassName="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                      <DetailFormField
+                        className="sm:col-span-2"
+                        label="Guard full name"
+                        htmlFor="sa-name"
+                        required
                         error={errors.fullName}
-                        autoComplete="off"
-                        placeholder="e.g. Juan Dela Cruz"
-                        onChange={(e) => update({ fullName: e.target.value })}
-                      />
-                    </Field>
-                    <Field
-                      label="Badge ID"
-                      htmlFor="sa-badge"
-                      required
-                      error={errors.badgeNumber}
-                      tip="Letters, numbers and dashes, 2–16 characters. Must be unique — the server refuses a badge already in use."
-                      hint="Shown on the roster and on every report they file."
-                    >
-                      <TextInput
-                        id="sa-badge"
-                        icon={IdCard}
-                        mono
-                        value={form.badgeNumber}
+                        tip="Every security account is created as a Patrol Guard — the role and patrol posting are assigned automatically."
+                        hint="As printed on their company ID. Joins as a Patrol Guard."
+                      >
+                        <TextInput
+                          id="sa-name"
+                          icon={UserRound}
+                          value={form.fullName}
+                          error={errors.fullName}
+                          autoComplete="off"
+                          placeholder="e.g. Juan Dela Cruz"
+                          onChange={(e) => update({ fullName: e.target.value })}
+                        />
+                      </DetailFormField>
+                      <DetailFormField
+                        label="Badge ID"
+                        htmlFor="sa-badge"
+                        required
                         error={errors.badgeNumber}
-                        autoComplete="off"
-                        placeholder="e.g. MV-0142"
-                        onChange={(e) => update({ badgeNumber: e.target.value.toUpperCase() })}
-                      />
-                    </Field>
-                    <Field
-                      label="Official contact number"
-                      htmlFor="sa-phone"
-                      required
-                      error={errors.phone}
-                      tip="7–20 digits; spaces, +, - and () are fine. Used by the guardhouse to reach them on shift." 
-                      hint="The number the guardhouse calls them on."
-                    >
-                      <TextInput
-                        id="sa-phone"
-                        type="tel"
-                        icon={Phone}
-                        mono
-                        inputMode="tel"
-                        value={form.phone}
+                        tip="Letters, numbers and dashes, 2–16 characters. Must be unique — the server refuses a badge already in use."
+                        hint="Shown on the roster and on every report they file."
+                      >
+                        <TextInput
+                          id="sa-badge"
+                          icon={IdCard}
+                          mono
+                          value={form.badgeNumber}
+                          error={errors.badgeNumber}
+                          autoComplete="off"
+                          placeholder="e.g. MV-0142"
+                          onChange={(e) => update({ badgeNumber: e.target.value.toUpperCase() })}
+                        />
+                      </DetailFormField>
+                      <DetailFormField
+                        label="Official contact number"
+                        htmlFor="sa-phone"
+                        required
                         error={errors.phone}
-                        autoComplete="off"
-                        placeholder="+63 9XX XXX XXXX"
-                        onChange={(e) => update({ phone: e.target.value })}
-                      />
-                    </Field>
-                  </div>
-                </>
-              ) : null}
-              {step === 1 ? (
-                <div className="space-y-5">
-                  <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
-                    <KeyRound size="sm" aria-hidden="true" />
-                    System credentials
-                  </p>
+                        tip="7–20 digits; spaces, +, - and () are fine. Used by the guardhouse to reach them on shift."
+                        hint="The number the guardhouse calls them on."
+                      >
+                        <TextInput
+                          id="sa-phone"
+                          type="tel"
+                          icon={Phone}
+                          mono
+                          inputMode="tel"
+                          value={form.phone}
+                          error={errors.phone}
+                          autoComplete="off"
+                          placeholder="+63 9XX XXX XXXX"
+                          onChange={(e) => update({ phone: e.target.value })}
+                        />
+                      </DetailFormField>
+                    </DetailCard>
+                  </>
+                ) : null}
 
-                  <div className="space-y-2">
-                    <Field
+                {step === 1 ? (
+                  <DetailCard icon={KeyRound} title="System credentials" bodyClassName="space-y-2">
+                    <DetailFormField
                       label="Login email"
                       htmlFor="sa-email"
                       required
@@ -498,81 +471,78 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
                         placeholder="guard@monticellovillas.ph"
                         onChange={(e) => update({ email: e.target.value })}
                       />
-                    </Field>
+                    </DetailFormField>
 
-                    <div className="border-t border-hairline pt-3">
-                      <Field
-                        label="Temporary password"
-                        htmlFor="sa-password"
-                        required
-                        error={errors.password}
-                        tip="Generated on this device. Shown once more after saving so you can hand it over; it is never stored where an admin can read it again."
-                        hint="The guard is prompted to replace this the first time they sign in."
-                        action={
+                    <DetailFormField
+                      label="Temporary password"
+                      htmlFor="sa-password"
+                      required
+                      error={errors.password}
+                      tip="Generated on this device. Shown once more after saving so you can hand it over; it is never stored where an admin can read it again."
+                      hint="The guard is prompted to replace this the first time they sign in."
+                      action={
+                        <button
+                          type="button"
+                          onClick={() => update({ password: generateTempPassword() })}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-500 transition-colors hover:bg-brand-500/20"
+                        >
+                          <RefreshCw size={12} aria-hidden="true" />
+                          Generate random password
+                        </button>
+                      }
+                    >
+                      <div className="relative">
+                        <Lock size="sm" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                        <input
+                          id="sa-password"
+                          type={revealed ? 'text' : 'password'}
+                          value={form.password}
+                          readOnly
+                          aria-invalid={errors.password ? 'true' : undefined}
+                          aria-describedby={errors.password ? 'sa-password-error' : 'sa-password-hint'}
+                          className={detailInputClass({ error: Boolean(errors.password), icon: true, mono: true, className: 'cursor-default !pr-20' })}
+                        />
+                        <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
                           <button
                             type="button"
-                            onClick={() => update({ password: generateTempPassword() })}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-500 transition-colors hover:bg-brand-500/20"
+                            onClick={copyPassword}
+                            aria-label={copied ? 'Password copied' : 'Copy password'}
+                            title={copied ? 'Copied' : 'Copy password'}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary"
                           >
-                            <RefreshCw size={12} aria-hidden="true" />
-                            Generate random password
+                            {copied ? <Check size="sm" className="text-success" /> : <Copy size="sm" />}
                           </button>
-                        }
-                      >
-                        <div className="relative">
-                          <Lock size="sm" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                          <input
-                            id="sa-password"
-                            type={revealed ? 'text' : 'password'}
-                            value={form.password}
-                            readOnly
-                            aria-invalid={errors.password ? 'true' : undefined}
-                            aria-describedby={errors.password ? 'sa-password-error' : undefined}
-                            className={`field h-11 cursor-default rounded-xl py-0 pl-9 pr-20 font-mono text-sm sm:h-10 sm:text-xs ${errors.password ? 'border-danger' : ''}`}
-                          />
-                          <div className="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
-                            <button
-                              type="button"
-                              onClick={copyPassword}
-                              aria-label={copied ? 'Password copied' : 'Copy password'}
-                              title={copied ? 'Copied' : 'Copy password'}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary"
-                            >
-                              {copied ? <Check size="sm" className="text-success" /> : <Copy size="sm" />}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setRevealed((v) => !v)}
-                              aria-label={revealed ? 'Hide password' : 'Show password'}
-                              title={revealed ? 'Hide password' : 'Show password'}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary"
-                            >
-                              {revealed ? <EyeOff size="sm" /> : <Eye size="sm" />}
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setRevealed((v) => !v)}
+                            aria-label={revealed ? 'Hide password' : 'Show password'}
+                            title={revealed ? 'Hide password' : 'Show password'}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary"
+                          >
+                            {revealed ? <EyeOff size="sm" /> : <Eye size="sm" />}
+                          </button>
                         </div>
-                      </Field>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+                      </div>
+                    </DetailFormField>
+                  </DetailCard>
+                ) : null}
 
-              {submitError ? (
-                <p role="alert" className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
-                  <AlertTriangle size="sm" className="mt-0.5 shrink-0" aria-hidden="true" />
-                  <span className="min-w-0">{submitError}</span>
-                </p>
-              ) : null}
+                {submitError ? (
+                  <p role="alert" className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
+                    <AlertTriangle size="sm" className="mt-0.5 shrink-0" aria-hidden="true" />
+                    <span className="min-w-0">{submitError}</span>
+                  </p>
+                ) : null}
+              </div>
             </div>
 
-            {/* ── Footer ── */}
-            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950/40 px-6 py-4">
-              <p className="text-xs font-medium text-text-muted">
-                Step <span className="font-bold text-text-primary">{step + 1}</span> of {STEPS.length}
+            {/* ═══ FOOTER ═══ ONE Cancel and ONE primary, on every step
+                (2026-10-18). Going back is the progress indicator's job. */}
+            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
+              <p className="flex items-center gap-2 text-xs text-text-muted">
+                <ShieldCheck size={14} className="text-success/70" aria-hidden="true" />
+                <span>Every change is recorded in Audit History</span>
               </p>
-              {/* ONE Cancel and ONE primary, on every step (2026-10-18). Going
-                  back to step 1 is the progress indicator's job; the header ×
-                  that duplicated Cancel is gone. */}
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={onClose} disabled={busy} className={secondaryBtn}>
                   Cancel

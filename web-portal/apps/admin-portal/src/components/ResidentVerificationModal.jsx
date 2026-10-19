@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, FileText, Info, Loader2, X, ZoomIn } from '@shared/icons'
+import {
+  AlertTriangle,
+  Check,
+  CheckCircle2,
+  FileText,
+  History,
+  Home,
+  IdCard,
+  Info,
+  Loader2,
+  ShieldCheck,
+  User,
+  X,
+  ZoomIn,
+} from '@shared/icons'
 import Lightbox from '@shared/components/Lightbox'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useResidentProfile } from '@/hooks/useResidentProfile'
@@ -13,8 +27,10 @@ import {
 } from '@shared/lib/residents'
 import { residentStatusIcon } from '@shared/theme/categoryIcons'
 import { formatDateTime } from '@shared/lib/dates'
+import { formatAddress } from '@shared/lib/addressQuery'
 import { describeError, toast } from '@shared/lib/toast'
 import Pill from '@shared/components/Pill'
+import { DetailCard, DetailField, DetailTimeline } from '@shared/components/detail/DetailCard'
 
 /**
  * Resident verification — who they are, the lot they claim, the ID they
@@ -22,20 +38,24 @@ import Pill from '@shared/components/Pill'
  *
  *   <ResidentVerificationModal isOpen={Boolean(selected)} resident={selected} onClose={…} />
  *
- *   ┌ (photo) Razel Roldan (✓ Verified)                              (×) ┐ sticky
- *   │         roldanrazel2004@gmail.com                                  │
- *   ├────────────────────────────────────────────────────────────────────┤
- *   │ PERSONAL DETAILS        [ resident type · registered · phone ]     │
- *   │ PROPERTY & LOCATION     [ PHASE | BLOCK | LOT ]                    │
- *   │ VERIFICATION DOCUMENTS  [ ID preview, filename badge ]  (n files)  │
- *   │ Reviewed by … • time                                               │
- *   ├────────────────────────────────────────────────────────────────────┤
- *   │ (✕ Reject)                                      (✓ Approve)        │ sticky
- *   └────────────────────────────────────────────────────────────────────┘
+ *   ┌ (photo) Razel Roldan (Phase 1 • Block 3 • Lot 12)                (×) ┐ fixed
+ *   │         roldanrazel2004@gmail.com                                       │
+ *   │         (✓ Verified) (• Homeowner)                                      │
+ *   ├─────────────────────────────────────────────────────────────────────────┤
+ *   │ PERSONAL DETAILS        name · email · resident type · contact · bio    │
+ *   │ PROPERTY & LOCATION     phase · block · lot                             │
+ *   │ VERIFICATION DOCUMENTS  ID preview · thumbnails · PDFs     (n files)    │
+ *   │ VERIFICATION HISTORY    ● Submitted ● Approved / ○ Awaiting review      │
+ *   ├─────────────────────────────────────────────────────────────────────────┤
+ *   │ The resident sees the decision in the app          (✕ Reject) (✓ Approve) │ fixed
+ *   └─────────────────────────────────────────────────────────────────────────┘
  *
- * Rebuilt 2026-10-19 from the provided reference: a centred max-w-xl modal
- * (it was a right-hand drawer), chunked by Miller's law with hairlines between
- * sections. Colours are the console's tokens, so it follows both themes.
+ * ── ONE DESIGN WITH THE INCIDENT DETAILS (2026-10-19) ──────────────────────
+ * Re-cut from the max-w-xl verification modal onto the shared
+ * IncidentDetailModal shell — max-w-3xl, header with a mono code pill and a
+ * pill row, one column of DetailCards on a base-950/40 body, a base-950 footer
+ * — with DetailField labels and the DetailTimeline, so a resident record reads
+ * like every other record in the console.
  *
  * ── LIVE ───────────────────────────────────────────────────────────────────
  * `resident` comes from the page's residents/ onSnapshot listener, and the
@@ -56,7 +76,10 @@ import Pill from '@shared/components/Pill'
 
 const STATUS_TONE = { pending: 'warning', verified: 'success', rejected: 'danger' }
 const EXIT_MS = 200
-const CARD = 'rounded-xl border border-hairline bg-base-900/30 p-4'
+const SECONDARY_BTN =
+  'inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:pointer-events-none disabled:opacity-50'
+const DANGER_BTN =
+  'inline-flex items-center gap-2 rounded-full border border-danger/20 bg-danger/10 px-5 py-2 text-xs font-semibold text-danger transition-[background-color,transform] hover:bg-danger/20 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:pointer-events-none disabled:opacity-50'
 
 /** A Storage download URL keeps the object path URL-encoded under `/o/`. */
 function isPdfUrl(url) {
@@ -78,31 +101,6 @@ function fileNameOf(url) {
   } catch {
     return ''
   }
-}
-
-function Section({ title, action = null, children }) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-muted">{title}</h3>
-        {action}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-const Divider = () => <div aria-hidden="true" className="border-t border-hairline" />
-
-function Detail({ label, value, mono = false, wide = false }) {
-  return (
-    <div className={`min-w-0 ${wide ? 'col-span-2' : ''}`}>
-      <span className="mb-1 block text-[11px] uppercase tracking-wide text-text-muted">{label}</span>
-      <span className={`block break-words text-sm font-medium ${mono ? 'font-mono' : ''} ${value ? 'text-text-primary' : 'text-text-muted'}`}>
-        {value || '—'}
-      </span>
-    </div>
-  )
 }
 
 function Avatar({ name, photoUrl }) {
@@ -149,26 +147,28 @@ function DocumentTile({ url, onOpen, lead }) {
       type="button"
       onClick={onOpen}
       aria-label={name ? `View ${name}` : 'View verification document'}
-      className={`group relative block w-full overflow-hidden rounded-lg border border-hairline bg-base-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
-        lead ? 'h-52' : 'aspect-square'
+      className={`group relative block overflow-hidden border bg-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 ${
+        lead ? 'h-64 w-full rounded-lg border-hairline sm:h-80' : 'h-12 w-12 shrink-0 rounded border-hairline opacity-70 transition-opacity hover:opacity-100'
       }`}
     >
       <img
         src={url}
         alt=""
         loading="lazy"
-        className="h-full w-full object-cover opacity-90 transition-transform duration-500 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+        className={`h-full w-full opacity-90 transition-transform ${lead ? 'object-contain' : 'object-cover'} duration-500 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100`}
       />
-      <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+      {lead ? <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" /> : null}
       {lead && name ? (
         <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate rounded-md border border-white/10 bg-black/60 px-2.5 py-1 font-mono text-xs font-medium text-zinc-200 backdrop-blur-md">
           {name}
         </span>
       ) : null}
-      <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-zinc-100 opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
-        <ZoomIn size={14} aria-hidden="true" />
-        View
-      </span>
+      {lead ? (
+        <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-zinc-100 opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+          <ZoomIn size={14} aria-hidden="true" />
+          View
+        </span>
+      ) : null}
     </button>
   )
 }
@@ -279,18 +279,37 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
   const approved = status === RESIDENT_STATUS.verified
   const rejected = status === RESIDENT_STATUS.rejected
 
+  // Registered → reviewed, in the Incident details' timeline.
+  const timeline = [
+    {
+      key: 'submitted',
+      label: 'Application submitted',
+      stamp: formatDateTime(current.createdAt, ''),
+      tone: 'done',
+    },
+    approved || rejected
+      ? {
+          key: 'reviewed',
+          label: approved ? 'Approved' : 'Rejected',
+          detail: current.reviewedByName ? `By ${current.reviewedByName}` : undefined,
+          stamp: formatDateTime(current.reviewedAt, ''),
+          tone: approved ? 'done' : 'warning',
+        }
+      : { key: 'reviewed', label: 'Awaiting review', detail: 'An admin approves or rejects below', tone: 'pending' },
+  ]
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4 md:p-6" role="presentation">
       {/* Scrim */}
       <div
         aria-hidden="true"
         onClick={close}
-        className={`absolute inset-0 bg-black/80 backdrop-blur-md transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+        className={`absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity duration-200 ease-out motion-reduce:transition-none ${
           shown ? 'opacity-100' : 'opacity-0'
         }`}
       />
 
-      {/* Panel */}
+      {/* Panel — the Incident details' shell. */}
       <div
         ref={panelRef}
         role="dialog"
@@ -299,26 +318,37 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
         onTransitionEnd={(event) => {
           if (event.target === event.currentTarget && !shown) setMounted(false)
         }}
-        className={`relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-hairline bg-base-950 shadow-2xl outline-none transition-[opacity,transform] duration-200 ease-[var(--ease-out-strong)] motion-reduce:transition-none ${
+        className={`relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl outline-none transition-[opacity,transform] duration-200 ease-[var(--ease-out-strong)] motion-reduce:transition-none sm:max-h-[90vh] sm:rounded-2xl ${
           shown ? 'scale-100 opacity-100' : 'scale-[0.96] opacity-0'
         }`}
       >
-        {/* ── Sticky header ── */}
-        <header className="z-20 flex shrink-0 items-start justify-between gap-4 border-b border-hairline bg-base-950/80 px-4 py-4 backdrop-blur-xl sm:px-6 sm:py-5">
-          <div className="flex min-w-0 items-center gap-4">
+        {/* ═══ HEADER ═══ */}
+        <header className="relative shrink-0 border-b border-hairline px-6 py-5 pr-14 sm:px-8 sm:pr-16">
+          <div className="flex min-w-0 items-start gap-4">
             <Avatar name={name} photoUrl={photoUrl} />
-            <div className="min-w-0 space-y-1">
-              {/* `flex-wrap` so a long name pushes the badge to its own line
-                  instead of being truncated to make room for it. */}
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                <h2 id="resident-modal-title" className="min-w-0 break-words text-lg font-semibold tracking-tight text-text-primary">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <h2 id="resident-modal-title" className="min-w-0 break-words text-xl font-bold tracking-tight text-text-primary">
                   {name}
                 </h2>
+                {phase || block || lot ? (
+                  <Pill className="font-mono tracking-wider">
+                    {formatAddress({ phase, block, lot })}
+                  </Pill>
+                ) : null}
+              </div>
+              <p className="mt-0.5 break-all text-xs text-text-muted">{email || 'No email on file'}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Pill tone={STATUS_TONE[status] ?? 'warning'} icon={StatusIcon}>
                   {RESIDENT_STATUS_LABELS[status] ?? status}
                 </Pill>
+                {current.residentType ? (
+                  <Pill tone="neutral">
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {residentTypeLabel(current.residentType)}
+                  </Pill>
+                ) : null}
               </div>
-              <p className="break-all font-mono text-xs text-text-muted">{email || 'No email on file'}</p>
             </div>
           </div>
           <button
@@ -326,107 +356,120 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
             onClick={close}
             disabled={Boolean(busy)}
             aria-label="Close resident details"
-            className="shrink-0 rounded-full bg-base-900/50 p-2 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40"
+            className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40 sm:right-6 sm:top-5"
           >
-            <X size={16} />
+            <X size={20} />
           </button>
         </header>
 
-        {/* ── Body ── */}
-        <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-6">
-          <Section title="Personal details">
-            {/* Contact number joins only when there is one: most applicants
-                never enter it, and an always-empty cell is noise. */}
-            <div className={`${CARD} grid grid-cols-2 gap-4`}>
-              <Detail label="Resident type" value={current.residentType ? residentTypeLabel(current.residentType) : ''} />
-              <Detail label="Registered" value={formatDateTime(current.createdAt, '')} mono />
-              {phone ? <Detail label="Contact number" value={phone} mono /> : null}
-              {profile?.bio ? <Detail label="Bio" value={profile.bio} wide /> : null}
-            </div>
-          </Section>
-
-          <Divider />
-
-          <Section title="Property & location">
-            {!phase && !block && !lot && !loading ? (
-              <Note>No property on file yet. They may not have finished property verification in the mobile app.</Note>
-            ) : (
-              <dl className="grid grid-cols-3 divide-x divide-hairline rounded-xl border border-hairline bg-base-950/80 py-4 text-center">
-                {[
-                  ['Phase', phase],
-                  ['Block', block],
-                  ['Lot', lot],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <dt className="mb-1 text-[10px] uppercase tracking-wider text-text-muted">{label}</dt>
-                    <dd className="text-base font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </Section>
-
-          <Divider />
-
-          <Section
-            title="Verification documents"
-            action={
-              documents.length ? (
-                <Pill tone="neutral">
-                  {documents.length} attachment{documents.length === 1 ? '' : 's'}
-                </Pill>
-              ) : null
-            }
-          >
-            {documents.length === 0 ? (
-              <Note warn>
-                No ID uploaded. This is an older application or one whose upload failed. Check the claimed property
-                above, or reject and ask for a valid ID.
-              </Note>
-            ) : (
-              <div className={`${CARD} space-y-3 p-3`}>
-                {images[0] ? <DocumentTile url={images[0].url} lead onOpen={() => setLightboxIndex(0)} /> : null}
-                {images.length > 1 || pdfs.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-3">
-                    {images.slice(1).map((d, i) => (
-                      <DocumentTile key={`${i}:${d.url}`} url={d.url} onOpen={() => setLightboxIndex(i + 1)} />
-                    ))}
-                    {pdfs.map((d, i) => (
-                      <a
-                        key={`${i}:${d.url}`}
-                        href={d.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={fileNameOf(d.url) || undefined}
-                        className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-lg border border-hairline bg-base-900 px-2 text-text-secondary transition-colors hover:border-brand-500/30 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
-                      >
-                        <FileText size="md" aria-hidden="true" />
-                        <span className="w-full truncate text-center font-mono text-[10px]">{fileNameOf(d.url) || 'Open PDF'}</span>
-                      </a>
-                    ))}
-                  </div>
+        {/* ═══ BODY: ONE COLUMN OF CARDS ═══ */}
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-base-950/40 p-6 sm:p-8">
+          <div className="flex flex-col gap-6">
+            <DetailCard icon={User} title="Personal details">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <DetailField label="Full name">{name}</DetailField>
+                <DetailField label="Email address" empty={!email}>
+                  <span className="break-all">{email || 'No email on file'}</span>
+                </DetailField>
+                <DetailField label="Resident type" empty={!current.residentType}>
+                  {current.residentType ? residentTypeLabel(current.residentType) : 'Not set'}
+                </DetailField>
+                {/* Most applicants never enter a number; say so rather than
+                    leave a dash. */}
+                <DetailField label="Contact number" mono={Boolean(phone)} empty={!phone}>
+                  {phone || 'Not provided'}
+                </DetailField>
+                {profile?.bio ? (
+                  <DetailField label="Bio" className="sm:col-span-2">
+                    {profile.bio}
+                  </DetailField>
                 ) : null}
               </div>
-            )}
+            </DetailCard>
 
-            {rejected && current.rejectionReason ? (
-              <div className="rounded-xl border border-danger/25 bg-danger/10 p-3">
-                <p className="text-xs font-semibold text-danger">Rejection reason</p>
-                <p className="mt-1 text-sm text-text-primary">{current.rejectionReason}</p>
-              </div>
-            ) : null}
-          </Section>
+            <DetailCard icon={Home} title="Property & location">
+              {!phase && !block && !lot && !loading ? (
+                <Note>No property on file yet. They may not have finished property verification in the mobile app.</Note>
+              ) : (
+                <div className="grid grid-cols-3 gap-6">
+                  <DetailField label="Phase" empty={!phase}>
+                    <span className="tabular-nums">{phase || '—'}</span>
+                  </DetailField>
+                  <DetailField label="Block" empty={!block}>
+                    <span className="tabular-nums">{block || '—'}</span>
+                  </DetailField>
+                  <DetailField label="Lot" empty={!lot}>
+                    <span className="tabular-nums">{lot || '—'}</span>
+                  </DetailField>
+                </div>
+              )}
+            </DetailCard>
 
-          {current.reviewedByName ? (
-            <p className="pt-1 text-center font-mono text-xs text-text-muted">
-              Reviewed by {current.reviewedByName}
-              {current.reviewedAt ? ` • ${formatDateTime(current.reviewedAt)}` : ''}
-            </p>
-          ) : null}
+            <DetailCard
+              icon={IdCard}
+              title="Verification documents"
+              bodyClassName="space-y-4"
+              action={
+                documents.length ? (
+                  <Pill tone="success" icon={CheckCircle2}>
+                    {documents.length} attachment{documents.length === 1 ? '' : 's'}
+                  </Pill>
+                ) : (
+                  <Pill tone="warning" icon={AlertTriangle}>
+                    No ID
+                  </Pill>
+                )
+              }
+            >
+              {documents.length === 0 ? (
+                <Note warn>
+                  No ID uploaded. This is an older application or one whose upload failed. Check the claimed property
+                  above, or reject and ask for a valid ID.
+                </Note>
+              ) : (
+                <>
+                  {images[0] ? <DocumentTile url={images[0].url} lead onOpen={() => setLightboxIndex(0)} /> : null}
+                  {images.length > 1 || pdfs.length > 0 ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {images.slice(1).map((d, i) => (
+                        <DocumentTile key={`${i}:${d.url}`} url={d.url} onOpen={() => setLightboxIndex(i + 1)} />
+                      ))}
+                      {pdfs.map((d, i) => (
+                        <a
+                          key={`${i}:${d.url}`}
+                          href={d.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={fileNameOf(d.url) || 'Open PDF'}
+                          aria-label={fileNameOf(d.url) ? `Open ${fileNameOf(d.url)}` : 'Open PDF'}
+                          className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded border border-hairline bg-base-950 text-text-secondary transition-colors hover:border-brand-500/40 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                        >
+                          <FileText size="sm" aria-hidden="true" />
+                          <span className="text-[9px] font-semibold uppercase tracking-wider">PDF</span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </DetailCard>
+
+            <DetailCard aria-label="Verification history" icon={History} title="Verification history" bodyClassName="">
+              <DetailTimeline items={timeline} />
+              {rejected && current.rejectionReason ? (
+                <div className="mt-6 border-t border-hairline pt-6">
+                  <span className="mb-1.5 block text-[11px] text-text-muted">Rejection reason</span>
+                  <p className="whitespace-pre-wrap break-words rounded-lg border border-danger/25 bg-danger/5 p-4 text-sm font-medium leading-relaxed text-text-secondary">
+                    {current.rejectionReason}
+                  </p>
+                </div>
+              ) : null}
+            </DetailCard>
+          </div>
         </div>
 
-        {/* ── Sticky decision footer ── */}
-        <footer className="z-20 shrink-0 border-t border-hairline bg-base-950/80 px-4 py-4 backdrop-blur-xl sm:px-6">
+        {/* ═══ FOOTER ═══ the decision, pinned. */}
+        <footer className="shrink-0 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
           {error ? (
             <p role="alert" className="mb-3 rounded-xl border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
               {error}
@@ -434,8 +477,8 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
           ) : null}
 
           {rejecting ? (
-            <div className="space-y-3">
-              <label htmlFor="resident-reject-reason" className="block text-xs font-medium text-text-secondary">
+            <div className="space-y-3 py-1">
+              <label htmlFor="resident-reject-reason" className="block text-[11px] font-medium text-text-muted">
                 Reason (optional, shown to the resident)
               </label>
               <textarea
@@ -445,49 +488,45 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="e.g. Block/Lot does not match HOA records, or the ID photo is unclear"
-                className="field-textarea resize-none"
+                className="w-full resize-none rounded-lg border border-hairline bg-base-950 p-3 text-sm text-text-primary shadow-inner outline-none transition-[border-color,box-shadow] placeholder:text-text-muted focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
               />
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  disabled={Boolean(busy)}
-                  onClick={() => setRejecting(false)}
-                  className="flex w-1/2 items-center justify-center gap-2 rounded-full border border-hairline py-2.5 text-xs font-medium text-text-secondary transition-[background-color,transform] duration-150 hover:bg-tint/[0.06] active:scale-[0.97] disabled:opacity-50"
-                >
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" disabled={Boolean(busy)} onClick={() => setRejecting(false)} className={SECONDARY_BTN}>
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  disabled={Boolean(busy)}
-                  onClick={() => decide('reject')}
-                  className="flex w-1/2 items-center justify-center gap-2 rounded-full border border-danger/20 bg-danger/10 py-2.5 text-xs font-semibold text-danger transition-[background-color,transform] duration-150 hover:bg-danger/20 active:scale-[0.97] disabled:opacity-50"
-                >
+                <button type="button" disabled={Boolean(busy)} onClick={() => decide('reject')} className={DANGER_BTN}>
                   {busy === 'reject' ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <X size="sm" aria-hidden="true" />}
                   Confirm rejection
                 </button>
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-3 sm:gap-4">
-              <button
-                type="button"
-                disabled={Boolean(busy) || rejected}
-                onClick={() => setRejecting(true)}
-                className="flex w-1/2 items-center justify-center gap-2 rounded-full border border-danger/20 bg-danger/10 py-2.5 text-xs font-medium text-danger transition-[background-color,transform] duration-150 hover:bg-danger/20 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:pointer-events-none disabled:opacity-50"
-              >
-                <X size="sm" aria-hidden="true" />
-                {rejected ? 'Rejected' : 'Reject'}
-              </button>
-              <button
-                type="button"
-                disabled={Boolean(busy) || approved}
-                onClick={() => decide('approve')}
-                aria-busy={busy === 'approve'}
-                className="flex w-1/2 items-center justify-center gap-2 rounded-full bg-brand-600 py-2.5 text-xs font-semibold text-white shadow-[0_0_20px_-5px_color-mix(in_oklab,var(--color-brand-500)_50%,transparent)] transition-[background-color,transform] duration-150 hover:bg-brand-500 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:pointer-events-none disabled:opacity-60 disabled:shadow-none"
-              >
-                {busy === 'approve' ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <Check size="sm" aria-hidden="true" />}
-                {approved ? 'Approved' : busy === 'approve' ? 'Approving…' : 'Approve'}
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-xs text-text-muted">
+                <ShieldCheck size={14} className="text-success/70" aria-hidden="true" />
+                <span>The resident sees the decision in the app</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={Boolean(busy) || rejected}
+                  onClick={() => setRejecting(true)}
+                  className={DANGER_BTN}
+                >
+                  <X size="sm" aria-hidden="true" />
+                  {rejected ? 'Rejected' : 'Reject'}
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(busy) || approved}
+                  onClick={() => decide('approve')}
+                  aria-busy={busy === 'approve'}
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
+                >
+                  {busy === 'approve' ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <Check size="sm" aria-hidden="true" />}
+                  {approved ? 'Approved' : busy === 'approve' ? 'Approving…' : 'Approve'}
+                </button>
+              </div>
             </div>
           )}
         </footer>

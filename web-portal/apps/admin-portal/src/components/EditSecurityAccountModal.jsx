@@ -1,12 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { KeyRound, Loader2, ShieldCheck, X } from '@shared/icons'
+import { Check, KeyRound, Loader2, Lock, Mail, ShieldCheck, UserRound, UserRoundCog, X } from '@shared/icons'
+import Pill from '@shared/components/Pill'
+import { DetailCard } from '@shared/components/detail/DetailCard'
+import { DetailFormField, detailInputClass } from '@shared/components/detail/DetailFormField'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import {
+  ACCESS_ROLE_LABELS,
   DEFAULT_POST,
   PATROL_ACCESS_ROLE,
   ROSTER_SHIFT,
+  STATUS_LABELS,
+  STATUS_TONES,
   describeCallableError,
+  resolveAccessRole,
   updateSecurityAssignment,
   validateAccountForm,
 } from '@/lib/securityAccounts'
@@ -26,6 +33,9 @@ import {
  *   │                                     (Cancel) (Save account details) │
  *   └─────────────────────────────────────────────────────────────────────┘
  *
+ * Drawn on the Incident details' shell and cards (2026-10-19), the same as
+ * the Add account form, with DetailFormField for every label and well.
+ *
  * Split out of ProvisionAccountModal (2026-10-18), which keeps the two-step
  * CREATE flow and its one-time password handoff. The reference's "Step 1 of 2"
  * is not drawn: an edit is one screen, and a step counter with no step 2
@@ -36,29 +46,6 @@ import {
  * a name fix must not reset a supervisor to Patrol Guard or a post to the
  * creation default.
  */
-
-const FIELD =
-  'w-full rounded-xl border bg-base-800/60 px-3.5 py-2.5 text-sm text-text-primary shadow-sm transition-[border-color,box-shadow] duration-150 placeholder:text-text-muted focus:outline-none focus:ring-4 dark:bg-base-900/50'
-
-function Field({ id, label, required = false, hint, error, children }) {
-  return (
-    <div>
-      <label htmlFor={id} className="mb-2 block text-sm font-medium text-text-secondary">
-        {label} {required ? <span className="text-brand-500">*</span> : null}
-      </label>
-      {children}
-      {error ? (
-        <p id={`${id}-error`} className="mt-2 text-xs text-danger">
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={`${id}-hint`} className="mt-2 text-xs text-text-muted">
-          {hint}
-        </p>
-      ) : null}
-    </div>
-  )
-}
 
 const formOf = (account) => ({
   fullName: account?.name ?? '',
@@ -144,14 +131,12 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
     }
   }
 
-  const fieldTone = (key) =>
-    errors[key]
-      ? 'border-danger/60 focus:border-danger focus:ring-danger/10'
-      : 'border-hairline focus:border-brand-500 focus:ring-brand-500/10'
+  const status = account.status
+  const roleLabel = ACCESS_ROLE_LABELS[resolveAccessRole(account)] || 'Security officer'
 
   return createPortal(
     <div
-      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center sm:p-4"
+      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4 md:p-6"
       onClick={() => !busy && onClose?.()}
       role="presentation"
     >
@@ -164,20 +149,36 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
         onSubmit={save}
         onClick={(event) => event.stopPropagation()}
         noValidate
-        className="officer-modal-enter relative flex max-h-[90dvh] w-full max-w-[520px] flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl shadow-black/50 sm:max-h-[90vh] sm:rounded-2xl dark:bg-base-950"
+        className="dialog-panel relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
       >
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-hairline px-6 py-5">
+        {/* ═══ HEADER ═══ as the Incident details: icon tile, title with the
+            mono badge, record line, pills; ✕ pinned top-right. */}
+        <header className="relative shrink-0 border-b border-hairline px-6 py-5 pr-14 sm:px-8 sm:pr-16">
           <div className="flex min-w-0 items-start gap-4">
-            <span className="shrink-0 rounded-xl border border-brand-500/20 bg-brand-500/10 p-2.5 text-brand-400">
-              <ShieldCheck size="md" aria-hidden="true" />
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 text-brand-500 shadow-inner">
+              <UserRoundCog size={22} aria-hidden="true" />
             </span>
-            <div className="mt-0.5 flex min-w-0 flex-col">
-              <h2 id="edit-account-title" className="text-lg font-semibold leading-snug tracking-tight text-text-primary">
-                Edit security account
-              </h2>
-              <p id="edit-account-subtitle" className="mt-1 text-sm leading-relaxed text-text-secondary">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <h2 id="edit-account-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
+                  Edit security account
+                </h2>
+                {original.badgeNumber ? <Pill className="font-mono tracking-wider">{original.badgeNumber}</Pill> : null}
+              </div>
+              <p id="edit-account-subtitle" className="mt-0.5 text-xs text-text-muted">
                 Update this guard’s details. The login email cannot change.
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Pill tone="brand" icon={ShieldCheck}>
+                  {roleLabel}
+                </Pill>
+                {status ? (
+                  <Pill tone={STATUS_TONES[status] ?? 'neutral'}>
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {STATUS_LABELS[status] ?? status}
+                  </Pill>
+                ) : null}
+              </div>
             </div>
           </div>
           <button
@@ -185,18 +186,19 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
             onClick={onClose}
             disabled={busy}
             aria-label="Close"
-            className="shrink-0 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40"
+            className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40 sm:right-6 sm:top-5"
           >
-            <X size="md" />
+            <X size={20} />
           </button>
         </header>
 
-        <div className="custom-scrollbar drawer-scroll min-h-0 flex-1 space-y-8 overflow-y-auto overscroll-contain p-6">
-          <section>
-            <h3 className="mb-5 text-[11px] font-semibold uppercase tracking-widest text-text-muted">Officer details</h3>
-            <div className="space-y-5">
-              <Field
-                id="edit-fullName"
+        {/* ═══ BODY ═══ */}
+        <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-base-950/40 p-6 sm:p-8">
+          <div className="flex flex-col gap-6">
+            <DetailCard icon={UserRound} title="Officer details" bodyClassName="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+              <DetailFormField
+                className="sm:col-span-2"
+                htmlFor="edit-fullName"
                 label="Guard full name"
                 required
                 hint="As printed on their company ID."
@@ -211,11 +213,11 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
                   onChange={set('fullName')}
                   aria-invalid={Boolean(errors.fullName)}
                   aria-describedby={errors.fullName ? 'edit-fullName-error' : 'edit-fullName-hint'}
-                  className={`${FIELD} ${fieldTone('fullName')}`}
+                  className={detailInputClass({ error: Boolean(errors.fullName) })}
                 />
-              </Field>
-              <Field
-                id="edit-badgeNumber"
+              </DetailFormField>
+              <DetailFormField
+                htmlFor="edit-badgeNumber"
                 label="Badge ID"
                 required
                 hint="Shown on the roster and on every report they file."
@@ -229,11 +231,11 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
                   onChange={set('badgeNumber')}
                   aria-invalid={Boolean(errors.badgeNumber)}
                   aria-describedby={errors.badgeNumber ? 'edit-badgeNumber-error' : 'edit-badgeNumber-hint'}
-                  className={`${FIELD} font-mono ${fieldTone('badgeNumber')}`}
+                  className={detailInputClass({ error: Boolean(errors.badgeNumber), mono: true })}
                 />
-              </Field>
-              <Field
-                id="edit-phone"
+              </DetailFormField>
+              <DetailFormField
+                htmlFor="edit-phone"
                 label="Official contact number"
                 hint="The number the guardhouse calls them on."
                 error={errors.phone}
@@ -247,49 +249,55 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
                   onChange={set('phone')}
                   aria-invalid={Boolean(errors.phone)}
                   aria-describedby={errors.phone ? 'edit-phone-error' : 'edit-phone-hint'}
-                  className={`${FIELD} ${fieldTone('phone')}`}
+                  className={detailInputClass({ error: Boolean(errors.phone), mono: true })}
                 />
-              </Field>
-            </div>
-          </section>
+              </DetailFormField>
+            </DetailCard>
 
-          <section>
-            <h3 className="mb-5 text-[11px] font-semibold uppercase tracking-widest text-text-muted">System credentials</h3>
-            <div className="space-y-5">
-              <Field id="edit-email" label="Login email" required hint="Cannot be changed — it is what this account signs in with.">
-                <input
-                  id="edit-email"
-                  type="email"
-                  value={form.email}
-                  disabled
-                  aria-describedby="edit-email-hint"
-                  className="w-full cursor-not-allowed rounded-xl border border-hairline bg-base-800/40 px-3.5 py-2.5 text-sm text-text-muted shadow-sm dark:bg-base-900/30"
-                />
-              </Field>
-              <div className="flex items-start gap-3.5 rounded-xl border border-hairline bg-base-800/40 p-4 dark:bg-base-900/40">
-                <KeyRound size="sm" className="mt-0.5 shrink-0 text-text-muted" aria-hidden="true" />
-                <p className="text-sm leading-relaxed text-text-secondary">
-                  Passwords cannot be changed here. Use{' '}
-                  <strong className="font-medium text-text-primary">Reset password</strong> in the directory — that
-                  re-issues and re-flags the account in one recorded step.
-                </p>
-              </div>
-            </div>
-          </section>
+            <DetailCard icon={KeyRound} title="System credentials" bodyClassName="space-y-4">
+              <DetailFormField htmlFor="edit-email" label="Login email" required hint="Cannot be changed — it is what this account signs in with.">
+                <div className="relative">
+                  <Mail size="sm" aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                  <input
+                    id="edit-email"
+                    type="email"
+                    value={form.email}
+                    disabled
+                    aria-describedby="edit-email-hint"
+                    className={detailInputClass({ icon: true, disabled: true, className: '!pr-10' })}
+                  />
+                  <Lock size="sm" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                </div>
+              </DetailFormField>
+              <p className="flex items-start gap-2 text-xs leading-relaxed text-text-muted">
+                <KeyRound size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+                <span>
+                  Passwords cannot be changed here. Use <strong className="font-medium text-text-secondary">Reset password</strong> in
+                  the directory — that re-issues and re-flags the account in one recorded step.
+                </span>
+              </p>
+            </DetailCard>
+
+            {submitError ? (
+              <p role="alert" className="rounded-xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
+                {submitError}
+              </p>
+            ) : null}
+          </div>
         </div>
 
-        <footer className="shrink-0 border-t border-hairline bg-base-900/90 px-6 py-4 backdrop-blur-md dark:bg-base-950/90">
-          {submitError ? (
-            <p role="alert" className="mb-3 rounded-xl border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
-              {submitError}
-            </p>
-          ) : null}
-          <div className="flex items-center justify-end gap-3">
+        {/* ═══ FOOTER ═══ */}
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
+          <p className="flex items-center gap-2 text-xs text-text-muted">
+            <ShieldCheck size={14} className="text-success/70" aria-hidden="true" />
+            <span>Every change is recorded in Audit History</span>
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="rounded-full px-5 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -297,9 +305,9 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
               type="submit"
               disabled={busy || !dirty}
               title={!dirty && !busy ? 'Nothing has changed yet' : undefined}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-segment-active)] px-5 py-2.5 text-sm font-medium text-[var(--color-segment-active-fg)] shadow-[0_0_20px_-5px_color-mix(in_oklab,var(--color-segment-active)_40%,transparent)] transition-[background-color,transform,opacity] duration-150 hover:bg-[color-mix(in_oklab,var(--color-segment-active)_85%,white)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
             >
-              {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : null}
+              {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <Check size="sm" aria-hidden="true" />}
               {busy ? 'Saving…' : 'Save account details'}
             </button>
           </div>
