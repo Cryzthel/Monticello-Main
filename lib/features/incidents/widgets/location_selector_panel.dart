@@ -57,13 +57,13 @@ class AddressFieldStyle {
   static const double textSize = 15.5;
   static const double hintSize = 15;
 
-  /// The floating label, resting and floated. The form used Login's 14 /
-  /// 11.5, and 11.5pt riding the border is the size residents could not read
-  /// on "Phase, Block & Lot" and "Incident details" once text was entered.
-  /// Floated is held at 14 — the bottom of the legible range — and resting
-  /// matches the typed text so the label does not shrink as it lifts off.
-  static const double labelRestingSize = 15.5;
-  static const double labelFloatedSize = 14;
+  /// The label above each box (2026-10-19: labels moved outside the field).
+  /// 14 — the size the floated label was held at for legibility — set
+  /// semi-bold so it reads as the question and the placeholder as the hint.
+  static const double labelSize = 14;
+
+  /// Between the label and its box.
+  static const double labelGap = 8;
 
   /// How much room a focused field asks for when it scrolls itself into view.
   ///
@@ -85,9 +85,9 @@ class AddressFieldStyle {
 ///
 /// The Phase / Block / Lot search field and the Incident details textarea both
 /// render through this, so their height, padding, type scale, border and
-/// floating-label behaviour are identical by construction. They used to be two
+/// label are identical by construction. They used to be two
 /// implementations that agreed on most numbers and disagreed on the rest —
-/// different text sizes, a floating label on one and a heading on the other,
+/// different text sizes, a label inside one and a heading on the other,
 /// an emerald focus border on one and slate on the other.
 class AddressInput extends StatelessWidget {
   const AddressInput({
@@ -110,9 +110,8 @@ class AddressInput extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
 
-  /// The floating label — resting inside the box, floating onto the border
-  /// when focused or filled, in Login's sizes and inks ([AuthTokens]). With a
-  /// label, [hint] only appears once the label has moved out of its way.
+  /// The label, drawn above the box. [hint] is the placeholder inside it,
+  /// shown whenever the field is empty.
   final String? label;
 
   final IconData? icon;
@@ -157,25 +156,6 @@ class AddressInput extends StatelessWidget {
           color: AppColors.textPrimary,
           fontWeight: AppInput.weight),
       decoration: InputDecoration(
-        labelText: label,
-        // Multi-line fields float from the first line, not the vertical
-        // middle of a four-line box.
-        alignLabelWithHint: !single,
-        labelStyle: sfPro(
-          fontSize: AddressFieldStyle.labelRestingSize,
-          fontWeight: FontWeight.w400,
-          color: AppColors.textMuted,
-        ),
-        floatingLabelStyle: WidgetStateTextStyle.resolveWith(
-          (states) => sfPro(
-            fontSize: AddressFieldStyle.labelFloatedSize,
-            fontWeight: FontWeight.w600,
-            // Focused and merely-floated differ by ink, as on Login.
-            color: states.contains(WidgetState.focused)
-                ? AppColors.textPrimary
-                : AppColors.textSecondary,
-          ),
-        ),
         hintText: hint,
         hintStyle: sfPro(
             fontSize: AddressFieldStyle.hintSize, color: AppColors.textMuted),
@@ -214,9 +194,32 @@ class AddressInput extends StatelessWidget {
       ),
     );
 
-    return SizedBox(
+    final box = SizedBox(
       height: single ? AddressFieldStyle.height : null,
       child: field,
+    );
+    if (label == null) return box;
+
+    // ── THE LABEL SITS OUTSIDE, ABOVE THE BOX (2026-10-19, by request) ──────
+    // It used to rest inside the field and float onto its border on focus.
+    // That hid the placeholder until the field was tapped, and the floated
+    // label was small text riding a line. Above the box it never moves, and
+    // the placeholder inside is always there to say what to type.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label!,
+          style: sfPro(
+            fontSize: AddressFieldStyle.labelSize,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: AddressFieldStyle.labelGap),
+        box,
+      ],
     );
   }
 }
@@ -254,9 +257,9 @@ class LocationEntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // No heading above the box any more: the field floats its own label, the
-    // same way Incident details does below the map, so the form's two inputs
-    // read as one set.
+    // The field draws its own label above the box, the same way Incident
+    // details does directly beneath it, so the form's two inputs read as one
+    // set.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -295,7 +298,7 @@ class LocationEntryCard extends StatelessWidget {
 ///   • OPENED AGAIN → "Recent Locations" first, which is the whole Grab trick.
 ///     The second report you file is mostly already entered.
 ///   • TYPING → live results from the estate's real schedule.
-/// The search field's floating label.
+/// The search field's label, above the box.
 const String kLocationFieldLabel = 'Phase, Block & Lot';
 
 class LocationSearchField extends StatefulWidget {
@@ -470,7 +473,7 @@ class _LocationSearchFieldState extends State<LocationSearchField> {
               // instant the field was tapped, by a panel repeating the same
               // sentence plus two more — so the first thing a resident met was
               // four lines of instructions for one text box.
-              hint: 'Search address, phase, or lot…',
+              hint: 'Enter your phase, block or lot…',
               onChanged: _onQueryChanged,
               textInputAction: TextInputAction.search,
               onSubmitted: _onSubmitted,

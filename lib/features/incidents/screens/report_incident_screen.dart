@@ -28,6 +28,7 @@ import 'package:monticello_villas_app/features/map/widgets/incident_map_picker.d
 import 'package:monticello_villas_app/features/incidents/widgets/location_selector_panel.dart';
 import 'package:monticello_villas_app/features/property/data/subdivision_directory.dart';
 import 'package:monticello_villas_app/features/property/services/lot_reference_store.dart';
+import 'package:monticello_villas_app/features/incidents/pin_placement.dart';
 
 class ReportIncidentScreen extends StatefulWidget {
   const ReportIncidentScreen({super.key});
@@ -43,6 +44,17 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen>
   String _category = 'Security';
 
   late LatLng _pin;
+
+  /// Whether the pin has actually been put somewhere: dragged, set by
+  /// "Locate me", or moved onto the chosen lot's surveyed centre.
+  ///
+  /// ── THE ESTATE-CENTRE REPORTS (2026-10-19) ─────────────────────────────
+  /// [_pin] starts at the subdivision centre. Only the Phase/Block/Lot was
+  /// required, so a report for a lot with no surveyed centre, filed without
+  /// touching the map, went out pinned to the middle of the estate — and the
+  /// guard's dispatch map drew it there, nowhere near the house it named.
+  /// The location step now refuses to continue until this is true.
+  bool _pinPlaced = false;
   final _descCtrl = TextEditingController();
 
   // ── Address: Phase, Block and Lot, chosen from the site plan ──
@@ -151,14 +163,35 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen>
       )
       .color;
 
+  /// Where the needle points while the map is moving, for the coordinate
+  /// read-out. The picker writes it every camera frame; [_setPin] keeps it on
+  /// the committed pin otherwise. A notifier so a drag repaints one line of
+  /// text instead of this whole form.
+  late final ValueNotifier<LatLng> _livePin;
+
+  /// The reporter's registered lot line, read once. It was `_lotLine()` in
+  /// build, so every pin commit started a new read and flashed the read-out
+  /// back to "…".
+  late final Future<String> _lotLineFuture = _lotLine();
+
   @override
   void initState() {
     super.initState();
     _pin = MapConstants.subdivisionCenter;
+    _livePin = ValueNotifier<LatLng>(_pin);
+  }
+
+  /// Commits a pin to the form: what the report will file, and what the
+  /// read-out shows. Call inside setState.
+  void _setPin(LatLng next) {
+    _pin = next;
+    _pinPlaced = true;
+    _livePin.value = next;
   }
 
   @override
   void dispose() {
+    _livePin.dispose();
     _descCtrl.dispose();
     _locationCtrl.dispose();
     _evidenceUploadCtrl.dispose();
@@ -178,6 +211,18 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen>
   /// on this step, so both are validated together before advancing.
   bool _validateLocationStep() {
     bool valid = true;
+
+    // A move still settling when Next is pressed — a fling's tail, or a drag
+    // released a moment ago. The picker commits on idle, and leaving the step
+    // unmounts it before that idle arrives, so the resident's last move would
+    // be lost. [_livePin] only differs from [_pin] for a finger-driven move
+    // (see IncidentMapPicker.liveCentre), so adopting it is adopting what the
+    // resident did. Outside the estate it is not adopted: the picker would
+    // have snapped it back.
+    final live = _livePin.value;
+    if (live != _pin && MapConstants.containsInSubdivision(live)) {
+      setState(() => _setPin(live));
+    }
     setState(() {
       _locationError = null;
       _descError = null;
@@ -187,6 +232,11 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen>
 
     if (_address == null) {
       setState(() => _locationError = 'Choose the Phase, Block and Lot.');
+      valid = false;
+    } else if (!_pinPlaced) {
+      // A fact, not a how-to (2026-10-19): the drag-and-Locate-me instruction
+      // that stood here was removed by request. The map itself shows how.
+      setState(() => _locationError = 'The pin is not on the map yet.');
       valid = false;
     }
 
@@ -665,10 +715,18 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen>
     // filed without dragging the map.
     if (!LotReferenceStore.isLoaded) await LotReferenceStore.load();
     final centre = LotReferenceStore.locator.centreFor(address);
-    if (centre == null || !mounted) return;
+    if (!mounted) return;
+    // A pin the resident already put ON this lot is more exact than its
+    // centroid, so it stays; see [pinAfterAddressPick].
+    final next = pinAfterAddressPick(
+      pin: _pin,
+      placedByHand: _pinPlaced,
+      lotCentre: centre,
+    );
+    if (next == null) return;
     // The picker watches `selected` and eases the camera across — see its
     // didUpdateWidget. Setting the pin here is the whole handoff.
-    setState(() => _pin = centre);
+    setState(() => _setPin(next));
   }
 
   Future<String> _lotLine() async {
@@ -768,8 +826,9 @@ class _ReportIncidentScreenState extends State<ReportIncidentScreen>
           descCtrl: _descCtrl,
           address: _address,
           onAddressChanged: _onAddressChanged,
-          lotLineFuture: _lotLine(),
-          onPinChanged: (ll) => setState(() => _pin = ll),
+          lotLineFuture: _lotLineFuture,
+          livePin: _livePin,
+          onPinChanged: (ll) => setState(() => _setPin(ll)),
           locationError: _locationError,
           descError: _descError,
           // The pin takes the selected category's colour, so "what happened"
@@ -1328,6 +1387,7 @@ class _MapStep extends StatelessWidget {
   final SubdivisionAddress? address;
   final ValueChanged<SubdivisionAddress?> onAddressChanged;
   final Future<String> lotLineFuture;
+  final ValueNotifier<LatLng> livePin;
   final ValueChanged<LatLng> onPinChanged;
   final String? locationError;
   final String? descError;
@@ -1340,6 +1400,7 @@ class _MapStep extends StatelessWidget {
     required this.address,
     required this.onAddressChanged,
     required this.lotLineFuture,
+    required this.livePin,
     required this.onPinChanged,
     required this.categoryColor,
     this.locationError,
@@ -1357,8 +1418,8 @@ class _MapStep extends StatelessWidget {
     // The map claims drags that start on it — it is live from the first frame,
     // with no tap-to-activate step in front of the screen's primary action (see
     // IncidentMapPicker's "NO INTERACTION GATE" note). The column is laid out
-    // so that costs nothing in practice: the address card above the map, the
-    // coordinate read-out and description below it, and the 16px gutters either
+    // so that costs nothing in practice: the address and description fields above
+    // the map, the coordinate read-out below it, and the 16px gutters either
     // side of it are all ordinary scroll surface, and the map is only 240 of a
     // screen's worth of height. Pinning the map at the top instead had solved
     // the collision by making the map unscrollable-past, which is the complaint
@@ -1380,8 +1441,29 @@ class _MapStep extends StatelessWidget {
             errorText: locationError,
           ),
 
-          // 2. THE MAP. Nothing floats over the imagery: the white address
-          //    label that used to sit above the pin repeated the field just
+          // 2. WHAT — directly under the address (2026-10-19, by request), so
+          //    the two typed answers sit together and both labelled
+          //    fields come before the map. It used to sit below the map,
+          //    which split the form's text entry across the one control that
+          //    cannot be scrolled past by dragging on it.
+          //
+          //    No time field. Evidence capture time is bound automatically
+          //    when a photo or clip is attached on the next step — see
+          //    _recordCaptureTime.
+          const SizedBox(height: _kStepGap),
+          _FormField(
+            controller: descCtrl,
+            label: 'Incident details',
+            hint: 'Enter your incident details…',
+            maxLines: 4,
+          ),
+          if (descError != null) ...[
+            const SizedBox(height: 8),
+            _InlineFieldError(message: descError!),
+          ],
+
+          // 3. THE MAP. Nothing floats over the imagery: the white address
+          //    label that used to sit above the pin repeated the field
           //    above, and covered the spot being chosen.
           const SizedBox(height: _kStepGap),
           ClipRRect(
@@ -1393,36 +1475,16 @@ class _MapStep extends StatelessWidget {
               // category's hue.
               radarColor: categoryColor,
               onChanged: onPinChanged,
+              liveCentre: livePin,
             ),
           ),
 
+          // 4. The coordinate the needle is on, following the drag.
           const SizedBox(height: _kStepGap),
-          SizedBox(
-            width: double.infinity,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _CoordinateReadout(pin: pin, lotLineFuture: lotLineFuture),
-                const SizedBox(height: 16),
-                _FormField(
-                  controller: descCtrl,
-                  label: 'Incident details',
-                  hint: 'Describe what happened — be as specific as possible…',
-                  maxLines: 4,
-                ),
-                if (descError != null) ...[
-                  const SizedBox(height: 8),
-                  _InlineFieldError(message: descError!),
-                ],
-
-                // No time field. Evidence capture time is bound automatically
-                // when a photo or clip is attached on the next step — see
-                // _recordCaptureTime. Asking every resident to confirm a clock
-                // reading taxed all of them to fix the minority who file late.
-                // Nor a caption saying so: it explained an automatic step the
-                // resident never has to think about.
-              ],
-            ),
+          ValueListenableBuilder<LatLng>(
+            valueListenable: livePin,
+            builder: (_, live, __) =>
+                _CoordinateReadout(pin: live, lotLineFuture: lotLineFuture),
           ),
         ],
       ),
@@ -1519,7 +1581,7 @@ class _FormField extends StatelessWidget {
 
   // ── ALL FOUR NUMBERS NOW COME FROM AddressFieldStyle ──────────────────────
   //
-  // The location panel above the map and the description below it are the same
+  // The location panel and the description beneath it are the same
   // form, and they were drifting: 16px radius here against the panel's 12,
   // emerald borders here against the panel's slate. Delegating means the two
   // cannot disagree, and the aliases stay so the ~15 call sites below (and

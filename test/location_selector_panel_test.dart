@@ -46,7 +46,7 @@ void main() {
     testWidgets('one search field — no street/landmark box', (tester) async {
       await pumpCard(tester);
       expect(field(), findsOneWidget);
-      expect(find.text('Search address, phase, or lot…'), findsOneWidget);
+      expect(find.text('Enter your phase, block or lot…'), findsOneWidget);
       expect(find.text('Street, landmark or gate'), findsNothing);
     });
 
@@ -57,12 +57,19 @@ void main() {
       expect(input.decoration!.hintStyle!.fontSize, greaterThanOrEqualTo(15));
     });
 
-    testWidgets('it floats its label like Incident details, no heading above',
+    testWidgets('its label sits above the box, like Incident details',
         (tester) async {
       await pumpCard(tester);
       expect(find.text('Where is the incident?'), findsNothing);
       final deco = tester.widget<TextField>(field()).decoration!;
-      expect(deco.labelText, 'Phase, Block & Lot');
+      // Outside the field, not floating inside it (2026-10-19)…
+      expect(deco.labelText, isNull);
+      final label = find.text('Phase, Block & Lot');
+      expect(label, findsOneWidget);
+      expect(tester.getBottomLeft(label).dy,
+          lessThanOrEqualTo(tester.getTopLeft(field()).dy));
+      // …so the placeholder shows at rest, before the field is tapped.
+      expect(find.text('Enter your phase, block or lot…'), findsOneWidget);
 
       // The description field renders through the very same widget, so the
       // two share size, padding, border and label behaviour by construction.
@@ -77,7 +84,8 @@ void main() {
         ),
       ));
       final details = tester.widget<TextField>(field()).decoration!;
-      expect(details.labelStyle, deco.labelStyle);
+      expect(details.labelText, isNull);
+      expect(find.text('Incident details'), findsOneWidget);
       expect(details.hintStyle, deco.hintStyle);
       expect(details.enabledBorder, deco.enabledBorder);
       expect(details.focusedBorder, deco.focusedBorder);

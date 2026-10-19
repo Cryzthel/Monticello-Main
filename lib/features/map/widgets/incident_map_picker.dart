@@ -52,10 +52,23 @@ class IncidentMapPicker extends StatefulWidget {
     this.height = 260,
     this.showHint = true,
     this.radarColor = AppColors.primary,
+    this.liveCentre,
   });
 
   final ll.LatLng selected;
+
+  /// The committed pin: called when the camera settles after the resident
+  /// moves the map, after the geofence check. This is what the report files.
   final PinChanged onChanged;
+
+  /// Where the needle points RIGHT NOW while the RESIDENT moves the map,
+  /// written on every camera frame of a finger-driven move — for a read-out
+  /// that follows the drag without the caller rebuilding on each frame.
+  /// Programmatic eases do not write it. Owned by the caller, who keeps it
+  /// equal to [selected] whenever it sets a pin itself, so a difference means
+  /// a move that has not settled (and committed) yet. Never written during a
+  /// build.
+  final ValueNotifier<ll.LatLng>? liveCentre;
   final double height;
   final bool showHint;
 
@@ -131,9 +144,8 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
   /// setState would rebuild [MapWidget] and snap the camera back mid-gesture.
   /// Only the pin badge and the status pill listen.
   ///
-  /// Null until the camera first moves, which is what lets the status bar show
-  /// the drag hint to someone who has not worked out the gesture yet, and the
-  /// live phase read-out to everyone who has.
+  /// Null until the camera first moves. The status bar reads it for the
+  /// out-of-estate warning.
   final ValueNotifier<ll.LatLng?> _liveCentre = ValueNotifier<ll.LatLng?>(null);
 
   // ── NO INTERACTION GATE ───────────────────────────────────────────────────
@@ -150,8 +162,8 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
   // unchanged in nature — the EagerGestureRecognizer below claims a pointer the
   // instant it lands, so a drag STARTING inside the map card does not reach the
   // step's SingleChildScrollView. It is bounded, though: the card is a few
-  // hundred pixels of a much taller column, and the address card above it, the
-  // coordinate read-out and description below it, and the gutters either side
+  // hundred pixels of a much taller column, and the address and description fields above
+  // it, the coordinate read-out below it, and the gutters either side
   // all scroll normally.
 
   /// Last centre reported while dragging, committed on idle.
@@ -165,8 +177,27 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
   /// "where the incident is" are two different facts.
   static const Color _liveBlue = Color(0xFF2563EB);
 
-  /// True while a camera move we started is in flight. See [_moveCameraTo].
-  bool _programmaticMove = false;
+  /// True from a finger landing on the map until the idle that follows it.
+  ///
+  /// ── THE PIN THAT WOULD NOT MOVE (2026-10-19) ──────────────────────────────
+  /// This replaced `_programmaticMove`, a flag raised by every camera move this
+  /// widget started and cleared by the NEXT idle event, whatever caused it.
+  /// That idle was not always ours:
+  ///   • picking a lot eases the camera for 520ms; a resident who grabbed the
+  ///     map during it cancelled the ease, and the one idle that followed their
+  ///     drag was swallowed as "our own landing" — the pin sat on the new spot
+  ///     while the form kept the old coordinate;
+  ///   • an ease to where the camera already was produces no idle at all, so
+  ///     the flag stayed up and silently ate the resident's next drag.
+  /// Either way the report was filed at a coordinate the resident had moved
+  /// away from, and the guard's map plotted it there.
+  ///
+  /// Ownership is now decided by the finger, not by guessing which idle
+  /// belongs to which move: an idle commits only when the map was touched
+  /// since the last one. Programmatic moves never touch it, so they can never
+  /// commit (no feedback loop), and a touch always commits, interrupted ease
+  /// or not.
+  bool _touchedSinceIdle = false;
 
   /// The camera the map OPENS on, built exactly once.
   ///
@@ -223,11 +254,13 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
     // phone" is exactly the bug that hides in the gap. Deceleration is what
     // makes a drag feel like it has weight instead of stopping dead.
     //
-    // Two-finger ROTATE is on here, unlike the dashboard map. A centre-anchored
-    // pin does not care about bearing — the viewport centre is the same
-    // coordinate whichever way north points — and recentre resets the bearing,
-    // so there is a way back from a crooked map. Pitch stays off: tilting moves
-    // the horizon and makes the point under the pin genuinely ambiguous.
+    // NORTH UP, like the dispatch map (2026-10-19, web parity). Rotate was on
+    // here; the centre coordinate does not change with bearing, but a resident
+    // who twisted the map lined their pin up against streets drawn at an
+    // angle the guard's north-up map never shows, and two-finger rotation
+    // fought pinch-zoom on small screens. Pitch stays off for the reason the
+    // web gives: tilting moves the horizon and makes the point under the pin
+    // ambiguous.
     await map.gestures.updateSettings(
       GesturesSettings(
         scrollEnabled: true,
@@ -239,9 +272,9 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
         scrollMode: ScrollMode.HORIZONTAL_AND_VERTICAL,
         scrollDecelerationEnabled: true,
         pinchToZoomDecelerationEnabled: true,
-        rotateDecelerationEnabled: true,
-        rotateEnabled: true,
-        simultaneousRotateAndPinchToZoomEnabled: true,
+        rotateDecelerationEnabled: false,
+        rotateEnabled: false,
+        simultaneousRotateAndPinchToZoomEnabled: false,
         pitchEnabled: false,
       ),
     );
@@ -497,25 +530,19 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
     );
   }
 
-  /// Moves the camera without letting the move be mistaken for a user drag.
-  ///
-  /// Every programmatic camera change ends in an idle event that looks exactly
-  /// like the end of a finger drag. Committing on that would close a loop —
-  /// commit fires onChanged, the parent rebuilds, the camera eases, idle fires,
-  /// commit again — so the flag tells [_onMapIdle] to sit this one out.
+  /// Moves the camera. Its idle never commits, because no finger touched the
+  /// map for it — see [_touchedSinceIdle].
   Future<void> _moveCameraTo(ll.LatLng target, {int duration = 380}) async {
     final map = _map;
     if (map == null) return;
-    _programmaticMove = true;
     try {
       await map.easeTo(
-        // Bearing back to north. Rotate is enabled, so this doubles as the way
-        // out of a map the resident has twisted and cannot straighten by hand.
+        // North up, stated explicitly, matching the dispatch map.
         CameraOptions(center: _toPoint(target), bearing: 0),
         MapAnimationOptions(duration: duration),
       );
     } catch (_) {
-      _programmaticMove = false;
+      // The style or view went away mid-ease; there is nothing to commit.
     }
   }
 
@@ -531,12 +558,19 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
 
   /// A finger DOWN on the map plants the pin, before it has moved: the brief's
   /// Grab behaviour stops the idle bounce the moment the screen is touched.
-  void _onPointerDown(PointerDownEvent event) => _dragging.value = true;
+  void _onPointerDown(PointerDownEvent event) {
+    _touchedSinceIdle = true;
+    _dragging.value = true;
+  }
 
   /// Drops the pin early when the drag never actually moved the map — no idle
   /// event is coming in that case, and the pin would stay lifted forever.
   void _onPointerUp(PointerEvent event) {
-    if (_pendingCentre == null) _dragging.value = false;
+    if (_pendingCentre != null) return;
+    // A tap that never moved the camera: no idle is coming for it, so the
+    // touch must not stay armed and claim the next programmatic move's idle.
+    _dragging.value = false;
+    _touchedSinceIdle = false;
   }
 
   void _onCameraChanged(CameraChangedEventData event) {
@@ -546,6 +580,12 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
     // the camera got to; the two notifiers repaint the pin badge and the status
     // pill without touching the map subtree.
     _liveCentre.value = centre;
+    // Only while a finger drives the camera. A programmatic ease (a lot pick,
+    // Locate me) already handed the caller its target, and publishing the
+    // in-between frames would let the caller adopt a point the camera was
+    // merely passing through. So `liveCentre` differing from the committed
+    // pin always means "the resident moved it and it has not settled yet".
+    if (_touchedSinceIdle) widget.liveCentre?.value = centre;
     _dragging.value = true;
   }
 
@@ -553,17 +593,28 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
   ///
   /// Committing on every camera frame instead would rebuild the whole report
   /// form behind the map sixty times a second.
-  void _onMapIdle(MapIdleEventData event) {
-    final centre = _pendingCentre;
+  Future<void> _onMapIdle(MapIdleEventData event) async {
+    var centre = _pendingCentre;
     _pendingCentre = null;
     _dragging.value = false;
 
-    // Our own easeTo landing, not the resident's finger. Swallow it.
-    if (_programmaticMove) {
-      _programmaticMove = false;
-      return;
+    // An easeTo landing, or the map's first settle, with no finger involved.
+    // Nothing the resident did, so nothing to commit.
+    if (!_touchedSinceIdle) return;
+    _touchedSinceIdle = false;
+
+    // The camera's own word on where it stopped. Camera-change events cross a
+    // platform channel and the last one before idle can be dropped, which left
+    // the commit a frame (or a fling's tail) short of where the needle points.
+    try {
+      final state = await _map?.getCameraState();
+      if (state != null) centre = _toLatLng(state.center);
+    } catch (_) {
+      // Keep the last reported centre.
     }
-    if (centre == null) return;
+    if (!mounted || centre == null) return;
+    _liveCentre.value = centre;
+    widget.liveCentre?.value = centre;
 
     // ── GEOFENCE: alert, then snap back ─────────────────────────────────────
     //
@@ -588,6 +639,7 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
       // Put the read-out on the coordinate the camera is moving to, so the
       // badge does not sit on "Outside Monticello Villas" after the snap.
       _liveCentre.value = target;
+      widget.liveCentre?.value = target;
       _moveCameraTo(target, duration: 420);
       if (target != widget.selected) {
         widget.onChanged(target);
@@ -773,9 +825,8 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
 
             // ── THE STATUS PILL ─────────────────────────────────────────────
             //
-            // Two states, and it is HIDDEN the rest of the time. It teaches the
-            // drag before the map has been moved, and it warns when the pin has
-            // left the estate.
+            // One state, and it is HIDDEN the rest of the time: it warns when
+            // the pin has left the estate.
             //
             // It used to fill the gap between those with "Pin placed — enter
             // the address below", which was the auto-address prompt wearing a
@@ -797,19 +848,11 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
                     builder: (context, live, _) {
                       final outside = live != null &&
                           !MapConstants.containsInSubdivision(live);
-                      // The hint no longer waits on the map being woken —
-                      // there is nothing to wake. It shows from the first frame
-                      // until the camera first moves, which is exactly the
-                      // window in which a resident does not yet know the
-                      // gesture.
-                      final label = outside
-                          ? 'Outside Monticello Villas'
-                          : (live == null
-                              // Names the primary gesture: dragging the map
-                              // under a fixed pin, not tapping at a target the
-                              // thumb covers.
-                              ? 'Drag the map to place the pin'
-                              : null);
+                      // Status only. "Drag the map to place the pin" stood
+                      // here until 2026-10-19 and was removed by request: a
+                      // pin over a live map already says what to do, and the
+                      // instruction sat on the imagery being read.
+                      final label = outside ? 'Outside Monticello Villas' : null;
 
                       return AnimatedSwitcher(
                         duration: const Duration(milliseconds: 220),
@@ -864,8 +907,8 @@ class _IncidentMapPickerState extends State<IncidentMapPicker> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          "Couldn't get your location. Check that location is "
-                          'on, then try again — or place the pin by dragging.',
+                          "Couldn't get your location. Check that location "
+                          'is on.',
                           style: sfPro(
                             fontSize: 11.5,
                             fontWeight: FontWeight.w500,
