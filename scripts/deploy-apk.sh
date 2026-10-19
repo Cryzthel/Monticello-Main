@@ -45,7 +45,7 @@ if [[ -f "$DOWNLOADS/$FILE" ]]; then
   fail "$FILE was already released. Bump 'version:' in pubspec.yaml (e.g. ${VERSION_NAME}+$((BUILD_NUMBER + 1)) and a new version name)."
 fi
 if [[ -f "$DOWNLOADS/latest.json" ]]; then
-  LAST_BUILD="$(node -e "console.log(require('./$DOWNLOADS/latest.json').buildNumber ?? 0)")"
+  LAST_BUILD="$(node -e "console.log((require('./$DOWNLOADS/latest.json') || {}).buildNumber ?? 0)")"
   (( BUILD_NUMBER > LAST_BUILD )) || fail "build number $BUILD_NUMBER is not above the last release ($LAST_BUILD). Phones refuse updates that do not increase it."
 fi
 
