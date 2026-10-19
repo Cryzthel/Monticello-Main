@@ -1,6 +1,6 @@
 import { toast } from '@shared/lib/toast'
 import { useMemo, useState } from 'react'
-import { UserCheck, UserPlus, Info, Lock, UserRoundCheck, X } from '@shared/icons'
+import { UserCheck, UserPlus, Info, UserRoundCheck, X } from '@shared/icons'
 import AppShell from '@/layouts/AppShell'
 import { useWaitWhile } from '@/lib/waitState'
 import ResidentVerificationModal from '@/components/ResidentVerificationModal'
@@ -14,9 +14,8 @@ import { useResidents } from '@shared/hooks/useResidents'
 import {
   residentAddress,
   residentTypeLabel,
-  REVIEW_LOCKED_HINT,
   approveResident,
-  isReviewLocked,
+  isReviewFinal,
   rejectResident,
   importResidentFromUser,
   RESIDENT_STATUS,
@@ -47,17 +46,7 @@ const TABS = [
 // Resident statuses reuse the shared badge so "Verified" here is the same
 // green as "Resolved" on an incident, and "Pending" the same amber — one
 // status colour language across both portals (see StatusControl.jsx).
-// Rejected is final (lib/residents.js, firestore.rules): it can never be
-// approved, so its badge carries a padlock rather than the status glyph, and
-// the row menu's Approve is locked, not just greyed.
 function ResidentStatusBadge({ status }) {
-  if (isReviewLocked(status)) {
-    return (
-      <span title={REVIEW_LOCKED_HINT} className="inline-flex">
-        <StatusBadge status={RESIDENT_STATUS_LABELS[status] ?? status} icon={Lock} />
-      </span>
-    )
-  }
   return <StatusBadge status={RESIDENT_STATUS_LABELS[status] ?? status} />
 }
 
@@ -147,8 +136,32 @@ export default function ResidentsPage() {
   // the instant onSnapshot echoes it back.
   const selected = residents.find((r) => r.id === selectedId) ?? null
 
-  function runAction(action, messages) {
-    return toast.run(action, messages)
+  /*
+   * A DECISION IS FINAL, AND IT ROUTES THE ROW.
+   *
+   * Verified and Rejected are terminal (lib/residents.js, firestore.rules), so
+   * only a Pending row carries Approve / Reject at all. Each tab filters the
+   * LIVE listener by status, so a decided row leaves the Pending queue and
+   * lands under its outcome the moment the write echoes back (from any admin,
+   * in any tab), with no refresh. The admin stays where they are, working
+   * the queue; the toast offers the jump to where the row went.
+   */
+  function announceDecision(name, next, description) {
+    const label = next === RESIDENT_STATUS.verified ? 'Verified' : 'Rejected'
+    const offerJump = tab !== ALL && tab !== next
+    toast.success(next === RESIDENT_STATUS.verified ? `${name} is approved` : `${name} was rejected`, {
+      description: description ?? `Moved to ${label}.`,
+      action: offerJump ? { label: `View ${label}`, onClick: () => setTab(next) } : undefined,
+    })
+  }
+
+  async function decideFromRow(resident, next) {
+    const approving = next === RESIDENT_STATUS.verified
+    const ok = await toast.run(() => (approving ? approveResident(resident) : rejectResident(resident, '')), {
+      quiet: true,
+      error: approving ? 'Could not approve the resident' : 'Could not reject the application',
+    })
+    if (ok) announceDecision(resident.name, next)
   }
 
   return (
@@ -294,20 +307,16 @@ export default function ResidentsPage() {
                       <td className="px-4 py-3.5 text-right" onClick={(event) => event.stopPropagation()}>
                         <RowActionMenu
                           onView={() => setSelectedId(resident.id)}
-                          onDispatch={() => runAction(() => approveResident(resident), { success: 'Resident approved', error: 'Could not approve the resident' })}
-                          onResolve={() => runAction(() => rejectResident(resident, ''), { success: 'Application rejected', error: 'Could not reject the application' })}
+                          // A decided row offers View only: RowActionMenu draws
+                          // no action whose handler is withheld.
+                          onDispatch={isReviewFinal(resident) ? undefined : () => decideFromRow(resident, RESIDENT_STATUS.verified)}
+                          onResolve={isReviewFinal(resident) ? undefined : () => decideFromRow(resident, RESIDENT_STATUS.rejected)}
                           dispatchLabel="Approve"
                           resolveLabel="Reject"
                           dispatchIcon={UserRoundCheck}
                           resolveIcon={X}
                           dispatchIconClass="text-success"
                           resolveIconClass="text-danger"
-                          dispatchDisabled={resident.status === RESIDENT_STATUS.verified || isReviewLocked(resident)}
-                          dispatchLocked={isReviewLocked(resident)}
-                          dispatchHint={isReviewLocked(resident) ? REVIEW_LOCKED_HINT : 'Already verified'}
-                          resolveDisabled={isReviewLocked(resident)}
-                          resolveLocked={isReviewLocked(resident)}
-                          resolveHint="Already rejected. The decision is final."
                         />
                       </td>
                     </tr>
@@ -323,6 +332,7 @@ export default function ResidentsPage() {
         isOpen={Boolean(selected)}
         resident={selected}
         onClose={() => setSelectedId(null)}
+        onDecided={announceDecision}
       />
     </AppShell>
   )

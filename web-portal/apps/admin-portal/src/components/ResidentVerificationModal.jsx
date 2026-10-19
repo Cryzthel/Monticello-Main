@@ -22,9 +22,8 @@ import { useResidentProfile } from '@/hooks/useResidentProfile'
 import {
   RESIDENT_STATUS,
   RESIDENT_STATUS_LABELS,
-  REVIEW_LOCKED_HINT,
   approveResident,
-  isReviewLocked,
+  isReviewFinal,
   rejectResident,
   residentTypeLabel,
 } from '@shared/lib/residents'
@@ -176,7 +175,7 @@ function DocumentTile({ url, onOpen, lead }) {
   )
 }
 
-export default function ResidentVerificationModal({ isOpen, resident, onClose }) {
+export default function ResidentVerificationModal({ isOpen, resident, onClose, onDecided }) {
   // ── Mount / show split, so the exit animates ─────────────────────────────
   const [mounted, setMounted] = useState(isOpen)
   const [shown, setShown] = useState(false)
@@ -256,24 +255,31 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
   const images = documents.filter((d) => d.type === 'image')
   const pdfs = documents.filter((d) => d.type === 'pdf')
 
-  // Rejected is final: nothing here can decide a locked record again. The
-  // library and firestore.rules refuse it too; this keeps a stale click quiet.
-  const rejected = isReviewLocked(status)
+  // Verified and Rejected are final: a decided record shows no Approve or
+  // Reject at all. The library and firestore.rules refuse a second decision
+  // too; this keeps a stale click quiet.
+  const final = isReviewFinal(status)
   const approved = status === RESIDENT_STATUS.verified
+  const rejected = status === RESIDENT_STATUS.rejected
+
+  // The page reports the outcome (with a jump to the tab the row moved to);
+  // standalone, the modal reports it itself.
+  function announce(next, description) {
+    if (onDecided) return onDecided(name, next, description)
+    toast.success(next === RESIDENT_STATUS.verified ? `${name} is approved` : `${name} was rejected`, { description })
+  }
 
   async function decide(kind) {
-    if (rejected || busy) return
+    if (final || busy) return
     setBusy(kind)
     setError('')
     try {
       if (kind === 'approve') {
         await approveResident(current)
-        toast.success(`${name} is approved`, { description: 'They can sign in to the resident app now.' })
+        announce(RESIDENT_STATUS.verified, 'They can sign in to the resident app now.')
       } else {
         await rejectResident(current, reason)
-        toast.success(`${name} was rejected`, {
-          description: reason.trim() ? 'They will see your reason in the app.' : undefined,
-        })
+        announce(RESIDENT_STATUS.rejected, reason.trim() ? 'They will see your reason in the app.' : undefined)
       }
       setBusy(null)
       onClose?.()
@@ -297,7 +303,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
       ? {
           key: 'reviewed',
           label: approved ? 'Approved' : 'Rejected',
-          detail: [current.reviewedByName && `By ${current.reviewedByName}`, rejected && 'Final, locked'].filter(Boolean).join(' · ') || undefined,
+          detail: [current.reviewedByName && `By ${current.reviewedByName}`, 'Final'].filter(Boolean).join(' · '),
           stamp: formatDateTime(current.reviewedAt, ''),
           tone: approved ? 'done' : 'warning',
         }
@@ -347,8 +353,8 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Pill
                   tone={STATUS_TONE[status] ?? 'warning'}
-                  icon={rejected ? Lock : StatusIcon}
-                  title={rejected ? REVIEW_LOCKED_HINT : undefined}
+                  icon={StatusIcon}
+                  title={final ? 'This decision is final' : undefined}
                 >
                   {RESIDENT_STATUS_LABELS[status] ?? status}
                 </Pill>
@@ -486,17 +492,21 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose })
             </p>
           ) : null}
 
-          {rejected ? (
+          {final ? (
+            // Checked before `rejecting`, so a decision landing live from
+            // another admin replaces an open reject form.
             <div role="status" className="flex flex-wrap items-center justify-between gap-3">
               <p className="flex min-w-0 items-start gap-2 text-xs leading-relaxed text-text-muted">
-                <Lock size={14} className="mt-0.5 shrink-0 text-danger/80" aria-hidden="true" />
+                <Lock size={14} className={`mt-0.5 shrink-0 ${approved ? 'text-success/80' : 'text-danger/80'}`} aria-hidden="true" />
                 <span>
-                  <strong className="font-semibold text-text-secondary">Decision locked.</strong> Rejected applications
-                  cannot be approved; the resident must register again to be reviewed.
+                  <strong className="font-semibold text-text-secondary">Decision final.</strong>{' '}
+                  {approved
+                    ? 'This resident is verified; the review is closed.'
+                    : 'Rejected applications cannot be approved; the resident must register again to be reviewed.'}
                 </span>
               </p>
-              <Pill tone="danger" icon={Lock}>
-                Locked
+              <Pill tone={approved ? 'success' : 'danger'} icon={Lock}>
+                {approved ? 'Verified' : 'Rejected'}
               </Pill>
             </div>
           ) : rejecting ? (

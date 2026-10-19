@@ -191,34 +191,31 @@ function identitySeed(resident) {
   }
 }
 
-// ── REJECTED IS FINAL ──────────────────────────────────────────────────────
+// ── A DECISION IS FINAL ────────────────────────────────────────────────────
 //
-// A rejected application is locked for good (2026-10-19, by request): it can
-// never be approved — by a stale row, a second tab, or a mis-click — and a
-// later review needs a fresh registration. Enforced three times over:
-//   • the UI never offers Approve on a rejected row (isReviewLocked);
+// Verified and Rejected are both terminal (2026-10-19, by request; Rejected
+// first, Verified the same day): once decided, a record is never decided again
+// — not by a stale row, a second tab, or a mis-click — and a fresh review
+// needs a fresh registration. Enforced three times over:
+//   • the UI offers Approve / Reject on Pending records only (isReviewFinal);
 //   • writeReview re-reads the document inside a transaction and refuses to
-//     move a rejected record, so a row that went stale under another admin's
-//     decision cannot overwrite it;
-//   • firestore.rules refuses any write that takes a residents doc out of
-//     `rejected`, whatever client sends it.
-// Verified → Rejected stays allowed: revoking a verification is legitimate.
+//     write over a decided record, so a row that went stale under another
+//     admin's decision cannot overwrite it;
+//   • firestore.rules refuses any write that changes a decided status,
+//     whatever client sends it.
 
-export const REVIEW_LOCKED_HINT =
-  'Rejected applications are locked. The resident must register again to be reviewed.'
-
-/** True once a resident row (or a raw status) can no longer be decided. */
-export function isReviewLocked(residentOrStatus) {
+/** True once a resident row (or a raw status) has been decided for good. */
+export function isReviewFinal(residentOrStatus) {
   const status = typeof residentOrStatus === 'string' ? residentOrStatus : residentOrStatus?.status
-  return normalizeResidentStatus(status) === RESIDENT_STATUS.rejected
+  return normalizeResidentStatus(status) !== RESIDENT_STATUS.pending
 }
 
-/** Thrown when a decision would move a locked record; describeError prints its message. */
-export class ReviewLockedError extends Error {
+/** Thrown when a decision would overwrite a decided record; describeError prints its message. */
+export class ReviewFinalError extends Error {
   constructor() {
-    super('This application was rejected and is locked. The resident must register again.')
-    this.name = 'ReviewLockedError'
-    this.code = 'resident/review-locked'
+    super('This application has already been decided. Its status is final.')
+    this.name = 'ReviewFinalError'
+    this.code = 'resident/review-final'
   }
 }
 
@@ -236,10 +233,10 @@ function writeReview(resident, fields) {
   return runTransaction(db, async (tx) => {
     const snap = await tx.get(ref)
     const stored = snap.exists() ? snap.data() : null
-    // Nothing moves a rejected record — not an approval, and not a second
-    // rejection that would overwrite the first reviewer, time and reason.
-    if (stored && isReviewLocked(stored.verificationStatus ?? stored.status)) {
-      throw new ReviewLockedError()
+    // Nothing moves a decided record — and a repeat of the same decision
+    // would overwrite the first reviewer, time and reason.
+    if (stored && isReviewFinal(stored.verificationStatus ?? stored.status)) {
+      throw new ReviewFinalError()
     }
     const reviewer = {
       reviewedBy: auth.currentUser?.uid ?? '',
@@ -254,7 +251,7 @@ function writeReview(resident, fields) {
 }
 
 export async function approveResident(resident) {
-  if (isReviewLocked(resident)) throw new ReviewLockedError()
+  if (isReviewFinal(resident)) throw new ReviewFinalError()
   await writeReview(resident, {
     verificationStatus: RESIDENT_STATUS.verified,
     rejectionReason: '',
@@ -262,7 +259,7 @@ export async function approveResident(resident) {
 }
 
 export async function rejectResident(resident, reason) {
-  if (isReviewLocked(resident)) throw new ReviewLockedError()
+  if (isReviewFinal(resident)) throw new ReviewFinalError()
   await writeReview(resident, {
     verificationStatus: RESIDENT_STATUS.rejected,
     // Surfaced verbatim on the resident's locked screen, so a blank reason

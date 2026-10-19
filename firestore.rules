@@ -78,11 +78,16 @@ service cloud.firestore {
     }
 
     // The resident status as the portal normalises it (lib/residents.js
-    // normalizeResidentStatus): only the "rejected" half matters here.
-    function isRejectedResident(data) {
+    // normalizeResidentStatus): reject spellings first, then a leading
+    // "pending", then approve spellings unless negated ("unverified").
+    function residentState(data) {
       let raw = data.get('verificationStatus', data.get('status', 'pending'));
-      return raw is string
-        && raw.lower().matches('.*(reject|declin|denie|deny|refus|flag).*');
+      let v = raw is string ? raw.lower().trim() : 'pending';
+      return v.matches('.*(reject|declin|denie|deny|refus|flag).*') ? 'rejected'
+        : v.matches('pending.*') ? 'pending'
+        : (v.matches('.*(verif|approv|accept).*')
+            && !v.matches('(.*[^a-z])?(un|not|non|never) *-? *(verif|approv).*')) ? 'verified'
+        : 'pending';
     }
 
     // Signup / verification workflow. A resident reads & upserts their own
@@ -106,15 +111,14 @@ service cloud.firestore {
       // blank on the admin Residents page. Self-approval is still blocked:
       // once a real status exists, the owner can only write that same value.
       //
-      // REJECTED IS FINAL (2026-10-19). No write — admin or owner — may take a
-      // record out of `rejected`; a later review needs a fresh registration.
-      // The status is read the way the portal reads it (verificationStatus,
-      // else status; any reject/decline spelling), so a legacy label cannot
-      // slip past. Staying rejected is allowed, so the owner can still save
-      // their own profile fields. See web-portal/packages/shared/src/lib/
-      // residents.js (writeReview), which checks the same lock first.
-      allow update: if (!isRejectedResident(resource.data)
-          || isRejectedResident(request.resource.data))
+      // A DECISION IS FINAL (2026-10-19). Once a record is verified or
+      // rejected, no write — admin or owner — may change that state; a fresh
+      // review needs a fresh registration. The state is read the way the
+      // portal reads it, so a legacy label cannot slip past. Keeping the
+      // state is allowed, so the owner can still save their profile fields.
+      // lib/residents.js (writeReview) checks the same lock first.
+      allow update: if (residentState(resource.data) == 'pending'
+          || residentState(request.resource.data) == residentState(resource.data))
         && (isAdminStaff()
           || (isOwner(userId)
             && request.resource.data.get('verificationStatus', 'pending')

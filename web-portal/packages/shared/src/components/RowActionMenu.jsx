@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MoreHorizontal, Eye, Send, CheckCircle2, Lock } from '@shared/icons'
+import { MoreHorizontal, Eye, Send, CheckCircle2 } from '@shared/icons'
 import { belowTrigger, flipIfOverflowing } from '@shared/lib/menuPosition'
 
 // Portal-based, same reasoning as shared/components/NotificationBell: the
@@ -21,12 +21,6 @@ export default function RowActionMenu({
   resolveIcon: ResolveIcon = CheckCircle2,
   dispatchIconClass = 'text-brand-400',
   resolveIconClass = 'text-success',
-  // Why a disabled action is unavailable — its tooltip and screen-reader
-  // text. `locked` swaps the glyph for a padlock: closed for good, not for now.
-  dispatchHint,
-  resolveHint,
-  dispatchLocked = false,
-  resolveLocked = false,
 }) {
   const buttonRef = useRef(null)
   const panelRef = useRef(null)
@@ -129,34 +123,22 @@ export default function RowActionMenu({
                 <button
                   type="button"
                   disabled={dispatchDisabled}
-                  title={dispatchDisabled ? dispatchHint : undefined}
                   onClick={() => runAction(onDispatch)}
                   className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
-                  {dispatchLocked ? (
-                    <Lock size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
-                  ) : (
-                    <DispatchIcon size="sm" className={`shrink-0 ${dispatchIconClass}`} aria-hidden="true" />
-                  )}
+                  <DispatchIcon size="sm" className={`shrink-0 ${dispatchIconClass}`} aria-hidden="true" />
                   {dispatchLabel}
-                  {dispatchDisabled && dispatchHint ? <span className="sr-only">. {dispatchHint}</span> : null}
                 </button>
               ) : null}
               {onResolve ? (
                 <button
                   type="button"
                   disabled={resolveDisabled}
-                  title={resolveDisabled ? resolveHint : undefined}
                   onClick={() => runAction(onResolve)}
                   className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
-                  {resolveLocked ? (
-                    <Lock size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
-                  ) : (
-                    <ResolveIcon size="sm" className={`shrink-0 ${resolveIconClass}`} aria-hidden="true" />
-                  )}
+                  <ResolveIcon size="sm" className={`shrink-0 ${resolveIconClass}`} aria-hidden="true" />
                   {resolveLabel}
-                  {resolveDisabled && resolveHint ? <span className="sr-only">. {resolveHint}</span> : null}
                 </button>
               ) : null}
             </div>,
