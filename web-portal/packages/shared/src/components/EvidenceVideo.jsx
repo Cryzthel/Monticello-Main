@@ -24,7 +24,7 @@ const durationLabel = (sec) => {
  *     a given browser lacks — with a download link, so evidence is never
  *     simply a black box that does nothing.
  */
-export function EvidenceVideo({ item, className = '', autoPlay = false }) {
+export function EvidenceVideo({ item, className = '', autoPlay = false, title }) {
   const [failed, setFailed] = useState(false)
   const playable = isBrowserPlayable(item.contentType ?? '') && !failed
 
@@ -58,6 +58,7 @@ export function EvidenceVideo({ item, className = '', autoPlay = false }) {
       preload="metadata"
       autoPlay={autoPlay}
       onError={() => setFailed(true)}
+      aria-label={title}
       className={className}
     />
   )

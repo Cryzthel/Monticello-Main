@@ -304,7 +304,7 @@ class _EvidenceGridState extends State<_EvidenceGrid> {
       MaterialPageRoute(
         fullscreenDialog: true,
         builder: (_) => item.isVideo
-            ? _VideoPlayerScreen(url: item.url)
+            ? VideoPlayerScreen(url: item.url)
             : _PhotoGalleryScreen(
                 urls: widget.photos, initialIndex: item.indexInType),
       ),
@@ -507,7 +507,7 @@ class _PhotoGalleryScreenState extends State<_PhotoGalleryScreen> {
 /// Small LRU cache of video controllers that are already `.initialize()`-ing
 /// (or finished), keyed by URL. Evidence videos are usually tapped moments
 /// after the incident timeline sheet opens, so [EvidenceSection] starts
-/// buffering each video as soon as its row is visible — [_VideoPlayerScreen]
+/// buffering each video as soon as its row is visible — [VideoPlayerScreen]
 /// then reuses that same controller/future instead of starting a cold
 /// network + codec setup from zero when the resident actually taps play.
 /// Bounded at a handful of entries so a report with many videos can't hold
@@ -543,19 +543,32 @@ class _VideoPreloadCache {
 }
 
 // ── Full-screen video player ────────────────────────────────────────────────
-class _VideoPlayerScreen extends StatefulWidget {
-  const _VideoPlayerScreen({required this.url});
-
-  final String url;
-
-  @override
-  State<_VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+/// Opens [VideoPlayerScreen] for [url] as a full-screen route.
+void openVideoPlayer(BuildContext context, String url, {String title = 'Video'}) {
+  Navigator.of(context).push(MaterialPageRoute<void>(
+    fullscreenDialog: true,
+    builder: (_) => VideoPlayerScreen(url: url, title: title),
+  ));
 }
 
-class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
+/// Full-screen player for one clip: tap to play/pause, scrub along the
+/// bottom, mute from the top bar. Evidence and announcement clips both open
+/// here (see [openVideoPlayer]).
+class VideoPlayerScreen extends StatefulWidget {
+  const VideoPlayerScreen({super.key, required this.url, this.title = 'Video evidence'});
+
+  final String url;
+  final String title;
+
+  @override
+  State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
+}
+
+class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   late final VideoPlayerController _controller;
   bool _ready = false;
   bool _failed = false;
+  bool _muted = false;
 
   @override
   void initState() {
@@ -588,16 +601,29 @@ class _VideoPlayerScreenState extends State<_VideoPlayerScreen> {
         backgroundColor: Colors.black,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: Text('Video evidence',
+        title: Text(widget.title,
             style: sfPro(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Colors.white)),
         // Top-right and `onDark`, matching the photo viewer above.
         automaticallyImplyLeading: false,
-        actions: const [
-          ModernCloseButton(onDark: true, semanticLabel: 'Close video'),
-          SizedBox(width: 8),
+        actions: [
+          if (_ready && !_failed)
+            IconButton(
+              tooltip: _muted ? 'Unmute' : 'Mute',
+              onPressed: () {
+                setState(() => _muted = !_muted);
+                _controller.setVolume(_muted ? 0 : 1);
+              },
+              icon: Icon(
+                _muted ? PhosphorIconsFill.speakerSlash : PhosphorIconsFill.speakerHigh,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          const ModernCloseButton(onDark: true, semanticLabel: 'Close video'),
+          const SizedBox(width: 8),
         ],
       ),
       body: Center(

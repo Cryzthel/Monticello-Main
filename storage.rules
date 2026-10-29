@@ -110,8 +110,8 @@ service firebase.storage {
     }
 
     // ── Announcement media: announcements/{uid}/{fileName} ──────────────────
-    // Images attached to an HOA broadcast from the admin portal's composer
-    // (web-portal/apps/admin-portal/src/lib/announcements.js uploadAnnouncementImage).
+    // Photos and video clips attached to an HOA broadcast from the admin portal's composer
+    // (web-portal/apps/admin-portal/src/lib/announcements.js uploadAnnouncementMedia).
     // Images are downscaled client-side to ~1.5 MB before upload, so the 5 MB
     // bound below is a backstop rather than the limit operators actually meet.
     // URLs are stored on the announcement's `imageUrls` array, with the first
@@ -123,11 +123,19 @@ service firebase.storage {
     match /announcements/{userId}/{fileName} {
       allow read: if request.auth != null;
 
-      // Images only, ≤ 5 MB — the same ceiling the composer enforces
-      // client-side (MAX_IMAGE_BYTES).
+      // Images ≤ 5 MB — the same ceiling the composer enforces client-side
+      // (MAX_IMAGE_BYTES) — and their video posters, which are JPEGs.
+      //
+      // Video (2026-10-29): MP4 / MOV / WebM only, the formats a resident's
+      // player can stream; no AVI. ≤ 150 MB, matching MAX_UPLOAD_VIDEO_BYTES
+      // in web-portal/packages/shared/src/lib/videoCompression.js (clips over
+      // 25 MB are re-encoded on the device first, so most land near 20 MB).
       allow create, update: if isAdminStaff()
-        && request.resource.size < 5 * 1024 * 1024
-        && isRasterImage();
+        && (
+          (request.resource.size < 5 * 1024 * 1024 && isRasterImage()) ||
+          (request.resource.size < 150 * 1024 * 1024
+            && request.resource.contentType.matches('video/(mp4|quicktime|webm)'))
+        );
 
       allow delete: if isAdminStaff();
     }

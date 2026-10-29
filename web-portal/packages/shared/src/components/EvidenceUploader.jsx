@@ -235,6 +235,9 @@ export default function EvidenceUploader({
               <ImagePlus size="sm" />
               {full ? `Limit reached — ${items.length} attached` : dragging ? 'Drop to attach' : 'Add more'}
             </button>
+            {/* The format line stays once files are attached: "Add more" asks
+                the same question the empty dropzone did. */}
+            {hint && !full ? <p className="mt-1.5 text-center text-small text-text-muted">{hint}</p> : null}
           </>
         ) : (
           <button

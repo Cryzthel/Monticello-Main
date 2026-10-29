@@ -288,7 +288,10 @@ export default function SecurityReportsPage() {
         icon: FileDown,
         onSelect: () => {
           try {
-            exportReportPdf(report, { attachmentCount: (report.photoUrls?.length ?? 0) + (report.attachmentUrls?.length ?? 0) })
+            exportReportPdf(report, {
+              attachmentCount:
+                (report.photoUrls?.length ?? 0) + (report.videoUrls?.length ?? 0) + (report.attachmentUrls?.length ?? 0),
+            })
             toast.success('Report exported', { description: `${ticketCode(report.id)}.pdf` })
           } catch (err) {
             console.error('Export failed', err)

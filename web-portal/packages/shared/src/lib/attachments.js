@@ -1,6 +1,6 @@
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage'
 import { auth, storage } from '@shared/lib/firebase'
-import { VIDEO_ACCEPT, videoContentType } from '@shared/lib/videoCompression'
+import { STREAMABLE_VIDEO_ACCEPT, VIDEO_ACCEPT, videoContentType } from '@shared/lib/videoCompression'
 
 /**
  * Attachment uploads for a guard-filed incident report.
@@ -52,6 +52,9 @@ export const ACCEPT_ATTRIBUTE = `image/*,.jpg,.jpeg,.png,.webp,${VIDEO_ACCEPT},a
 
 /** For pickers that take photos and video but not documents (the resolve modals). */
 export const MEDIA_ACCEPT_ATTRIBUTE = `image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp,${VIDEO_ACCEPT}`
+
+/** Photos plus only the video formats that play inline (the announcement composer). */
+export const STREAMABLE_MEDIA_ACCEPT_ATTRIBUTE = `image/png,image/jpeg,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif,${STREAMABLE_VIDEO_ACCEPT}`
 
 /**
  * The content type a picked file is stored as: the browser's own, or for a

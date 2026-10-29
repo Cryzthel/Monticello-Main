@@ -267,7 +267,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
                 <EvidenceUploader
                   uploads={photos}
                   heading="Photo & video proof"
-                  hint="Supports photos and videos up to 25 MB"
+                  hint={`Up to ${RESOLUTION_PHOTOS_MAX} photos and ${RESOLUTION_VIDEOS_MAX} videos (MP4, MOV, WebM, AVI). Clips over 25 MB are compressed.`}
                   disabled={submitting}
                   inputLabel="Add photo or video proof"
                 />

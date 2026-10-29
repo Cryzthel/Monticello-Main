@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ACCEPT_ATTRIBUTE,
   MEDIA_ACCEPT_ATTRIBUTE,
+  STREAMABLE_MEDIA_ACCEPT_ATTRIBUTE,
   attachmentLimitBytes,
   bucketFor,
   contentTypeOf,
@@ -9,7 +10,7 @@ import {
   formatBytes,
   uploadIncidentAttachment,
 } from '@shared/lib/attachments'
-import { COMPRESS_ABOVE_BYTES, isVideoFile } from '@shared/lib/videoCompression'
+import { COMPRESS_ABOVE_BYTES, isBrowserPlayable, isVideoFile, videoContentType } from '@shared/lib/videoCompression'
 import { uploadVideoEvidence } from '@shared/lib/videoEvidence'
 import { MAX_SOURCE_IMAGE_BYTES, compressImage, isCompressibleImage } from '@shared/lib/imageCompression'
 import { getSettings } from '@shared/lib/systemSettingsStore'
@@ -57,9 +58,14 @@ const isCanceled = (err) => err?.code === 'storage/canceled' || err?.name === 'C
  * @param {boolean}  [options.documents]   Accept PDF and plain text.
  * @param {number}   [options.maxFileBytes] Ceiling for a photo after resizing,
  *   and for a document. Defaults to the admin-set attachment limit.
- * @param {Function} [options.uploadFile]  `(file, onProgress) → { task, done }`;
- *   defaults to the incident evidence folder.
+ * @param {Function} [options.uploadFile]  `(file, onProgress, { contentType, name })
+ *   → { task, done }`, for photos, videos and video posters alike; defaults to
+ *   the incident evidence folder.
  * @param {string[]} [options.initialUrls] Photos already attached (editing).
+ * @param {object[]} [options.initialVideos] `videoMeta` records already attached
+ *   (editing): `{ url, posterUrl, contentType, … }`.
+ * @param {boolean}  [options.streamableOnly] Refuse AVI — for media residents
+ *   watch inline, where an AVI could only be downloaded.
  */
 export function useEvidenceUploads({
   maxPhotos = Infinity,
@@ -68,9 +74,11 @@ export function useEvidenceUploads({
   maxFileBytes,
   uploadFile = uploadIncidentAttachment,
   initialUrls = [],
+  initialVideos = [],
+  streamableOnly = false,
 } = {}) {
-  const [items, setItems] = useState(() =>
-    initialUrls.map((url) => ({
+  const [items, setItems] = useState(() => [
+    ...initialUrls.map((url) => ({
       id: `e${(seq += 1)}`,
       kind: 'image',
       name: 'Current attachment',
@@ -80,7 +88,18 @@ export function useEvidenceUploads({
       progress: 100,
       url,
     })),
-  )
+    ...initialVideos.map((meta) => ({
+      id: `e${(seq += 1)}`,
+      kind: 'video',
+      name: 'Current video',
+      type: meta.contentType || 'video/mp4',
+      preview: meta.posterUrl ?? null,
+      status: 'done',
+      progress: 100,
+      url: meta.url,
+      meta,
+    })),
+  ])
   const [rejected, setRejected] = useState('')
 
   // Uploads start OUTSIDE state updaters (React may run an updater twice in
@@ -115,6 +134,7 @@ export function useEvidenceUploads({
       try {
         if (item.kind === 'video') {
           const video = uploadVideoEvidence(source, {
+            upload: uploadFile,
             onUpdate: ({ preview, ...next }) => {
               if (stopped()) {
                 if (preview) URL.revokeObjectURL(preview)
@@ -189,6 +209,8 @@ export function useEvidenceUploads({
         const kind = kindOf(file)
         if (!kind || caps[kind] === 0) {
           problems.push(`${file.name} is not a supported file type`)
+        } else if (kind === 'video' && streamableOnly && !isBrowserPlayable(videoContentType(file))) {
+          problems.push(`${file.name} can't play in the feed — use MP4, MOV or WebM`)
         } else if (counts[kind] >= caps[kind]) {
           problems.push(`${file.name} was not added — ${kind === 'video' ? 'video' : 'photo'} limit reached`)
         } else if (kind === 'image' && file.size > MAX_SOURCE_IMAGE_BYTES) {
@@ -223,7 +245,7 @@ export function useEvidenceUploads({
       accepted.forEach(start)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [maxPhotos, maxVideos, documents, maxFileBytes, start],
+    [maxPhotos, maxVideos, documents, maxFileBytes, streamableOnly, start],
   )
 
   const remove = useCallback((target) => {
@@ -298,7 +320,13 @@ export function useEvidenceUploads({
       failed: items.some((item) => item.status === 'error'),
       ...buckets,
       capacity: Number.isFinite(capacity) ? capacity : undefined,
-      accept: documents ? ACCEPT_ATTRIBUTE : maxVideos ? MEDIA_ACCEPT_ATTRIBUTE : IMAGE_ACCEPT_ATTRIBUTE,
+      accept: documents
+        ? ACCEPT_ATTRIBUTE
+        : maxVideos
+          ? streamableOnly
+            ? STREAMABLE_MEDIA_ACCEPT_ATTRIBUTE
+            : MEDIA_ACCEPT_ATTRIBUTE
+          : IMAGE_ACCEPT_ATTRIBUTE,
     }
-  }, [items, rejected, add, remove, retry, reset, maxPhotos, maxVideos, documents])
+  }, [items, rejected, add, remove, retry, reset, maxPhotos, maxVideos, documents, streamableOnly])
 }

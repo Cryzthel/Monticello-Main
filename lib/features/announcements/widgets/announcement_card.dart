@@ -344,6 +344,13 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     final catColor = announcementCategoryColor(announcement.category);
     final hasImage =
         widget.showImage && (announcement.imageUrl ?? '').isNotEmpty;
+    // A notice whose only media is a clip leads with that clip's poster,
+    // badged as video; the detail sheet is where it plays.
+    final posterVideo = hasImage || !widget.showImage
+        ? null
+        : announcement.videos
+            .where((v) => (v.posterUrl ?? '').isNotEmpty)
+            .firstOrNull;
 
     // Geometry, border and press feedback all come from [AppCard] — the same
     // container the notification tiles and settings groups render through, so
@@ -359,11 +366,12 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
         children: [
           // MEDIA FIRST. See the layout note on the class: below the body
           // it sat past the fold on any post long enough to truncate.
-          if (hasImage) ...[
+          if (hasImage || posterVideo != null) ...[
             _AnnouncementMedia(
-              imageUrl: announcement.imageUrl!,
+              imageUrl: hasImage ? announcement.imageUrl! : posterVideo!.posterUrl!,
               stamp: announcementTimeAgo(announcement.postedAt),
               aspectRatio: widget.mediaAspectRatio,
+              isVideo: !hasImage,
             ),
             const SizedBox(height: 13),
           ],
@@ -593,11 +601,15 @@ class _AnnouncementMedia extends StatelessWidget {
     required this.imageUrl,
     required this.stamp,
     required this.aspectRatio,
+    this.isVideo = false,
   });
 
   final String imageUrl;
   final String stamp;
   final double aspectRatio;
+
+  /// The image is a video's poster frame: draw a play badge over it.
+  final bool isVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -655,6 +667,22 @@ class _AnnouncementMedia extends StatelessWidget {
                 ),
               ),
             ),
+
+            if (isVideo)
+              IgnorePointer(
+                child: Center(
+                  child: Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withValues(alpha: 0.55),
+                    ),
+                    child: const Icon(PhosphorIconsFill.play,
+                        color: Colors.white, size: 26),
+                  ),
+                ),
+              ),
 
             // Scrim. `IgnorePointer` so it never eats the card's tap.
             const IgnorePointer(

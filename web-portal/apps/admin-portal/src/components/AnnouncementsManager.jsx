@@ -19,14 +19,17 @@ import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useWaitWhile } from '@/lib/waitState'
 import { db } from '@shared/lib/firebase'
 import EvidenceUploader from '@shared/components/EvidenceUploader'
+import { EvidenceVideo } from '@shared/components/EvidenceVideo'
 import { useEvidenceUploads } from '@shared/hooks/useEvidenceUploads'
 import {
   ANNOUNCEMENT_CATEGORIES,
   CATEGORY_TONES,
   MAX_ANNOUNCEMENT_IMAGES,
+  MAX_ANNOUNCEMENT_VIDEOS,
   MAX_IMAGE_BYTES,
   STATE_META,
   announcementImages,
+  announcementVideos,
   categoryLabel,
   announcementState,
   createAnnouncement,
@@ -40,7 +43,7 @@ import {
   taxonomyLabel,
   taxonomyTone,
   updateAnnouncement,
-  uploadAnnouncementImage,
+  uploadAnnouncementMedia,
 } from '@/lib/announcements'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { announcementCategoryIcon } from '@shared/theme/categoryIcons'
@@ -112,6 +115,10 @@ const EMPTY_DRAFT = {
   // never reference storage that does not exist yet. The composer owns the
   // richer per-tile state (progress, task handle, errors) locally.
   imageUrls: [],
+  // Clips, on the same rule, with the `videoMeta` record (poster, type, size,
+  // duration) each one landed with.
+  videoUrls: [],
+  videoMeta: [],
 }
 
 
@@ -280,10 +287,11 @@ function Composer({
   intent,
 }) {
   /**
-   * The images go through the same engine and uploader as the Guardhouse
-   * evidence pickers (useEvidenceUploads / EvidenceUploader): resized on the
-   * device, uploaded eagerly to `announcements/`, cancelled when removed,
-   * retryable when they fail.
+   * Photos and video go through the same engine and uploader as the Guardhouse
+   * evidence pickers (useEvidenceUploads / EvidenceUploader): photos resized and
+   * large clips re-encoded on the device, uploaded eagerly to `announcements/`,
+   * cancelled when removed, retryable when they fail. AVI is refused here
+   * (`streamableOnly`): residents watch these inline, and an AVI cannot play.
    *
    * Seeded ONCE from the draft, which is correct rather than lazy: the parent
    * remounts this component (via `formKey`) on both reset and startEdit, so
@@ -291,22 +299,26 @@ function Composer({
    */
   const uploads = useEvidenceUploads({
     maxPhotos: MAX_ANNOUNCEMENT_IMAGES,
+    maxVideos: MAX_ANNOUNCEMENT_VIDEOS,
+    streamableOnly: true,
     maxFileBytes: MAX_IMAGE_BYTES,
-    uploadFile: uploadAnnouncementImage,
+    uploadFile: uploadAnnouncementMedia,
     initialUrls: draft.imageUrls ?? [],
+    initialVideos: draft.videoMeta ?? [],
   })
 
   // Publish only what actually landed. The equality check matters: this effect
   // writes to the parent's draft, and returning `prev` unchanged when the URL
   // list is identical is what stops that write from re-rendering us into a loop.
-  const { photoUrls } = uploads
+  const { photoUrls, videoUrls, videoMeta } = uploads
   useEffect(() => {
-    setDraft((prev) => {
-      const same =
-        prev.imageUrls.length === photoUrls.length && prev.imageUrls.every((url, i) => url === photoUrls[i])
-      return same ? prev : { ...prev, imageUrls: photoUrls }
-    })
-  }, [photoUrls, setDraft])
+    const sameList = (a, b) => a.length === b.length && a.every((url, i) => url === b[i])
+    setDraft((prev) =>
+      sameList(prev.imageUrls, photoUrls) && sameList(prev.videoUrls, videoUrls)
+        ? prev
+        : { ...prev, imageUrls: photoUrls, videoUrls, videoMeta },
+    )
+  }, [photoUrls, videoUrls, videoMeta, setDraft])
 
   function updateField(field, value) {
     setDraft((prev) => ({ ...prev, [field]: value }))
@@ -323,7 +335,7 @@ function Composer({
    * the draft's `imageUrls` does not contain it, so publishing now would write
    * an announcement missing that image.
    *
-   * WHY THE STATUS IS THE TEST, NOT A PERCENTAGE. `uploadAnnouncementImage`
+   * WHY THE STATUS IS THE TEST, NOT A PERCENTAGE. `uploadAnnouncementMedia`
    * resolves only after `getDownloadURL` comes back, and 'done' is set there —
    * so 100% of the bytes sent is deliberately NOT enough to clear the guard.
    * The URL existing is.
@@ -471,15 +483,15 @@ function Composer({
         {/* ── Media ──
             `EvidenceUploader` is the one uploader in both portals, so
             attaching a file looks and behaves identically everywhere.
-            The cap is MAX_ANNOUNCEMENT_IMAGES because the document holds an
-            `imageUrls` array (with `imageUrl` still written as the lead image
-            for the mobile reader — see lib/announcements.js). */}
+            Photos land in `imageUrls` (with `imageUrl` still written as the
+            lead image for the mobile reader), clips in `videoUrls` +
+            `videoMeta` — see lib/announcements.js. */}
         <EvidenceUploader
           uploads={uploads}
-          heading="Media"
-          hint={`Supports up to ${MAX_ANNOUNCEMENT_IMAGES} photos`}
+          heading="Photos & video"
+          hint={`Up to ${MAX_ANNOUNCEMENT_IMAGES} photos (JPG, PNG, WebP, GIF) and ${MAX_ANNOUNCEMENT_VIDEOS} videos (MP4, MOV, WebM). Clips over 25 MB are compressed before upload.`}
           autoOpen={intent === 'media'}
-          inputLabel="Attach images"
+          inputLabel="Attach photos or videos"
         />
 
         <label className="flex cursor-pointer select-none items-center gap-2.5 text-small text-text-secondary">
@@ -527,7 +539,7 @@ function Composer({
               uploadIncomplete
                 ? 'Waiting for every attachment to finish uploading'
                 : uploads.failed
-                  ? 'Retry or remove the image that failed to upload'
+                  ? 'Retry or remove the file that failed to upload'
                   : undefined
             }
           >
@@ -536,7 +548,7 @@ function Composer({
             ) : (
               <Send size="sm" />
             )}
-            {uploadIncomplete ? 'Uploading images…' : submitting ? 'Working…' : submitLabel}
+            {uploadIncomplete ? 'Uploading media…' : submitting ? 'Working…' : submitLabel}
         </button>
       </div>
     </form>
@@ -662,6 +674,7 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
   const stateMeta = STATE_META[state]
   const goLive = goLiveDate(a)
   const images = announcementImages(a)
+  const videos = announcementVideos(a)
 
   return (
     <div
@@ -729,6 +742,17 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
           ) : null}
 
           <AnnouncementGallery images={images} title={a.title} />
+
+          {/* Clips play inline with the browser's own controls — play/pause,
+              mute and fullscreen — at the width of the notice, poster first. */}
+          {videos.map((video, index) => (
+            <EvidenceVideo
+              key={video.url}
+              item={video}
+              title={`${a.title || 'Announcement'} — video ${index + 1} of ${videos.length}`}
+              className="aspect-video w-full rounded-lg border border-slate-200 bg-black object-contain"
+            />
+          ))}
         </div>
 
         <div className="flex shrink-0 justify-end gap-2 border-t border-hairline px-6 py-3">
@@ -967,6 +991,8 @@ export default function AnnouncementsManager() {
       priority: a.priority ?? 'general',
       isPinned: Boolean(a.isPinned),
       imageUrls: announcementImages(a),
+      videoUrls: announcementVideos(a).map((v) => v.url),
+      videoMeta: announcementVideos(a),
     })
   }
 

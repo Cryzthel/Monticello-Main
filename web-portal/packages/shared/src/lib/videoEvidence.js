@@ -33,8 +33,12 @@ import {
  * `storage/canceled` / ConversionCanceledError on `cancel()`.
  *
  * The caller owns the returned preview URL and revokes it.
+ *
+ * `upload` is where the clip and its poster go: `(file, onProgress, { contentType, name })
+ * → { task, done }`. Defaults to the incident evidence folder; the announcement
+ * composer passes its own.
  */
-export function uploadVideoEvidence(source, { onUpdate } = {}) {
+export function uploadVideoEvidence(source, { onUpdate, upload = uploadIncidentAttachment } = {}) {
   let canceled = false
   let stopCompression = null
   let uploadTask = null
@@ -91,7 +95,7 @@ export function uploadVideoEvidence(source, { onUpdate } = {}) {
 
     onUpdate?.({ status: 'uploading', progress: 0, note })
     const uploadType = meta.compressed ? 'video/mp4' : contentType
-    const { task, done: uploaded } = uploadIncidentAttachment(
+    const { task, done: uploaded } = upload(
       file,
       (progress) => onUpdate?.({ status: 'uploading', progress }),
       { contentType: uploadType },
@@ -106,7 +110,7 @@ export function uploadVideoEvidence(source, { onUpdate } = {}) {
     let posterUrl = null
     if (posterBlob && !canceled) {
       try {
-        const poster = uploadIncidentAttachment(posterBlob, null, {
+        const poster = upload(posterBlob, null, {
           contentType: 'image/jpeg',
           name: `${file.name.replace(/\.[^.]+$/, '')}-poster.jpg`,
         })

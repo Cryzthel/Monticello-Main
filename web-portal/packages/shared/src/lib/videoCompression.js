@@ -74,6 +74,9 @@ const VIDEO_TYPES = {
 
 export const VIDEO_ACCEPT = '.mp4,.mov,.webm,.avi,video/mp4,video/quicktime,video/webm,video/x-msvideo'
 
+/** The formats a viewer can play inline: no AVI. For media residents watch (announcements). */
+export const STREAMABLE_VIDEO_ACCEPT = '.mp4,.mov,.webm,video/mp4,video/quicktime,video/webm'
+
 const extensionOf = (name = '') => (name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase()
 
 /** The content type to treat (and upload) this file as — the browser's own if it has one. */

@@ -412,6 +412,15 @@ class Announcement {
   final String category;
   final String? imageUrl;
 
+  /// Every photo on the notice. The admin composer writes up to six to
+  /// `imageUrls` and repeats the first as `imageUrl`; older notices have only
+  /// the single field.
+  final List<String> imageUrls;
+
+  /// Clips attached in the admin composer (`videoUrls`), each joined to its
+  /// `videoMeta` record for the poster frame and duration where one exists.
+  final List<AnnouncementVideo> videos;
+
   const Announcement({
     required this.id,
     required this.title,
@@ -421,6 +430,8 @@ class Announcement {
     this.pinned = false,
     this.category = 'General',
     this.imageUrl,
+    this.imageUrls = const [],
+    this.videos = const [],
   });
 
   // Field names match what the admin/security dashboard actually writes
@@ -429,6 +440,26 @@ class Announcement {
   // `postedAt`/`pinned`/`author`/`category` this used to read.
   factory Announcement.fromFirestore(DocumentSnapshot doc) {
     final d = doc.data() as Map<String, dynamic>;
+    final lead = (d['imageUrl'] as String?) ?? '';
+    final images = (d['imageUrls'] as List?)
+            ?.whereType<String>()
+            .where((u) => u.isNotEmpty)
+            .toList() ??
+        const <String>[];
+    final meta = <String, Map>{
+      for (final m in (d['videoMeta'] as List?) ?? const [])
+        if (m is Map && m['url'] is String) m['url'] as String: m,
+    };
+    final videos = [
+      for (final url in (d['videoUrls'] as List?)?.whereType<String>() ??
+          const <String>[])
+        if (url.isNotEmpty)
+          AnnouncementVideo(
+            url: url,
+            posterUrl: meta[url]?['posterUrl'] as String?,
+            durationSec: (meta[url]?['durationSec'] as num?)?.toDouble(),
+          ),
+    ];
     return Announcement(
       id: doc.id,
       title: d['title'] ?? '',
@@ -437,9 +468,9 @@ class Announcement {
       author: d['authorName'] ?? d['author'] ?? '',
       pinned: d['isPinned'] ?? d['pinned'] ?? false,
       category: d['type'] ?? d['category'] ?? 'General',
-      imageUrl: (d['imageUrl'] as String?)?.isNotEmpty == true
-          ? d['imageUrl'] as String
-          : null,
+      imageUrl: lead.isNotEmpty ? lead : (images.isEmpty ? null : images.first),
+      imageUrls: images.isNotEmpty ? images : (lead.isEmpty ? const [] : [lead]),
+      videos: videos,
     );
   }
 
@@ -454,5 +485,21 @@ class Announcement {
       'isArchived': false,
       if (imageUrl != null) 'imageUrl': imageUrl,
     };
+  }
+}
+
+/// One clip on an announcement.
+class AnnouncementVideo {
+  final String url;
+  final String? posterUrl;
+  final double? durationSec;
+
+  const AnnouncementVideo({required this.url, this.posterUrl, this.durationSec});
+
+  /// "1:05", or null when the length was not recorded.
+  String? get durationLabel {
+    final s = durationSec?.round();
+    if (s == null) return null;
+    return '${s ~/ 60}:${(s % 60).toString().padLeft(2, '0')}';
   }
 }

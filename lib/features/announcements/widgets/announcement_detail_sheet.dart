@@ -303,13 +303,9 @@ class _AnnouncementFocusModal extends StatelessWidget {
 
   final Announcement announcement;
 
-  /// The model carries a single `imageUrl`, but the gallery is written against
-  /// a list so a post with several attachments needs no layout work here — only
-  /// a wider field on the model and the writer that populates it.
-  List<String> get _images {
-    final url = announcement.imageUrl ?? '';
-    return url.isEmpty ? const [] : [url];
-  }
+  /// Every photo on the notice (the model reads `imageUrls`, falling back to
+  /// the single `imageUrl` older notices carry).
+  List<String> get _images => announcement.imageUrls;
 
   @override
   Widget build(BuildContext context) {
@@ -408,6 +404,18 @@ class _AnnouncementFocusModal extends StatelessWidget {
           _AttachmentGallery(urls: _images),
         ],
 
+        // Clips, one per row at 16:9 — poster frame, play badge, length.
+        // Tapping opens the full-screen player (play/pause, scrub, mute).
+        for (final (i, video) in announcement.videos.indexed) ...[
+          const SizedBox(height: 12),
+          _VideoTile(
+            video: video,
+            title: announcement.videos.length == 1
+                ? 'Video'
+                : 'Video ${i + 1} of ${announcement.videos.length}',
+          ),
+        ],
+
         const SizedBox(height: 18),
         // No maxLines. The feed clamps the body to three lines precisely so
         // that opening the post is what shows the rest of it.
@@ -420,6 +428,73 @@ class _AnnouncementFocusModal extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One clip on the opened notice: its poster (or a dark field when none was
+/// captured) under a play badge, with the length in the corner.
+class _VideoTile extends StatelessWidget {
+  const _VideoTile({required this.video, required this.title});
+
+  final AnnouncementVideo video;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final poster = video.posterUrl;
+    final duration = video.durationLabel;
+    return Semantics(
+      button: true,
+      label: 'Play $title',
+      child: ClipRRect(
+        borderRadius: AppCard.borderRadius,
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: GestureDetector(
+            onTap: () => openVideoPlayer(context, video.url, title: title),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (poster != null && poster.isNotEmpty)
+                  CachedNetworkImage(
+                    imageUrl: poster,
+                    fit: BoxFit.cover,
+                    fadeInDuration: const Duration(milliseconds: 300),
+                    errorWidget: (_, __, ___) => const ColoredBox(color: Colors.black87),
+                  )
+                else
+                  const ColoredBox(color: Colors.black87),
+                Center(
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withValues(alpha: 0.55),
+                    ),
+                    child: const Icon(PhosphorIconsFill.play, color: Colors.white, size: 28),
+                  ),
+                ),
+                if (duration != null)
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(duration,
+                          style: sfPro(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.white)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

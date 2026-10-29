@@ -1,9 +1,11 @@
 import {
   Archive,
   ArchiveRestore,
+  Film,
   Megaphone,
   Pin,
   PinOff,
+  Play,
   Trash2,
   Zap,
 } from '@shared/icons'
@@ -18,6 +20,7 @@ import {
   CATEGORY_TONES,
   STATE_META,
   announcementImages,
+  announcementVideos,
   announcementState,
   categoryLabel,
   goLiveDate,
@@ -61,7 +64,10 @@ function AnnouncementRow({ announcement: a, onView, onDelete, onPin, onArchive, 
   const state = announcementState(a)
   const meta = STATE_META[state]
   const goLive = goLiveDate(a)
-  const thumb = announcementImages(a)[0]
+  // A notice with only a clip shows that clip's poster, marked as video.
+  const firstVideo = announcementVideos(a)[0]
+  const thumb = announcementImages(a)[0] ?? firstVideo?.posterUrl
+  const videoOnly = !announcementImages(a)[0] && Boolean(firstVideo)
   const category = a.type ?? 'General'
   const title = a.title || 'Untitled announcement'
 
@@ -99,12 +105,25 @@ function AnnouncementRow({ announcement: a, onView, onDelete, onPin, onArchive, 
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           {thumb ? (
-            <img
-              src={thumb}
-              alt=""
-              loading="lazy"
-              className="h-10 w-10 shrink-0 rounded-lg border border-hairline object-cover"
-            />
+            <span className="relative h-10 w-10 shrink-0">
+              <img
+                src={thumb}
+                alt=""
+                loading="lazy"
+                className="h-10 w-10 rounded-lg border border-hairline object-cover"
+              />
+              {videoOnly ? (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white">
+                    <Play size={10} aria-label="Video" />
+                  </span>
+                </span>
+              ) : null}
+            </span>
+          ) : videoOnly ? (
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-tint/[0.05] text-text-muted">
+              <Film size="sm" aria-label="Video" />
+            </span>
           ) : (
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-tint/[0.05] text-text-muted">
               <Megaphone size="sm" />

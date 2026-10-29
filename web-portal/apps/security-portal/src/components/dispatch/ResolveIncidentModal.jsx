@@ -259,7 +259,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
             <EvidenceUploader
               uploads={photos}
               heading="Photos & video"
-              hint="At least one photo · photos and videos up to 25 MB"
+              hint={`At least one photo · up to ${RESOLUTION_PHOTOS_MAX} photos and ${RESOLUTION_VIDEOS_MAX} videos (MP4, MOV, WebM, AVI). Clips over 25 MB are compressed.`}
               disabled={busy}
               capture="environment"
               inputLabel="Add scene photos or video"

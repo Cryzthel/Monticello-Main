@@ -231,6 +231,8 @@ export async function createAnnouncement({
   priority = 'general',
   isPinned = false,
   imageUrls = [],
+  videoUrls = [],
+  videoMeta = [],
   scheduledFor = null,
 }) {
   const scheduled = scheduledFor instanceof Date && scheduledFor.getTime() > Date.now()
@@ -247,6 +249,7 @@ export async function createAnnouncement({
     imageUrls: images,
     // The lead image, for the mobile reader. See the note above.
     imageUrl: images[0] ?? '',
+    ...videoFields(videoUrls, videoMeta),
     publishedAt: goLive,
     scheduledFor: scheduled ? Timestamp.fromDate(scheduledFor) : null,
     state: scheduled ? 'scheduled' : 'published',
@@ -258,7 +261,10 @@ export async function createAnnouncement({
 }
 
 /** Content edit. Never touches state/publishedAt — those have their own paths. */
-export async function updateAnnouncement(id, { title, body, category, priority, imageUrls = [] }) {
+export async function updateAnnouncement(
+  id,
+  { title, body, category, priority, imageUrls = [], videoUrls = [], videoMeta = [] },
+) {
   const images = imageUrls.filter(Boolean)
   await updateDoc(doc(db, COLLECTION, id), {
     title: title.trim(),
@@ -267,6 +273,7 @@ export async function updateAnnouncement(id, { title, body, category, priority, 
     priority,
     imageUrls: images,
     imageUrl: images[0] ?? '',
+    ...videoFields(videoUrls, videoMeta),
     editedByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
     updatedAt: serverTimestamp(),
   })
@@ -351,7 +358,26 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 export const MAX_ANNOUNCEMENT_IMAGES = 6
 
 /**
- * Uploads one image, reporting progress.
+ * Video clips per notice. Two, not six: a clip is long-form on a phone, and a
+ * notice with a stack of them stops being a notice. Same pipeline as the
+ * Guardhouse evidence (useEvidenceUploads → lib/videoEvidence.js): MP4, MOV or
+ * WebM, re-encoded on the device above 25 MB, a poster frame captured.
+ */
+export const MAX_ANNOUNCEMENT_VIDEOS = 2
+
+/**
+ * `videoUrls` plus the `videoMeta` records that describe them (poster, type,
+ * size, duration — see lib/videoEvidence.js), meta kept only for clips still
+ * attached. Written as empty arrays rather than omitted so an edit that
+ * removes every clip actually clears them.
+ */
+function videoFields(videoUrls, videoMeta) {
+  const urls = videoUrls.filter(Boolean)
+  return { videoUrls: urls, videoMeta: videoMeta.filter((m) => m?.url && urls.includes(m.url)) }
+}
+
+/**
+ * Uploads one image, video or video poster, reporting progress.
  *
  * Returns the resumable task alongside the promise so a caller can CANCEL an
  * in-flight upload. That matters now that the composer takes several images at
@@ -361,18 +387,22 @@ export const MAX_ANNOUNCEMENT_IMAGES = 6
  * uploadIncidentAttachment in shared/lib/attachments.js, which solved the same
  * problem first.
  *
+ * Same signature as uploadIncidentAttachment, options included, because the
+ * video pipeline calls it for the clip and again for its poster (a Blob with
+ * no name of its own).
+ *
  * Requires the `announcements/{uid}/{file}` rule in storage.rules; without it
  * this rejects with storage/unauthorized.
  */
-export function uploadAnnouncementImage(file, onProgress) {
+export function uploadAnnouncementMedia(file, onProgress, { contentType = file.type, name = file.name } = {}) {
   const uid = auth.currentUser?.uid ?? 'unknown'
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const safeName = name.replace(/[^a-zA-Z0-9._-]/g, '_')
   // Random suffix, not just the timestamp: several images from one picker land
   // in the same millisecond, and two files of the same name would then collide
   // on one path — the second silently overwriting the first.
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   const path = `announcements/${uid}/${unique}-${safeName}`
-  const task = uploadBytesResumable(ref(storage, path), file, { contentType: file.type })
+  const task = uploadBytesResumable(ref(storage, path), file, { contentType })
 
   const done = new Promise((resolve, reject) => {
     task.on(
@@ -397,6 +427,15 @@ export function uploadAnnouncementImage(file, onProgress) {
 export function announcementImages(a) {
   if (Array.isArray(a?.imageUrls) && a.imageUrls.length > 0) return a.imageUrls.filter(Boolean)
   return a?.imageUrl ? [a.imageUrl] : []
+}
+
+/**
+ * The clips on an announcement as `videoMeta`-shaped records, one per URL in
+ * `videoUrls` (a URL with no record still plays; it just has no poster).
+ */
+export function announcementVideos(a) {
+  const meta = new Map((a?.videoMeta ?? []).filter((m) => m?.url).map((m) => [m.url, m]))
+  return (a?.videoUrls ?? []).filter(Boolean).map((url) => meta.get(url) ?? { url })
 }
 
 // ── Formatting ──────────────────────────────────────────────────────────────

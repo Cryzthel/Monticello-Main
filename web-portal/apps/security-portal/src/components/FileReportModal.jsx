@@ -447,7 +447,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
             <EvidenceUploader
               uploads={attachments}
               heading="Photos, video or documents"
-              hint="Supports photos, videos and PDFs up to 25 MB"
+              hint="Photos (JPG, PNG, WebP), video (MP4, MOV, WebM, AVI) and PDF or text files. Clips over 25 MB are compressed before upload."
               disabled={submitting}
               inputLabel="Attach files to this report"
             />
