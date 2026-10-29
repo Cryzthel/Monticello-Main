@@ -87,7 +87,10 @@ class _Sms {
 }
 
 Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
-    {_StatusFeed? feed, ResidentVerification Function()? verification, _Sms? sms}) async {
+    {_StatusFeed? feed,
+    ResidentVerification Function()? verification,
+    _Sms? sms,
+    bool offline = false}) async {
   // Always a fake feed: the real one needs a Firebase app.
   final statusFeed = feed ?? _StatusFeed();
   await tester.pumpWidget(
@@ -105,6 +108,7 @@ Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
                 verification:
                     verification ?? () => ResidentVerification.verified,
                 smsComposer: (sms ?? _Sms()).call,
+                offlineCheck: () async => offline,
               ),
               child: const Text('SOS'),
             ),
@@ -178,11 +182,12 @@ void main() {
     expect(dispatcher.calls, 1);
     // The whole point of the queued state: it must not claim the guardhouse
     // has the alert, and it must not read as a failure either.
-    expect(find.text('SAVED — NO SIGNAL'), findsOneWidget);
+    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
     expect(find.text('SECURITY NOTIFIED'), findsNothing);
     expect(find.text('ALERT NOT SENT'), findsNothing);
-    expect(find.textContaining('has not seen it yet'), findsOneWidget);
-    expect(find.textContaining('send itself'), findsOneWidget);
+    // No separate "saved on this phone" notice: the prompt carries it.
+    expect(find.textContaining('saved on this phone'), findsNothing);
+    expect(find.textContaining('has not received your alert yet'), findsOneWidget);
   });
 
   testWidgets('a queued alert can be dismissed like a sent one', (tester) async {
@@ -202,7 +207,7 @@ void main() {
     expect(find.text('Done'), findsOneWidget);
     await tester.tap(find.text('Done'));
     await _advance(tester);
-    expect(find.text('SAVED — NO SIGNAL'), findsNothing);
+    expect(find.text('NO INTERNET CONNECTION'), findsNothing);
   });
 
   // ── NO SIGNAL: THE SMS FALLBACK ─────────────────────────────────────────
@@ -248,6 +253,50 @@ void main() {
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 4);
     expect(find.textContaining('could not open a messaging app'), findsOneWidget);
+  });
+
+  testWidgets('with no network the prompt opens before the alert is saved',
+      (tester) async {
+    // The dispatch (GPS fix, encrypted save) takes its time; the prompt must
+    // not wait for it, and its SMS must still carry that alert.
+    final gate = Completer<void>();
+    final dispatcher = _Dispatcher()..outcome = SosDispatchOutcome.queued;
+    final sms = _Sms();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showSosCountdown(
+              context,
+              dispatcher: () async {
+                await gate.future;
+                return dispatcher.call();
+              },
+              statusStream: _StatusFeed().call,
+              verification: () => ResidentVerification.verified,
+              smsComposer: sms.call,
+              offlineCheck: () async => true,
+            ),
+            child: const Text('SOS'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('SOS'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 6));
+    await _advance(tester, frames: 3);
+
+    expect(find.text('No Internet Connection'), findsOneWidget);
+    await tester.tap(find.text('Send SMS Alert'));
+    await _advance(tester, frames: 2);
+    expect(sms.sent, isEmpty, reason: 'waits for the alert to be built');
+
+    gate.complete();
+    await _advance(tester, frames: 4);
+    expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
+    // Shown once, not again when the queued answer arrives.
+    expect(find.text('No Internet Connection'), findsNothing);
   });
 
   testWidgets('a delivered alert never offers SMS', (tester) async {
@@ -445,20 +494,20 @@ void main() {
         feed: feed);
     await runOut(tester);
 
-    expect(find.text('SAVED — NO SIGNAL'), findsOneWidget);
+    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
     expect(find.text('Waiting for signal'), findsOneWidget);
     expect(find.text('Received by the guardhouse'), findsNothing);
 
     // Still only in this phone's cache: not delivered, nothing changes.
     feed.emit(const SosAlertStatus(serverAcknowledged: false));
     await _advance(tester, frames: 3);
-    expect(find.text('SAVED — NO SIGNAL'), findsOneWidget);
+    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
 
     // The sync service lands it while the sheet is still open.
     feed.emit(const SosAlertStatus(serverAcknowledged: true));
     await _advance(tester, frames: 3);
     expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
-    expect(find.text('SAVED — NO SIGNAL'), findsNothing);
+    expect(find.text('NO INTERNET CONNECTION'), findsNothing);
     expect(find.text('Received by the guardhouse'), findsOneWidget);
     await feed.close();
   });
@@ -508,7 +557,7 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     await _advance(tester);
     expect(streams, hasLength(1));
-    expect(find.text('SAVED — NO SIGNAL'), findsOneWidget);
+    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
 
     await streams.first.close();
     await tester.pump();
@@ -606,7 +655,7 @@ void main() {
     expect(dispatcher.calls, 1);
     expect(find.text('SOS UNAVAILABLE'), findsOneWidget);
     expect(find.text('Verification Pending'), findsOneWidget);
-    expect(find.text('SAVED — NO SIGNAL'), findsNothing);
+    expect(find.text('NO INTERNET CONNECTION'), findsNothing);
     expect(find.textContaining('send itself'), findsNothing);
     expect(feed.watched, isEmpty,
         reason: 'a refused alert has no document to follow');

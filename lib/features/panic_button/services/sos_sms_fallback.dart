@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:monticello_villas_app/features/panic_button/models/sos_payload.dart';
@@ -45,6 +46,8 @@ class SosSmsFallback {
     return Uri.parse('sms:${numbers.join(';')}?body=$text');
   }
 
+  static const _channel = MethodChannel('monticello/sms');
+
   /// Opens the SMS composer addressed to the guardhouse numbers in
   /// [SosSmsRecipients] with [payload] written out.
   ///
@@ -54,11 +57,25 @@ class SosSmsFallback {
   /// it and the sync service will still deliver it.
   static Future<bool> compose(SosPayload payload) async {
     await SosSmsRecipients.load();
-    final uri = buildUri(
-      SosSmsRecipients.current,
-      payload.toSmsBody(),
-      ios: defaultTargetPlatform == TargetPlatform.iOS,
-    );
+    final recipients = SosSmsRecipients.current;
+    final body = payload.toSmsBody();
+
+    // Android: an explicit SENDTO intent through MainActivity.composeSms,
+    // which does not depend on url_launcher resolving an `sms:` URI (the
+    // "Could not launch sms:" failure) and passes the body as an extra too.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final opened = await _channel.invokeMethod<bool>('compose', {
+          'numbers': [for (final r in recipients) r.dialable],
+          'body': body,
+        });
+        if (opened == true) return true;
+      } catch (e) {
+        debugPrint('SOS SMS intent failed, trying the URI: $e');
+      }
+    }
+
+    final uri = buildUri(recipients, body, ios: defaultTargetPlatform == TargetPlatform.iOS);
     try {
       return await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {

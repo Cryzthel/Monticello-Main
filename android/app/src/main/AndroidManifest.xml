@@ -110,6 +110,16 @@
             <action android:name="android.intent.action.SENDTO"/>
             <data android:scheme="sms"/>
         </intent>
+        <!-- The offline SOS text opens the SMS app with SENDTO smsto: (see
+             MainActivity.composeSms), with a VIEW sms: fallback. -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="smsto"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="sms"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>

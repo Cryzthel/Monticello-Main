@@ -46,6 +46,13 @@ class UpdateService extends ChangeNotifier {
   int receivedBytes = 0;
   String? error;
 
+  /// Whether Android lets this app install packages ("Install unknown
+  /// apps"). Read with each check, and again on return from Settings.
+  bool? canInstallPackages;
+
+  /// The start-up permission prompt was waved away for this session.
+  bool _permissionPromptDismissed = false;
+
   int _dismissedBuild = 0;
   DateTime? _lastCheck;
   bool _checking = false;
@@ -58,6 +65,21 @@ class UpdateService extends ChangeNotifier {
       urgency == UpdateUrgency.optional && release != null && release!.buildNumber > _dismissedBuild;
 
   bool get busy => phase == UpdatePhase.downloading || phase == UpdatePhase.installing;
+
+  /// An update is waiting and Android would refuse to install it: ask for
+  /// "Install unknown apps" first, before the resident gets into the app.
+  bool get needsInstallPermission =>
+      urgency != UpdateUrgency.none && canInstallPackages == false && phase == UpdatePhase.idle;
+
+  /// The start-up prompt, unless already waved away (a required update keeps
+  /// asking: the forced screen shows the same step).
+  bool get offerInstallPermission =>
+      needsInstallPermission && (urgency == UpdateUrgency.required || (offerOptional && !_permissionPromptDismissed));
+
+  void dismissPermissionPrompt() {
+    _permissionPromptDismissed = true;
+    notifyListeners();
+  }
 
   Future<void> check({bool force = false}) async {
     if (!supported || _checking || busy) return;
@@ -73,6 +95,7 @@ class UpdateService extends ChangeNotifier {
       _lastCheck = DateTime.now();
       release = fetched;
       urgency = urgencyFor(installedBuild: installedBuild, release: fetched);
+      if (urgency != UpdateUrgency.none) canInstallPackages = await _canInstall().catchError((Object _) => true);
       notifyListeners();
     } catch (err) {
       // Offline, Hosting unreachable, malformed JSON: carry on as we are. A
@@ -127,6 +150,11 @@ class UpdateService extends ChangeNotifier {
   /// installs from this app in Settings, carry straight on to the installer;
   /// otherwise re-check for a release.
   Future<void> onResume() async {
+    // Back from Settings, perhaps having allowed installs.
+    if (urgency != UpdateUrgency.none && canInstallPackages == false) {
+      canInstallPackages = await _canInstall().catchError((Object _) => false);
+      notifyListeners();
+    }
     if (phase == UpdatePhase.needsPermission && _verifiedApk != null) {
       if (await _canInstall()) {
         await _install(_verifiedApk!);

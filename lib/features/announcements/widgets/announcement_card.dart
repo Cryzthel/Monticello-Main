@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
@@ -73,6 +75,21 @@ String announcementStamp(DateTime t) {
   return DateFormat(pattern).format(t);
 }
 
+/// Facebook-style age beside the byline's date: "Just now", "45s", "12m",
+/// "2h", "3d", "2w". Null past a month, where the date says it better.
+/// A post stamped slightly in the future (a phone clock running behind the
+/// server) reads "Just now", never a negative age.
+String? announcementAgeShort(DateTime t, {DateTime? now}) {
+  final age = (now ?? DateTime.now()).difference(t);
+  if (age.inSeconds < 10) return 'Just now';
+  if (age.inSeconds < 60) return '${age.inSeconds}s';
+  if (age.inMinutes < 60) return '${age.inMinutes}m';
+  if (age.inHours < 24) return '${age.inHours}h';
+  if (age.inDays < 7) return '${age.inDays}d';
+  if (age.inDays < 30) return '${age.inDays ~/ 7}w';
+  return null;
+}
+
 /// The mark beside the publisher on every card in this feed.
 ///
 /// Not a claim the app can get wrong: every announcement here comes from the
@@ -135,20 +152,9 @@ List<AnnouncementBadge> announcementBadges(Announcement a, {DateTime? now}) {
       fill: color.withValues(alpha: 0.14),
       edge: color.withValues(alpha: 0.32),
     ),
-    if (a.pinned)
-      AnnouncementBadge(
-        label: 'Pinned',
-        ink: _pinnedInk,
-        fill: AppColors.primarySoft,
-        edge: AppColors.primary.withValues(alpha: 0.28),
-      ),
-    if (isFreshAnnouncement(a, now: now))
-      const AnnouncementBadge(
-        label: 'New',
-        ink: AppColors.onAccent,
-        fill: AppColors.accentPrimary,
-        edge: AppColors.accentPrimary,
-      ),
+    // The "Pinned" and "New" pills were removed (2026-10-29, by request): a
+    // pinned post now carries a pin glyph in the card's top-right corner
+    // ([_PinMark]), and freshness is the relative age in the byline.
   ];
 
   final seen = <String>{};
@@ -361,213 +367,218 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     // of a feed, leaving them to find again the very card they had just tapped.
     return AppCard(
       onTap: () => showAnnouncementDetail(context, announcement),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          // MEDIA FIRST. See the layout note on the class: below the body
-          // it sat past the fold on any post long enough to truncate.
-          if (hasImage || posterVideo != null) ...[
-            _AnnouncementMedia(
-              imageUrl: hasImage ? announcement.imageUrl! : posterVideo!.posterUrl!,
-              stamp: announcementTimeAgo(announcement.postedAt),
-              aspectRatio: widget.mediaAspectRatio,
-              isVideo: !hasImage,
-            ),
-            const SizedBox(height: 13),
-          ],
-          Row(
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: catColor.withValues(alpha: 0.14),
-                  // AppRadius.sm (12) — the shared lead-icon tile radius,
-                  // same as SettingsRow and the notification tiles. A lead
-                  // glyph is one object across all three screens.
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
+              // MEDIA FIRST. See the layout note on the class: below the body
+              // it sat past the fold on any post long enough to truncate.
+              if (hasImage || posterVideo != null) ...[
+                _AnnouncementMedia(
+                  imageUrl: hasImage ? announcement.imageUrl! : posterVideo!.posterUrl!,
+                  stamp: announcementTimeAgo(announcement.postedAt),
+                  aspectRatio: widget.mediaAspectRatio,
+                  isVideo: !hasImage,
                 ),
-                child: Icon(
-                  announcementCategoryIcon(announcement.category),
-                  size: 19,
-                  // Ink on the 14% tile behind it. This glyph is the only
-                  // thing distinguishing a Security notice from a Maintenance
-                  // one at a glance, so it is meaningful content and owes the
-                  // 3:1 that non-text UI is held to. In the fill hue three of
-                  // the four categories missed it — Maintenance at 1.93:1,
-                  // Event 2.82:1, General 2.40:1, with only Security clearing
-                  // at 3.89:1. The inks run 6.09:1 to 6.55:1 on that wash.
-                  color: AppColors.inkFor(catColor),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      announcement.title,
-                      style: _t(
-                        size: 15.5,
-                        weight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.2,
-                        height: 1.25,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 5),
-                    // ── THE BYLINE ────────────────────────────────────────
-                    //
-                    // Publisher, then a verified seal, then the date and time
-                    // it was posted. This was the author's name and a relative
-                    // age — "HOA Admin · 2h ago" — set in one muted step of
-                    // the ramp, which is what a comment looks like, not what
-                    // an official notice looks like.
-                    //
-                    // Two things changed and each does specific work:
-                    //
-                    //   • THE SEAL. Every post in this feed comes from the
-                    //     estate's own portal, and nothing on the card said so.
-                    //     A resident glancing at a water-interruption notice
-                    //     has to be able to tell it apart from a screenshot
-                    //     forwarded in a group chat, and a mark beside the
-                    //     publisher is how every news surface does that.
-                    //   • THE ACTUAL TIME. "2h ago" is the right unit for
-                    //     skimming and the wrong one for an announcement that
-                    //     names a window — "the water goes off at 10" is
-                    //     unusable next to a stamp that only says how long ago
-                    //     it was written. The relative age still rides on the
-                    //     image; the byline carries the real one.
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            announcement.author.isEmpty
-                                ? 'Monticello Villas HOA'
-                                : announcement.author,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _t(
-                              size: 11.5,
-                              // One step heavier than the timestamp beside it.
-                              // The publisher is the claim being made; the
-                              // stamp is a detail about it.
-                              weight: FontWeight.w600,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        const _OfficialSeal(),
-                        Text('  ·  ',
-                            style: _t(size: 11.5, color: AppColors.textMuted)),
-                        // Flexible as well: with a status badge in the corner
-                        // the column is narrower, and a fixed-width stamp
-                        // overflowed the row on small phones.
-                        Flexible(
-                          child: Text(
-                            announcementStamp(announcement.postedAt),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _t(size: 11.5, color: AppColors.textMuted),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // The caption, and its toggle when one is warranted.
-          //
-          // LayoutBuilder because `_needsToggle` has to measure against the
-          // real width the text will occupy — the card is used at two
-          // different widths (dashboard panel and full-width feed), so a
-          // fixed number here would be wrong on one of them.
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final bodyStyle = _t(
-                size: 13.5,
-                color: AppColors.textSecondary,
-                height: 1.5,
-              );
-              final overflows = _needsToggle(
-                announcement.body,
-                bodyStyle,
-                constraints.maxWidth,
-              );
-
-              return Column(
+                const SizedBox(height: 13),
+              ],
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    alignment: Alignment.topCenter,
-                    child: Text(
-                      announcement.body,
-                      maxLines: _expanded ? null : widget.collapsedMaxLines,
-                      overflow: _expanded
-                          ? TextOverflow.visible
-                          : TextOverflow.ellipsis,
-                      style: bodyStyle,
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: catColor.withValues(alpha: 0.14),
+                      // AppRadius.sm (12) — the shared lead-icon tile radius,
+                      // same as SettingsRow and the notification tiles. A lead
+                      // glyph is one object across all three screens.
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: Icon(
+                      announcementCategoryIcon(announcement.category),
+                      size: 19,
+                      // Ink on the 14% tile behind it. This glyph is the only
+                      // thing distinguishing a Security notice from a Maintenance
+                      // one at a glance, so it is meaningful content and owes the
+                      // 3:1 that non-text UI is held to. In the fill hue three of
+                      // the four categories missed it — Maintenance at 1.93:1,
+                      // Event 2.82:1, General 2.40:1, with only Security clearing
+                      // at 3.89:1. The inks run 6.09:1 to 6.55:1 on that wash.
+                      color: AppColors.inkFor(catColor),
                     ),
                   ),
-                  if (overflows) ...[
-                    const SizedBox(height: 6),
-                    // A real button, not the old decorative "Read more"
-                    // label. That one had no onTap at all — it looked like
-                    // a control and did nothing but ride the card's ripple
-                    // to the detail sheet.
-                    //
-                    // Its own GestureDetector inside the card's InkWell is
-                    // deliberate: the toggle must NOT open the sheet, so it
-                    // has to swallow the tap before the card sees it.
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _expanded = !_expanded),
-                      child: Padding(
-                        // Vertical padding is the tap target — the label is
-                        // only ~14px tall, well under the 44px minimum, and
-                        // padding is what makes it reachable without
-                        // visually enlarging the control.
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          announcement.title,
+                          style: _t(
+                            size: 15.5,
+                            weight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                            letterSpacing: -0.2,
+                            height: 1.25,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 5),
+                        // ── THE BYLINE ────────────────────────────────────────
+                        //
+                        // Publisher, then a verified seal, then the date and time
+                        // it was posted. This was the author's name and a relative
+                        // age — "HOA Admin · 2h ago" — set in one muted step of
+                        // the ramp, which is what a comment looks like, not what
+                        // an official notice looks like.
+                        //
+                        // Two things changed and each does specific work:
+                        //
+                        //   • THE SEAL. Every post in this feed comes from the
+                        //     estate's own portal, and nothing on the card said so.
+                        //     A resident glancing at a water-interruption notice
+                        //     has to be able to tell it apart from a screenshot
+                        //     forwarded in a group chat, and a mark beside the
+                        //     publisher is how every news surface does that.
+                        //   • THE ACTUAL TIME. "2h ago" is the right unit for
+                        //     skimming and the wrong one for an announcement that
+                        //     names a window — "the water goes off at 10" is
+                        //     unusable next to a stamp that only says how long ago
+                        //     it was written. The relative age still rides on the
+                        //     image; the byline carries the real one.
+                        Row(
                           children: [
-                            Text(
-                              _expanded ? 'Show Less' : 'Read More',
-                              style: _t(
-                                size: 12.5,
-                                weight: FontWeight.w700,
-                                color: AppColors.primary,
-                                height: 1.1,
+                            Flexible(
+                              child: Text(
+                                announcement.author.isEmpty
+                                    ? 'Monticello Villas HOA'
+                                    : announcement.author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: _t(
+                                  size: 11.5,
+                                  // One step heavier than the timestamp beside it.
+                                  // The publisher is the claim being made; the
+                                  // stamp is a detail about it.
+                                  weight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 3),
-                            Icon(
-                              _expanded
-                                  ? PhosphorIconsBold.caretUp
-                                  : PhosphorIconsBold.caretDown,
-                              size: 12,
-                              color: AppColors.primary,
+                            const SizedBox(width: 4),
+                            const _OfficialSeal(),
+                            Text('  ·  ',
+                                style: _t(size: 11.5, color: AppColors.textMuted)),
+                            // Flexible as well: with a status badge in the corner
+                            // the column is narrower, and a fixed-width stamp
+                            // overflowed the row on small phones.
+                            Flexible(
+                              child: _LiveStamp(postedAt: announcement.postedAt),
                             ),
                           ],
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
+                  // Room for the pin in the corner when nothing is above the
+                  // title to carry it (a photo or a video poster does).
+                  if (announcement.pinned && !hasImage && posterVideo == null)
+                    const SizedBox(width: 30),
                 ],
-              );
-            },
+              ),
+              const SizedBox(height: 12),
+              // The caption, and its toggle when one is warranted.
+              //
+              // LayoutBuilder because `_needsToggle` has to measure against the
+              // real width the text will occupy — the card is used at two
+              // different widths (dashboard panel and full-width feed), so a
+              // fixed number here would be wrong on one of them.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final bodyStyle = _t(
+                    size: 13.5,
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  );
+                  final overflows = _needsToggle(
+                    announcement.body,
+                    bodyStyle,
+                    constraints.maxWidth,
+                  );
+    
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        alignment: Alignment.topCenter,
+                        child: Text(
+                          announcement.body,
+                          maxLines: _expanded ? null : widget.collapsedMaxLines,
+                          overflow: _expanded
+                              ? TextOverflow.visible
+                              : TextOverflow.ellipsis,
+                          style: bodyStyle,
+                        ),
+                      ),
+                      if (overflows) ...[
+                        const SizedBox(height: 6),
+                        // A real button, not the old decorative "Read more"
+                        // label. That one had no onTap at all — it looked like
+                        // a control and did nothing but ride the card's ripple
+                        // to the detail sheet.
+                        //
+                        // Its own GestureDetector inside the card's InkWell is
+                        // deliberate: the toggle must NOT open the sheet, so it
+                        // has to swallow the tap before the card sees it.
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => setState(() => _expanded = !_expanded),
+                          child: Padding(
+                            // Vertical padding is the tap target — the label is
+                            // only ~14px tall, well under the 44px minimum, and
+                            // padding is what makes it reachable without
+                            // visually enlarging the control.
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _expanded ? 'Show Less' : 'Read More',
+                                  style: _t(
+                                    size: 12.5,
+                                    weight: FontWeight.w700,
+                                    color: AppColors.primary,
+                                    height: 1.1,
+                                  ),
+                                ),
+                                const SizedBox(width: 3),
+                                Icon(
+                                  _expanded
+                                      ? PhosphorIconsBold.caretUp
+                                      : PhosphorIconsBold.caretDown,
+                                  size: 12,
+                                  color: AppColors.primary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              _BadgeRow(badges: announcementBadges(announcement)),
+            ],
           ),
-          const SizedBox(height: 12),
-          _BadgeRow(badges: announcementBadges(announcement)),
+          if (announcement.pinned)
+            const Positioned(top: 0, right: 0, child: _PinMark()),
         ],
       ),
     );
@@ -856,4 +867,84 @@ TextStyle _t({
     letterSpacing: letterSpacing,
     height: height,
   );
+}
+
+/// The pinned mark: a pin glyph in the card's top-right corner, on a small
+/// white disc so it reads over a photo as well as over the card itself.
+class _PinMark extends StatelessWidget {
+  const _PinMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Pinned',
+      child: Container(
+        width: 26,
+        height: 26,
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          shape: BoxShape.circle,
+          boxShadow: AppShadows.sm,
+        ),
+        child: const Icon(PhosphorIconsFill.pushPin, size: 14, color: _pinnedInk),
+      ),
+    );
+  }
+}
+
+/// "Oct 29 · 2:05 PM · 12m": the posted date and time with its age beside
+/// it, kept current — every 10 seconds in the first minute, then once a
+/// minute — and stopped when the card leaves the screen.
+class _LiveStamp extends StatefulWidget {
+  const _LiveStamp({required this.postedAt});
+
+  final DateTime postedAt;
+
+  @override
+  State<_LiveStamp> createState() => _LiveStampState();
+}
+
+class _LiveStampState extends State<_LiveStamp> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(_LiveStamp old) {
+    super.didUpdateWidget(old);
+    if (old.postedAt != widget.postedAt) _schedule();
+  }
+
+  void _schedule() {
+    _timer?.cancel();
+    final age = DateTime.now().difference(widget.postedAt);
+    if (age.inDays >= 30) return;
+    final every = age.inMinutes < 1 ? const Duration(seconds: 10) : const Duration(minutes: 1);
+    _timer = Timer(every, () {
+      if (!mounted) return;
+      setState(() {});
+      _schedule();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final age = announcementAgeShort(widget.postedAt);
+    return Text(
+      [announcementStamp(widget.postedAt), if (age != null) age].join(' · '),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: _t(size: 11.5, color: AppColors.textMuted),
+    );
+  }
 }

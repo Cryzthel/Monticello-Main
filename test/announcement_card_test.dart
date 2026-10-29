@@ -138,18 +138,15 @@ void main() {
     List<String> labels(Announcement a) =>
         announcementBadges(a).map((b) => b.label).toList();
 
-    test('category, then Pinned, then New, each once', () {
-      expect(labels(_post(pinned: true)), ['Maintenance', 'Pinned', 'New']);
+    test('the category alone: no Pinned or New pill', () {
+      expect(labels(_post(pinned: true)), ['Maintenance']);
       final old = DateTime.now().subtract(const Duration(days: 3));
       expect(labels(_post(postedAt: old)), ['Maintenance']);
     });
 
     test('an unknown or status-like category folds to one General badge', () {
-      // The label is canonical (four words), so a stored "New" or "Pinned"
-      // can never print a second status pill.
       for (final odd in ['New', 'PINNED', 'Notice ', '']) {
-        expect(labels(_post(category: odd, pinned: true)),
-            ['General', 'Pinned', 'New'],
+        expect(labels(_post(category: odd, pinned: true)), ['General'],
             reason: 'category "$odd"');
       }
     });
@@ -164,45 +161,60 @@ void main() {
       expect(find.text('Maintenance'), findsOneWidget);
     });
 
-    testWidgets('all badges sit in one row and stay inside the card',
+    testWidgets('a pinned post shows a pin in the top-right corner, not a pill',
         (tester) async {
       await _pumpCard(tester, _post(pinned: true));
-      final rects = [
-        for (final l in ['Maintenance', 'Pinned', 'New'])
-          tester.getRect(find.text(l)),
-      ];
-      // One row: every label shares a vertical centre.
-      for (final r in rects) {
-        expect(r.center.dy, closeTo(rects.first.center.dy, 0.5));
-      }
-      // Left to right, inside the 360pt card.
-      expect(rects[0].right, lessThan(rects[1].left));
-      expect(rects[1].right, lessThan(rects[2].left));
-      expect(rects.last.right, lessThanOrEqualTo(360));
+      expect(find.text('Pinned'), findsNothing);
+      expect(find.text('New'), findsNothing);
+      final pin = tester.getRect(find.byIcon(PhosphorIconsFill.pushPin));
+      final card = tester.getRect(find.byType(AnnouncementCard));
+      expect(pin.right, closeTo(card.right, 24));
+      expect(pin.top, closeTo(card.top, 24));
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('three badges still fit one row on a narrow card',
-        (tester) async {
+    testWidgets('an unpinned post has no pin', (tester) async {
+      await _pumpCard(tester, _post());
+      expect(find.byIcon(PhosphorIconsFill.pushPin), findsNothing);
+    });
+
+    testWidgets('fits a narrow card with the pin', (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: Scaffold(
           body: SingleChildScrollView(
             child: SizedBox(
               width: 260,
-              child: AnnouncementCard(
-                announcement: _post(pinned: true),
-              ),
+              child: AnnouncementCard(announcement: _post(pinned: true)),
             ),
           ),
         ),
       ));
       await tester.pump();
       expect(tester.takeException(), isNull, reason: 'no overflow');
-      final first = tester.getRect(find.text('Maintenance'));
-      for (final l in ['Pinned', 'New']) {
-        expect(tester.getRect(find.text(l)).center.dy,
-            closeTo(first.center.dy, 0.5));
-      }
+    });
+  });
+
+  group('the relative age', () {
+    final now = DateTime(2026, 10, 29, 12);
+    String? age(Duration d) => announcementAgeShort(now.subtract(d), now: now);
+
+    test('Facebook-style steps', () {
+      expect(age(const Duration(seconds: 3)), 'Just now');
+      expect(age(const Duration(seconds: 45)), '45s');
+      expect(age(const Duration(minutes: 12)), '12m');
+      expect(age(const Duration(hours: 2)), '2h');
+      expect(age(const Duration(days: 3)), '3d');
+      expect(age(const Duration(days: 15)), '2w');
+      expect(age(const Duration(days: 40)), isNull);
+    });
+
+    test('a post stamped in the future reads Just now', () {
+      expect(announcementAgeShort(now.add(const Duration(minutes: 2)), now: now), 'Just now');
+    });
+
+    testWidgets('the byline shows the age beside the date', (tester) async {
+      await _pumpCard(tester, _post(postedAt: DateTime.now().subtract(const Duration(minutes: 12))));
+      expect(find.textContaining('· 12m'), findsOneWidget);
     });
   });
 }

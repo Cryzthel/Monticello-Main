@@ -57,6 +57,22 @@ class _UpdateGateState extends State<UpdateGate> with WidgetsBindingObserver {
         if (_service.urgency == UpdateUrgency.required) {
           return ForcedUpdateScreen(service: _service);
         }
+        // An update is waiting but Android would refuse to install it: the
+        // permission prompt comes first, over a scrim, before the app is used.
+        if (_service.offerInstallPermission) {
+          return Stack(
+            children: [
+              widget.child,
+              const ModalBarrier(dismissible: false, color: Color(0x8C000000)),
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: _InstallPermissionCard(service: _service),
+                ),
+              ),
+            ],
+          );
+        }
         return Stack(
           children: [
             widget.child,
@@ -70,6 +86,62 @@ class _UpdateGateState extends State<UpdateGate> with WidgetsBindingObserver {
           ],
         );
       },
+    );
+  }
+}
+
+/// "Allow app updates": the one-time Android permission an in-place update
+/// needs, asked for at start-up when an update is waiting and the permission
+/// is not yet granted. "Allow" opens this app's "Install unknown apps" page;
+/// on return [UpdateService.onResume] re-reads it and the prompt gives way to
+/// the update itself.
+class _InstallPermissionCard extends StatelessWidget {
+  const _InstallPermissionCard({required this.service});
+
+  final UpdateService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final required = service.urgency == UpdateUrgency.required;
+    return Material(
+      color: AppColors.background,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(PhosphorIconsFill.shieldCheck, size: 40, color: AppColors.primary),
+            const SizedBox(height: 12),
+            Text('Allow app updates',
+                textAlign: TextAlign.center,
+                style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            Text(
+              'Version ${service.release?.version ?? ''} is ready. To install it inside the app, '
+              'Android needs you to allow Monticello Villas to install updates — once. '
+              'Turn on "Allow from this source", then come back.',
+              textAlign: TextAlign.center,
+              style: sfPro(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+            ),
+            const SizedBox(height: 18),
+            PrimaryButton(
+              label: 'Allow',
+              icon: PhosphorIconsBold.gear,
+              onPressed: service.openInstallSettings,
+            ),
+            if (!required) ...[
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: service.dismissPermissionPrompt,
+                child: Text('Not now',
+                    style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -275,7 +347,14 @@ class _UpdateActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phase = service.phase;
-    final primary = switch (phase) {
+    final primary = service.needsInstallPermission
+        // The forced screen asks for the permission in its own action.
+        ? PrimaryButton(
+            label: 'Allow app updates',
+            icon: PhosphorIconsBold.gear,
+            onPressed: service.openInstallSettings,
+          )
+        : switch (phase) {
       UpdatePhase.downloading => const PrimaryButton(label: 'Downloading…', loading: true, onPressed: null),
       UpdatePhase.needsPermission => PrimaryButton(
           label: 'Open settings',

@@ -53,6 +53,7 @@ Future<void> showSosCountdown(
   SosStatusStream? statusStream,
   ResidentVerification Function()? verification,
   Future<bool> Function(SosPayload payload)? smsComposer,
+  Future<bool> Function()? offlineCheck,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -69,6 +70,7 @@ Future<void> showSosCountdown(
       statusStream: statusStream ?? watchSosAlert,
       verification: verification ?? cachedResidentVerification,
       smsComposer: smsComposer ?? SosSmsFallback.compose,
+      offlineCheck: offlineCheck ?? PanicAlertService.isOffline,
     ),
   );
 }
@@ -84,7 +86,11 @@ class _SosCountdownSheet extends StatefulWidget {
     required this.statusStream,
     required this.verification,
     required this.smsComposer,
+    required this.offlineCheck,
   });
+
+  /// Whether the phone has no network at all. See [showSosCountdown].
+  final Future<bool> Function() offlineCheck;
 
   /// Opens the SMS composer for an alert. See [showSosCountdown].
   final Future<bool> Function(SosPayload payload) smsComposer;
@@ -220,6 +226,13 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
   /// What was sent, kept for the SMS fallback (same alert, same reference).
   SosPayload? _payload;
 
+  /// Completes with [_payload] once the dispatch has built it (GPS included),
+  /// so an SMS asked for before then waits for it rather than going without.
+  final Completer<SosPayload> _payloadReady = Completer<SosPayload>();
+
+  /// The "No Internet Connection" prompt has been shown for this alert.
+  bool _smsOffered = false;
+
   /// The SMS composer was opened at least once / could not be opened.
   bool _smsOpened = false;
   bool _smsUnavailable = false;
@@ -309,6 +322,12 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
     // The last check before anything is written.
     if (_lockIfUnverified()) return;
     setState(() => _phase = _Phase.sending);
+    // No network at all: the prompt comes up NOW, not after the GPS fix and
+    // the save that the dispatch below still has to do. Its "Send SMS Alert"
+    // waits for that payload, so the text still carries the location.
+    unawaited(widget.offlineCheck().then((offline) {
+      if (offline && mounted && _phase == _Phase.sending) unawaited(_offerSms());
+    }).catchError((Object _) {}));
     try {
       final receipt = await widget.dispatcher();
       if (!mounted) return;
@@ -330,6 +349,7 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       setState(() {
         _alertId = receipt.alertId;
         _payload = receipt.payload;
+        if (!_payloadReady.isCompleted) _payloadReady.complete(receipt.payload);
         _phase = receipt.outcome == SosDispatchOutcome.delivered
             ? _Phase.sent
             : _Phase.queued;
@@ -348,7 +368,8 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
   /// is already queued and sends itself when a connection returns, so this is
   /// an extra way out, never a gate.
   Future<void> _offerSms() async {
-    if (!mounted || _payload == null) return;
+    if (!mounted || _smsOffered) return;
+    _smsOffered = true;
     final send = await showDialog<bool>(
       context: context,
       builder: (ctx) => _NoInternetDialog(recipients: SosSmsRecipients.current),
@@ -357,8 +378,20 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
   }
 
   Future<void> _sendSms() async {
-    final payload = _payload;
-    if (payload == null) return;
+    SosPayload? payload = _payload;
+    if (payload == null) {
+      // Asked for before the dispatch finished building the alert (the
+      // offline prompt opens early): wait for it, a few seconds at most.
+      try {
+        payload = await _payloadReady.future.timeout(const Duration(seconds: 6));
+      } catch (_) {
+        payload = null;
+      }
+    }
+    if (payload == null) {
+      if (mounted) setState(() => _smsUnavailable = true);
+      return;
+    }
     final opened = await widget.smsComposer(payload);
     if (!mounted) return;
     setState(() {
@@ -444,7 +477,7 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
             _Phase.counting => 'EMERGENCY ALERT',
             _Phase.sending => 'SENDING ALERT',
             _Phase.sent => 'SECURITY NOTIFIED',
-            _Phase.queued => 'SAVED — NO SIGNAL',
+            _Phase.queued => 'NO INTERNET CONNECTION',
             _Phase.failed => 'ALERT NOT SENT',
           },
           style: sfPro(
@@ -558,19 +591,16 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       _Phase.sent =>
         'Security has your alert, with your location and property details.\n'
             'Stay where you are if it is safe to do so.',
+      // One message per state, and no separate "saved on this phone" notice:
+      // the No Internet Connection prompt carries the offline transition.
       _Phase.queued => _smsUnavailable
-          ? 'No internet. Your alert is saved on this phone and will send itself '
-              'when you are back online.\n'
-              'This phone could not open a messaging app — call the guardhouse '
-              'if you can.'
+          ? 'This phone could not open a messaging app. Call the guardhouse if '
+              'you can — the alert also sends itself once you are back online.'
           : _smsOpened
-              ? 'No internet. Your alert is saved on this phone and will send '
-                  'itself when you are back online.\n'
-                  'The text to the guardhouse is in your messaging app — make sure '
+              ? 'Your text to the guardhouse is in your messaging app — make sure '
                   'you pressed Send.'
-              : 'No internet. Your alert is saved on this phone, encrypted, and '
-                  'will send itself as soon as you are back online.\n'
-                  'The guardhouse has not seen it yet — send it by SMS below.',
+              : 'The guardhouse has not received your alert yet. Send it by SMS '
+                  'below.',
       _Phase.failed =>
         'The alert could not be sent. Check your connection and try again, '
             'or call the security hotline.',

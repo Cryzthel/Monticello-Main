@@ -8,7 +8,6 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/app_card.dart';
-import 'package:monticello_villas_app/core/widgets/leaf_loader.dart';
 import 'package:monticello_villas_app/features/panic_button/models/sos_alert_record.dart';
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
 import 'package:monticello_villas_app/features/panic_button/services/sos_queue.dart';
@@ -20,51 +19,55 @@ Color _stageColor(SosStage stage) => switch (stage) {
       SosStage.resolved => AppColors.success,
     };
 
-/// The SOS tab of History: every alert this resident raised, newest first,
-/// live from `panic_alerts` plus anything still queued on this phone.
+/// The resident's SOS alerts, live, for the History feed (2026-10-29: merged
+/// into All / Active / Resolved beside the reports, by request, rather than a
+/// tab of their own).
 ///
-/// The listen re-subscribes after an error (signed-out moment, a dropped
-/// channel) instead of leaving the tab frozen on its last answer — the same
+/// One `panic_alerts` listener (residentUid == the signed-in resident) plus
+/// whatever is still queued on this phone, merged newest first. Every status
+/// a guard writes — acknowledged, resolved — arrives through the listener and
+/// [records] changes at once.
+///
+/// The listen re-subscribes after an error (a signed-out moment, a dropped
+/// channel) instead of leaving the feed frozen on its last answer — the same
 /// rule the rest of the app's listeners follow.
-class SosHistoryList extends StatefulWidget {
-  const SosHistoryList({super.key});
-
-  @override
-  State<SosHistoryList> createState() => _SosHistoryListState();
-}
-
-class _SosHistoryListState extends State<SosHistoryList> {
+class SosHistoryController extends ChangeNotifier {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _sub;
   Timer? _relisten;
   Timer? _queuePoll;
   List<SosAlertRecord> _server = const [];
   List<SosAlertRecord> _queued = const [];
-  bool _loaded = false;
-  bool _failed = false;
+  bool _disposed = false;
 
-  @override
-  void initState() {
-    super.initState();
+  /// True once the first answer (or the first failure) is in.
+  bool loaded = false;
+
+  List<SosAlertRecord> get records => mergeSosHistory(_server, _queued);
+
+  void start() {
     _listen();
-    _readQueue();
+    readQueue();
     // The queue drains in the background when signal returns; look again
     // now and then so a "Waiting for signal" row does not outlive its alert.
-    _queuePoll = Timer.periodic(const Duration(seconds: 15), (_) => _readQueue());
+    _queuePoll ??= Timer.periodic(const Duration(seconds: 15), (_) => readQueue());
   }
 
-  @override
-  void dispose() {
-    _sub?.cancel();
-    _relisten?.cancel();
-    _queuePoll?.cancel();
-    super.dispose();
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
   void _listen() {
     _sub?.cancel();
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    _relisten?.cancel();
+    String? uid;
+    try {
+      uid = FirebaseAuth.instance.currentUser?.uid;
+    } catch (_) {
+      uid = null; // No Firebase app (tests, a failed boot): nothing to read.
+    }
     if (uid == null) {
-      setState(() => _loaded = true);
+      loaded = true;
+      _notify();
       return;
     }
     // Equality only, sorted here: an orderBy beside the residentUid filter
@@ -75,34 +78,34 @@ class _SosHistoryListState extends State<SosHistoryList> {
         .snapshots()
         .listen(
       (snap) {
-        if (!mounted) return;
-        setState(() {
-          _server = snap.docs.map(SosAlertRecord.fromFirestore).toList();
-          _loaded = true;
-          _failed = false;
-        });
-        _readQueue();
+        _server = snap.docs.map(SosAlertRecord.fromFirestore).toList();
+        loaded = true;
+        _notify();
+        readQueue();
       },
       onError: (Object err) {
         debugPrint('SOS history listener failed: $err');
-        if (!mounted) return;
-        setState(() {
-          _loaded = true;
-          _failed = _server.isEmpty;
-        });
-        _relisten?.cancel();
+        loaded = true;
+        _notify();
         _relisten = Timer(const Duration(seconds: 5), () {
-          if (mounted) _listen();
+          if (!_disposed) _listen();
         });
       },
     );
   }
 
-  Future<void> _readQueue() async {
+  /// Pull-to-refresh: listen again and re-read the queue.
+  Future<void> refresh() async {
+    _listen();
+    await readQueue();
+  }
+
+  Future<void> readQueue() async {
     try {
       final items = await SosQueue.pending();
-      if (!mounted) return;
-      setState(() => _queued = items.map(SosAlertRecord.queued).toList());
+      if (_disposed) return;
+      _queued = items.map(SosAlertRecord.queued).toList();
+      _notify();
     } catch (_) {
       // An unreadable queue is the sync service's problem to report; the
       // server history still shows.
@@ -110,33 +113,19 @@ class _SosHistoryListState extends State<SosHistoryList> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (!_loaded) {
-      return const Center(child: LeafLoader(size: 36, color: AppColors.primary));
-    }
-    final records = mergeSosHistory(_server, _queued);
-    if (records.isEmpty) {
-      return _Empty(failed: _failed, onRetry: _listen);
-    }
-    return RefreshIndicator(
-      color: AppColors.primary,
-      onRefresh: () async {
-        _listen();
-        await _readQueue();
-      },
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-        itemCount: records.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) => _SosCard(record: records[i]),
-      ),
-    );
+  void dispose() {
+    _disposed = true;
+    _sub?.cancel();
+    _relisten?.cancel();
+    _queuePoll?.cancel();
+    super.dispose();
   }
 }
 
-class _SosCard extends StatelessWidget {
-  const _SosCard({required this.record});
+/// One SOS alert as a History row, shaped like a report card so the two
+/// read as one feed. Tapping it opens the live status timeline.
+class SosHistoryCard extends StatelessWidget {
+  const SosHistoryCard({super.key, required this.record});
 
   final SosAlertRecord record;
 
@@ -199,49 +188,6 @@ class _StagePill extends StatelessWidget {
       ),
       child: Text(stage.label,
           style: sfPro(fontSize: 11, fontWeight: FontWeight.w700, color: color, letterSpacing: 0.2)),
-    );
-  }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty({required this.failed, required this.onRetry});
-
-  final bool failed;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(32, 80, 32, 100),
-      children: [
-        Icon(failed ? PhosphorIconsFill.cloudSlash : PhosphorIconsFill.siren,
-            size: 40, color: AppColors.textMuted),
-        const SizedBox(height: 14),
-        Text(
-          failed ? "Your SOS history couldn't be loaded" : 'No SOS alerts',
-          textAlign: TextAlign.center,
-          style: sfPro(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          failed
-              ? 'Check your connection. It retries on its own.'
-              : 'Alerts you send with the SOS button appear here, with how the guardhouse responded.',
-          textAlign: TextAlign.center,
-          style: sfPro(fontSize: 13.5, color: AppColors.textSecondary, height: 1.45),
-        ),
-        if (failed) ...[
-          const SizedBox(height: 14),
-          Center(
-            child: TextButton(
-              onPressed: onRetry,
-              child: Text('Try again',
-                  style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
-            ),
-          ),
-        ],
-      ],
     );
   }
 }

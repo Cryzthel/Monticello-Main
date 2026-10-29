@@ -111,7 +111,7 @@ class PanicAlertService {
     // No network at all: say so now rather than after a timeout. The write
     // would only hang, and the sheet uses this answer to offer the SMS
     // fallback. The queue delivers it when a connection returns.
-    if (await _offline()) return SosDispatchOutcome.queued;
+    if (await isOffline()) return SosDispatchOutcome.queued;
 
     switch (await SosSyncService.deliverFirst(payload)) {
       case SosDelivery.delivered:
@@ -130,7 +130,8 @@ class PanicAlertService {
   /// Every lookup here is cached-or-best-effort by design. A resident in an
   /// emergency cannot wait on a profile fetch, and an alert carrying a blank
   /// name still carries the lot number that tells a guard where to go.
-  static Future<bool> _offline() async {
+  /// Whether the phone reports no network at all. Unknown reads as online.
+  static Future<bool> isOffline() async {
     try {
       final result = await Connectivity().checkConnectivity().timeout(const Duration(seconds: 1));
       return result == ConnectivityResult.none;

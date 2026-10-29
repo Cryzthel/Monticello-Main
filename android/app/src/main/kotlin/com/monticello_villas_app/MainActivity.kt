@@ -49,6 +49,24 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+        // The offline SOS text (lib/features/panic_button/services/sos_sms_fallback.dart).
+        // An explicit SENDTO intent rather than url_launcher's `sms:` VIEW:
+        // that one depends on package-visibility rules and on each SMS app
+        // parsing several numbers out of a URI, and it is what failed with
+        // "Could not launch sms:" on some phones.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "monticello/sms")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "compose") {
+                    result.success(
+                        composeSms(
+                            call.argument<List<String>>("numbers") ?: emptyList(),
+                            call.argument<String>("body") ?: "",
+                        )
+                    )
+                } else {
+                    result.notImplemented()
+                }
+            }
         // The in-app updater (lib/core/updates/update_service.dart): where to
         // download the new APK, whether this app may install packages, the
         // switch that allows it, and handing the file to the system installer.
@@ -62,6 +80,33 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // Opens the default SMS app addressed to every number with the body
+    // written. `;` separates recipients: Google Messages and Samsung Messages
+    // both read it (Samsung rejects `,`). `sms_body` is the extra every
+    // mainstream SMS app reads; the body is also in the URI for those that
+    // only parse that. Falls back to a plain VIEW, then reports false.
+    private fun composeSms(numbers: List<String>, body: String): Boolean {
+        val to = numbers.map { it.filter { c -> c.isDigit() || c == '+' } }
+            .filter { it.isNotEmpty() }
+            .joinToString(";")
+        val attempts = listOf(
+            Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$to")),
+            Intent(Intent.ACTION_VIEW, Uri.parse("sms:$to")),
+        )
+        for (intent in attempts) {
+            try {
+                intent.putExtra("sms_body", body)
+                    .putExtra("address", to)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                return true
+            } catch (_: Exception) {
+                // No handler for this form; try the next.
+            }
+        }
+        return false
     }
 
     // Android 7+ hands the installer a content:// URI from UpdateFileProvider,

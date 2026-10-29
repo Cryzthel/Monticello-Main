@@ -1110,6 +1110,20 @@ class _HeaderIdentity extends StatelessWidget {
                 final status = snap.data;
                 final verified = status == ResidentStatus.verified;
                 final rejected = status == ResidentStatus.rejected;
+                // Verified: the checkmark alone beside the name, no word and
+                // no pill (2026-10-29, by request) — the way a verified
+                // account reads on any social app.
+                if (verified) {
+                  return const Tooltip(
+                    message: 'HOA verified',
+                    child: Icon(
+                      PhosphorIconsFill.sealCheck,
+                      size: 20,
+                      color: Colors.white,
+                      semanticLabel: 'HOA verified',
+                    ),
+                  );
+                }
                 // Pending and rejected both read "Unverified", with colour
                 // carrying the difference — see the note this replaced.
                 return _VerifiedPill(

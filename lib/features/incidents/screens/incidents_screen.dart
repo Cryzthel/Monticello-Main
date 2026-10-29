@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import 'package:monticello_villas_app/features/panic_button/models/sos_alert_record.dart';
 import 'package:monticello_villas_app/features/panic_button/widgets/sos_history.dart';
 import 'package:monticello_villas_app/core/network/request_pace.dart';
 import 'package:monticello_villas_app/core/widgets/page_title_bar.dart';
@@ -51,10 +52,8 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   static const _all = 0;
   static const _active = 1;
   static const _resolved = 2;
-  // The resident's SOS alerts, with their own live timeline (sos_history.dart).
-  static const _sos = 3;
 
-  static const _statuses = ['All', 'Active', 'Resolved', 'SOS'];
+  static const _statuses = ['All', 'Active', 'Resolved'];
 
   /// ── THREE PAGES, NOT ONE FILTERED LIST ───────────────────────────────────
   /// The status filter narrowed a single list until now, and the comment that
@@ -89,14 +88,20 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   /// Firestore dropping the document locally — see [_delete].
   final Map<String, ReportDeletion> _deleting = <String, ReportDeletion>{};
 
+  /// The resident's SOS alerts, live, merged into every tab beside the
+  /// reports: open ones under Active, closed ones under Resolved.
+  final SosHistoryController _sos = SosHistoryController();
+
   @override
   void initState() {
     super.initState();
     _pages = PageController(initialPage: _index)..addListener(_trackPage);
+    _sos.start();
   }
 
   @override
   void dispose() {
+    _sos.dispose();
     _pages.removeListener(_trackPage);
     _pages.dispose();
     _tabPosition.dispose();
@@ -139,6 +144,12 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   /// Distinguishes "you have filed nothing" from "nothing is in this tab" —
   /// the same words for both is how a filter convinces someone their records
   /// were deleted.
+  bool _matchesSos(SosAlertRecord r, int tab) => switch (tab) {
+        _active => r.stage.isOpen,
+        _resolved => !r.stage.isOpen,
+        _ => true,
+      };
+
   String? _emptyMessage(int tab, {required bool nothingFiled}) {
     if (nothingFiled || tab == _all) return null;
     return tab == _active
@@ -230,7 +241,7 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
             ),
             Expanded(
               child: ListenableBuilder(
-                listenable: LocalDataStore.instance,
+                listenable: Listenable.merge([LocalDataStore.instance, _sos]),
                 builder: (context, _) {
                   // Nothing has been fetched yet — not "you have no reports".
                   // See LocalDataStore.hasLoadedIncidents.
@@ -255,17 +266,23 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
                     // rebuilds a page mid-swipe. The INDICATOR does not wait
                     // for it — that follows `_tabPosition` continuously.
                     onPageChanged: (i) => setState(() => _index = i),
-                    itemBuilder: (context, tab) => tab == _sos
-                        ? const SosHistoryList()
-                        : !loaded
+                    itemBuilder: (context, tab) => !loaded
                         ? const HistoryFeedSkeleton()
                         : IncidentHistoryList(
                       incidents:
                           source.where((i) => _matches(i, tab)).toList(),
-                      onRefresh: LocalDataStore.instance.refresh,
+                      sosAlerts: _sos.records
+                          .where((r) => _matchesSos(r, tab))
+                          .toList(),
+                      onRefresh: () async {
+                        await Future.wait([
+                          LocalDataStore.instance.refresh(),
+                          _sos.refresh(),
+                        ]);
+                      },
                       emptyMessage: _emptyMessage(
                         tab,
-                        nothingFiled: source.isEmpty,
+                        nothingFiled: source.isEmpty && _sos.records.isEmpty,
                       ),
                       // Deletion lives on ONE tab. See IncidentHistoryList.canDelete.
                       canDelete: tab == _resolved,
@@ -314,6 +331,9 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
 class IncidentHistoryList extends StatelessWidget {
   final List<Incident> incidents;
 
+  /// SOS alerts shown in the same feed, interleaved with the reports by date.
+  final List<SosAlertRecord> sosAlerts;
+
   /// Shown instead of the stock "no reports yet" copy when the list is empty
   /// only because a filter is narrowing it.
   final String? emptyMessage;
@@ -350,6 +370,7 @@ class IncidentHistoryList extends StatelessWidget {
   const IncidentHistoryList({
     super.key,
     required this.incidents,
+    this.sosAlerts = const [],
     required this.canDelete,
     required this.onDelete,
     required this.onRefresh,
@@ -420,9 +441,16 @@ class IncidentHistoryList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Reports and SOS alerts, newest first. Each keeps its own card: a report
+    // opens its report timeline, an SOS opens its dispatch timeline.
+    final entries = <({DateTime at, Incident? incident, SosAlertRecord? sos})>[
+      for (final i in incidents) (at: i.reportedAt, incident: i, sos: null),
+      for (final r in sosAlerts) (at: r.raisedAt, incident: null, sos: r),
+    ]..sort((a, b) => b.at.compareTo(a.at));
+
     return RefreshShell(
       onRefresh: onRefresh,
-      child: incidents.isEmpty
+      child: entries.isEmpty
           ? ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
@@ -438,9 +466,17 @@ class IncidentHistoryList extends StatelessWidget {
               // of its own: the first card now sits directly under the filter
               // rather than under a band of instructions.
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-              itemCount: incidents.length,
+              itemCount: entries.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, i) => _row(context, incidents[i]),
+              itemBuilder: (context, i) {
+                final entry = entries[i];
+                return entry.incident != null
+                    ? _row(context, entry.incident!)
+                    : AnimatedListEntry(
+                        key: ValueKey('sos-${entry.sos!.id}'),
+                        child: SosHistoryCard(record: entry.sos!),
+                      );
+              },
             ),
     );
   }
