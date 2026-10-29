@@ -24,12 +24,12 @@ export default function DispatchStatusBanner({ message, action = null }) {
       >
         <Bell size="sm" />
       </span>
-      <p className="min-w-0 flex-1 truncate text-xs font-semibold text-red-300">{message}</p>
+      <p className="min-w-0 flex-1 truncate text-small font-semibold text-red-300">{message}</p>
       {action ? (
         <button
           type="button"
           onClick={action.onClick}
-          className="pointer-events-auto shrink-0 rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-200 ring-1 ring-inset ring-red-400/40 transition-[background-color,transform] duration-150 ease-out hover:bg-red-500/30 active:scale-[0.97]"
+          className="pointer-events-auto shrink-0 rounded-full bg-red-500/20 px-3 py-1 text-small font-semibold text-red-200 ring-1 ring-inset ring-red-400/40 transition-[background-color,transform] duration-150 ease-out hover:bg-red-500/30 active:scale-[0.97]"
         >
           {action.label}
         </button>

@@ -11,7 +11,7 @@ function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   const { name, value } = payload[0].payload
   return (
-    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-xs shadow-overlay">
+    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-small shadow-overlay">
       <p className="font-medium text-text-primary">{name}</p>
       <p className="text-text-secondary">{value} active</p>
     </div>
@@ -30,14 +30,14 @@ export default function PriorityBreakdownChart({ incidents = [], loading = false
   return (
     <Card className="flex h-72 flex-col p-5">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-semibold text-text-primary">Active incidents by priority</p>
+        <p className="text-small font-semibold text-text-primary">Active incidents by priority</p>
         {/* Withheld rather than rendered as "0 active" while the query opens —
             on a priority chart that is a claim about the queue being clear,
             not a placeholder. */}
         {loading ? (
           <Skeleton variant="muted" className="h-3 w-16" />
         ) : (
-          <span className="text-xs text-text-secondary">{total} active</span>
+          <span className="text-small text-text-secondary">{total} active</span>
         )}
       </div>
       {loading ? (
@@ -46,10 +46,10 @@ export default function PriorityBreakdownChart({ incidents = [], loading = false
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={CHART_MARGIN}>
           <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} />
-          <XAxis dataKey="name" tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }} axisLine={{ stroke: 'var(--color-chart-grid)' }} tickLine={false} />
+          <XAxis dataKey="name" tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }} axisLine={{ stroke: 'var(--color-chart-grid)' }} tickLine={false} />
           <YAxis
             allowDecimals={false}
-            tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }}
+            tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
             axisLine={false}
             tickLine={false}
             width={yAxisWidth(peak)}

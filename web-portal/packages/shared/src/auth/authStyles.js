@@ -40,7 +40,7 @@
  * is deliberately NOT used: it hardcodes the near-black pair.
  */
 export const CTA =
-  'btn h-12 w-full rounded-full bg-brand-cta text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover text-sm font-semibold disabled:opacity-60'
+  'btn h-12 w-full rounded-full bg-brand-cta text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover text-small font-semibold disabled:opacity-60'
 
 /**
  * The secondary action: "Back to sign in", "Use a different account".
@@ -61,4 +61,4 @@ export const CTA =
  * same faint tint the reveal toggle uses.
  */
 export const SECONDARY =
-  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-transparent text-sm font-semibold text-text-secondary transition-[background-color,border-color,color] duration-150 ease-out hover:border-slate-300 hover:bg-tint/5 hover:text-text-primary active:bg-tint/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border border-slate-200/80 bg-transparent text-small font-semibold text-text-secondary transition-[background-color,border-color,color] duration-150 ease-out hover:border-slate-300 hover:bg-tint/5 hover:text-text-primary active:bg-tint/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50'

@@ -107,7 +107,7 @@ export default function NewPasswordFields({
 function PasswordRequirements({ password }) {
   return (
     <div className="rounded-xl border border-slate-200/80 bg-field px-4 py-3.5">
-      <p className="text-2xs font-bold uppercase tracking-[0.05em] text-text-muted">
+      <p className="text-small font-bold uppercase tracking-[0.05em] text-text-muted">
         Password requirements
       </p>
       <ul className="mt-2.5 flex flex-col gap-1.5" aria-live="polite">
@@ -117,7 +117,7 @@ function PasswordRequirements({ password }) {
           return (
             <li
               key={rule.id}
-              className={`flex items-center gap-2 text-[0.78125rem] font-medium transition-colors duration-200 ${
+              className={`flex items-center gap-2 text-small font-medium transition-colors duration-200 ${
                 met ? 'text-text-primary' : 'text-text-secondary'
               }`}
             >

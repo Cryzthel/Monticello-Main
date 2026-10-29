@@ -86,7 +86,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false, o
           placeholder="Search deleted reports"
           className="min-w-[16rem] flex-1"
         />
-        <span className="text-xs text-text-secondary">
+        <span className="text-small text-text-secondary">
           {rows.length} report{rows.length === 1 ? '' : 's'} in trash
         </span>
       </div>
@@ -94,7 +94,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false, o
       {/* Batch controls appear only once something is checked. */}
       {count > 0 ? (
         <div className="flex flex-wrap items-center gap-3 border-b border-hairline bg-brand-50 px-4 py-2.5">
-          <span className="text-xs font-medium text-text-primary">{count} selected</span>
+          <span className="text-small font-medium text-text-primary">{count} selected</span>
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
@@ -170,7 +170,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false, o
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
                   <Trash size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-small text-text-secondary">
                     {search ? 'No deleted reports match that search.' : 'The recycle bin is empty.'}
                   </p>
                 </td>

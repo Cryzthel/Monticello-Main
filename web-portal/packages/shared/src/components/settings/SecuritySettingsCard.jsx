@@ -45,7 +45,7 @@ export default function SecuritySettingsCard() {
         align="start"
       >
         {!hasEmail ? (
-          <p className="text-sm text-text-muted">
+          <p className="text-small text-text-muted">
             Not available: a password is confirmed against the account's email, and this account has none.
           </p>
         ) : (
@@ -55,7 +55,7 @@ export default function SecuritySettingsCard() {
               Change password
             </button>
             {pw.done && step === null ? (
-              <p role="status" className="inline-flex items-center gap-1.5 text-xs text-success">
+              <p role="status" className="inline-flex items-center gap-1.5 text-small text-success">
                 <Check size="sm" aria-hidden="true" />
                 Password updated
               </p>
@@ -118,7 +118,7 @@ export default function SecuritySettingsCard() {
           onChange={pw.setConfirmation}
         />
         {pw.error ? (
-          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-xs text-danger">
+          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-small text-danger">
             <CircleAlert size="sm" aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>{pw.error}</span>
           </p>
@@ -138,7 +138,7 @@ export default function SecuritySettingsCard() {
           </button>
         }
       >
-        <p className="text-sm leading-relaxed text-text-secondary">
+        <p className="text-small leading-relaxed text-text-secondary">
           Every other device signed in to this account has been signed out. This console stays signed in.
         </p>
       </SettingsDialog>

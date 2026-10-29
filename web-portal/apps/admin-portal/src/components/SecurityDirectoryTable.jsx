@@ -61,14 +61,14 @@ function PresenceCell({ account, now }) {
     return (
       <Tooltip side="left" label={onlineSince ? `Connected since ${formatDateTime(onlineSince)}` : 'Connected now'}>
         <span className="flex flex-col gap-0.5 whitespace-nowrap">
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-success">
+          <span className="flex items-center gap-1.5 text-small font-semibold text-success">
             <span aria-hidden="true" className="relative flex h-2 w-2 shrink-0">
               <span className="absolute inset-0 rounded-full bg-success opacity-60 motion-safe:animate-ping" />
               <span className="relative h-2 w-2 rounded-full bg-success" />
             </span>
             Online
           </span>
-          <span className="text-2xs text-text-muted">{account.onDuty ? 'On duty' : 'Signed in, off duty'}</span>
+          <span className="text-small text-text-muted">{account.onDuty ? 'On duty' : 'Signed in, off duty'}</span>
         </span>
       </Tooltip>
     )
@@ -76,11 +76,11 @@ function PresenceCell({ account, now }) {
   return (
     <Tooltip side="left" label={lastSeenAt ? `${formatDateTime(lastSeenAt)} (${relativeTime(lastSeenAt, now)})` : 'Not seen yet'}>
       <span className="flex flex-col gap-0.5 whitespace-nowrap">
-        <span className="flex items-center gap-1.5 text-xs font-medium text-text-secondary">
+        <span className="flex items-center gap-1.5 text-small font-medium text-text-secondary">
           <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-text-muted/50" />
           Offline
         </span>
-        <span className="text-2xs tabular-nums text-text-muted">
+        <span className="text-small tabular-nums text-text-muted">
           {lastSeenAt ? `Last seen ${seenAt(lastSeenAt, now)}` : 'Not seen yet'}
         </span>
       </span>
@@ -92,7 +92,7 @@ function LastActiveCell({ account, now }) {
   if (account.presence) return <PresenceCell account={account} now={now} />
   if (account.onDuty && account.onDutySince) {
     return (
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-success">
+      <span className="flex items-center gap-1.5 whitespace-nowrap text-small font-semibold text-success">
         <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-success" />
         On duty now
       </span>
@@ -102,11 +102,11 @@ function LastActiveCell({ account, now }) {
     // Not "Never" — an account provisioned an hour ago has not failed to do
     // anything. The distinction matters when the column is being used to find
     // dormant credentials to revoke.
-    return <span className="whitespace-nowrap text-xs text-text-muted">No shifts logged</span>
+    return <span className="whitespace-nowrap text-small text-text-muted">No shifts logged</span>
   }
   return (
     <Tooltip side="left" label={formatDateTime(account.lastActiveAt)}>
-      <span className="whitespace-nowrap text-xs text-text-secondary">
+      <span className="whitespace-nowrap text-small text-text-secondary">
         {relativeTime(account.lastActiveAt)}
       </span>
     </Tooltip>
@@ -189,13 +189,13 @@ export default function SecurityDirectoryTable({
             {error ? (
               <tr>
                 <td colSpan={COLUMNS} className="px-4 py-12 text-center">
-                  <p className="text-sm font-medium text-danger">
+                  <p className="text-small font-medium text-danger">
                     Could not load the security directory.
                   </p>
                   {/* Surfacing the code matters: a permission-denied points at
                       firestore.rules (staff_accounts read requires
                       isAdminStaff), not at the query. */}
-                  <p className="mt-1 text-xs text-text-secondary">
+                  <p className="mt-1 text-small text-text-secondary">
                     {error.code ? `Firestore error: ${error.code}` : error.message}
                   </p>
                 </td>
@@ -206,7 +206,7 @@ export default function SecurityDirectoryTable({
               <tr>
                 <td colSpan={COLUMNS} className="px-4 py-14 text-center">
                   <ShieldOff size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-small text-text-secondary">
                     {filtered
                       ? 'No accounts match these filters.'
                       : 'No security accounts yet. Provision one to give a guard portal access.'}
@@ -254,7 +254,7 @@ export default function SecurityDirectoryTable({
                           <p className="truncate font-medium text-text-primary">
                             {account.name || 'Unnamed officer'}
                           </p>
-                          <p className="truncate text-xs text-text-secondary">
+                          <p className="truncate text-small text-text-secondary">
                             {account.email || '—'}
                           </p>
                         </div>
@@ -262,7 +262,7 @@ export default function SecurityDirectoryTable({
                     </td>
 
                     <td className="px-4 py-3.5">
-                      <span className="whitespace-nowrap font-mono text-xs text-text-secondary">
+                      <span className="whitespace-nowrap font-mono text-small text-text-secondary">
                         {account.badgeNumber || '—'}
                       </span>
                     </td>

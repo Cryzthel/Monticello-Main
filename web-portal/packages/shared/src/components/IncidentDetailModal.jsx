@@ -195,12 +195,12 @@ export default function IncidentDetailModal({
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <h2 id="ticket-sheet-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
+                <h2 id="ticket-sheet-title" className="type-h3 truncate text-text-primary">
                   {title}
                 </h2>
                 <Pill className="font-mono tracking-wider">{ticketCode(report.id)}</Pill>
               </div>
-              <p className="mt-0.5 text-xs text-text-muted">{footerNote}</p>
+              <p className="mt-0.5 text-small text-text-muted">{footerNote}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Pill tone={categoryTone(report.category)}>
                   <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -232,7 +232,7 @@ export default function IncidentDetailModal({
               <MediaEvidenceCard report={report} onLightboxChange={setLightboxOpen} />
 
               <DetailCard icon={FileText} title="Incident notes / description">
-                <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-secondary shadow-inner">
+                <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-body font-medium leading-relaxed text-text-secondary shadow-inner">
                   {report.description || 'No written description.'}
                 </p>
               </DetailCard>
@@ -282,14 +282,14 @@ export default function IncidentDetailModal({
             <DetailCard aria-label="Status history" icon={History} title="Status history" bodyClassName="">
               <IncidentStatusTimeline report={report} />
               <div className="mt-6 space-y-4 border-t border-hairline pt-6">
-                <p className="flex items-start gap-2 text-xs leading-relaxed text-text-muted">
+                <p className="flex items-start gap-2 text-small leading-relaxed text-text-muted">
                   <Info size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                   <span>Each stage is stamped with the officer who changed it, and appears in Audit History as it lands.</span>
                 </p>
                 <button
                   type="button"
                   onClick={exportSummary}
-                  className="flex w-full items-center justify-center gap-2 rounded-full border border-hairline bg-tint/[0.06] py-2.5 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
+                  className="flex w-full items-center justify-center gap-2 rounded-full border border-hairline bg-tint/[0.06] py-2.5 text-small font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
                 >
                   <Printer size={16} aria-hidden="true" />
                   Export summary
@@ -301,7 +301,7 @@ export default function IncidentDetailModal({
 
         {/* ═══ FOOTER ═══ */}
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
-          <p className="flex items-center gap-2 text-xs text-text-muted">
+          <p className="flex items-center gap-2 text-small text-text-muted">
             <ShieldCheck size={14} className="text-success/70" aria-hidden="true" />
             <span>{primaryAction?.hint ?? 'Guardhouse dispatch system • Monticello Villas'}</span>
           </p>
@@ -309,7 +309,7 @@ export default function IncidentDetailModal({
             <button
               type="button"
               onClick={() => primaryAction.onClick(report)}
-              className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-xs font-semibold shadow-md transition-colors active:scale-[0.97] ${
+              className={`inline-flex items-center gap-2 rounded-full px-5 py-2 text-small font-semibold shadow-md transition-colors active:scale-[0.97] ${
                 primaryAction.tone === 'amber'
                   ? 'bg-amber-400 text-amber-950 shadow-amber-500/10 hover:bg-amber-300'
                   : 'bg-[var(--color-cta)] text-[var(--color-cta-fg)] hover:bg-[var(--color-cta-hover)]'

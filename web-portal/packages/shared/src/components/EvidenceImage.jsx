@@ -60,7 +60,7 @@ export default function EvidenceImage({
       {state === 'error' ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-tint/[0.03]">
           <ImageOff size="md" className="text-text-muted" />
-          <p className="text-2xs text-text-muted">Evidence unavailable</p>
+          <p className="text-small text-text-muted">Evidence unavailable</p>
         </div>
       ) : null}
 

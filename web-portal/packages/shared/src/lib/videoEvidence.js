@@ -44,7 +44,7 @@ export function uploadVideoEvidence(source, { onUpdate } = {}) {
   const done = (async () => {
     const contentType = videoContentType(source)
     if (source.size > MAX_SOURCE_VIDEO_BYTES) {
-      throw new Error(`${formatBytes(source.size)} is too large to process (1 GB max).`)
+      throw new Error(`This video is too large (${formatBytes(source.size)}). Trim the clip and try again.`)
     }
 
     const playable = isBrowserPlayable(contentType)
@@ -81,11 +81,7 @@ export function uploadVideoEvidence(source, { onUpdate } = {}) {
     if (canceled) throw cancelError()
 
     if (file.size > MAX_UPLOAD_VIDEO_BYTES) {
-      throw new Error(
-        `${formatBytes(file.size)}${meta ? ' after compression' : ''} — over the ${Math.round(
-          MAX_UPLOAD_VIDEO_BYTES / 1048576,
-        )} MB video limit. Trim the clip and try again.`,
-      )
+      throw new Error('This video is too long to upload. Trim the clip and try again.')
     }
 
     if (!meta) {

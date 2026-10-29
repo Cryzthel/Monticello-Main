@@ -23,11 +23,11 @@ import Pill from '@shared/components/Pill'
 function Stat({ icon: Icon, label, value, tone = 'text-text-primary' }) {
   return (
     <div className="rounded-xl border border-hairline bg-base-800 p-3">
-      <p className="flex items-center gap-1.5 text-2xs font-semibold text-text-muted">
+      <p className="flex items-center gap-1.5 text-small font-semibold text-text-muted">
         <Icon size="sm" />
         {label}
       </p>
-      <p className={`mt-1 text-sm font-semibold ${tone}`}>{value}</p>
+      <p className={`mt-1 text-small font-semibold ${tone}`}>{value}</p>
     </div>
   )
 }
@@ -35,7 +35,7 @@ function Stat({ icon: Icon, label, value, tone = 'text-text-primary' }) {
 function Section({ icon: Icon, title, count, children }) {
   return (
     <section>
-      <p className="mb-2 flex items-center gap-2 text-2xs font-semibold text-text-muted">
+      <p className="mb-2 flex items-center gap-2 text-small font-semibold text-text-muted">
         <Icon size="sm" className="text-brand-400" />
         {title}
         <span className="count-pill text-text-secondary">{count}</span>
@@ -68,11 +68,11 @@ function IncidentRow({ incident, at, onOpen }) {
         <PriorityBadge severity={incident.severity}>
           {categoryLabel(incident.category)}
         </PriorityBadge>
-        <span className="min-w-0 flex-1 truncate text-xs text-text-secondary">
+        <span className="min-w-0 flex-1 truncate text-small text-text-secondary">
           {incident.location ?? 'Location not provided'}
         </span>
         <StatusBadge status={incident.status ?? 'Pending'} size="sm" />
-        <span className="shrink-0 font-mono text-2xs text-text-muted">
+        <span className="shrink-0 font-mono text-small text-text-muted">
           {formatTime(at)}
         </span>
         <ChevronRight size="sm" className="shrink-0 text-text-muted" />
@@ -83,7 +83,7 @@ function IncidentRow({ incident, at, onOpen }) {
 
 function Empty({ children }) {
   return (
-    <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-text-secondary">
+    <p className="rounded-xl border border-dashed border-slate-200 px-3 py-4 text-center text-small text-text-secondary">
       {children}
     </p>
   )
@@ -159,7 +159,7 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
           <div className="flex shrink-0 items-start justify-between gap-3 border-b border-hairline p-5">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-base font-semibold text-text-primary">{shift.name}</h2>
+                <h2 className="type-h3 truncate text-text-primary">{shift.name}</h2>
                 {shift.open ? (
                   <Pill tone="success" pulse>
                     On duty
@@ -168,7 +168,7 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
                   <Pill>Shift ended</Pill>
                 )}
               </div>
-              <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-text-secondary">
+              <p className="mt-0.5 flex items-center gap-1.5 truncate text-small text-text-secondary">
                 <Mail size="sm" className="shrink-0" />
                 {shift.email || 'No email on file'}
               </p>
@@ -218,13 +218,13 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
             {shift.handover ? (
               <Section icon={ClipboardList} title="Duty log" count={shift.handover.outstanding ? 2 : 1}>
                 <div className="rounded-lg border border-hairline bg-base-800 p-3">
-                  <p className="whitespace-pre-line text-xs leading-relaxed text-text-primary">
+                  <p className="whitespace-pre-line text-small leading-relaxed text-text-primary">
                     {shift.handover.summary}
                   </p>
                   {shift.handover.outstanding ? (
                     <div className="mt-3 border-t border-divider pt-3">
-                      <p className="text-2xs font-semibold text-text-muted">For the next officer</p>
-                      <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-text-primary">
+                      <p className="text-small font-semibold text-text-muted">For the next officer</p>
+                      <p className="mt-1 whitespace-pre-line text-small leading-relaxed text-text-primary">
                         {shift.handover.outstanding}
                       </p>
                     </div>
@@ -280,7 +280,7 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
                 timesheet above. */}
             {offShift.length > 0 ? (
               <Section icon={LogOut} title="After clock-out" count={offShift.length}>
-                <p className="mb-2 text-caption leading-relaxed text-text-muted">
+                <p className="mb-2 text-body leading-relaxed text-text-muted">
                   Worked by this guard between clocking out
                   {shift.timeOut ? ` at ${formatTime(shift.timeOut)}` : ''} and
                   {nextShiftStart
@@ -301,7 +301,7 @@ export default function ShiftRecordDrawer({ shift, incidents = [], nextShiftStar
               </Section>
             ) : null}
 
-            <p className="text-caption leading-relaxed text-text-muted">
+            <p className="text-body leading-relaxed text-text-muted">
               Activity is derived from the incident records themselves — each ticket stamps who
               dispatched and who resolved it — so this view can never disagree with the Incident
               Tickets queue. Select any row for the full audit record.

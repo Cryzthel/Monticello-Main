@@ -174,7 +174,7 @@ function SidebarHeader({ collapsed, onClose }) {
             both. 16px briefly did not, which is why this once branched on
             `onClose` — that branch is gone, and a conditional that always
             evaluates the same way is worse than no conditional. */}
-        <p className="truncate font-brand text-sm font-normal leading-tight tracking-tight text-brand-logo">
+        <p className="truncate font-brand text-small font-normal leading-tight tracking-tight text-brand-logo">
           Monticello Villas
         </p>
       </div>
@@ -242,7 +242,7 @@ function NavItem({ to, label, icon: Icon, count, collapsed, onNavigate }) {
                 utilities ever land in the same class string. */}
             {count > 0 ? (
               <span
-                className={`flex shrink-0 items-center justify-center rounded-full bg-pill-danger py-1 text-xs font-semibold leading-4 tabular-nums text-pill-danger-fg ring-1 ring-inset ring-pill-danger-fg/15 transition-opacity ${
+                className={`flex shrink-0 items-center justify-center rounded-full bg-pill-danger py-1 text-small font-semibold leading-4 tabular-nums text-pill-danger-fg ring-1 ring-inset ring-pill-danger-fg/15 transition-opacity ${
                   collapsed
                     ? 'w-0 overflow-hidden opacity-0 duration-150'
                     : 'mr-3 min-w-6 px-3 opacity-100 delay-100 duration-200'
@@ -322,7 +322,7 @@ function SidebarProfile({ collapsed, profile }) {
           ) : (
             <span
               aria-hidden="true"
-              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-[#047857]"
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-small font-semibold text-[#047857]"
             >
               {initial}
             </span>
@@ -330,11 +330,11 @@ function SidebarProfile({ collapsed, profile }) {
         </span>
         <span className={`nav-label min-w-0 ${labelMotion(collapsed)}`}>
           {name ? (
-            <span className="block truncate text-xs font-semibold leading-tight text-text-primary">{name}</span>
+            <span className="block truncate text-small font-semibold leading-tight text-text-primary">{name}</span>
           ) : null}
           <span
             className={`block truncate leading-tight ${
-              name ? 'mt-0.5 text-2xs text-text-secondary' : 'text-xs font-medium text-text-primary'
+              name ? 'mt-0.5 text-small text-text-secondary' : 'text-small font-medium text-text-primary'
             }`}
           >
             {email}

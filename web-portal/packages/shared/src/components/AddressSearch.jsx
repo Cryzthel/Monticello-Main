@@ -147,7 +147,7 @@ export default function AddressSearch({
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className="h-full w-full min-w-0 bg-transparent text-base text-text-primary outline-none placeholder:text-text-muted sm:text-sm"
+          className="h-full w-full min-w-0 bg-transparent text-body text-text-primary outline-none placeholder:text-text-muted"
         />
 
         {value ? (
@@ -191,7 +191,7 @@ export default function AddressSearch({
                 }`}
               >
                 <MapPin size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+                <span className="min-w-0 flex-1 truncate text-small font-medium text-text-primary">
                   {entry.label}
                 </span>
                 {/* The count is why this list beats three dropdowns: it says how

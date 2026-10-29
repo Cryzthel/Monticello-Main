@@ -105,16 +105,16 @@ function FiledReportCard({ report, checked, onToggle, onOpen }) {
             <p className="min-w-0 truncate font-medium text-text-primary">
               {report.reportedByName || 'Unknown'}
             </p>
-            <span className="shrink-0 font-mono text-2xs text-text-muted">
+            <span className="shrink-0 font-mono text-small text-text-muted">
               {formatFiledAt(report.reportedAt)}
             </span>
           </div>
 
-          <p className="mt-0.5 font-mono text-2xs text-text-muted">
+          <p className="mt-0.5 font-mono text-small text-text-muted">
             Officer {officerId(report.reporterUid)}
           </p>
 
-          <p className="mt-2 flex items-start gap-1.5 text-xs leading-snug text-text-secondary">
+          <p className="mt-2 flex items-start gap-1.5 text-small leading-snug text-text-secondary">
             <MapPin size="sm" className="mt-0.5 shrink-0 text-brand-400" />
             <span className="min-w-0 break-words">{report.location || 'Location not provided'}</span>
           </p>
@@ -144,7 +144,7 @@ function EmptyState({ message }) {
   return (
     <div className="px-4 py-14 text-center">
       <FileText size="lg" className="mx-auto mb-2 text-text-muted" />
-      <p className="text-sm text-text-secondary">{message}</p>
+      <p className="text-small text-text-secondary">{message}</p>
     </div>
   )
 }
@@ -355,7 +355,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
             )}
 
             {filtering ? (
-              <p className="shrink-0 text-2xs text-text-muted">
+              <p className="shrink-0 text-small text-text-muted">
                 <span className="font-mono tabular-nums text-text-secondary">{rows.length}</span> of{' '}
                 <span className="font-mono tabular-nums">{buckets[tab].length}</span> shown
               </p>
@@ -365,7 +365,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
       </div>
 
       {loadError ? (
-        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
+        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-small text-danger">
           <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">
             {describeFirestoreError(loadError, 'load your filed reports')}
@@ -374,7 +374,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
       ) : null}
 
       {error ? (
-        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
+        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-small text-danger">
           <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">{error}</span>
           <button type="button" onClick={() => setError('')} aria-label="Dismiss" className="shrink-0 rounded p-0.5 hover:bg-danger/15">
@@ -387,7 +387,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
         /* Wraps to two rows on a phone — count and dismiss, then the command at
            full width. `sm:order-*` restores the desktop reading order. */
         <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-brand-50 px-4 py-2.5 sm:gap-3">
-          <span className="text-xs font-medium text-text-primary">
+          <span className="text-small font-medium text-text-primary">
             <span className="font-mono">{selected.length}</span> selected
           </span>
           <button
@@ -452,7 +452,7 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
                 onChange={() => setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
                 className="h-5 w-5 rounded border-tint/20 bg-tint/5 accent-brand-500"
               />
-              <span className="text-xs font-medium text-text-secondary">Select all {rows.length}</span>
+              <span className="text-small font-medium text-text-secondary">Select all {rows.length}</span>
             </label>
             <ul>
               {pageRows.map((report) => (
@@ -531,11 +531,11 @@ export default function FiledReportsTable({ incidents = [], loading = false, loa
                       <p className="font-medium text-text-primary">
                         {report.reportedByName || 'Unknown'}
                       </p>
-                      <p className="mt-0.5 font-mono text-2xs text-text-muted">
+                      <p className="mt-0.5 font-mono text-small text-text-muted">
                         Officer {officerId(report.reporterUid)}
                       </p>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-text-secondary">
+                    <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small text-text-secondary">
                       {formatFiledAt(report.reportedAt)}
                     </td>
                     <td className="px-4 py-3.5 text-text-secondary">

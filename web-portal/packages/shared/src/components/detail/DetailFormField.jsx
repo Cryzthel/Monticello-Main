@@ -19,7 +19,7 @@ export function DetailFormField({ label, htmlFor, required = false, tip = null, 
     <div className={`min-w-0 space-y-1.5 ${className}`}>
       <div className="flex min-h-5 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1.5">
-          <label htmlFor={htmlFor} className="block text-[11px] font-medium text-text-muted">
+          <label htmlFor={htmlFor} className="block text-small font-medium text-text-muted">
             {label}
             {required ? (
               <span aria-hidden="true" className="ml-0.5 text-brand-500">
@@ -44,11 +44,11 @@ export function DetailFormField({ label, htmlFor, required = false, tip = null, 
       {children}
       <div className="min-h-4">
         {error ? (
-          <p id={`${htmlFor}-error`} className="text-[11px] font-medium leading-snug text-danger">
+          <p id={`${htmlFor}-error`} className="text-small font-medium leading-snug text-danger">
             {error}
           </p>
         ) : hint ? (
-          <p id={`${htmlFor}-hint`} className="text-[11px] leading-snug text-text-muted">
+          <p id={`${htmlFor}-hint`} className="text-small leading-snug text-text-muted">
             {hint}
           </p>
         ) : null}
@@ -60,7 +60,7 @@ export function DetailFormField({ label, htmlFor, required = false, tip = null, 
 /** The input well. `icon` reserves a leading glyph slot; `disabled` reads as locked. */
 export function detailInputClass({ error = false, icon = false, mono = false, disabled = false, className = '' } = {}) {
   return [
-    'h-10 w-full rounded-xl border bg-base-950 text-sm shadow-inner outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-muted',
+    'h-10 w-full rounded-xl border bg-base-950 text-body shadow-inner outline-none transition-[border-color,box-shadow] duration-150 placeholder:text-text-muted',
     icon ? 'pl-9 pr-3.5' : 'px-3.5',
     mono ? 'font-mono tracking-wide' : '',
     disabled

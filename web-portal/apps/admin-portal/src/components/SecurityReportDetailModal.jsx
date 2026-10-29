@@ -249,7 +249,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
     : []
 
   const footerButton =
-    'inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-tint/[0.06] px-4 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:pointer-events-none disabled:opacity-50'
+    'inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-hairline bg-tint/[0.06] px-4 py-2 text-small font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 disabled:pointer-events-none disabled:opacity-50'
 
   return createPortal(
     <>
@@ -282,7 +282,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                 </div>
               </div>
             ) : gone ? (
-              <h2 id="report-sheet-title" className="text-xl font-bold tracking-tight text-text-primary">
+              <h2 id="report-sheet-title" className="type-h3 text-text-primary">
                 Report removed
               </h2>
             ) : (
@@ -295,13 +295,13 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                     <h2
                       id="report-sheet-title"
                       title={report.title || undefined}
-                      className="line-clamp-2 break-words text-xl font-bold tracking-tight text-text-primary"
+                      className="type-h3 line-clamp-2 break-words text-text-primary"
                     >
                       {report.title || `${formatCategory(report.category)} report`}
                     </h2>
                     <Pill className="font-mono tracking-wider">{ticketCode(report.id)}</Pill>
                   </div>
-                  <p className="mt-0.5 truncate text-xs text-text-muted" title={report.reportedByName || undefined}>
+                  <p className="mt-0.5 truncate text-small text-text-muted" title={report.reportedByName || undefined}>
                     <span className="font-mono">{stamp(report.reportedAt) || 'No filing time'}</span>
                     {' • '}Filed by {report.reportedByName || 'an officer'}
                   </p>
@@ -337,7 +337,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
             {pending ? (
               <SkeletonBody />
             ) : gone ? (
-              <p className="text-sm text-text-secondary">
+              <p className="text-small text-text-secondary">
                 This report was deleted while it was open. It may be in Audit History → Deleted reports, where it can be
                 restored.
               </p>
@@ -357,7 +357,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                 </DetailCard>
 
                 <DetailCard icon={FileText} title="Reported description">
-                  <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-secondary shadow-inner">
+                  <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-4 text-body font-medium leading-relaxed text-text-secondary shadow-inner">
                     {report.description || 'No written description.'}
                   </p>
                 </DetailCard>
@@ -381,8 +381,8 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                       ['Lot', report.lot],
                     ].map(([label, value]) => (
                       <div key={label}>
-                        <dt className="mb-0.5 text-[10px] uppercase tracking-wider text-text-muted">{label}</dt>
-                        <dd className="text-sm font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
+                        <dt className="mb-0.5 text-small uppercase tracking-wider text-text-muted">{label}</dt>
+                        <dd className="text-small font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
                       </div>
                     ))}
                   </dl>
@@ -422,7 +422,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                   {attachmentCount === 0 ? (
                     <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-hairline bg-zinc-900 text-zinc-400">
                       <ImageOff size="lg" className="mb-2" aria-hidden="true" />
-                      <span className="text-sm">No evidence attached</span>
+                      <span className="text-small">No evidence attached</span>
                     </div>
                   ) : (
                     <>
@@ -478,10 +478,10 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                                 className="flex min-h-10 items-center gap-2.5 rounded-lg border border-hairline bg-base-950 px-3 py-2 transition-colors hover:bg-tint/[0.04]"
                               >
                                 <FileType size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
-                                <span className="min-w-0 flex-1 truncate font-mono text-xs text-text-secondary">
+                                <span className="min-w-0 flex-1 truncate font-mono text-small text-text-secondary">
                                   {decodeURIComponent(url.split('/').pop().split('?')[0])}
                                 </span>
-                                <span className="shrink-0 text-xs font-medium text-brand-500">Open</span>
+                                <span className="shrink-0 text-small font-medium text-brand-500">Open</span>
                               </a>
                             </li>
                           ))}
@@ -497,7 +497,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
           {/* ═══ FOOTER — Export PDF · Archive … Delete ═══ */}
           <footer className="shrink-0 border-t border-hairline bg-base-950 px-4 py-3 sm:px-8">
             {error ? (
-              <p role="alert" className="mb-3 rounded-lg border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
+              <p role="alert" className="mb-3 rounded-lg border border-danger/25 bg-danger/10 p-2.5 text-small text-danger">
                 {error}
               </p>
             ) : null}
@@ -532,7 +532,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                 type="button"
                 disabled={!report || deleted || Boolean(busy)}
                 onClick={() => setConfirming(true)}
-                className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-danger/20 bg-danger/10 px-4 py-2 text-xs font-semibold text-danger transition-colors hover:bg-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-danger/20 bg-danger/10 px-4 py-2 text-small font-semibold text-danger transition-colors hover:bg-danger/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:pointer-events-none disabled:opacity-50"
               >
                 <Trash2 size={14} aria-hidden="true" />
                 Delete

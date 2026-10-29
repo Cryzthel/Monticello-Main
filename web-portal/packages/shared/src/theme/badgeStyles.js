@@ -61,9 +61,9 @@ export const BADGE_TONES = {
 // promoted to `md` on 2026-09-23 to settle it. If you are adding a badge to
 // something with rows, it is `md`, which is the default — pass nothing.
 export const BADGE_SIZES = {
-  sm: 'h-5 gap-1 px-2.5 text-caption',
-  md: 'h-6 gap-1.5 px-3 text-xs',
-  lg: 'h-7 gap-1.5 px-3.5 text-sm',
+  sm: 'h-5 gap-1 px-2.5 text-small',
+  md: 'h-6 gap-1.5 px-3 text-small',
+  lg: 'h-7 gap-1.5 px-3.5 text-small',
 }
 
 /*

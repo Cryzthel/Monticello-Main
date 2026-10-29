@@ -119,9 +119,9 @@ export default function Tooltip({ label, hint, disabled = false, side = 'right',
                     : 'animate-[tooltipIn_140ms_cubic-bezier(0.23,1,0.32,1)]'
               }`}
             >
-              <p className="whitespace-nowrap text-xs font-medium leading-tight text-text-primary">{label}</p>
+              <p className="whitespace-nowrap text-small font-medium leading-tight text-text-primary">{label}</p>
               {hint ? (
-                <p className="mt-0.5 whitespace-nowrap text-2xs leading-tight text-text-secondary">{hint}</p>
+                <p className="mt-0.5 whitespace-nowrap text-small leading-tight text-text-secondary">{hint}</p>
               ) : null}
             </div>,
             document.body,

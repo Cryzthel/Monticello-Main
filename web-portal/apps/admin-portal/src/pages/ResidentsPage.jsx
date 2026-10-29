@@ -179,11 +179,11 @@ export default function ResidentsPage() {
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-info/30 bg-info/[0.07] p-4">
             <Info size="md" className="shrink-0 text-info" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-text-primary">
+              <p className="text-small font-semibold text-text-primary">
                 {profileOnly.length} account{profileOnly.length === 1 ? '' : 's'} visible from their
                 mobile profile only
               </p>
-              <p className="mt-0.5 text-xs text-text-secondary">
+              <p className="mt-0.5 text-small text-text-secondary">
                 They are listed below and can be reviewed as normal — approving or rejecting writes
                 the missing verification record. Backfill only to normalize the records up front.
               </p>
@@ -236,11 +236,11 @@ export default function ResidentsPage() {
                 {error ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center">
-                      <p className="text-sm font-medium text-danger">Could not load resident registrations.</p>
+                      <p className="text-small font-medium text-danger">Could not load resident registrations.</p>
                       {/* Surfacing the real code matters here: a
                           permission-denied points at firestore.rules, not at
                           the query — the exact confusion that hid this bug. */}
-                      <p className="mt-1 text-xs text-text-secondary">
+                      <p className="mt-1 text-small text-text-secondary">
                         {error.code ? `Firestore error: ${error.code}` : error.message}
                       </p>
                     </td>
@@ -266,7 +266,7 @@ export default function ResidentsPage() {
                   <tr>
                     <td colSpan={6} className="px-4 py-14 text-center">
                       <UserCheck size="lg" className="mx-auto mb-2 text-text-muted" />
-                      <p className="text-sm text-text-secondary">
+                      <p className="text-small text-text-secondary">
                         {search
                           ? 'No registrations match this search.'
                           : tab === ALL
@@ -290,7 +290,7 @@ export default function ResidentsPage() {
                               <p className="truncate font-medium text-text-primary">{resident.name}</p>
                               <SourceChip source={resident.source} />
                             </div>
-                            <p className="truncate text-xs text-text-secondary">{resident.email || '—'}</p>
+                            <p className="truncate text-small text-text-secondary">{resident.email || '—'}</p>
                           </div>
                         </div>
                       </td>

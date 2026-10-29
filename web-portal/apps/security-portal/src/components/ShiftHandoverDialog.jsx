@@ -83,7 +83,7 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
       >
         <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
           <ClipboardList size="sm" aria-hidden="true" className="shrink-0 text-brand-500" />
-          <h2 id="handover-title" className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
+          <h2 id="handover-title" className="type-h3 min-w-0 flex-1 truncate text-text-primary">
             Duty log
           </h2>
           <button
@@ -105,13 +105,13 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
               cannot see. */}
           <ShiftSummary shift={shift} open={open} />
 
-          <p className="text-xs leading-relaxed text-text-secondary">
+          <p className="text-body leading-relaxed text-text-secondary">
             Those are recorded automatically. This is for what they do not cover — a
             handover is read by the officer relieving you.
           </p>
 
           <div>
-            <label htmlFor="handover-summary" className="text-xs font-medium text-text-secondary">
+            <label htmlFor="handover-summary" className="text-small font-medium text-text-secondary">
               What happened on shift <span className="text-danger">*</span>
             </label>
             <textarea
@@ -127,7 +127,7 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
               placeholder="Quiet shift. Two gate checks, nothing to report."
               className="field-textarea mt-1.5 resize-none leading-relaxed"
             />
-            <p id="handover-summary-hint" className="mt-1 flex items-center justify-between gap-3 text-2xs">
+            <p id="handover-summary-hint" className="mt-1 flex items-center justify-between gap-3 text-small">
               <span className={touched && !ready ? 'text-danger' : 'text-text-muted'}>
                 {touched && !ready ? 'Required before you can clock out.' : 'Required.'}
               </span>
@@ -138,7 +138,7 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
           </div>
 
           <div>
-            <label htmlFor="handover-outstanding" className="text-xs font-medium text-text-secondary">
+            <label htmlFor="handover-outstanding" className="text-small font-medium text-text-secondary">
               For the next officer
             </label>
             <textarea
@@ -151,20 +151,20 @@ export default function ShiftHandoverDialog({ open, shift, busy, error, onSubmit
               placeholder="Gate motor sticking. Contractor expected at Block 7 around 06:00."
               className="field-textarea mt-1.5 resize-none leading-relaxed"
             />
-            <p className="mt-1 text-right text-2xs tabular-nums text-text-muted">
+            <p className="mt-1 text-right text-small tabular-nums text-text-muted">
               {outstanding.length}/{MAX}
             </p>
           </div>
 
           {error ? (
-            <p role="alert" className="text-xs leading-snug text-danger">
+            <p role="alert" className="text-small leading-snug text-danger">
               {error}
             </p>
           ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-t border-hairline px-6 py-3">
-          <p className="hidden min-w-0 flex-1 truncate text-2xs text-text-muted sm:block">
+          <p className="hidden min-w-0 flex-1 truncate text-small text-text-muted sm:block">
             Filing this closes your shift.
           </p>
           <button type="button" onClick={onCancel} disabled={busy} className="btn btn-sm btn-outline">

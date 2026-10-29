@@ -17,7 +17,7 @@ import { BADGE_TONES } from '@shared/theme/badgeStyles'
  * @param {'md'|'sm'} [props.size]
  */
 export default function Pill({ tone = 'neutral', icon: Icon = null, pulse = false, size = 'md', className = '', title, children }) {
-  const sizing = size === 'sm' ? 'gap-1 px-2.5 py-0.5 text-[11px]' : 'gap-1.5 px-3 py-1 text-xs'
+  const sizing = size === 'sm' ? 'gap-1 px-2.5 py-0.5 text-small' : 'gap-1.5 px-3 py-1 text-small'
   return (
     <span
       title={title}

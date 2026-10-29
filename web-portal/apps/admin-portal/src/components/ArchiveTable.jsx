@@ -122,9 +122,9 @@ export default function ArchiveTable({ incidents = [], events = [], loading = fa
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline p-4">
         <div className="flex items-center gap-2">
           <Archive size="sm" className="text-brand-400" />
-          <p className="text-sm font-semibold text-text-primary">
+          <p className="text-small font-semibold text-text-primary">
             Archive
-            <span className="ml-2 text-xs font-normal text-text-muted">{rows.length} in range</span>
+            <span className="ml-2 text-small font-normal text-text-muted">{rows.length} in range</span>
           </p>
         </div>
         <TimeframeFilter value={timeframe} onChange={setTimeframe} />
@@ -162,7 +162,7 @@ export default function ArchiveTable({ incidents = [], events = [], loading = fa
           />
         ) : rows.length === 0 ? (
           <tr>
-            <td colSpan={5} className="px-4 py-10 text-center text-sm text-text-secondary">
+            <td colSpan={5} className="px-4 py-10 text-center text-small text-text-secondary">
               {/* Names the filter, not just the emptiness — an archive that
                   says "nothing here" while holding a year of records reads as
                   broken. */}
@@ -178,7 +178,7 @@ export default function ArchiveTable({ incidents = [], events = [], loading = fa
                 onClick={opens ? () => onOpenReport(row.reportId) : undefined}
                 className={`border-t border-divider ${opens ? 'data-row cursor-pointer' : ''}`}
               >
-                <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-text-secondary">
+                <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small text-text-secondary">
                   {stamp(row.at)}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5">

@@ -58,7 +58,7 @@ export default function LocationAccessNotice({ mode, locationError, fix }) {
   return (
     <div
       role="status"
-      className="flex items-start gap-3 border-b border-hairline bg-warning/10 px-4 py-2.5 text-caption text-text-primary"
+      className="flex items-start gap-3 border-b border-hairline bg-warning/10 px-4 py-2.5 text-small text-text-primary"
     >
       <Icon size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
       <div className="min-w-0 flex-1">

@@ -48,8 +48,8 @@ export function CopyRow({ label, value, mono = true }) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-hairline bg-base-900 p-3">
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold tracking-normal text-text-muted">{label}</p>
-        <p className={`mt-0.5 truncate text-sm text-text-primary ${mono ? 'font-mono' : 'font-medium'}`}>
+        <p className="text-small font-semibold tracking-normal text-text-muted">{label}</p>
+        <p className={`mt-0.5 truncate text-small text-text-primary ${mono ? 'font-mono' : 'font-medium'}`}>
           {value}
         </p>
       </div>
@@ -112,13 +112,13 @@ export default function CredentialHandoff({ mode = 'created', credentials, onDon
           {isReset ? <KeyRound size="lg" /> : <BadgeCheck size="lg" />}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold leading-tight text-text-primary">
+          <h2 className="type-h3 text-text-primary">
             {isReset ? 'New password issued' : 'Account created'}
           </h2>
           {/* Reset only: "X can now sign in…" under "Account created" said
               the heading twice and was removed (2026-10-18). */}
           {isReset ? (
-            <p className="mt-1 text-sm leading-snug text-text-secondary">
+            <p className="mt-1 text-body leading-snug text-text-secondary">
               {`${credentials.fullName}'s previous password no longer works. Hand over the new one below.`}
             </p>
           ) : null}
@@ -128,7 +128,7 @@ export default function CredentialHandoff({ mode = 'created', credentials, onDon
       {/* The warning sits ABOVE the values, not below them. Below, it is read
           after the panel has already been dismissed by someone who got what
           they came for. */}
-      <p className="mt-5 flex items-start gap-2 rounded-xl border border-warning/25 bg-warning/10 p-3 text-xs leading-relaxed text-warning">
+      <p className="mt-5 flex items-start gap-2 rounded-xl border border-warning/25 bg-warning/10 p-3 text-small leading-relaxed text-warning">
         <AlertTriangle size="sm" className="mt-0.5 shrink-0" />
         <span>
           <strong className="font-semibold">This password is shown once.</strong> It was made on

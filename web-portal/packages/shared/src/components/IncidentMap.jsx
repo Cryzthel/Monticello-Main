@@ -50,7 +50,7 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN
 function ControlSection({ label, last = false, children }) {
   return (
     <div className={`p-3 ${last ? '' : 'border-b border-hairline'}`}>
-      <p className="mb-2 text-caption font-medium text-text-muted">{label}</p>
+      <p className="mb-2 text-small font-medium text-text-muted">{label}</p>
       {children}
     </div>
   )
@@ -107,10 +107,10 @@ function HoverPreview({ record }) {
                 titles mid-word — "Fallen power line across t…" answers less
                 than the category underneath it does. Two lines hold almost
                 every title whole; anything longer still ellipsizes. */}
-            <p className="line-clamp-2 text-xs font-semibold leading-tight text-text-primary">
+            <p className="line-clamp-2 text-small font-semibold leading-tight text-text-primary">
               {isPanic ? 'SOS — Emergency' : data.title || categoryLabel(data.category)}
             </p>
-            <p className="mt-0.5 truncate text-2xs leading-tight text-text-secondary">
+            <p className="mt-0.5 truncate text-small leading-tight text-text-secondary">
               {isPanic ? data.residentName : categoryLabel(data.category)}
             </p>
           </div>
@@ -119,7 +119,7 @@ function HoverPreview({ record }) {
               on every hover. */}
           {phase ? (
             <span
-              className="shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-semibold capitalize"
+              className="shrink-0 rounded-full px-1.5 py-0.5 text-small font-semibold capitalize"
               style={{ backgroundColor: `${RESPONSE_PHASE_COLORS[phase]}1F`, color: RESPONSE_PHASE_COLORS[phase] }}
             >
               {phase}
@@ -128,8 +128,8 @@ function HoverPreview({ record }) {
         </div>
 
         <div className="border-t border-hairline px-3 py-2">
-          <p className="truncate text-2xs leading-tight text-text-secondary">{address || 'Address unavailable'}</p>
-          <p className="mt-0.5 text-2xs leading-tight text-text-muted">
+          <p className="truncate text-small leading-tight text-text-secondary">{address || 'Address unavailable'}</p>
+          <p className="mt-0.5 text-small leading-tight text-text-muted">
             {relativeTime(isPanic ? data.createdAt : data.reportedAt)}
           </p>
         </div>
@@ -1741,7 +1741,7 @@ export default function IncidentMap({
                 }`}
               >
                 <SlidersHorizontal size="sm" className="shrink-0 text-brand-400" />
-                <span className="flex-1 text-xs font-semibold text-text-primary">
+                <span className="flex-1 text-small font-semibold text-text-primary">
                   Map controls
                 </span>
                 <ChevronDown
@@ -1809,8 +1809,8 @@ export default function IncidentMap({
                           style={{ backgroundColor: RESPONSE_PHASE_COLORS[item.key] }}
                         />
                         <div className="min-w-0">
-                          <p className="text-caption font-medium leading-tight text-text-primary">{item.label}</p>
-                          <p className="text-2xs leading-tight text-text-secondary">{item.description}</p>
+                          <p className="text-small font-medium leading-tight text-text-primary">{item.label}</p>
+                          <p className="text-small leading-tight text-text-secondary">{item.description}</p>
                         </div>
                       </div>
                     ))}
@@ -1827,14 +1827,14 @@ export default function IncidentMap({
                           boxShadow: `0 0 0 1px ${BOUNDARY_STYLE.casing}`,
                         }}
                       />
-                      <p className="text-caption text-text-secondary">Monticello Villas boundary</p>
+                      <p className="text-small text-text-secondary">Monticello Villas boundary</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full border-2 bg-transparent"
                         style={{ borderColor: BOUNDARY_STYLE.casing }}
                       />
-                      <p className="text-caption text-text-secondary">Pin outside premises</p>
+                      <p className="text-small text-text-secondary">Pin outside premises</p>
                     </div>
                   </div>
                 </ControlSection>
@@ -1853,8 +1853,8 @@ export default function IncidentMap({
                             style={{ backgroundColor: UNIT_COLORS[key] }}
                           />
                           <div className="min-w-0">
-                            <p className="text-caption font-medium leading-tight text-text-primary">{label}</p>
-                            <p className="text-2xs leading-tight text-text-secondary">{description}</p>
+                            <p className="text-small font-medium leading-tight text-text-primary">{label}</p>
+                            <p className="text-small leading-tight text-text-secondary">{description}</p>
                           </div>
                         </div>
                       ))}
@@ -1872,7 +1872,7 @@ export default function IncidentMap({
                             // In a legend it was doing none of that.
                             style={{ backgroundColor: ROUTE_TONE_COLORS[tone] }}
                           />
-                          <p className="text-caption text-text-secondary">{label}</p>
+                          <p className="text-small text-text-secondary">{label}</p>
                         </div>
                       ))}
                     </div>
@@ -1890,7 +1890,7 @@ export default function IncidentMap({
                           className="h-2.5 w-2.5 shrink-0 rounded-full border-2"
                           style={{ borderColor: item.color }}
                         />
-                        <p className="text-caption text-text-secondary">{item.label}</p>
+                        <p className="text-small text-text-secondary">{item.label}</p>
                       </div>
                     ))}
                     {/* ONE SOS key, not two. The amber-ringed variant had its
@@ -1905,7 +1905,7 @@ export default function IncidentMap({
                           className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white/60"
                           style={{ backgroundColor: EMERGENCY_COLORS.critical }}
                         />
-                        <p className="text-caption font-medium text-text-primary">Panic alerts (SOS)</p>
+                        <p className="text-small font-medium text-text-primary">Panic alerts (SOS)</p>
                       </div>
                     ) : null}
                   </div>
@@ -1953,14 +1953,14 @@ export default function IncidentMap({
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-base-900/95 p-6 text-center">
           <div className="max-w-xs">
             <MapPinOff size="lg" aria-hidden="true" className="mx-auto mb-2 text-text-muted" />
-            <p className="text-sm font-medium text-text-primary">The map is not available</p>
-            <p className="mt-1 text-xs leading-relaxed text-text-secondary">{mapFailure}</p>
+            <p className="text-small font-medium text-text-primary">The map is not available</p>
+            <p className="mt-1 text-small leading-relaxed text-text-secondary">{mapFailure}</p>
           </div>
         </div>
       ) : null}
 
       {!mapboxgl.accessToken ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-base-950 text-sm text-text-secondary">
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-base-950 text-small text-text-secondary">
           Set VITE_MAPBOX_TOKEN to enable the incident map.
         </div>
       ) : null}

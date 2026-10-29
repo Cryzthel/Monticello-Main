@@ -29,7 +29,7 @@ export default function Receipt({ feedback, onDismiss }) {
       className={`absolute inset-x-3 bottom-full z-10 mb-2 flex items-start gap-2.5 rounded-xl border p-3 shadow-overlay animate-[riseIn_180ms_var(--ease-spring)] ${shell}`}
     >
       <Icon size="sm" className="mt-px shrink-0" aria-hidden="true" />
-      <p className="min-w-0 flex-1 text-xs font-medium leading-snug">{feedback.text}</p>
+      <p className="min-w-0 flex-1 text-small font-medium leading-snug">{feedback.text}</p>
       <button
         type="button"
         onClick={onDismiss}

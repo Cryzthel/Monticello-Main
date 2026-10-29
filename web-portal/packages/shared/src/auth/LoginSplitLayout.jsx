@@ -227,7 +227,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
               the handful of people who administer it.
 
               Removing it is also what let the wordmark grow, and the two
-              changes only work together. At `text-label` (13px) this was the
+              changes only work together. At `text-small` (13px) this was the
               larger of two stacked lines, which is why it read as a label
               above a caption rather than as the brand — a 13px line cannot
               anchor a 40px mark, and the pair straddled the mark's centre
@@ -275,7 +275,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
               colour by construction and cannot drift apart. It is a visible
               change even here in light — the ink moves off slate-900
               (#0F172A) onto the brand's #05171B. */}
-          <p className="min-w-0 truncate font-brand text-sm font-normal leading-tight tracking-tight text-brand-logo">
+          <p className="min-w-0 truncate font-brand text-small font-normal leading-tight tracking-tight text-brand-logo">
             Monticello Villas
           </p>
         </div>
@@ -312,36 +312,11 @@ export default function LoginSplitLayout({ children, illustration, title, descri
               state has to be lifted out of LoginForm to say "recovering". */}
           <div className="flex flex-col items-center group-has-[[data-auth-recovery]]/shell:hidden">
 
-          {/* THE HEADING, AND THE ONE PLACE THIS PRODUCT USES A SECOND FACE.
-              Plus Jakarta Sans at 800, via `--font-display` — see that token
-              for why a display face exists at all and why only this console
-              downloads it. Inter is a text face: its proportions are drawn to
-              stay even at 11-16px, which is exactly what makes it
-              unremarkable at 30px. This is a different typeface, not the body
-              font enlarged, and that is the difference the brief is asking
-              for.
-
-              Three values carry the rest, and none of them are decoration:
-
-                · 800, not 700. Plus Jakarta Sans has a genuinely distinct
-                  ExtraBold — wider stems, tighter counters — where many
-                  families just smear the bold. At 700 it reads as a heavier
-                  Inter; at 800 it reads as itself.
-                · tracking -0.025em. A face's default spacing is metric for
-                  text sizes; at display sizes it sets loose, and negative
-                  tracking is most of the difference between a heading that
-                  looks drawn and one that looks typed.
-                · leading 1.1. Tighter than the 1.15 this had under Inter,
-                  because Jakarta's taller x-height already fills the line.
-
-              NO GRADIENT FILL, which the brief marks optional. A two-colour
-              heading is the single most recognisable tell of a generated
-              landing page, and this is an internal console that four
-              administrators sign into. The ink is the system's heading value.
-
-              It steps down to 24px below `sm`, where the full string would
-              otherwise orphan "Admin" onto a second line. */}
-          <h1 className="font-display text-2xl font-extrabold leading-[1.1] tracking-[-0.025em] text-text-primary sm:text-[1.875rem]">
+          {/* THE HEADING: H1 of the type scale — Space Grotesk 700 at 64px,
+              through `type-h1`. It clamps down to 40px on a phone, where
+              64px would split the greeting a word per line. No gradient
+              fill: the ink is the system's heading value. */}
+          <h1 className="type-h1 text-text-primary">
             {title}
           </h1>
 
@@ -351,7 +326,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
             // contrast on the line nobody reads first. `leading-relaxed`
             // (1.625) rather than the body 1.5, because this sets at 45-ish
             // characters and a longer measure wants more air between lines.
-            <p className="mt-3 max-w-[46ch] text-sm font-normal leading-relaxed text-text-muted">
+            <p className="mt-3 max-w-[46ch] text-body font-normal leading-relaxed text-text-muted">
               {description}
             </p>
           ) : null}

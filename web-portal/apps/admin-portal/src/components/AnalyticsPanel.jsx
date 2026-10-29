@@ -49,7 +49,7 @@ function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   const count = payload[0].value
   return (
-    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-xs shadow-overlay">
+    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-small shadow-overlay">
       <p className="text-text-secondary">{TOOLTIP_FORMAT.format(label)}</p>
       <p className="font-medium tabular-nums text-text-primary">
         {count} {count === 1 ? 'incident' : 'incidents'}
@@ -62,7 +62,7 @@ function DonutTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   const { category, count } = payload[0].payload
   return (
-    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-xs shadow-overlay">
+    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-small shadow-overlay">
       <p className="font-medium text-text-primary">{categoryLabel(category)}</p>
       <p className="text-text-secondary">{count} incidents</p>
     </div>
@@ -152,9 +152,9 @@ export default function AnalyticsPanel({
       <Card className="col-span-12 flex h-72 flex-col p-5 xl:col-span-6">
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-text-primary">Incident volume</p>
+            <p className="text-small font-semibold text-text-primary">Incident volume</p>
             {/* The window in words, so the ticks can stay short. */}
-            <p className="mt-0.5 truncate text-caption tabular-nums text-text-muted">{rangeLabel}</p>
+            <p className="mt-0.5 truncate text-small tabular-nums text-text-muted">{rangeLabel}</p>
           </div>
           {/* The count is withheld rather than shown as 0 while the feed opens,
               for the same reason the donut's empty state is — a confident
@@ -163,7 +163,7 @@ export default function AnalyticsPanel({
           {loading ? (
             <Skeleton variant="muted" className="h-3 w-20" />
           ) : (
-            <span className="shrink-0 text-xs tabular-nums text-text-secondary">{totalInRange} in range</span>
+            <span className="shrink-0 text-small tabular-nums text-text-secondary">{totalInRange} in range</span>
           )}
         </div>
         {loading ? (
@@ -186,13 +186,13 @@ export default function AnalyticsPanel({
               tickFormatter={(ms) => formatChartTick(ms)}
               interval={tickEvery - 1}
               minTickGap={12}
-              tick={{ fill: 'var(--color-chart-axis)', fontSize: 10 }}
+              tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
               axisLine={{ stroke: 'var(--color-chart-grid)' }}
               tickLine={false}
             />
             <YAxis
               allowDecimals={false}
-              tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }}
+              tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
               axisLine={false}
               tickLine={false}
               width={yAxisWidth(peakDay)}
@@ -205,11 +205,11 @@ export default function AnalyticsPanel({
       </Card>
 
       <Card className="col-span-12 flex h-72 flex-col p-5 xl:col-span-6">
-        <p className="mb-2 text-sm font-semibold text-text-primary">Category breakdown</p>
+        <p className="mb-2 text-small font-semibold text-text-primary">Category breakdown</p>
         {loading ? (
           <SkeletonDonut className="min-h-0 flex-1" size="h-32 w-32" legendRows={4} />
         ) : stableBreakdown.length === 0 ? (
-          <p className="text-sm text-text-secondary">No data yet.</p>
+          <p className="text-small text-text-secondary">No data yet.</p>
         ) : (
           <div className="flex flex-1 items-center gap-4">
             <ResponsiveContainer width="45%" height="100%" debounce={120}>
@@ -241,7 +241,7 @@ export default function AnalyticsPanel({
                 <Tooltip content={<DonutTooltip />} />
               </PieChart>
             </ResponsiveContainer>
-            <ul className="flex-1 space-y-2 text-xs">
+            <ul className="flex-1 space-y-2 text-small">
               {stableBreakdown.map((segment) => (
                 <li key={segment.category} className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 text-text-secondary">
@@ -260,7 +260,7 @@ export default function AnalyticsPanel({
         {loading ? (
           <Skeleton variant="muted" className="mt-2 h-2.5 w-48" />
         ) : (
-          <p className="mt-2 text-caption text-text-muted">{totalCategorized} incidents categorized in this timeframe</p>
+          <p className="mt-2 text-small text-text-muted">{totalCategorized} incidents categorized in this timeframe</p>
         )}
       </Card>
     </div>

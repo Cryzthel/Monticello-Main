@@ -4,10 +4,9 @@ import { toast, describeError } from '@shared/lib/toast'
 import { minutesWaiting } from '@shared/lib/wpda'
 import { acknowledgePanicAlert, resolvePanicAlert } from '@shared/lib/panicAlerts'
 import { settleWrite } from '@shared/lib/writeSync'
-import MediaAttachmentField from '@shared/components/MediaAttachmentField'
-import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
+import EvidenceUploader from '@shared/components/EvidenceUploader'
+import { useEvidenceUploads } from '@shared/hooks/useEvidenceUploads'
 import { RESOLUTION_NOTES_MAX, RESOLUTION_PHOTOS_MAX, RESOLUTION_VIDEOS_MAX } from '@shared/lib/dispatchStage'
-import { MEDIA_ACCEPT_ATTRIBUTE } from '@shared/lib/attachments'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
@@ -78,8 +77,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
   const [busy, setBusy] = useState(null)
   const [notice, setNotice] = useState(null)
   const [notes, setNotes] = useState('')
-  const fileRef = useRef(null)
-  const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX, maxVideos: RESOLUTION_VIDEOS_MAX })
+  const photos = useEvidenceUploads({ maxPhotos: RESOLUTION_PHOTOS_MAX, maxVideos: RESOLUTION_VIDEOS_MAX })
 
   const panelRef = useRef(null)
   useDialogFocus({ open: !closing, containerRef: panelRef })
@@ -107,16 +105,6 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
   const outside = geofenceAlert && isOutsideBoundary(alert)
   const mine = acknowledged && alert.acknowledgedBy && alert.acknowledgedBy === user?.uid
   const responding = respondingId === alert.id
-
-  const tiles = photos.items.map((item) => ({
-    id: item.id,
-    name: item.name,
-    type: item.type,
-    src: item.previewUrl,
-    status: item.status,
-    progress: item.progress,
-    error: item.error,
-  }))
 
   /**
    * One write, settled with `settleWrite` so a stalled connection releases
@@ -184,8 +172,8 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               <Siren size={20} className="relative" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold tracking-tight text-zinc-100">Panic alert</h2>
-              <p className="flex items-center gap-1.5 font-mono text-xs text-zinc-400">
+              <h2 className="type-h3 text-zinc-100">Panic alert</h2>
+              <p className="flex items-center gap-1.5 font-mono text-small text-zinc-400">
                 <Clock size={12} aria-hidden="true" />
                 {formatAgo(alert.createdAt)} · {acknowledged ? 'Responding' : 'Active emergency'}
               </p>
@@ -206,21 +194,21 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
           {/* STATUS & RESIDENT */}
           <div className="space-y-3 rounded-xl border border-zinc-800/60 bg-zinc-900/30 p-4">
             {acknowledged ? (
-              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-400">
+              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-small font-semibold text-emerald-400">
                 <ShieldCheck size={12} aria-hidden="true" />
                 <span className="truncate">
                   Acknowledged by Security{alert.acknowledgedByName ? ` · ${alert.acknowledgedByName}` : ''}
                 </span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-red-400">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-0.5 text-small font-semibold text-red-400">
                 <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none" />
                 Awaiting acknowledgement
               </span>
             )}
             <div>
-              <h3 className="text-sm font-semibold text-zinc-100">{alert.residentName}</h3>
-              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400">
+              <h3 className="text-small font-semibold text-zinc-100">{alert.residentName}</h3>
+              <p className="mt-0.5 flex items-center gap-1.5 text-small text-zinc-400">
                 <MapPin size={14} className="shrink-0 text-zinc-500" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{alert.address}</span>
                 {/* The acknowledging officer can still get directions after
@@ -230,7 +218,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
                   <button
                     type="button"
                     onClick={() => onRespond?.(alert)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-zinc-300 ring-1 ring-inset ring-zinc-700 transition-colors duration-150 hover:bg-zinc-800 hover:text-zinc-100"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-small font-medium text-zinc-300 ring-1 ring-inset ring-zinc-700 transition-colors duration-150 hover:bg-zinc-800 hover:text-zinc-100"
                   >
                     <Navigation size={12} aria-hidden="true" />
                     Directions
@@ -239,7 +227,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               </p>
             </div>
             {outside ? (
-              <p className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2.5 text-xs leading-relaxed text-zinc-200">
+              <p className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2.5 text-small leading-relaxed text-zinc-200">
                 <MapPinOff size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-amber-400" />
                 <span>
                   <span className="font-semibold text-amber-300">Outside the subdivision.</span> This SOS reported a
@@ -256,10 +244,10 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               <div className="border-t border-zinc-800/80" />
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label htmlFor="sos-resolution-notes" className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                  <label htmlFor="sos-resolution-notes" className="text-small font-semibold uppercase tracking-[0.2em] text-zinc-400">
                     What happened?
                   </label>
-                  <span className="text-[11px] text-zinc-500">Optional</span>
+                  <span className="text-small text-zinc-500">Optional</span>
                 </div>
                 <textarea
                   id="sos-resolution-notes"
@@ -268,7 +256,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
                   disabled={submitting}
                   onChange={(event) => setNotes(event.target.value.slice(0, RESOLUTION_NOTES_MAX))}
                   placeholder="What you found, and what you did about it…"
-                  className="w-full resize-none rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-3 text-sm text-zinc-200 placeholder-zinc-500 transition-colors duration-150 focus:border-zinc-600 focus:outline-none disabled:opacity-60"
+                  className="w-full resize-none rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-3 text-body text-zinc-200 placeholder-zinc-500 transition-colors duration-150 focus:border-zinc-600 focus:outline-none disabled:opacity-60"
                 />
               </div>
 
@@ -276,30 +264,17 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               <div>
                 {/* Tagged, not burned in: the server's resolution time is the
                     stamp, rendered over the photo wherever it is shown. */}
-                <MediaAttachmentField
-                  items={tiles}
-                  capacity={RESOLUTION_PHOTOS_MAX + RESOLUTION_VIDEOS_MAX}
+                <EvidenceUploader
+                  uploads={photos}
                   heading="Photo & video proof"
-                  hint={`Photos (JPG, PNG, WebP) and up to ${RESOLUTION_VIDEOS_MAX} clips (MP4, MOV, WebM, AVI); clips over 25 MB are compressed on this device. Stamped with the server's resolution time.`}
+                  hint="Supports photos and videos up to 25 MB"
                   disabled={submitting}
-                  onPick={() => fileRef.current?.click()}
-                  onRemove={photos.remove}
-                />
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept={MEDIA_ACCEPT_ATTRIBUTE}
-                  multiple
-                  hidden
-                  onChange={(event) => {
-                    photos.add(event.target.files)
-                    event.target.value = ''
-                  }}
+                  inputLabel="Add photo or video proof"
                 />
               </div>
             </div>
           ) : (
-            <p className="text-xs leading-relaxed text-zinc-500">
+            <p className="text-small leading-relaxed text-zinc-500">
               {canNavigate
                 ? 'Respond to acknowledge this SOS and start navigation. The resolution form unlocks once Security has acknowledged.'
                 : 'This SOS has no GPS fix — go by the address above. Acknowledge it so every console knows it is being handled.'}
@@ -312,7 +287,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
           {notice ? (
             <p
               role="status"
-              className={`flex items-start gap-2 text-xs leading-snug ${notice.tone === 'danger' ? 'text-red-400' : 'text-zinc-300'}`}
+              className={`flex items-start gap-2 text-small leading-snug ${notice.tone === 'danger' ? 'text-red-400' : 'text-zinc-300'}`}
             >
               {notice.tone === 'danger' ? (
                 <AlertTriangle size={14} className="mt-px shrink-0" aria-hidden="true" />
@@ -326,25 +301,31 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
           {acknowledged ? (
             <button
               type="button"
-              disabled={Boolean(busy) || photos.uploading}
+              disabled={Boolean(busy) || photos.busy || photos.failed}
               onClick={() =>
-                run('resolve', () => resolvePanicAlert(alert.id, { notes, photoUrls: photos.urls, videoUrls: photos.videoUrls, videoMeta: photos.videoMeta }), 'SOS alert resolved', () => onClose?.())
+                run('resolve', () => resolvePanicAlert(alert.id, { notes, photoUrls: photos.photoUrls, videoUrls: photos.videoUrls, videoMeta: photos.videoMeta }), 'SOS alert resolved', () => onClose?.())
               }
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-zinc-100 py-2.5 text-xs font-semibold text-zinc-950 shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-zinc-100 py-2.5 text-small font-semibold text-zinc-950 shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {submitting || photos.uploading ? (
+              {submitting || photos.busy ? (
                 <Loader2 size={16} className="animate-spin" aria-hidden="true" />
               ) : (
                 <CheckCircle2 size={16} aria-hidden="true" />
               )}
-              {submitting ? 'Submitting…' : photos.uploading ? 'Uploading evidence…' : 'Submit & confirm resolve'}
+              {submitting
+                ? 'Submitting…'
+                : photos.busy
+                  ? 'Uploading evidence…'
+                  : photos.failed
+                    ? 'Retry or remove the failed file'
+                    : 'Submit & confirm resolve'}
             </button>
           ) : canNavigate ? (
             <button
               type="button"
               disabled={Boolean(busy)}
               onClick={respond}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-red-500 py-2.5 text-xs font-semibold text-white shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-red-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-red-500 py-2.5 text-small font-semibold text-white shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-red-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Navigation size={16} aria-hidden="true" />
               Respond to SOS
@@ -354,7 +335,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               type="button"
               disabled={Boolean(busy)}
               onClick={() => run('ack', () => acknowledgePanicAlert(alert.id, user?.displayName), 'SOS acknowledged by Security')}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-red-500 py-2.5 text-xs font-semibold text-white shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-red-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-red-500 py-2.5 text-small font-semibold text-white shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-red-400 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy === 'ack' ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <ShieldCheck size={16} aria-hidden="true" />}
               {busy === 'ack' ? 'Acknowledging…' : 'Acknowledge'}

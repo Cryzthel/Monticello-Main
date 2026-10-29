@@ -76,7 +76,7 @@ export function forensicCoordinates(lat, lng) {
  * file to fetch. The grid shows the compressed original, scaled down.
  */
 export default function EvidenceGrid({ media, stamp, onOpen, emptyText }) {
-  if (!media.length) return <p className="text-sm text-text-muted">{emptyText}</p>
+  if (!media.length) return <p className="text-small text-text-muted">{emptyText}</p>
 
   return (
     // Two up, not three: at three a 416px rail leaves ~115px per tile, and the
@@ -113,13 +113,13 @@ export default function EvidenceGrid({ media, stamp, onOpen, emptyText }) {
               aria-hidden="true"
               className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 via-70% to-transparent px-2 pb-1.5 pt-10 text-left [text-shadow:0_1px_2px_rgb(0_0_0/0.6)]"
             >
-              <span className="block text-[9px] font-semibold uppercase leading-none tracking-[0.08em] text-white">
+              <span className="block text-small font-semibold uppercase leading-none tracking-[0.08em] text-white">
                 {stamp.label ?? 'Captured'}
               </span>
-              <span className="mt-1 block truncate text-xs font-semibold leading-tight tabular-nums text-white">
+              <span className="mt-1 block truncate text-small font-semibold leading-tight tabular-nums text-white">
                 {captureTimestamp(stamp.at)}
               </span>
-              <span className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 font-mono text-[9.5px] leading-tight text-white/80">
+              <span className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 font-mono text-small leading-tight text-white/80">
                 <span className="truncate">{forensicCoordinates(stamp.lat, stamp.lng)}</span>
                 <span className="shrink-0 font-semibold text-white/90">{stamp.reference}</span>
               </span>

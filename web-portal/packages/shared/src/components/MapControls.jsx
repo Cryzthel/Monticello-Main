@@ -278,7 +278,7 @@ export default function MapControls({
       </div>
 
       {locateError ? (
-        <div className="pointer-events-none absolute right-3 top-3 z-20 ml-3 max-w-[16rem] translate-x-0 rounded-xl border border-warning/30 bg-base-900 px-3 py-2 text-xs text-warning shadow-overlay"
+        <div className="pointer-events-none absolute right-3 top-3 z-20 ml-3 max-w-[16rem] translate-x-0 rounded-xl border border-warning/30 bg-base-900 px-3 py-2 text-small text-warning shadow-overlay"
           style={{ right: '3.75rem' }}
         >
           {locateError}

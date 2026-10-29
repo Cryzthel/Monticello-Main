@@ -185,7 +185,7 @@ export default function NotificationBell({ detailPath, historyPath = '/history',
             FILL=0, so this is a change of drawing, not of weight. */}
         {unreadCount > 0 ? <BellRinging size="md" /> : <Bell size="md" />}
         {unreadCount > 0 ? (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-2xs font-semibold tabular-nums text-white ring-2 ring-base-950">
+          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-small font-semibold tabular-nums text-white ring-2 ring-base-950">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         ) : null}

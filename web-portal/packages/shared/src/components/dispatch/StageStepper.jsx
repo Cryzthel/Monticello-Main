@@ -129,7 +129,7 @@ export default function StageStepper({ report, stage, labels = null }) {
               />
             ) : null}
             <span
-              className={`relative z-[1] flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold transition-colors duration-200 ${
+              className={`relative z-[1] flex h-6 w-6 items-center justify-center rounded-full text-small font-bold transition-colors duration-200 ${
                 done
                   ? 'bg-brand-500 text-base-900'
                   : active
@@ -140,13 +140,13 @@ export default function StageStepper({ report, stage, labels = null }) {
               {done ? <Check size="sm" strokeWidth={3} aria-hidden="true" /> : step}
             </span>
             <span
-              className={`mt-1.5 line-clamp-2 w-full px-1 text-2xs font-semibold leading-tight ${
+              className={`mt-1.5 line-clamp-2 w-full px-1 text-small font-semibold leading-tight ${
                 active ? 'text-text-primary' : done ? 'text-text-secondary' : 'text-text-muted'
               }`}
             >
               {labels?.[key] ?? STEP_LABELS[key] ?? STAGE_LABELS[key]}
             </span>
-            <span className={`text-2xs tabular-nums ${at ? 'text-text-secondary' : 'text-text-muted/60'}`}>
+            <span className={`text-small tabular-nums ${at ? 'text-text-secondary' : 'text-text-muted/60'}`}>
               {formatTime(at)}
             </span>
           </li>

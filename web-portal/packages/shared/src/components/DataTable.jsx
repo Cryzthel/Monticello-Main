@@ -66,7 +66,7 @@ export default function DataTable({
   const frame = scroll === 'x' ? 'overflow-x-auto' : 'custom-scrollbar min-h-0 flex-1 overflow-auto'
   return (
     <div className={`${frame} ${scrollClassName}`}>
-      <table className={`w-full text-left text-sm ${tableClassName}`} style={{ minWidth }}>
+      <table className={`w-full text-left text-small ${tableClassName}`} style={{ minWidth }}>
         {colgroup}
         <thead
           className={`bg-base-900 shadow-[inset_0_-1px_0_var(--color-hairline)] ${sticky ? 'sticky top-0 z-10' : ''}`}
@@ -101,8 +101,8 @@ export function DataTableEmpty({ colSpan, icon: Icon = null, children, detail = 
     <tr>
       <td colSpan={colSpan} className="px-4 py-14 text-center">
         {Icon ? <Icon size="lg" className="mx-auto mb-2 text-text-muted" aria-hidden="true" /> : null}
-        <p className="text-sm text-text-secondary">{children}</p>
-        {detail ? <p className="mt-1 text-xs text-text-muted">{detail}</p> : null}
+        <p className="text-small text-text-secondary">{children}</p>
+        {detail ? <p className="mt-1 text-small text-text-muted">{detail}</p> : null}
       </td>
     </tr>
   )

@@ -59,7 +59,7 @@ export default function ProfileSettingsCard({ role }) {
         <div className="flex flex-col gap-4">
           <div className="flex min-w-0 items-center gap-3 rounded-lg border border-hairline bg-base-900/40 p-3">
             <Mail size="sm" aria-hidden="true" className="shrink-0 text-text-muted" />
-            <span className="min-w-0 truncate text-sm font-medium text-text-secondary">{account.email || '—'}</span>
+            <span className="min-w-0 truncate text-small font-medium text-text-secondary">{account.email || '—'}</span>
             <span className="ml-auto shrink-0">
               {account.verified ? (
                 <Pill tone="success" icon={CheckCircle2}>
@@ -74,7 +74,7 @@ export default function ProfileSettingsCard({ role }) {
           </div>
 
           {!account.verified && account.available ? (
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-text-muted">
               This address has not been confirmed.
               <button
                 type="button"
@@ -129,7 +129,7 @@ export default function ProfileSettingsCard({ role }) {
           </>
         }
       >
-        <div className="flex items-center gap-2 text-xs text-text-muted">
+        <div className="flex items-center gap-2 text-small text-text-muted">
           <span>Current:</span>
           <span className="min-w-0 truncate font-medium text-text-secondary">{account.email || '—'}</span>
         </div>
@@ -162,7 +162,7 @@ export default function ProfileSettingsCard({ role }) {
           onChange={account.setPassword}
         />
         {account.error ? (
-          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-xs text-danger">
+          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-small text-danger">
             <CircleAlert size="sm" aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>{account.error}</span>
           </p>
@@ -199,7 +199,7 @@ export default function ProfileSettingsCard({ role }) {
           onChange={account.setCode}
           onComplete={confirm}
         />
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-small text-text-muted">
           No email? Check spam, or
           <button
             type="button"
@@ -211,12 +211,12 @@ export default function ProfileSettingsCard({ role }) {
           </button>
         </p>
         {account.error ? (
-          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-xs text-danger">
+          <p role="alert" className="flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 px-3 py-2.5 text-small text-danger">
             <CircleAlert size="sm" aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>{account.error}</span>
           </p>
         ) : null}
-        <p className="text-xs leading-relaxed text-text-muted">
+        <p className="text-small leading-relaxed text-text-muted">
           Your sign-in email changes only when the code is confirmed. The old address is told, and the change is
           recorded in Audit History.
         </p>

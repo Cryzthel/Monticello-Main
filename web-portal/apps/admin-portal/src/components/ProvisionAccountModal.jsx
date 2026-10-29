@@ -138,7 +138,7 @@ function ProgressSteps({ step, unlocked, busy, onJump }) {
                 }`}
               >
                 <span
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-1 ring-inset transition-colors duration-200 ${
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-small font-bold ring-1 ring-inset transition-colors duration-200 ${
                     current
                       ? 'bg-[var(--color-segment-active)] text-[var(--color-segment-active-fg)] ring-transparent'
                       : done
@@ -149,11 +149,11 @@ function ProgressSteps({ step, unlocked, busy, onJump }) {
                   {done ? <Check size={14} /> : locked ? <Lock size={12} /> : index + 1}
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                  <span className="block text-small font-semibold uppercase tracking-wider text-text-muted">
                     Step {index + 1}
                   </span>
                   <span
-                    className={`block truncate text-xs ${
+                    className={`block truncate text-small ${
                       current ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary group-hover:text-text-primary'
                     }`}
                   >
@@ -313,9 +313,9 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
   if (!open) return null
 
   const primaryBtn =
-    'inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50'
+    'inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-small font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50'
   const secondaryBtn =
-    'inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50'
+    'inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-small font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50'
 
   return createPortal(
     <div
@@ -348,8 +348,8 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
                   <UserPlus size={22} aria-hidden="true" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-xl font-bold tracking-tight text-text-primary">Create security account</h2>
-                  <p className="mt-0.5 text-xs text-text-muted">
+                  <h2 className="type-h3 truncate text-text-primary">Create security account</h2>
+                  <p className="mt-0.5 text-small text-text-muted">
                     Fill out guard details before configuring account credentials.
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -379,7 +379,7 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
                 {step === 0 ? (
                   <>
                     {showStepWarning && !step1Valid ? (
-                      <p role="alert" className="flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                      <p role="alert" className="flex items-center gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3 text-small text-warning">
                         <AlertTriangle size="sm" className="shrink-0" aria-hidden="true" />
                         <span>
                           Complete the required fields below to unlock step 2: full name, badge ID and contact number.
@@ -484,7 +484,7 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
                         <button
                           type="button"
                           onClick={() => update({ password: generateTempPassword() })}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-semibold text-brand-500 transition-colors hover:bg-brand-500/20"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-small font-semibold text-brand-500 transition-colors hover:bg-brand-500/20"
                         >
                           <RefreshCw size={12} aria-hidden="true" />
                           Generate random password
@@ -528,7 +528,7 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
                 ) : null}
 
                 {submitError ? (
-                  <p role="alert" className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
+                  <p role="alert" className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-small text-danger">
                     <AlertTriangle size="sm" className="mt-0.5 shrink-0" aria-hidden="true" />
                     <span className="min-w-0">{submitError}</span>
                   </p>
@@ -539,7 +539,7 @@ export default function ProvisionAccountModal({ open, onClose, onSaved }) {
             {/* ═══ FOOTER ═══ ONE Cancel and ONE primary, on every step
                 (2026-10-18). Going back is the progress indicator's job. */}
             <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
-              <p className="flex items-center gap-2 text-xs text-text-muted">
+              <p className="flex items-center gap-2 text-small text-text-muted">
                 <ShieldCheck size={14} className="text-success/70" aria-hidden="true" />
                 <span>Every change is recorded in Audit History</span>
               </p>

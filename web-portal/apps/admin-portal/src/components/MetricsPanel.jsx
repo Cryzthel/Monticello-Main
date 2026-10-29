@@ -47,7 +47,7 @@ function computeWeeklyResolutionTrend(incidents) {
 function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-xs shadow-overlay">
+    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-small shadow-overlay">
       <p className="mb-1 text-text-secondary">Week of {label}</p>
       {payload.map((entry) => (
         <p key={entry.dataKey} style={{ color: entry.color }}>
@@ -62,7 +62,7 @@ function DurationTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
   const { category, avgMinutes, count } = payload[0].payload
   return (
-    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-xs shadow-overlay">
+    <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-small shadow-overlay">
       <p className="font-medium text-text-primary">{categoryLabel(category)}</p>
       <p className="text-text-secondary">
         {formatMinutes(avgMinutes)} avg · {count} closed
@@ -118,7 +118,7 @@ export default function MetricsPanel({
         <PriorityBreakdownChart incidents={activeIncidents} loading={loading} />
 
         <Card className="flex h-72 flex-col p-5">
-          <p className="mb-2 text-sm font-semibold text-text-primary">
+          <p className="mb-2 text-small font-semibold text-text-primary">
             Reports filed vs. closed — last {TREND_WEEKS} weeks
           </p>
           {loading ? (
@@ -131,17 +131,17 @@ export default function MetricsPanel({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={weeklyTrend} margin={CHART_MARGIN}>
               <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: 'var(--color-chart-axis)', fontSize: 10 }} axisLine={{ stroke: 'var(--color-chart-grid)' }} tickLine={false} />
+              <XAxis dataKey="label" tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }} axisLine={{ stroke: 'var(--color-chart-grid)' }} tickLine={false} />
               <YAxis
                 allowDecimals={false}
                 domain={[0, maxWeekly]}
-                tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }}
+                tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
                 axisLine={false}
                 tickLine={false}
                 width={yAxisWidth(maxWeekly)}
               />
               <Tooltip content={<TrendTooltip />} cursor={{ fill: 'var(--color-chart-cursor)' }} />
-              <Legend wrapperStyle={{ fontSize: 11, color: 'var(--color-chart-axis)' }} />
+              <Legend wrapperStyle={{ fontSize: 14, color: 'var(--color-chart-axis)' }} />
               <Bar dataKey="Reported" fill="var(--color-chart-neutral)" radius={[4, 4, 0, 0]} maxBarSize={18} />
               <Bar dataKey="Resolved" fill="var(--color-chart-line)" radius={[4, 4, 0, 0]} maxBarSize={18} />
             </BarChart>
@@ -154,16 +154,16 @@ export default function MetricsPanel({
             See .page-grid in the shared stylesheet. */}
         <div className="page-grid">
           <Card className="col-span-12 flex h-72 flex-col p-5 xl:col-span-6">
-            <p className="mb-1 shrink-0 text-sm font-semibold text-text-primary">
+            <p className="mb-1 shrink-0 text-small font-semibold text-text-primary">
               How long each type takes to close
             </p>
-            <p className="mb-3 shrink-0 text-xs text-text-secondary">
+            <p className="mb-3 shrink-0 text-small text-text-secondary">
               Average across every closed report
             </p>
             {loading ? (
               <SkeletonChart height="h-full" className="min-h-0 flex-1" showLegend={false} />
             ) : categoryDurations.length === 0 ? (
-              <p className="flex flex-1 items-center justify-center text-sm text-text-secondary">
+              <p className="flex flex-1 items-center justify-center text-small text-text-secondary">
                 Nothing closed yet.
               </p>
             ) : (
@@ -174,12 +174,12 @@ export default function MetricsPanel({
                   margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
                 >
                   <CartesianGrid stroke="var(--color-chart-grid)" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: 'var(--color-chart-axis)', fontSize: 11 }} axisLine={false} tickLine={false} hide />
+                  <XAxis type="number" tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }} axisLine={false} tickLine={false} hide />
                   <YAxis
                     type="category"
                     dataKey="category"
                     tickFormatter={categoryLabel}
-                    tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }}
+                    tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
                     axisLine={false}
                     tickLine={false}
                     width={90}
@@ -200,10 +200,10 @@ export default function MetricsPanel({
           </Card>
 
           <Card className="col-span-12 flex h-72 min-h-0 flex-col p-5 xl:col-span-6">
-            <p className="mb-1 shrink-0 text-sm font-semibold text-text-primary">
+            <p className="mb-1 shrink-0 text-small font-semibold text-text-primary">
               Reports by Phases
             </p>
-            <p className="mb-3 shrink-0 text-xs text-text-secondary">
+            <p className="mb-3 shrink-0 text-small text-text-secondary">
               Reports in the last {days} days
             </p>
             {loading ? (
@@ -229,14 +229,14 @@ export default function MetricsPanel({
                 ))}
               </div>
             ) : phaseHotspots.length === 0 ? (
-              <p className="flex flex-1 items-center justify-center text-sm text-text-secondary">
+              <p className="flex flex-1 items-center justify-center text-small text-text-secondary">
                 No phase data for this period.
               </p>
             ) : (
               <div className="custom-scrollbar flex min-h-0 flex-1 flex-col justify-center gap-2.5 overflow-y-auto">
                 {phaseHotspots.map(({ phase, count }) => (
                   <div key={phase}>
-                    <div className="mb-1 flex items-center justify-between text-xs">
+                    <div className="mb-1 flex items-center justify-between text-small">
                       <span className="flex items-center gap-2 text-text-primary">
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"

@@ -97,26 +97,26 @@ function InstallGuide({ open, onClose, release }) {
         >
           <X size={18} />
         </button>
-        <h2 id="install-guide-title" className="pr-8 text-base font-semibold text-text-primary">
+        <h2 id="install-guide-title" className="type-h3 pr-8 text-text-primary">
           Installing the app on Android
         </h2>
-        <p className="mt-1 text-sm text-text-secondary">
+        <p className="mt-1 text-small text-text-secondary">
           This app is installed directly instead of from the Play Store. It takes about a minute.
         </p>
         <ol className="mt-4 space-y-3">
           {steps.map((step, i) => (
             <li key={step.title} className="flex gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-xs font-semibold text-brand-600 dark:text-brand-400">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-small font-semibold text-brand-600 dark:text-brand-400">
                 {i + 1}
               </span>
               <div>
-                <p className="text-sm font-medium text-text-primary">{step.title}</p>
-                <p className="mt-0.5 text-sm leading-relaxed text-text-secondary">{step.body}</p>
+                <p className="text-small font-medium text-text-primary">{step.title}</p>
+                <p className="mt-0.5 text-small leading-relaxed text-text-secondary">{step.body}</p>
               </div>
             </li>
           ))}
         </ol>
-        <p className="mt-4 flex items-start gap-2 rounded-xl border border-hairline bg-base-950/60 p-3 text-xs leading-relaxed text-text-secondary">
+        <p className="mt-4 flex items-start gap-2 rounded-xl border border-hairline bg-base-950/60 p-3 text-small leading-relaxed text-text-secondary">
           <ShieldCheck size={14} className="mt-0.5 shrink-0 text-brand-600 dark:text-brand-400" aria-hidden="true" />
           <span>
             Only install the app from this page. Updates must come from the same source — a copy from anywhere else will
@@ -162,20 +162,20 @@ export default function DirectDownloadCard() {
               <Smartphone size={20} aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <h2 className="text-base font-semibold tracking-tight text-text-primary">Monticello Villas for Android</h2>
-              <p className="text-sm text-text-secondary">Report incidents, raise an SOS and follow updates.</p>
+              <h2 className="type-h3 text-text-primary">Monticello Villas for Android</h2>
+              <p className="text-small text-text-secondary">Report incidents, raise an SOS and follow updates.</p>
             </div>
           </div>
 
           {status === 'loading' ? (
-            <p className="mt-5 flex items-center gap-2 text-sm text-text-muted" role="status">
+            <p className="mt-5 flex items-center gap-2 text-small text-text-muted" role="status">
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
               Checking for the latest release…
             </p>
           ) : null}
 
           {status === 'none' || status === 'error' ? (
-            <p className="mt-5 flex items-start gap-2 rounded-xl border border-hairline bg-base-950/60 p-3 text-sm text-text-secondary" role="status">
+            <p className="mt-5 flex items-start gap-2 rounded-xl border border-hairline bg-base-950/60 p-3 text-small text-text-secondary" role="status">
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
               {status === 'none'
                 ? 'No Android release has been published yet.'
@@ -196,7 +196,7 @@ export default function DirectDownloadCard() {
                   .map((pill) => (
                     <li
                       key={pill.text}
-                      className={`inline-flex items-center gap-1 rounded-full border border-hairline px-2.5 py-0.5 text-xs tabular-nums ${
+                      className={`inline-flex items-center gap-1 rounded-full border border-hairline px-2.5 py-0.5 text-small tabular-nums ${
                         pill.strong ? 'font-semibold text-text-primary' : 'text-text-secondary'
                       }`}
                     >
@@ -219,12 +219,12 @@ export default function DirectDownloadCard() {
                 <button
                   type="button"
                   onClick={() => setGuideOpen(true)}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+                  className="inline-flex items-center gap-1.5 text-small font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
                 >
                   <Info size={14} aria-hidden="true" />
                   How to install
                 </button>
-                <span className="flex min-w-0 items-center gap-1 text-xs text-text-muted">
+                <span className="flex min-w-0 items-center gap-1 text-small text-text-muted">
                   <span className="font-mono">SHA-256</span>
                   <span className="truncate font-mono" title={release.sha256}>
                     {release.sha256.slice(0, 12)}…
@@ -243,7 +243,7 @@ export default function DirectDownloadCard() {
             <div className="rounded-xl border border-hairline bg-white p-2">
               <QrCode value={APK_DOWNLOAD_URL} label="QR code: download the Monticello Villas Android app" />
             </div>
-            <figcaption className="max-w-[11rem] text-center text-xs text-text-muted">
+            <figcaption className="max-w-[11rem] text-center text-small text-text-muted">
               On a computer? Scan with your phone&rsquo;s camera to download.
             </figcaption>
           </figure>

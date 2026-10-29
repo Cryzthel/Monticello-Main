@@ -28,21 +28,21 @@ export default function TimeframeFilter({ value, onChange, className = '' }) {
             aria-label="From date"
             value={value.from ?? ''}
             onChange={(e) => onChange({ ...value, from: e.target.value })}
-            className="field h-9 w-auto py-1.5 text-xs"
+            className="field h-10 w-auto py-1.5"
           />
-          <span className="text-xs text-text-muted">to</span>
+          <span className="text-small text-text-muted">to</span>
           <input
             type="date"
             aria-label="To date"
             value={value.to ?? ''}
             onChange={(e) => onChange({ ...value, to: e.target.value })}
-            className="field h-9 w-auto py-1.5 text-xs"
+            className="field h-10 w-auto py-1.5"
           />
         </div>
       ) : null}
 
       {range.from ? (
-        <span className="text-caption text-text-muted">
+        <span className="text-small text-text-muted">
           since {formatDate(range.from)}
         </span>
       ) : null}

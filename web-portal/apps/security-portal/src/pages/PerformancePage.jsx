@@ -105,7 +105,7 @@ export default function PerformancePage() {
           </div>
         )}
 
-        <p className="-mt-3 text-xs text-text-muted">
+        <p className="-mt-3 text-small text-text-muted">
           Figures update live as statuses change on the dispatch map.
         </p>
 

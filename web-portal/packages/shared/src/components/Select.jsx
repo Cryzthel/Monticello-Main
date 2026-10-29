@@ -61,9 +61,9 @@ import { Check, ChevronDown } from '@shared/icons'
  * that build.
  */
 const SIZES = {
-  sm: 'h-8 text-xs',
-  md: 'h-9 text-sm',
-  touch: 'h-11 text-sm sm:h-9',
+  sm: 'h-8 text-small',
+  md: 'h-9 text-small',
+  touch: 'h-11 text-small sm:h-9',
 }
 
 /**
@@ -127,7 +127,8 @@ export default function Select({
   )
   const picked = multiple ? (Array.isArray(value) ? value : []) : []
   const selected = multiple ? null : normalized.find((option) => option.value === value)
-  const height = SIZES[size] ?? SIZES.md
+  // A Select in a form is form input text (Body, 18px); in a toolbar it is chrome (Small).
+  const height = (SIZES[size] ?? SIZES.md).replace('text-small', variant === 'field' ? 'text-body' : 'text-small')
 
   /**
    * What the trigger says when several things are chosen.
@@ -421,7 +422,7 @@ export default function Select({
               onClick={(event) => event.stopPropagation()}
             >
               {normalized.length === 0 ? (
-                <p className="px-2.5 py-2 text-xs text-text-muted">No options</p>
+                <p className="px-2.5 py-2 text-small text-text-muted">No options</p>
               ) : (
                 normalized.map((option, index) => {
                   const active = multiple ? picked.includes(option.value) : option.value === value
@@ -462,7 +463,7 @@ export default function Select({
                       // them into one treatment is how a keyboard user ends
                       // up unable to tell what they have chosen from what
                       // they are merely pointing at.
-                      className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors duration-100 sm:min-h-0 sm:text-xs ${
+                      className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-small font-medium transition-colors duration-100 sm:min-h-0 sm:text-small ${
                         active
                           ? 'bg-nav-active text-nav-active-fg'
                           : focused
@@ -473,7 +474,7 @@ export default function Select({
                       {OptionIcon ? <OptionIcon size="sm" className="shrink-0 opacity-70" /> : null}
                       <span className="truncate">{option.label}</span>
                       {option.hint ? (
-                        <span className="ml-1 shrink-0 text-2xs text-text-muted">{option.hint}</span>
+                        <span className="ml-1 shrink-0 text-small text-text-muted">{option.hint}</span>
                       ) : null}
                       {active ? <Check size="sm" className="ml-auto shrink-0 text-brand-400" /> : null}
                     </button>

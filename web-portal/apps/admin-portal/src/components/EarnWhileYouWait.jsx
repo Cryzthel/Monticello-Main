@@ -131,14 +131,14 @@ export default function EarnWhileYouWait({ collapsed = false, feed: injectedFeed
           aria-label="Earn while you wait, sponsored"
           className="rounded-xl border border-hairline bg-base-950 p-3"
         >
-          <p className="truncate text-caption font-medium text-text-secondary">{label}…</p>
+          <p className="truncate text-small font-medium text-text-secondary">{label}…</p>
           <div className="mt-2 h-0.5 overflow-hidden rounded-full bg-tint/10" aria-hidden="true">
             <div className="h-full w-1/3 animate-[indeterminate_1.4s_ease-in-out_infinite] rounded-full bg-brand-500" />
           </div>
 
           <div className="mt-3 border-t border-hairline pt-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-2xs font-medium text-text-muted">Sponsored</span>
+              <span className="text-small font-medium text-text-muted">Sponsored</span>
               <button
                 type="button"
                 onClick={dismiss}
@@ -154,10 +154,10 @@ export default function EarnWhileYouWait({ collapsed = false, feed: injectedFeed
               rel="sponsored noopener noreferrer"
               className="group mt-0.5 block rounded"
             >
-              <span className="line-clamp-2 text-label font-medium leading-snug text-text-primary decoration-slate-300 underline-offset-2 group-hover:underline">
+              <span className="line-clamp-2 text-small font-medium leading-snug text-text-primary decoration-slate-300 underline-offset-2 group-hover:underline">
                 {placement.text}
               </span>
-              <span className="mt-1 flex items-center gap-1 text-caption text-text-muted">
+              <span className="mt-1 flex items-center gap-1 text-small text-text-muted">
                 <span className="truncate">{placement.advertiser}</span>
                 <ArrowUpRight size="sm" className="shrink-0 transition-transform duration-150 ease-[var(--ease-out-strong)] group-hover:-translate-y-px group-hover:translate-x-px" />
               </span>

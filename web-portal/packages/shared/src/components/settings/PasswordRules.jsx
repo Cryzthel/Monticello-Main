@@ -14,7 +14,7 @@ export default function PasswordRules({ value, failed = false }) {
         const met = rule.test(value)
         const tone = met ? 'text-success' : failed ? 'text-danger' : 'text-text-muted'
         return (
-          <li key={rule.id} className={`flex items-center gap-1.5 text-2xs transition-colors duration-150 ${tone}`}>
+          <li key={rule.id} className={`flex items-center gap-1.5 text-small transition-colors duration-150 ${tone}`}>
             {met ? (
               <Check size="sm" aria-hidden="true" className="h-3 w-3 shrink-0" />
             ) : (

@@ -202,8 +202,8 @@ export default function PanicAlertsTable({
                       empty array with loading:false — indistinguishable from
                       "no emergencies have happened", which is the worst possible
                       reading of an emergency log. */}
-                  <p className="text-sm font-medium text-danger">Could not load panic alerts.</p>
-                  <p className="mt-1 text-xs text-text-secondary">
+                  <p className="text-small font-medium text-danger">Could not load panic alerts.</p>
+                  <p className="mt-1 text-small text-text-secondary">
                     {error.code ? `Firestore error: ${error.code}` : error.message}
                   </p>
                 </td>
@@ -229,7 +229,7 @@ export default function PanicAlertsTable({
               <tr>
                 <td colSpan={hasActions ? 6 : 5} className="px-4 py-16 text-center">
                   <Siren size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-small text-text-secondary">
                     {alerts.length === 0
                       ? 'No panic alerts have been raised.'
                       : 'No alerts match this view.'}
@@ -255,7 +255,7 @@ export default function PanicAlertsTable({
                 return (
                   <tr key={alert.id} className="border-t border-divider">
                     <td className="px-4 py-3.5 align-top">
-                      <p className="font-mono text-xs font-medium text-text-secondary">{alertId(alert.id)}</p>
+                      <p className="font-mono text-small font-medium text-text-secondary">{alertId(alert.id)}</p>
                       {/* Every SOS is critical by definition — a resident held a
                           panic button. There is no priority to compute, so the
                           badge states the fact rather than a derived grade. */}
@@ -265,7 +265,7 @@ export default function PanicAlertsTable({
                     </td>
                     <td className="px-4 py-3.5 align-top">
                       <p className="truncate font-medium text-text-primary">{alert.residentName}</p>
-                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-text-secondary">
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-small text-text-secondary">
                         <MapPin size="sm" className="shrink-0" />
                         <span className="truncate">{alert.address}</span>
                       </p>
@@ -276,7 +276,7 @@ export default function PanicAlertsTable({
                       {alert.residentPhone ? (
                         <a
                           href={`tel:${alert.residentPhone}`}
-                          className="mt-1 inline-flex items-center gap-1.5 font-mono text-xs text-brand-400 transition hover:text-brand-300"
+                          className="mt-1 inline-flex items-center gap-1.5 font-mono text-small text-brand-400 transition hover:text-brand-300"
                         >
                           <Phone size="sm" className="shrink-0" />
                           {alert.residentPhone}
@@ -284,19 +284,19 @@ export default function PanicAlertsTable({
                       ) : null}
                     </td>
                     <td className="px-4 py-3.5 align-top">
-                      <p className="font-mono text-xs tabular-nums text-text-secondary">{stamp(alert.createdAt)}</p>
+                      <p className="font-mono text-small tabular-nums text-text-secondary">{stamp(alert.createdAt)}</p>
                       {alert.createdAt ? (
-                        <p className="mt-1 text-2xs text-text-muted">{relativeTime(alert.createdAt)}</p>
+                        <p className="mt-1 text-small text-text-muted">{relativeTime(alert.createdAt)}</p>
                       ) : null}
                     </td>
                     <td className="px-4 py-3.5 align-top">
                       {coordinatesOf(alert) ? (
-                        <p className="flex items-center gap-1.5 font-mono text-xs tabular-nums text-brand-500">
+                        <p className="flex items-center gap-1.5 font-mono text-small tabular-nums text-brand-500">
                           <Crosshair size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
                           <span className="select-all">{coordinatesOf(alert)}</span>
                         </p>
                       ) : (
-                        <p className="text-xs text-text-muted">No GPS fix</p>
+                        <p className="text-small text-text-muted">No GPS fix</p>
                       )}
                     </td>
                     <td className="px-4 py-3.5 align-top">
@@ -316,7 +316,7 @@ export default function PanicAlertsTable({
                         </p>
                       ) : null}
                       {alert.acknowledgedByName ? (
-                        <p className="mt-1 truncate text-2xs text-text-muted">
+                        <p className="mt-1 truncate text-small text-text-muted">
                           by {acknowledgedByLabel(alert.acknowledgedByName)}
                           {alert.acknowledgedAt ? (
                             <span className="font-mono"> · {formatTime(alert.acknowledgedAt)}</span>

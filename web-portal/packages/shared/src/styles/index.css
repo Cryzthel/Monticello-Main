@@ -13,12 +13,12 @@
 
 
 /* ══ TYPEFACE ═════════════════════════════════════════════════════════════════
-   Every word of text in both consoles is INTER (user's standard, 2026-10-18):
-   body, headings and the "Monticello Villas" wordmark alike, through
-   --font-sans / --font-display / --font-brand in the @theme below. It is
-   requested once, from Google Fonts, by each app's index.html <link> (a
-   <link> starts the download in parallel; a CSS @import would wait for this
-   sheet first). JetBrains Mono stays for codes and coordinates only.
+   Body text in both consoles is INTER; headings are SPACE GROTESK 700
+   (2026-10-29 type scale — see THE TYPE SCALE in the @theme below), through
+   --font-sans / --font-heading. Both are requested once, from Google Fonts,
+   by each app's index.html <link> (a <link> starts the download in parallel;
+   a CSS @import would wait for this sheet first). JetBrains Mono stays for
+   codes and coordinates only.
 
    ONE EXCEPTION: the "Monticello Villas" wordmark is set in GROOTE
    (Artiveko), restored at the user's request on 2026-10-18 through
@@ -863,8 +863,42 @@
      It is still a DISPLAY face, not a second body face. One element uses it.
      Anything that reaches for it on a screen full of 14px text is using the
      wrong token; `--font-sans` is the answer there. */
-  /* Inter too: the sign-in headings no longer use a separate display face. */
-  --font-display: var(--font-sans);
+  /* ── THE TYPE SCALE (2026-10-29) ──────────────────────────────────────────
+     Five roles, and every word in both consoles is one of them:
+
+       H1  64px  Space Grotesk 700   sign-in heroes            .type-h1
+       H2  40px  Space Grotesk 700   page titles               .type-h2
+       H3  28px  Space Grotesk 700   card / section / modal    .type-h3
+       Body 18px Inter 400/500       descriptions, logs, form inputs  text-body
+       Small 14px Inter 400/500      metadata, badges, tables, buttons text-small
+
+     14px is the FLOOR: nothing renders smaller (charts and map popups too).
+     Dense chrome — table cells, nav rows, buttons, chips — sits at Small so a
+     screen of tickets still fits; only reading text steps up to Body.
+
+     Use the `type-h*` utilities (below the @theme blocks), not `text-h*`, for
+     headings: they bundle the face, weight and the phone step-down, which
+     the raw size tokens cannot. Space Grotesk is requested at 700 only. */
+  --font-heading:
+    "Space Grotesk", "Inter", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: var(--font-heading);
+
+  --text-h1: 4rem;
+  --text-h1--line-height: 1.05;
+  --text-h1--letter-spacing: -0.035em;
+  --text-h2: 2.5rem;
+  --text-h2--line-height: 1.1;
+  --text-h2--letter-spacing: -0.03em;
+  --text-h3: 1.75rem;
+  --text-h3--line-height: 1.2;
+  --text-h3--letter-spacing: -0.02em;
+  --text-body: 1.125rem;
+  --text-body--line-height: 1.6;
+  --text-body--letter-spacing: -0.011em;
+  --text-small: 0.875rem;
+  --text-small--line-height: 1.45;
+  --text-small--letter-spacing: 0em;
 
   /* Optical tracking. A geometric sans set at 24px needs meaningfully tighter
      spacing than the same face at 11px; setting one global `tracking-tight`
@@ -1021,6 +1055,36 @@
   --color-brand-dark: #05171B;
   --color-brand-cream: #F2F1D6;
   --color-brand-logo: var(--color-brand-cta);
+}
+
+/* ══ HEADING UTILITIES ═══════════════════════════════════════════════════════
+   The three heading roles of the type scale (see THE TYPE SCALE in @theme).
+   Each reaches its exact spec size at 1000px of viewport and above, and
+   clamps down on a phone, where a 64px word is wider than the screen. Being
+   @utility, they take variants (`md:type-h2`) and lose to a later `text-*`. */
+@utility type-h1 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(2.5rem, 1.5rem + 4vw, var(--text-h1));
+  line-height: var(--text-h1--line-height);
+  letter-spacing: var(--text-h1--letter-spacing);
+  text-wrap: balance;
+}
+@utility type-h2 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(1.75rem, 1.25rem + 2vw, var(--text-h2));
+  line-height: var(--text-h2--line-height);
+  letter-spacing: var(--text-h2--letter-spacing);
+  text-wrap: balance;
+}
+@utility type-h3 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: clamp(1.375rem, 1.125rem + 1vw, var(--text-h3));
+  line-height: var(--text-h3--line-height);
+  letter-spacing: var(--text-h3--letter-spacing);
+  text-wrap: balance;
 }
 
 
@@ -1352,7 +1416,7 @@
   border: 1px solid var(--color-slate-200);
   padding: 0.125rem 0.5rem;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-small);
   color: var(--color-text-secondary);
 }
 
@@ -1709,6 +1773,64 @@
   }
   to {
     transform: translateX(400%);
+  }
+}
+
+/* ── EVIDENCE UPLOADER STATES (EvidenceUploader + UploadProgressRing) ──────
+   The halo behind the progress ring breathes while work is going on; the
+   overlay fades in rather than snapping over the photo; on landing a check
+   pops in and fades away. All three run on opacity/transform only, under
+   200–700ms, ease-out, so nothing reflows and nothing outstays its news. */
+@keyframes ring-breathe {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+@keyframes upload-overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.upload-overlay {
+  animation: upload-overlay-in 180ms var(--ease-out-strong);
+}
+
+@keyframes upload-landed {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+.upload-landed {
+  animation: upload-landed 900ms var(--ease-out-strong) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The caption already says "Attached"; without motion the check would
+     simply sit over the photo, so it is not shown at all. */
+  .upload-landed {
+    display: none;
   }
 }
 
@@ -2146,7 +2268,7 @@
      applied as a utility; with the inset gone there is nothing left to lose,
      but the rule still holds for anything added here later. */
   .field {
-    @apply w-full rounded-lg border border-slate-200 bg-field px-3 py-2 text-sm text-text-primary placeholder:text-text-muted outline-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/20;
+    @apply w-full rounded-lg border border-slate-200 bg-field px-3 py-2 text-body leading-6 text-text-primary placeholder:text-text-muted outline-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/20;
   }
 
   /* Identical to .field apart from the vertical padding. The two used to
@@ -2156,7 +2278,7 @@
      rule below is kept anyway: it costs one selector and it is what stops a
      future pill experiment from clipping a four-row textarea again. */
   .field-textarea {
-    @apply w-full rounded-lg border border-slate-200 bg-field px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted outline-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/20;
+    @apply w-full rounded-lg border border-slate-200 bg-field px-3 py-2.5 text-body leading-6 text-text-primary placeholder:text-text-muted outline-none transition-[color,background-color,border-color,box-shadow] duration-150 hover:border-slate-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 disabled:cursor-not-allowed disabled:opacity-60 aria-[invalid=true]:border-danger aria-[invalid=true]:focus:ring-danger/20;
   }
 
   /* ── SAFETY NET ───────────────────────────────────────────────────────────
@@ -2217,7 +2339,7 @@
      on the same strong ease-out. `:not(:disabled)` keeps a disabled control
      inert to the pointer rather than merely faded. */
   .btn {
-    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full text-small font-medium disabled:cursor-not-allowed disabled:opacity-50;
     transition-property: color, background-color, border-color, box-shadow, transform, opacity;
     transition-duration: 150ms;
     transition-timing-function: var(--ease-out-strong);
@@ -2241,7 +2363,7 @@
      14px sides the first glyph sat inside the bend. Height unchanged, so no
      toolbar or dialog footer reflows. */
   .btn-sm {
-    @apply h-9 px-3.5 text-xs;
+    @apply h-9 px-3.5 text-small;
   }
 
   /* ── THE COMPACT TIER ─────────────────────────────────────────────────────
@@ -2262,7 +2384,7 @@
      keeps it flush with a `text-xs` label and lets it sit inline beside a
      field without a hardcoded pixel height to keep in sync. */
   .btn-compact {
-    @apply px-3 py-1.5 text-xs;
+    @apply px-3 py-1.5 text-small;
   }
 
   /* The FORM tier: `px-4 py-2` on a 14px label, a 36px capsule. What a
@@ -2270,7 +2392,7 @@
      because it commits a change to live consoles, and one step below
      `.btn-md` because it sits inside a card footer, not alone on a page. */
   .btn-form {
-    @apply px-4 py-2 text-sm;
+    @apply px-4 py-2 text-small;
   }
 
   /* The dispatch drawer's tier: `px-3 py-1.5 text-xs` with a hairline edge.
@@ -2279,7 +2401,7 @@
      variant carries the same 1px `border-slate-200` (zinc-800 in dark) so a
      filled and an outlined button in one row stand the same height. */
   .btn-drawer {
-    @apply border border-slate-200 px-3 py-1.5 text-xs;
+    @apply border border-slate-200 px-3 py-1.5 text-small;
   }
 
   /* The COMMIT tier, for the dispatch drawer's pinned action bar:
@@ -2319,7 +2441,7 @@
      into the bar. The colour variants are declared BELOW this rule and so
      win on source order, painting the edge they want over a reserved one. */
   .btn-action {
-    @apply border border-transparent px-6 py-2.5 text-sm font-semibold;
+    @apply border border-transparent px-6 py-2.5 text-small font-semibold;
   }
 
   .btn-icon-md {
@@ -2387,7 +2509,7 @@
      edge and rose-400 text is red at ~12% on the dark canvas, which is what
      these tokens produce, and a light pink slab with red text in light mode. */
   .btn-decision {
-    @apply flex-1 rounded-xl px-4 py-3 text-[14px];
+    @apply flex-1 rounded-xl px-4 py-3 text-small;
   }
 
   .btn-approve {
@@ -2409,7 +2531,7 @@
      reference: square-cornered `rounded-lg` slabs at 13px, not the house
      capsule. Quiet ghosts, and a red ghost for Delete that only gains a fill and an edge on hover. */
   .sheet-btn {
-    @apply inline-flex items-center justify-center gap-2.5 whitespace-nowrap rounded-lg border border-transparent px-4 py-2.5 text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2.5 whitespace-nowrap rounded-lg border border-transparent px-4 py-2.5 text-small font-medium disabled:cursor-not-allowed disabled:opacity-50;
     transition-property: color, background-color, border-color, transform;
     transition-duration: 150ms;
     transition-timing-function: var(--ease-out-strong);
@@ -2431,7 +2553,7 @@
      in dark mode is exactly the reference's `zinc-100` on `zinc-950` (and
      slate-900 on white in light). OUTLINE is a hairline-edged ghost. */
   .sheet-btn-primary {
-    @apply px-5 text-[14px] font-semibold;
+    @apply px-5 text-small font-semibold;
     background-color: var(--color-cta);
     color: var(--color-cta-fg);
   }
@@ -2441,7 +2563,7 @@
   }
 
   .sheet-btn-outline {
-    @apply border-hairline px-5 text-[14px] text-text-secondary hover:bg-tint/[0.06] hover:text-text-primary;
+    @apply border-hairline px-5 text-small text-text-secondary hover:bg-tint/[0.06] hover:text-text-primary;
   }
 
   /* Scrolls, without drawing a scrollbar (the report sheet's body, per the
@@ -2533,7 +2655,7 @@
      ::after that must paint ABOVE the indicator layer (see
      .segmented-indicator), and it can only do that as a positioned box. */
   .segment {
-    @apply relative flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium outline-none select-none;
+    @apply relative flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-small font-medium outline-none select-none;
     transition-property: color, background-color, opacity;
     transition-duration: 150ms;
     transition-timing-function: ease;
@@ -2622,7 +2744,7 @@
      the idle layer, in the selected layer and on either theme without a
      branch — a hardcoded `bg-base-950/20` only worked on one of the four. */
   .count-pill {
-    @apply inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full px-1.5 text-2xs font-semibold leading-none tabular-nums;
+    @apply inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-small font-semibold leading-none tabular-nums;
     background-color: color-mix(in oklab, currentColor 16%, transparent);
   }
 
@@ -2637,7 +2759,7 @@
      12px label on a 28px target sitting in a toolbar beside other controls.
      Same track, same selected treatment, one step up in scale. */
   .segment-lg {
-    @apply shrink-0 gap-2 text-sm;
+    @apply shrink-0 gap-2 text-small;
   }
 
   /* ══ FILTER CHIPS ═════════════════════════════════════════════════════════
@@ -2652,7 +2774,7 @@
      takes the brand pair; a caller with a meaning of its own (a status tone)
      passes its tone classes instead of `.chip-active`. */
   .chip {
-    @apply inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium leading-4 select-none disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-small font-medium leading-4 select-none disabled:cursor-not-allowed disabled:opacity-40;
     transition-property: color, background-color, border-color, box-shadow, transform;
     transition-duration: 150ms;
     transition-timing-function: var(--ease-out-strong);
@@ -2776,7 +2898,7 @@
      stadium-shaped one reads as a button that failed to size itself — the
      same reasoning as the rows inside a dropdown panel. */
   .nav-link {
-    @apply relative flex w-full items-center rounded-lg py-2.5 text-left text-sm font-medium tracking-normal text-text-secondary transition-colors duration-150 hover:bg-tint/[0.04] hover:text-text-primary;
+    @apply relative flex w-full items-center rounded-lg py-2.5 text-left text-small font-medium tracking-normal text-text-secondary transition-colors duration-150 hover:bg-tint/[0.04] hover:text-text-primary;
   }
 
   /* Fixed-width icon column, animated in step with the rail. At w-64/px-4 the
@@ -2786,7 +2908,7 @@
   /* A sidebar group's name: small grey sentence case, like the table heads.
      Replaces the uppercase eyebrow the redesign retired. */
   .nav-group-label {
-    @apply truncate text-xs font-medium leading-4 text-text-muted;
+    @apply truncate text-small font-medium leading-4 text-text-muted;
   }
 
   .nav-icon {
@@ -2984,7 +3106,7 @@
   /* A table's column heads: the reference's small grey sentence-case labels
      on a pale band. Paired with `bg-slate-50` on the thead. */
   .table-head {
-    @apply text-xs font-medium leading-tight tracking-normal text-text-muted;
+    @apply text-small font-medium leading-tight tracking-normal text-text-muted;
   }
 
   /* A <th> is bold by the browser's own stylesheet; the heads take the row's
@@ -3005,7 +3127,7 @@
      secondary at medium weight, against primary. Secondary measures 7.58:1 on
      a light card and 11.93:1 on a dark one. */
   .meta-label {
-    @apply text-sm font-medium leading-snug tracking-normal text-text-secondary;
+    @apply text-small font-medium leading-snug tracking-normal text-text-secondary;
   }
 
   /* A wizard step arriving. The shared `riseIn` entrance, short and

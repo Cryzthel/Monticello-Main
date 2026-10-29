@@ -52,7 +52,7 @@ export default function KpiCard({
 
   const trend = delta ? (
     <span
-      className={`inline-flex h-5 shrink-0 items-center gap-1 rounded-full px-2 text-caption font-medium tabular-nums ring-1 ring-inset ${
+      className={`inline-flex h-5 shrink-0 items-center gap-1 rounded-full px-2 text-small font-medium tabular-nums ring-1 ring-inset ${
         good
           ? 'bg-pill-success text-pill-success-fg ring-pill-success-fg/15'
           : 'bg-pill-danger text-pill-danger-fg ring-pill-danger-fg/15'
@@ -66,11 +66,11 @@ export default function KpiCard({
   return (
     <div className={`kpi-shell ${className}`}>
       <div className={`kpi-face ${compact ? 'px-3 py-2.5' : 'px-4 py-3.5'}`}>
-        <p className={`truncate font-medium text-text-secondary ${compact ? 'text-xs' : 'text-sm'}`}>{label}</p>
+        <p className={`truncate font-medium text-small text-text-secondary`}>{label}</p>
         <div className={`flex items-center justify-between gap-2 ${compact ? 'mt-1' : 'mt-1.5'}`}>
           <p
-            className={`font-semibold tabular-nums tracking-tight ${
-              compact ? 'text-xl leading-7' : 'text-3xl leading-9'
+            className={`tabular-nums ${
+              compact ? 'type-h3' : 'type-h2'
             } ${valueTone}`}
           >
             {value}
@@ -81,7 +81,7 @@ export default function KpiCard({
       {!compact && (trend || helpText) ? (
         <div className="flex min-h-9 min-w-0 items-center gap-2 px-3 py-2">
           {trend}
-          {helpText ? <p className="min-w-0 truncate text-xs text-text-muted">{helpText}</p> : null}
+          {helpText ? <p className="min-w-0 truncate text-small text-text-muted">{helpText}</p> : null}
         </div>
       ) : null}
     </div>

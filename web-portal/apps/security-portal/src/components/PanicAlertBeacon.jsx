@@ -72,12 +72,12 @@ export default function PanicAlertBeacon() {
         </span>
 
         <span className="min-w-0">
-          <span className="block truncate text-label font-semibold leading-tight">
+          <span className="block truncate text-small font-semibold leading-tight">
             {alerts.length === 1 ? 'Panic alert' : `${alerts.length} panic alerts`}
           </span>
           {/* opacity-90 measures 5.45:1 on this plate — see the floor
               documented on the shared `.sos-banner` style. */}
-          <span className="mt-0.5 block truncate text-caption leading-none opacity-90">
+          <span className="mt-0.5 block truncate text-small leading-none opacity-90">
             {unattended ? `${unattended} unattended · open dispatch` : 'Open dispatch'}
           </span>
         </span>

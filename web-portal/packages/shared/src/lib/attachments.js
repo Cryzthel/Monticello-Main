@@ -123,7 +123,7 @@ export function uploadIncidentAttachment(file, onProgress, { contentType = conte
 /** Turns a Storage error into something an operator can act on. */
 export function describeUploadError(err) {
   if (err?.code === 'storage/unauthorized') {
-    return 'Upload denied by Storage rules — run "firebase deploy --only storage".'
+    return 'This file could not be saved. Ask an administrator to check upload permissions.'
   }
   if (err?.code === 'storage/canceled') return 'Upload cancelled.'
   if (err?.code === 'storage/retry-limit-exceeded') {

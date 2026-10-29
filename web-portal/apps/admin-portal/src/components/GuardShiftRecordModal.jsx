@@ -171,7 +171,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
   }
 
   const ghostBtn =
-    'inline-flex items-center gap-1.5 rounded-full border border-hairline bg-tint/[0.05] px-4 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50'
+    'inline-flex items-center gap-1.5 rounded-full border border-hairline bg-tint/[0.05] px-4 py-2 text-small font-medium text-text-secondary transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50'
 
   // Rendered in place, NOT portalled: ShiftRecordDrawer is its next sibling in
   // OnDutyHistoryTable and must paint above this modal when a shift is opened.
@@ -193,7 +193,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
         <header className="flex shrink-0 flex-col justify-between gap-4 border-b border-hairline bg-gradient-to-r from-base-900 to-base-950/60 px-6 py-5 md:flex-row md:items-center dark:to-base-950">
           <div className="flex min-w-0 items-center gap-4">
             <div className="relative shrink-0">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-500/40 bg-brand-500/15 text-base font-bold text-brand-500 shadow-lg shadow-brand-500/10">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-500/40 bg-brand-500/15 text-body font-bold text-brand-500 shadow-lg shadow-brand-500/10">
                 {initialsOf(displayName)}
               </span>
               {guard.onDuty ? (
@@ -204,7 +204,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h2 id="duty-log-title" className="truncate text-base font-bold tracking-tight text-text-primary">
+                <h2 id="duty-log-title" className="type-h3 truncate text-text-primary">
                   {displayName}
                 </h2>
                 {guard.onDuty ? (
@@ -215,7 +215,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
                   <Pill>Off duty</Pill>
                 )}
               </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-small text-text-secondary">
                 {badge ? <Pill className="font-mono">Badge #{badge}</Pill> : null}
                 <span className="inline-flex items-center gap-1 font-semibold text-text-primary">
                   <ShieldCheck size={14} className="text-brand-500" aria-hidden="true" />
@@ -228,7 +228,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
                   </>
                 ) : null}
               </div>
-              {guard.email && staff?.name ? <p className="mt-1 truncate text-xs text-text-muted">{guard.email}</p> : null}
+              {guard.email && staff?.name ? <p className="mt-1 truncate text-small text-text-muted">{guard.email}</p> : null}
             </div>
           </div>
 
@@ -254,11 +254,11 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
           <section className="space-y-3">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div>
-                <h3 className="flex items-center gap-2 text-sm font-bold tracking-tight text-text-primary">
+                <h3 className="flex items-center gap-2 text-small font-bold tracking-tight text-text-primary">
                   <ClipboardList size="sm" className="text-brand-500" aria-hidden="true" />
                   Official shift duty logs
                 </h3>
-                <p className="mt-0.5 text-xs text-text-secondary">
+                <p className="mt-0.5 text-small text-text-secondary">
                   Every clock-in and clock-out, newest first. Select a shift to see what was dispatched during it.
                 </p>
               </div>
@@ -313,10 +313,10 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
                       <td className={`whitespace-nowrap px-4 py-3.5 ${s.open ? 'font-semibold text-text-primary' : 'text-text-secondary'}`}>
                         {formatDateTime(s.timeIn)}
                       </td>
-                      <td className={`whitespace-nowrap px-4 py-3.5 font-mono text-xs tabular-nums ${s.open ? 'text-success' : 'text-text-secondary'}`}>
+                      <td className={`whitespace-nowrap px-4 py-3.5 font-mono text-small tabular-nums ${s.open ? 'text-success' : 'text-text-secondary'}`}>
                         {formatTime(s.timeIn)}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs tabular-nums text-text-secondary">
+                      <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small tabular-nums text-text-secondary">
                         {s.open ? (
                           <Pill tone="success" pulse>
                             On duty
@@ -325,7 +325,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
                           formatTime(s.timeOut)
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs tabular-nums text-text-muted">
+                      <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small tabular-nums text-text-muted">
                         {s.open ? '—' : hoursAndMinutes(s.durationMinutes)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-right">
@@ -340,7 +340,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
         </div>
 
         {/* ── Footer ── */}
-        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-hairline bg-base-950/40 px-6 py-3.5 text-xs text-text-muted">
+        <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-hairline bg-base-950/40 px-6 py-3.5 text-small text-text-muted">
           <span className="flex items-center gap-2">
             <ShieldCheck size="sm" className="text-brand-500" aria-hidden="true" />
             Monticello Villas security network

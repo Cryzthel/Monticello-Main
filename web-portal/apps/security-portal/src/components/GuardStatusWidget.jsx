@@ -54,7 +54,7 @@ export default function GuardStatusWidget() {
         card — so it read a shade off from every other success tone in the app.
       */}
       <span
-        className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-xs font-medium ${
+        className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full px-3 text-small font-medium ${
           onDuty ? 'bg-pill-success text-pill-success-fg' : 'bg-pill-neutral text-pill-neutral-fg'
         }`}
         title={error || undefined}
@@ -72,7 +72,7 @@ export default function GuardStatusWidget() {
 
         {/*
           The running shift, at a size someone can actually read across a
-          guardhouse desk — this was `text-2xs` in a mono face. `tabular-nums`
+          guardhouse desk — this was `text-small` in a mono face. `tabular-nums`
           is what stops the figures jittering as the minutes tick; a monospace
           face was never what did that, and the stylesheet refuses one used as
           costume. The divider is a character rather than a border: at this

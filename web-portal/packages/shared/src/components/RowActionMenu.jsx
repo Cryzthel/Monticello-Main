@@ -106,7 +106,7 @@ export default function RowActionMenu({
               <button
                 type="button"
                 onClick={() => runAction(onView)}
-                className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07]"
+                className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-small font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07]"
               >
                 <Eye size="sm" className="shrink-0 text-text-secondary" />
                 View details
@@ -124,7 +124,7 @@ export default function RowActionMenu({
                   type="button"
                   disabled={dispatchDisabled}
                   onClick={() => runAction(onDispatch)}
-                  className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-small font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   <DispatchIcon size="sm" className={`shrink-0 ${dispatchIconClass}`} aria-hidden="true" />
                   {dispatchLabel}
@@ -135,7 +135,7 @@ export default function RowActionMenu({
                   type="button"
                   disabled={resolveDisabled}
                   onClick={() => runAction(onResolve)}
-                  className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-xs font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-small font-medium text-text-primary transition-colors duration-150 hover:bg-tint/[0.07] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   <ResolveIcon size="sm" className={`shrink-0 ${resolveIconClass}`} aria-hidden="true" />
                   {resolveLabel}

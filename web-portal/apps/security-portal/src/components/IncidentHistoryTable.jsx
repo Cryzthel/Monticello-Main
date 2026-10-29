@@ -174,7 +174,7 @@ export default function IncidentHistoryTable({
                       `incidentReference` the dispatch drawer prints, so the
                       code a guard wrote down while working a call is the code
                       they can find it by afterwards. */}
-                  <td className="px-4 py-3.5 font-mono text-xs font-medium text-text-secondary">
+                  <td className="px-4 py-3.5 font-mono text-small font-medium text-text-secondary">
                     {incidentReference(report.id)}
                   </td>
                   <td className="px-4 py-3.5">
@@ -193,7 +193,7 @@ export default function IncidentHistoryTable({
                   <td className="px-4 py-3.5">
                     <StatusBadge status={report.status ?? 'Pending'} />
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-text-secondary">
+                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small text-text-secondary">
                     {report.reportedAt ? formatLogTime(report.reportedAt) : '—'}
                   </td>
                   {/* The affordance for the modal. A whole row is clickable and

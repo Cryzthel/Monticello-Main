@@ -41,7 +41,7 @@ export default function TablePagination({
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline px-4 py-3">
       {/* Range indicator. `tabular-nums` so the figures do not jitter as the
           page changes and the digit widths differ. */}
-      <p className="text-xs text-text-secondary tabular-nums">
+      <p className="text-small text-text-secondary tabular-nums">
         Showing <span className="font-medium text-text-primary">{firstItem}</span>–
         <span className="font-medium text-text-primary">{lastItem}</span> of{' '}
         <span className="font-medium text-text-primary">{totalItems}</span> {plural}
@@ -49,7 +49,7 @@ export default function TablePagination({
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2">
-          <span className="whitespace-nowrap text-xs text-text-secondary">Rows</span>
+          <span className="whitespace-nowrap text-small text-text-secondary">Rows</span>
           <Select
             ariaLabel="Rows per page"
             size="sm"
@@ -78,7 +78,7 @@ export default function TablePagination({
               <span
                 key={`gap-${index}`}
                 aria-hidden="true"
-                className="px-1 text-xs text-text-muted"
+                className="px-1 text-small text-text-muted"
               >
                 …
               </span>
@@ -93,7 +93,7 @@ export default function TablePagination({
                 // digit a circle and a double digit a stadium, which is the
                 // right behaviour: the control grows along one axis only, so
                 // a row of page numbers keeps one baseline and one height.
-                className={`h-9 min-w-9 rounded-full px-2.5 text-xs font-semibold tabular-nums transition-colors duration-150 ${
+                className={`h-9 min-w-9 rounded-full px-2.5 text-small font-semibold tabular-nums transition-colors duration-150 ${
                   item === safePage
                     ? 'surface-brand'
                     : 'border border-slate-200 bg-base-800 text-text-secondary hover:border-slate-300 hover:text-brand-400'

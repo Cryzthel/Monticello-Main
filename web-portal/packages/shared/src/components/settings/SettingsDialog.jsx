@@ -39,9 +39,9 @@ import { useDialogFocus } from '@shared/hooks/useDialogFocus'
  * width. Exported so both account dialogs use the same pair.
  */
 export const DIALOG_PRIMARY =
-  'btn h-11 flex-1 rounded-full bg-brand-cta px-5 text-sm font-semibold text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover disabled:opacity-60'
+  'btn h-11 flex-1 rounded-full bg-brand-cta px-5 text-small font-semibold text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover disabled:opacity-60'
 export const DIALOG_SECONDARY =
-  'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-hairline bg-transparent px-5 text-sm font-semibold text-text-secondary transition-[background-color,border-color,color] duration-150 ease-out hover:border-brand-500/30 hover:bg-tint/5 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-hairline bg-transparent px-5 text-small font-semibold text-text-secondary transition-[background-color,border-color,color] duration-150 ease-out hover:border-brand-500/30 hover:bg-tint/5 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50'
 
 export default function SettingsDialog({
   open,
@@ -98,10 +98,10 @@ export default function SettingsDialog({
               </span>
             ) : null}
             <div className="min-w-0">
-              <h2 id={titleId} className="font-display text-xl font-extrabold leading-tight tracking-[-0.025em] text-text-primary">
+              <h2 id={titleId} className="type-h3 text-text-primary">
                 {title}
               </h2>
-              {description ? <p className="mt-1 text-sm leading-relaxed text-text-muted">{description}</p> : null}
+              {description ? <p className="mt-1 text-body leading-relaxed text-text-muted">{description}</p> : null}
             </div>
           </div>
           <button

@@ -211,10 +211,10 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
               ) : null}
             </span>
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-              <h2 id="panic-detail-title" className="text-lg font-bold tracking-tight text-danger">
+              <h2 id="panic-detail-title" className="type-h3 text-danger">
                 Panic alert
               </h2>
-              <span className="font-mono text-xs tracking-wider text-text-muted">{alertCode(alert.id)}</span>
+              <span className="font-mono text-small tracking-wider text-text-muted">{alertCode(alert.id)}</span>
               <Pill tone={signal.tone} icon={panicSignalIcon(alert.status)} pulse={signal.live}>
                 {signal.label}
               </Pill>
@@ -241,7 +241,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
                 alert.residentPhone ? (
                   <a
                     href={`tel:${alert.residentPhone}`}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 text-xs font-semibold text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3 py-1 text-small font-semibold text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
                   >
                     <Phone size={14} aria-hidden="true" />
                     Call
@@ -265,7 +265,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
                 {responder ? (
                   <>
                     {responder}
-                    <span className="mt-0.5 block font-mono text-xs font-normal text-text-muted">
+                    <span className="mt-0.5 block font-mono text-small font-normal text-text-muted">
                       {when(alert.acknowledgedAt)}
                       {alert.createdAt ? ` · after ${took(alert.createdAt, alert.acknowledgedAt)}` : ''}
                     </span>
@@ -293,7 +293,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
                   className="inline-flex items-center gap-1 rounded text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
                 >
                   {copied ? <Check size={14} className="text-success" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-                  <span className="text-[10px] font-medium uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
+                  <span className="text-small font-medium uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
                 </button>
               ) : null
             }
@@ -302,7 +302,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
               {coordinates ? <span className="select-all">{coordinates}</span> : null}
             </Fact>
             {gpsNotice ? (
-              <p className="flex items-start gap-2 border-t border-dashed border-hairline pt-3 text-xs leading-relaxed text-text-secondary">
+              <p className="flex items-start gap-2 border-t border-dashed border-hairline pt-3 text-small leading-relaxed text-text-secondary">
                 {gpsNotice.tone === 'warning' ? (
                   <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
                 ) : (
@@ -325,7 +325,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
           {alert.resolution?.notes || proof.length ? (
             <DetailCard compact icon={FileText} title="Resolution proof">
               {alert.resolution?.notes ? (
-                <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 text-sm leading-relaxed text-text-secondary shadow-inner">
+                <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 text-body leading-relaxed text-text-secondary shadow-inner">
                   {alert.resolution.notes}
                 </p>
               ) : null}
@@ -343,7 +343,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
           {escalation || escalationHistory ? (
             <p
               role={escalation ? 'status' : undefined}
-              className={`flex items-start gap-2.5 rounded-xl border p-3 text-xs leading-relaxed ${
+              className={`flex items-start gap-2.5 rounded-xl border p-3 text-small leading-relaxed ${
                 escalation ? 'border-warning/20 bg-warning/10 text-warning' : 'border-hairline bg-base-900/40 text-text-secondary'
               }`}
             >
@@ -355,21 +355,21 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
 
         {/* ── FOOTER ── */}
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline px-5 py-3.5">
-          <p className="max-w-xs text-[11px] leading-snug text-text-muted">
+          <p className="max-w-xs text-small leading-snug text-text-muted">
             Read-only here. The Guardhouse acknowledges and resolves alerts.
           </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full px-4 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              className="rounded-full px-4 py-2 text-small font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
             >
               Close
             </button>
             <button
               type="button"
               onClick={openLog}
-              className="group inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-sm font-semibold text-[var(--color-cta-fg)] transition-colors hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97]"
+              className="group inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-small font-semibold text-[var(--color-cta-fg)] transition-colors hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97]"
             >
               Open SOS log
               <ArrowRight size="sm" className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden="true" />

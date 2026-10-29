@@ -73,10 +73,10 @@ const ZoneOption = memo(function ZoneOption({ z, index, total, id, active, selec
       className={`flex cursor-pointer items-center gap-3 rounded-lg px-2.5 ${active ? 'bg-tint/[0.07]' : ''}`}
     >
       <span className="min-w-0 flex-1 leading-tight">
-        <span className="block truncate text-sm text-text-primary">{z.city}</span>
-        {z.region ? <span className="block truncate text-2xs text-text-muted">{z.region}</span> : null}
+        <span className="block truncate text-small text-text-primary">{z.city}</span>
+        {z.region ? <span className="block truncate text-small text-text-muted">{z.region}</span> : null}
       </span>
-      <span className="shrink-0 font-mono text-2xs tabular-nums text-text-muted">{z.offset}</span>
+      <span className="shrink-0 font-mono text-small tabular-nums text-text-muted">{z.offset}</span>
       <Check size="sm" aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 text-brand-500 ${selected ? '' : 'invisible'}`} />
     </div>
   )
@@ -256,14 +256,14 @@ export default function TimeZoneSelect({ id, value, onChange, disabled }) {
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        className={`inline-flex h-10 w-full items-center gap-2 rounded-lg border bg-base-900/50 px-4 text-left text-sm shadow-sm outline-none transition-[border-color,box-shadow] duration-150 disabled:opacity-60 ${
+        className={`inline-flex h-10 w-full items-center gap-2 rounded-lg border bg-base-900/50 px-4 text-left text-small shadow-sm outline-none transition-[border-color,box-shadow] duration-150 disabled:opacity-60 ${
           open
             ? 'border-brand-500/60 ring-2 ring-brand-500/20'
             : 'border-hairline hover:border-brand-500/30 focus-visible:border-brand-500/60 focus-visible:ring-2 focus-visible:ring-brand-500/20'
         }`}
       >
         <span className="min-w-0 flex-1 truncate text-text-primary">{valueLabel ? valueLabel.city : 'Select a time zone'}</span>
-        <span className="shrink-0 font-mono text-2xs tabular-nums text-text-muted">{valueLabel?.offset}</span>
+        <span className="shrink-0 font-mono text-small tabular-nums text-text-muted">{valueLabel?.offset}</span>
         <ChevronDown
           size="sm"
           aria-hidden="true"
@@ -297,7 +297,7 @@ export default function TimeZoneSelect({ id, value, onChange, disabled }) {
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={onSearchKey}
                   placeholder="Search city, region or UTC offset"
-                  className="h-11 w-full bg-transparent pl-10 pr-3 text-sm text-text-primary outline-none placeholder:text-text-muted"
+                  className="h-11 w-full bg-transparent pl-10 pr-3 text-body text-text-primary outline-none placeholder:text-text-muted"
                 />
               </div>
               <div
@@ -310,7 +310,7 @@ export default function TimeZoneSelect({ id, value, onChange, disabled }) {
                 className="custom-scrollbar overflow-y-auto overscroll-contain"
               >
                 {results.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-xs text-text-muted">No time zone matches “{query.trim()}”.</p>
+                  <p className="px-3 py-6 text-center text-small text-text-muted">No time zone matches “{query.trim()}”.</p>
                 ) : (
                   <div style={{ height: results.length * ROW_HEIGHT, paddingTop: first * ROW_HEIGHT }}>
                     {visible.map((z, offset) => {

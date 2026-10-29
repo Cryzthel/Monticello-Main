@@ -44,7 +44,7 @@ function Section({ icon: Icon, title, action, children }) {
         {/* 14px semibold in primary ink. The labels inside moved up to 14px
             (`.meta-label`), and a 12px section title would have read SMALLER
             than the labels it heads — the hierarchy upside down. */}
-        <h3 className="flex items-center gap-2 text-sm font-semibold tracking-normal text-text-primary">
+        <h3 className="type-h3 flex items-center gap-2 text-text-primary">
           <Icon size="sm" className="text-brand-400" />
           {title}
         </h3>
@@ -62,7 +62,7 @@ function Field({ icon: Icon, label, value, mono = false, tone = 'text-text-prima
         {Icon ? <Icon size="sm" /> : null}
         {label}
       </p>
-      <p className={`mt-1 break-words text-sm font-medium ${mono ? 'font-mono' : ''} ${tone}`}>
+      <p className={`mt-1 break-words text-small font-medium ${mono ? 'font-mono' : ''} ${tone}`}>
         {value || <span className="text-text-muted">—</span>}
       </p>
     </div>
@@ -90,11 +90,11 @@ function TimelineRow({ icon: Icon, label, at, duration, pendingLabel, isLast = f
       </div>
       <div className={`min-w-0 flex-1 ${isLast ? '' : 'pb-4'}`}>
         <p className="meta-label">{label}</p>
-        <p className={`mt-0.5 text-sm font-medium ${done ? 'text-text-primary' : 'text-text-muted'}`}>
+        <p className={`mt-0.5 text-small font-medium ${done ? 'text-text-primary' : 'text-text-muted'}`}>
           {done ? formatDateTime(at) : pendingLabel}
         </p>
         {done && duration != null ? (
-          <p className="mt-0.5 text-xs text-brand-400">+{formatMinutes(duration)} elapsed</p>
+          <p className="mt-0.5 text-small text-brand-400">+{formatMinutes(duration)} elapsed</p>
         ) : null}
       </div>
     </li>
@@ -140,7 +140,7 @@ function NotesEditor({ report, canEdit = true }) {
           <>
             <div>
               <p className="meta-label">Responder notes</p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">
+              <p className="mt-1 whitespace-pre-wrap text-small text-text-primary">
                 {report.responderNotes || <span className="text-text-muted">None recorded</span>}
               </p>
             </div>
@@ -148,12 +148,12 @@ function NotesEditor({ report, canEdit = true }) {
               <p className="meta-label">
                 Final resolution summary
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">
+              <p className="mt-1 whitespace-pre-wrap text-small text-text-primary">
                 {report.resolutionSummary || <span className="text-text-muted">None recorded</span>}
               </p>
             </div>
             {report.notesUpdatedByName ? (
-              <p className="text-xs text-text-secondary">
+              <p className="text-small text-text-secondary">
                 Logged by {report.notesUpdatedByName}
                 {report.notesUpdatedAt ? ` • ${formatDateTime(report.notesUpdatedAt)}` : ''}
               </p>
@@ -162,7 +162,7 @@ function NotesEditor({ report, canEdit = true }) {
         ) : (
           <div className="flex items-start gap-2 rounded-xl border border-dashed border-slate-200 p-3">
             <Info size="sm" className="mt-0.5 shrink-0 text-text-muted" />
-            <p className="text-xs text-text-secondary">
+            <p className="text-small text-text-secondary">
               No responder notes on this report yet. The mobile app never writes these — they are
               recorded here by whoever handled the call.
             </p>
@@ -213,7 +213,7 @@ function NotesEditor({ report, canEdit = true }) {
           placeholder="How the incident was closed out."
         />
       </div>
-      {error ? <p className="text-xs text-danger">{error}</p> : null}
+      {error ? <p className="text-small text-danger">{error}</p> : null}
       <div className="flex gap-2">
         <button type="button" disabled={busy} onClick={save} className="btn btn-sm btn-brand">
           <Save size="sm" />
@@ -246,7 +246,7 @@ export default function IncidentBreakdown({ report, mediaCount = 0, canEditNotes
           <Field label="Severity" value={report.severity} tone="text-text-primary capitalize" />
           <div className="min-w-0">
             <p className="meta-label">WPDA urgency</p>
-            <p className="mt-1 font-mono text-sm font-semibold text-brand-400">{Math.round(wpdaScore)}</p>
+            <p className="mt-1 font-mono text-small font-semibold text-brand-400">{Math.round(wpdaScore)}</p>
             {/* The "Server-scored • weight ×10" line was here and is gone. It
                 explained the scorer's internals — where the number came from
                 and what the category multiplier was — to an audience that acts
@@ -264,7 +264,7 @@ export default function IncidentBreakdown({ report, mediaCount = 0, canEditNotes
             <p className="meta-label">
               Reported description
             </p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-text-primary">{report.description}</p>
+            <p className="mt-1 whitespace-pre-wrap text-small text-text-primary">{report.description}</p>
           </div>
         ) : null}
       </Section>

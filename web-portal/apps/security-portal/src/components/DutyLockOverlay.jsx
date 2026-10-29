@@ -69,16 +69,16 @@ export default function DutyLockOverlay() {
           <ShieldAlert size="lg" className="text-warning" />
         </span>
 
-        <h2 id="duty-lock-title" className="mt-4 text-base font-semibold text-text-primary">
+        <h2 id="duty-lock-title" className="type-h3 mt-4 text-text-primary">
           You are off duty
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-text-secondary">
+        <p className="mt-2 text-body leading-relaxed text-text-secondary">
           Clock in to acknowledge alerts, dispatch tickets and log responder
           notes. Every action you take is recorded against your shift, so the
           shift has to be open first.
         </p>
 
-        {error ? <p className="mt-3 text-xs text-danger">{error}</p> : null}
+        {error ? <p className="mt-3 text-small text-danger">{error}</p> : null}
 
         {/* THE SHIFT PICKER WAS HERE: a Morning / Evening / Night segmented
             control and the window text under it ("22:00 – 06:00").

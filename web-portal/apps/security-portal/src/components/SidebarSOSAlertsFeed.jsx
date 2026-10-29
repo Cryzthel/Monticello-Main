@@ -121,14 +121,14 @@ function Tag({ tone = 'neutral', children }) {
     neutral: 'bg-tint/[0.06] text-text-secondary ring-hairline font-medium dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700/50',
   }
   return (
-    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] leading-4 ring-1 ring-inset ${tones[tone]}`}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-small leading-4 ring-1 ring-inset ${tones[tone]}`}>
       {children}
     </span>
   )
 }
 
 const secondaryButton =
-  'inline-flex min-h-[44px] items-center justify-center rounded-full border border-hairline bg-tint/[0.04] py-2 text-xs font-medium text-text-primary transition-[background-color,border-color,transform] duration-150 ease-out hover:bg-tint/[0.09] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus lg:min-h-0 dark:border-zinc-700/60 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
+  'inline-flex min-h-[44px] items-center justify-center rounded-full border border-hairline bg-tint/[0.04] py-2 text-small font-medium text-text-primary transition-[background-color,border-color,transform] duration-150 ease-out hover:bg-tint/[0.09] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus lg:min-h-0 dark:border-zinc-700/60 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800'
 
 /**
  * One alert. The card is a container, not a button: the identity block opens
@@ -153,20 +153,20 @@ function AlertCard({ alert, origin, now, fresh, busy, onOpen, onAcknowledge }) {
         className="block w-full rounded-lg text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus"
       >
         <span className="flex items-start justify-between gap-3">
-          <span className="min-w-0 truncate text-[13px] font-semibold leading-5 text-text-primary">
+          <span className="min-w-0 truncate text-small font-semibold leading-5 text-text-primary">
             {alert.residentName}
           </span>
           <time
             dateTime={alert.createdAt instanceof Date ? alert.createdAt.toISOString() : undefined}
             title={alert.createdAt ? formatDateTime(alert.createdAt) : 'Time not recorded yet'}
-            className="mt-0.5 shrink-0 font-mono text-[11px] tabular-nums text-text-muted"
+            className="mt-0.5 shrink-0 font-mono text-small tabular-nums text-text-muted"
           >
             {alertAge(alert.createdAt, now)}
           </time>
         </span>
         <span className="mt-1 flex min-w-0 items-center gap-1.5 text-text-secondary">
           <MapPin size={13} aria-hidden="true" className="shrink-0 opacity-60" />
-          <span className="min-w-0 truncate text-xs">{alert.address}</span>
+          <span className="min-w-0 truncate text-small">{alert.address}</span>
         </span>
       </button>
 
@@ -179,7 +179,7 @@ function AlertCard({ alert, origin, now, fresh, busy, onOpen, onAcknowledge }) {
           {hasFix ? (metres != null ? <Tag>{formatDistance(metres)} away</Tag> : null) : <Tag>No GPS fix</Tag>}
         </div>
         {!waiting && alert.acknowledgedByName ? (
-          <span className="min-w-0 truncate text-[11px] font-medium text-text-secondary">{alert.acknowledgedByName}</span>
+          <span className="min-w-0 truncate text-small font-medium text-text-secondary">{alert.acknowledgedByName}</span>
         ) : null}
       </div>
 
@@ -194,7 +194,7 @@ function AlertCard({ alert, origin, now, fresh, busy, onOpen, onAcknowledge }) {
               onClick={() => onAcknowledge(alert)}
               disabled={busy}
               aria-busy={busy || undefined}
-              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full bg-[var(--color-cta)] py-2 text-xs font-medium text-[var(--color-cta-fg)] shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus lg:min-h-0"
+              className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-full bg-[var(--color-cta)] py-2 text-small font-medium text-[var(--color-cta-fg)] shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus lg:min-h-0"
             >
               {busy ? (
                 <>
@@ -298,10 +298,10 @@ export default function SidebarSOSAlertsFeed({ onOpenAlert, muted, onToggleMute,
             <span className={`h-2.5 w-2.5 rounded-full ${unattended ? 'bg-danger' : 'bg-warning'}`} />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold tracking-tight text-text-primary">
+            <h2 className="type-h3 truncate text-text-primary">
               {alerts.length === 1 ? '1 SOS alert' : `${alerts.length} SOS alerts`}
             </h2>
-            <p className="truncate text-[11px] text-text-muted" aria-live="polite">
+            <p className="truncate text-small text-text-muted" aria-live="polite">
               {unattended
                 ? `${unattended} need${unattended === 1 ? 's' : ''} acknowledgement · ${responding} responding`
                 : 'All acknowledged · none resolved yet'}
@@ -318,7 +318,7 @@ export default function SidebarSOSAlertsFeed({ onOpenAlert, muted, onToggleMute,
             aria-pressed={muted}
             aria-label={muted ? 'Unmute the SOS siren' : 'Mute the SOS siren'}
             title={muted ? 'The siren is silenced — turn it back on' : 'Silence the siren'}
-            className={`inline-flex min-h-[44px] items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors duration-150 lg:min-h-0 ${
+            className={`inline-flex min-h-[44px] items-center gap-1 rounded-full border px-3 py-1 text-small font-medium transition-colors duration-150 lg:min-h-0 ${
               muted
                 ? 'border-warning/30 bg-warning/10 text-warning hover:bg-warning/20'
                 : 'border-hairline bg-tint/[0.04] text-text-secondary hover:bg-tint/[0.09] hover:text-text-primary dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
@@ -342,7 +342,7 @@ export default function SidebarSOSAlertsFeed({ onOpenAlert, muted, onToggleMute,
       </header>
 
       {muted ? (
-        <p className="shrink-0 border-b border-hairline bg-warning/10 px-5 py-2 text-[11px] leading-snug text-warning dark:border-zinc-800/80">
+        <p className="shrink-0 border-b border-hairline bg-warning/10 px-5 py-2 text-small leading-snug text-warning dark:border-zinc-800/80">
           Siren muted. These alerts are still open and still unresolved.
         </p>
       ) : null}
@@ -354,7 +354,7 @@ export default function SidebarSOSAlertsFeed({ onOpenAlert, muted, onToggleMute,
         {groups.map((group) =>
           group.items.length ? (
             <section key={group.key} aria-label={group.title}>
-              <h3 className={`mb-2 px-1 font-mono text-[10px] font-semibold uppercase tracking-widest ${group.ink}`}>
+              <h3 className={`mb-2 px-1 font-mono text-small font-semibold uppercase tracking-widest ${group.ink}`}>
                 {group.title} · {group.items.length}
               </h3>
               <ul className="flex flex-col gap-3">

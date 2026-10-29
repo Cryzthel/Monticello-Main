@@ -1556,10 +1556,10 @@ export function setupUnitLayers(map, initialData, { unitsRef, onSelectUnitRef })
       const card = document.createElement('div')
       card.style.padding = '8px 10px'
       const name = document.createElement('p')
-      name.style.cssText = 'margin:0;font-size:12px;font-weight:600;color:var(--color-text-primary)'
+      name.style.cssText = 'margin:0;font-size:14px;font-weight:600;color:var(--color-text-primary)'
       name.textContent = unit.badgeNumber ? `${unit.name} · ${unit.badgeNumber}` : unit.name
       const state = document.createElement('p')
-      state.style.cssText = 'margin:2px 0 0;font-size:11px;color:var(--color-text-secondary)'
+      state.style.cssText = 'margin:2px 0 0;font-size:14px;color:var(--color-text-secondary)'
       state.textContent = `${UNIT_STATE_TEXT[unit.state] ?? ''}${unit.stale ? ' · position stale' : ''}`
       card.append(name, state)
       hover.setLngLat(feature.geometry.coordinates).setDOMContent(card).addTo(map)

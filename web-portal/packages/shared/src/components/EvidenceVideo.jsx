@@ -32,13 +32,13 @@ export function EvidenceVideo({ item, className = '', autoPlay = false }) {
     return (
       <div className={`flex flex-col items-center justify-center gap-3 rounded-lg bg-black/60 p-6 text-center ${className}`}>
         <Film size={32} className="text-white/70" aria-hidden="true" />
-        <p className="text-sm font-medium text-white/90">This video format cannot play in the browser.</p>
+        <p className="text-small font-medium text-white/90">This video format cannot play in the browser.</p>
         <a
           href={item.url}
           target="_blank"
           rel="noreferrer"
           download
-          className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold text-white hover:bg-white/20"
+          className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-small font-semibold text-white hover:bg-white/20"
         >
           <Download size="sm" aria-hidden="true" />
           Download {item.format ?? 'video'}
@@ -87,7 +87,7 @@ export function VideoThumb({ item, className = 'h-full w-full object-cover' }) {
         </span>
       </span>
       {duration ? (
-        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/70 px-1 font-mono text-[10px] text-white">
+        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/70 px-1 font-mono text-small text-white">
           {duration}
         </span>
       ) : null}

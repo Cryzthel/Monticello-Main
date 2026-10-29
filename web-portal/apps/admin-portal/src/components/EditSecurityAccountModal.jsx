@@ -160,12 +160,12 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <h2 id="edit-account-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
+                <h2 id="edit-account-title" className="type-h3 truncate text-text-primary">
                   Edit security account
                 </h2>
                 {original.badgeNumber ? <Pill className="font-mono tracking-wider">{original.badgeNumber}</Pill> : null}
               </div>
-              <p id="edit-account-subtitle" className="mt-0.5 text-xs text-text-muted">
+              <p id="edit-account-subtitle" className="mt-0.5 text-small text-text-muted">
                 Update this guard’s details. The login email cannot change.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -269,7 +269,7 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
                   <Lock size="sm" aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-muted" />
                 </div>
               </DetailFormField>
-              <p className="flex items-start gap-2 text-xs leading-relaxed text-text-muted">
+              <p className="flex items-start gap-2 text-small leading-relaxed text-text-muted">
                 <KeyRound size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
                 <span>
                   Passwords cannot be changed here. Use <strong className="font-medium text-text-secondary">Reset password</strong> in
@@ -279,7 +279,7 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
             </DetailCard>
 
             {submitError ? (
-              <p role="alert" className="rounded-xl border border-danger/25 bg-danger/10 p-3 text-xs text-danger">
+              <p role="alert" className="rounded-xl border border-danger/25 bg-danger/10 p-3 text-small text-danger">
                 {submitError}
               </p>
             ) : null}
@@ -288,7 +288,7 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
 
         {/* ═══ FOOTER ═══ */}
         <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
-          <p className="flex items-center gap-2 text-xs text-text-muted">
+          <p className="flex items-center gap-2 text-small text-text-muted">
             <ShieldCheck size={14} className="text-success/70" aria-hidden="true" />
             <span>Every change is recorded in Audit History</span>
           </p>
@@ -297,7 +297,7 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-small font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -305,7 +305,7 @@ export default function EditSecurityAccountModal({ account, onClose, onSaved }) 
               type="submit"
               disabled={busy || !dirty}
               title={!dirty && !busy ? 'Nothing has changed yet' : undefined}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-small font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
             >
               {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <Check size="sm" aria-hidden="true" />}
               {busy ? 'Saving…' : 'Save account details'}

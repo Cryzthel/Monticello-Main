@@ -112,10 +112,10 @@ function oobCodeFrom(resetLink) {
 function StepHeading({ title, children }) {
   return (
     <div>
-      <h2 className="font-display text-2xl font-extrabold leading-[1.15] tracking-[-0.025em] text-text-primary">
+      <h2 className="type-h2 text-text-primary">
         {title}
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-text-muted">{children}</p>
+      <p className="mt-2 text-small leading-relaxed text-text-muted">{children}</p>
     </div>
   )
 }
@@ -311,7 +311,7 @@ export default function PasswordRecovery({ initialEmail = '', onClose }) {
 
         {/* `aria-live` so reaching zero is announced rather than silently
             becoming pressable for someone not watching the number. */}
-        <p className="text-xs font-medium text-text-secondary" aria-live="polite">
+        <p className="text-small font-medium text-text-secondary" aria-live="polite">
           {cooldown > 0 ? (
             `Resend code in ${cooldown}s`
           ) : (

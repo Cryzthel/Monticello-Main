@@ -120,10 +120,10 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
                 <KeyRound size="lg" />
               </span>
               <div className="min-w-0 flex-1">
-                <h2 className="text-base font-semibold leading-tight text-text-primary">
+                <h2 className="type-h3 text-text-primary">
                   Reset password
                 </h2>
-                <p className="mt-1 text-sm leading-snug text-text-secondary">
+                <p className="mt-1 text-body leading-snug text-text-secondary">
                   A new password for{' '}
                   <strong className="font-semibold text-text-primary">
                     {account.name || account.email}
@@ -145,7 +145,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
             <div className="mt-5">
               <label
                 htmlFor="reset-password"
-                className="mb-1.5 block text-xs font-semibold text-text-primary"
+                className="mb-1.5 block text-small font-semibold text-text-primary"
               >
                 New temporary password
               </label>
@@ -181,14 +181,14 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
                   New password
                 </button>
               </div>
-              <p className="mt-1 text-caption leading-tight text-text-muted">
+              <p className="mt-1 text-small leading-tight text-text-muted">
                 Made for you on this device. They will be asked to set their own the next time they
                 sign in.
               </p>
             </div>
 
             {error ? (
-              <p className="mt-4 flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
+              <p className="mt-4 flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-small text-danger">
                 <AlertTriangle size="sm" className="mt-0.5 shrink-0" />
                 <span className="min-w-0">{error}</span>
               </p>

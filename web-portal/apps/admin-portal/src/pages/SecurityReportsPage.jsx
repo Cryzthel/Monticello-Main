@@ -131,10 +131,10 @@ function ReportCard({ report, officer, checked, onToggle, onOpen, actions }) {
 
         <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="font-mono text-xs font-medium text-text-secondary">
+            <span className="font-mono text-small font-medium text-text-secondary">
               {ticketCode(report.id)}
             </span>
-            <span className="shrink-0 font-mono text-2xs text-text-muted">
+            <span className="shrink-0 font-mono text-small text-text-muted">
               {stamp(report.reportedAt)}
             </span>
           </div>
@@ -142,11 +142,11 @@ function ReportCard({ report, officer, checked, onToggle, onOpen, actions }) {
           <p className="mt-1 truncate font-medium text-text-primary">
             {report.reportedByName || 'Unknown'}
           </p>
-          <p className="mt-0.5 text-2xs text-text-muted">
+          <p className="mt-0.5 text-small text-text-muted">
             {officer?.role ? officer.role.replace(/_/g, ' ') : 'Officer'}
           </p>
 
-          <p className="mt-2 break-words text-xs leading-snug text-text-secondary">
+          <p className="mt-2 break-words text-small leading-snug text-text-secondary">
             {report.location || 'Location not provided'}
           </p>
 
@@ -408,15 +408,15 @@ export default function SecurityReportsPage() {
                   aria-label="From date"
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
-                  className="field h-11 py-0 text-base sm:h-9 sm:w-[9.5rem] sm:text-sm"
+                  className="field h-11 py-0 sm:h-10 sm:w-[10.5rem]"
                 />
-                <span className="text-xs text-text-muted">to</span>
+                <span className="text-small text-text-muted">to</span>
                 <input
                   type="date"
                   aria-label="To date"
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
-                  className="field h-11 py-0 text-base sm:h-9 sm:w-[9.5rem] sm:text-sm"
+                  className="field h-11 py-0 sm:h-10 sm:w-[10.5rem]"
                 />
               </div>
             ) : null}
@@ -437,7 +437,7 @@ export default function SecurityReportsPage() {
           </div>
 
           {error ? (
-            <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
+            <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-small text-danger">
               <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
               <span className="min-w-0 flex-1">{error}</span>
               <button type="button" onClick={() => setError('')} aria-label="Dismiss" className="shrink-0 rounded p-0.5 hover:bg-danger/15">
@@ -451,7 +451,7 @@ export default function SecurityReportsPage() {
                commands side by side at full width. `sm:order-*` puts them back
                on one row in the desktop reading order. */
             <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-brand-50 px-4 py-2.5 sm:gap-3">
-              <span className="text-xs font-medium text-text-primary">
+              <span className="text-small font-medium text-text-primary">
                 <span className="font-mono">{selected.length}</span> selected
               </span>
               <button
@@ -521,7 +521,7 @@ export default function SecurityReportsPage() {
                   onChange={() => setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))}
                   className="h-5 w-5 rounded border-tint/20 bg-tint/5 accent-brand-500"
                 />
-                <span className="text-xs font-medium text-text-secondary">
+                <span className="text-small font-medium text-text-secondary">
                   Select all {rows.length}
                 </span>
               </label>
@@ -540,7 +540,7 @@ export default function SecurityReportsPage() {
             ) : rows.length === 0 ? (
               <div className="px-4 py-16 text-center">
                 <ClipboardList size="lg" className="mx-auto mb-2 text-text-muted" />
-                <p className="text-sm text-text-secondary">{emptyMessage}</p>
+                <p className="text-small text-text-secondary">{emptyMessage}</p>
               </div>
             ) : (
               <ul>
@@ -597,7 +597,7 @@ export default function SecurityReportsPage() {
                   <tr>
                     <td colSpan={8} className="px-4 py-16 text-center">
                       <ClipboardList size="lg" className="mx-auto mb-2 text-text-muted" />
-                      <p className="text-sm text-text-secondary">{emptyMessage}</p>
+                      <p className="text-small text-text-secondary">{emptyMessage}</p>
                     </td>
                   </tr>
                 ) : (
@@ -631,18 +631,18 @@ export default function SecurityReportsPage() {
                             className="h-3.5 w-3.5 rounded border-tint/20 bg-tint/5 accent-brand-500"
                           />
                         </td>
-                        <td className="px-4 py-3.5 font-mono text-xs font-medium text-text-secondary">
+                        <td className="px-4 py-3.5 font-mono text-small font-medium text-text-secondary">
                           {ticketCode(report.id)}
                         </td>
                         <td className="px-4 py-3.5">
                           <p className="font-medium text-text-primary">{report.reportedByName || 'Unknown'}</p>
                           {/* Role, not a badge number — staff_accounts has no
                               badgeId field. See the note in the summary. */}
-                          <p className="mt-0.5 text-2xs text-text-muted">
+                          <p className="mt-0.5 text-small text-text-muted">
                             {officer?.role ? officer.role.replace(/_/g, ' ') : 'Officer'}
                           </p>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-text-secondary">
+                        <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small text-text-secondary">
                           {stamp(report.reportedAt)}
                         </td>
                         <td className="px-4 py-3.5 text-text-secondary">

@@ -15,10 +15,10 @@ export default function SettingsItem({ title, description, labelFor, align = 'ce
       }`}
     >
       <div className="min-w-0 lg:pr-4">
-        <Title htmlFor={labelFor} className="block text-sm font-medium text-text-primary">
+        <Title htmlFor={labelFor} className="block text-small font-medium text-text-primary">
           {title}
         </Title>
-        {description ? <p className="mt-1 text-sm leading-relaxed text-text-muted">{description}</p> : null}
+        {description ? <p className="mt-1 text-small leading-relaxed text-text-muted">{description}</p> : null}
       </div>
       <div className="min-w-0">{children}</div>
     </div>

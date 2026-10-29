@@ -79,7 +79,7 @@ const clock = (at) => (at ? formatInZone(at, CLOCK, 'en-GB') : '—')
 function SectionTitle({ icon: Icon, action = null, children }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <h3 className="flex items-center gap-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">
+      <h3 className="flex items-center gap-1.5 font-mono text-small font-semibold uppercase tracking-widest text-text-muted">
         <Icon size={14} aria-hidden="true" />
         {children}
       </h3>
@@ -482,10 +482,10 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
               <CategoryGlyph size={20} />
             </span>
             <div className="min-w-0">
-              <h2 id="hazard-report-title" className="truncate text-base font-bold tracking-tight text-text-primary">
+              <h2 id="hazard-report-title" className="type-h3 truncate text-text-primary">
                 {title}
               </h2>
-              <p className="mt-0.5 font-mono text-xs text-text-muted">
+              <p className="mt-0.5 font-mono text-small text-text-muted">
                 {code}
                 {report.reportedAt ? ` • Reported ${clock(report.reportedAt)}` : ''}
               </p>
@@ -542,13 +542,13 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
           <section className={`${CARD} flex items-center gap-3.5`} aria-label={officerFiled ? 'Filed by officer' : 'Reporter'}>
             <span
               aria-hidden="true"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-sm font-bold text-brand-500"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-small font-bold text-brand-500"
             >
               {reporterInitial}
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-sm font-bold tracking-tight text-text-primary">
+                <h3 className="truncate text-small font-bold tracking-tight text-text-primary">
                   {report.reportedByName || 'Unknown reporter'}
                 </h3>
                 {/* Whether an administrator has confirmed this resident owns or
@@ -556,7 +556,7 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
                 {officerFiled ? (
                   <Pill tone="neutral" icon={IdCard}>Security officer</Pill>
                 ) : contactLoading ? (
-                  <span className="text-[11px] text-text-muted">Looking up…</span>
+                  <span className="text-small text-text-muted">Looking up…</span>
                 ) : household === RESIDENT_STATUS.verified ? (
                   <Pill tone="success" icon={BadgeCheck}>Verified</Pill>
                 ) : household === RESIDENT_STATUS.rejected ? (
@@ -565,7 +565,7 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
                   <Pill tone="warning" icon={Clock}>{RESIDENT_STATUS_LABELS[household]}</Pill>
                 )}
               </div>
-              <p className="mt-0.5 font-mono text-xs text-text-muted">
+              <p className="mt-0.5 font-mono text-small text-text-muted">
                 {exactTime(report.reportedAt) || 'Time unavailable'}
                 {/* The relative time only while it IS relative: past a week
                     relativeTime falls back to a plain date. */}
@@ -599,7 +599,7 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
             <div className="border-b border-hairline pb-2.5">
               <SectionTitle icon={MapPin}>Location telemetry</SectionTitle>
             </div>
-            <dl className="space-y-2.5 text-xs">
+            <dl className="space-y-2.5 text-small">
               <LocationRow label="Address">
                 {(address || report.location || '').replaceAll(' · ', ' • ') || '—'}
               </LocationRow>
@@ -630,7 +630,7 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
                 Reported description
               </SectionTitle>
             </div>
-            <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 font-mono text-xs leading-relaxed text-text-secondary">
+            <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 font-mono text-body leading-relaxed text-text-secondary">
               {report.description || 'The resident submitted no written description.'}
             </p>
             {media.length ? (
@@ -643,7 +643,7 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
                 />
               </div>
             ) : report.hasMedia ? (
-              <p role="status" className="flex items-center gap-2 text-xs font-medium text-text-muted">
+              <p role="status" className="flex items-center gap-2 text-small font-medium text-text-muted">
                 <Loader2 size="sm" className="animate-[spin_1.5s_linear_infinite]" aria-hidden="true" />
                 Media still uploading…
               </p>
@@ -661,7 +661,7 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
                   Resolution
                 </SectionTitle>
               </div>
-              <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 font-mono text-xs leading-relaxed text-text-secondary">
+              <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 font-mono text-body leading-relaxed text-text-secondary">
                 {report.resolution.notes}
               </p>
               {resolutionMedia.length ? (
@@ -700,7 +700,7 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
                 ✕, a backdrop click or Escape — one control, not two. */}
             {footer}
           </div>
-          {hint ? <p className="text-center font-mono text-[10px] leading-relaxed text-text-muted">{hint}</p> : null}
+          {hint ? <p className="text-center font-mono text-small leading-relaxed text-text-muted">{hint}</p> : null}
         </footer>
       </div>
 

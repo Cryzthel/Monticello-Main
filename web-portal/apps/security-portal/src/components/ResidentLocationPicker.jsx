@@ -135,8 +135,8 @@ export default function ResidentLocationPicker({
           <UserRound size="sm" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-text-primary">{selected.name}</p>
-          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-text-secondary">
+          <p className="truncate text-small font-semibold text-text-primary">{selected.name}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-small text-text-secondary">
             <MapPin size="sm" className="shrink-0" />
             {selected.label || 'No address on their profile'}
           </p>
@@ -203,7 +203,7 @@ export default function ResidentLocationPicker({
       </div>
 
       {error ? (
-        <p className="mt-1.5 flex items-start gap-1.5 text-2xs leading-snug text-danger">
+        <p className="mt-1.5 flex items-start gap-1.5 text-small leading-snug text-danger">
           <ShieldAlert size="sm" className="mt-px shrink-0" />
           Resident directory unavailable — check the connection and reopen this form.
         </p>
@@ -224,7 +224,7 @@ export default function ResidentLocationPicker({
           className="custom-scrollbar z-[var(--z-popover)] overflow-y-auto overscroll-contain rounded-lg bg-base-850 p-1.5 shadow-overlay"
         >
           {matches.length === 0 ? (
-            <li className="px-3 py-2.5 text-xs text-text-muted">
+            <li className="px-3 py-2.5 text-small text-text-muted">
               {loading ? 'Loading residents…' : 'No resident matches that search.'}
             </li>
           ) : (
@@ -240,8 +240,8 @@ export default function ResidentLocationPicker({
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-nav-active"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-semibold text-text-primary">{resident.name}</p>
-                    <p className="truncate text-2xs text-text-muted">
+                    <p className="truncate text-small font-semibold text-text-primary">{resident.name}</p>
+                    <p className="truncate text-small text-text-muted">
                       {resident.label || 'No address registered'}
                     </p>
                   </div>

@@ -30,7 +30,7 @@ export function DetailCard({
   return (
     <section className={`min-w-0 rounded-xl border border-hairline bg-base-900/40 ${compact ? 'p-4' : 'p-6'} ${className}`} {...rest}>
       <div className={`flex items-center justify-between gap-3 border-b border-hairline ${compact ? 'mb-3 pb-2.5' : 'mb-5 pb-3'}`}>
-        <h3 className="flex min-w-0 items-center gap-2 font-mono text-xs font-semibold uppercase tracking-widest text-text-muted">
+        <h3 className="flex min-w-0 items-center gap-2 font-mono text-small font-semibold uppercase tracking-widest text-text-muted">
           {Icon ? <Icon size={14} aria-hidden="true" className="shrink-0" /> : null}
           <span className="truncate">{title}</span>
         </h3>
@@ -48,9 +48,9 @@ export function DetailCard({
 export function DetailField({ label, children, empty = false, mono = false, accent = '', className = '' }) {
   return (
     <div className={`min-w-0 border-l-2 pl-3 ${accent || 'border-hairline'} ${className}`}>
-      <span className="mb-0.5 block text-[11px] text-text-muted">{label}</span>
+      <span className="mb-0.5 block text-small text-text-muted">{label}</span>
       <div
-        className={`break-words text-sm font-medium ${mono ? 'font-mono tracking-wide' : ''} ${
+        className={`break-words text-small font-medium ${mono ? 'font-mono tracking-wide' : ''} ${
           empty ? 'italic text-text-muted' : 'text-text-primary'
         }`}
       >
@@ -84,14 +84,14 @@ export function DetailTimeline({ items }) {
         return (
           <li key={item.key} className="relative">
             <span aria-hidden="true" className={`absolute -left-6 top-1.5 h-2.5 w-2.5 rounded-full ${NODE[tone]}`} />
-            <p className={`text-sm ${LABEL[tone]}`}>{item.label}</p>
+            <p className={`text-small ${LABEL[tone]}`}>{item.label}</p>
             {item.detail ? (
-              <p className={`mt-0.5 truncate text-xs ${tone === 'pending' ? 'text-text-muted' : 'font-medium text-text-secondary'}`}>
+              <p className={`mt-0.5 truncate text-small ${tone === 'pending' ? 'text-text-muted' : 'font-medium text-text-secondary'}`}>
                 {item.detail}
               </p>
             ) : null}
             {item.stamp ? (
-              <time dateTime={item.dateTime} className="mt-0.5 block font-mono text-[10px] text-text-muted">
+              <time dateTime={item.dateTime} className="mt-0.5 block font-mono text-small text-text-muted">
                 {item.stamp}
               </time>
             ) : null}

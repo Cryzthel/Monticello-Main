@@ -131,13 +131,13 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
             ) : (
               <span
                 aria-hidden="true"
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-xl font-bold text-brand-500 shadow-inner"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-body font-bold text-brand-500 shadow-inner"
               >
                 {initialsOf(name)}
               </span>
             )}
             <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-              <h2 id="account-inspector-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
+              <h2 id="account-inspector-title" className="type-h3 truncate text-text-primary">
                 {name}
               </h2>
               <div className="flex flex-wrap items-center gap-2">
@@ -200,7 +200,7 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
                   account.onDutySince ? (
                     <>
                       On duty since {when(account.onDutySince, now)}
-                      <span className="block font-mono text-[11px] font-semibold tracking-wide">
+                      <span className="block font-mono text-small font-semibold tracking-wide">
                         · {elapsed(account.onDutySince, now)}
                       </span>
                     </>
@@ -212,7 +212,7 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
                 ) : account.lastActiveAt ? (
                   <>
                     Off duty
-                    <span className="block font-mono text-[11px] font-normal text-text-muted">
+                    <span className="block font-mono text-small font-normal text-text-muted">
                       · last on post {when(account.lastActiveAt, now)}
                     </span>
                   </>
@@ -227,7 +227,7 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
                   <>
                     Online
                     {presence.onlineSince ? (
-                      <span className="font-mono text-[11px] font-normal text-text-muted">
+                      <span className="font-mono text-small font-normal text-text-muted">
                         {' '}
                         · since {when(presence.onlineSince, now)}
                       </span>
@@ -237,7 +237,7 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
                   <>
                     Offline
                     {presence.lastSeenAt ? (
-                      <span className="font-mono text-[11px] font-normal text-text-muted">
+                      <span className="font-mono text-small font-normal text-text-muted">
                         {' '}
                         · last seen {when(presence.lastSeenAt, now)}
                       </span>

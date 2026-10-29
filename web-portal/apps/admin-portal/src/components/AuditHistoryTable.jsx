@@ -185,7 +185,7 @@ export default function AuditHistoryTable({
           face to line up two figures is the exact thing the stylesheet's own
           rule refuses; Inter's tabular figures are already fixed-width.
         */}
-        <span className="flex h-9 shrink-0 items-center gap-1 text-xs text-text-secondary">
+        <span className="flex h-9 shrink-0 items-center gap-1 text-small text-text-secondary">
           <span className="font-medium tabular-nums text-text-primary">{rows.length}</span>
           {filtering && totalCount != null ? (
             <span className="tabular-nums">of {totalCount}</span>
@@ -198,7 +198,7 @@ export default function AuditHistoryTable({
           empty — so it has to be stated, or a dismissal that DID save looks
           like it was ignored. */}
       {readError ? (
-        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
+        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-small text-danger">
           <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           Deleted entries can’t be loaded, so removed rows may reappear.{' '}
           {describeFirestoreError(readError, 'load dismissals')}
@@ -206,7 +206,7 @@ export default function AuditHistoryTable({
       ) : null}
 
       {error ? (
-        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
+        <p className="flex items-start gap-2 border-b border-danger/20 bg-danger/10 px-4 py-2.5 text-small text-danger">
           <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
           <span className="min-w-0 flex-1">{error}</span>
           <button
@@ -222,7 +222,7 @@ export default function AuditHistoryTable({
 
       {selectedCount > 0 ? (
         <div className="flex items-center gap-3 border-b border-hairline bg-brand-50 px-4 py-2.5">
-          <span className="text-xs font-medium text-text-primary">
+          <span className="text-small font-medium text-text-primary">
             <span className="font-mono">{selectedCount}</span> selected
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -289,7 +289,7 @@ export default function AuditHistoryTable({
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
                   <History size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-sm text-text-secondary">
+                  <p className="text-small text-text-secondary">
                     {search ? 'No events match that search.' : 'No events recorded yet.'}
                   </p>
                 </td>
@@ -350,7 +350,7 @@ export default function AuditHistoryTable({
                         />
                       </label>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-text-secondary">
+                    <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small text-text-secondary">
                       {event.at ? formatLogTime(event.at) : '—'}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">

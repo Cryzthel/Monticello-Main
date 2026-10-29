@@ -37,7 +37,7 @@ function timeCell(value) {
   return (
     <span className="whitespace-nowrap">
       {formatDate(value)}{' '}
-      <span className="font-mono text-xs text-text-muted">{formatTime(value)}</span>
+      <span className="font-mono text-small text-text-muted">{formatTime(value)}</span>
     </span>
   )
 }
@@ -224,10 +224,10 @@ export default function OnDutyHistoryTable() {
               {error ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center">
-                    <p className="text-sm font-medium text-danger">Could not load shift history.</p>
+                    <p className="text-small font-medium text-danger">Could not load shift history.</p>
                     {/* Surfacing the code matters: a permission-denied points at
                         firestore.rules (guard_shifts), not at the query. */}
-                    <p className="mt-1 text-xs text-text-secondary">
+                    <p className="mt-1 text-small text-text-secondary">
                       {error.code ? `Firestore error: ${error.code}` : error.message}
                     </p>
                   </td>
@@ -246,7 +246,7 @@ export default function OnDutyHistoryTable() {
                 <tr>
                   <td colSpan={6} className="px-4 py-14 text-center">
                     <ShieldOff size="lg" className="mx-auto mb-2 text-text-muted" />
-                    <p className="text-sm text-text-secondary">
+                    <p className="text-small text-text-secondary">
                       {search || state !== 'all' || range !== 'all'
                         ? 'No shifts match these filters.'
                         : 'No shifts recorded yet. Guards clock in from the Guardhouse portal.'}
@@ -265,7 +265,7 @@ export default function OnDutyHistoryTable() {
                         <ResidentAvatar name={guard.name} />
                         <div className="min-w-0">
                           <p className="truncate font-medium text-text-primary">{guard.name}</p>
-                          <p className="truncate text-caption text-text-muted">{guard.email || '—'}</p>
+                          <p className="truncate text-small text-text-muted">{guard.email || '—'}</p>
                         </div>
                       </div>
                     </td>

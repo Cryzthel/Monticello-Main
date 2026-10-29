@@ -205,7 +205,7 @@ export default function SettingsPage() {
           {status === 'error' ? (
             <p
               role="status"
-              className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3.5 text-sm leading-relaxed text-text-primary"
+              className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3.5 text-small leading-relaxed text-text-primary"
             >
               <AlertTriangle size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
               <span>
@@ -242,7 +242,7 @@ export default function SettingsPage() {
       >
         <ul className="max-h-64 divide-y divide-hairline overflow-y-auto rounded-xl border border-hairline bg-base-950/40">
           {changes.map((change) => (
-            <li key={change.path} className="px-3.5 py-2.5 text-xs">
+            <li key={change.path} className="px-3.5 py-2.5 text-small">
               <p className="font-semibold text-text-primary">{change.label}</p>
               <p className="mt-0.5 break-words text-text-secondary">
                 <span className="line-through opacity-70">{change.from}</span>
@@ -254,7 +254,7 @@ export default function SettingsPage() {
           ))}
         </ul>
         {silencing ? (
-          <p className="mt-3 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 p-3 text-xs leading-relaxed text-danger">
+          <p className="mt-3 flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 p-3 text-small leading-relaxed text-danger">
             <AlertTriangle size="sm" aria-hidden="true" className="mt-0.5 shrink-0" />
             This silences the SOS siren on every guardhouse console. Guards will only see a panic alert, not hear it.
           </p>

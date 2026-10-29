@@ -18,7 +18,8 @@ import Select from '@shared/components/Select'
 import { DetailCard, DetailField } from '@shared/components/detail/DetailCard'
 import { DetailFormField, detailInputClass } from '@shared/components/detail/DetailFormField'
 import ResidentLocationPicker from '@/components/ResidentLocationPicker'
-import AttachFileField from '@/components/AttachFileField'
+import EvidenceUploader from '@shared/components/EvidenceUploader'
+import { useEvidenceUploads } from '@shared/hooks/useEvidenceUploads'
 import { useResidentAddresses } from '@shared/hooks/useResidentAddresses'
 import { useAuth } from '@shared/auth/AuthContext'
 import { db } from '@shared/lib/firebase'
@@ -76,9 +77,8 @@ function validate(form, resident) {
  * that scrolls.
  *
  * `busy` disables every dismissal route at once (scrim, Escape, ×, Cancel).
- * Closing anyway would orphan an in-flight upload in Storage: AttachFileField
- * cancels a resumable task on `remove` but NOT on unmount, and cancelling on
- * close would throw away evidence the guard already waited for.
+ * Closing anyway would cancel an in-flight upload (useEvidenceUploads cancels
+ * on unmount), throwing away evidence the guard is already waiting for.
  *
  * Children render ONLY while open: the composer opens the resident directory
  * listeners, and mounting it behind a closed dialog would hold them for the
@@ -162,10 +162,10 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
   const [attempted, setAttempted] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  // Populated by AttachFileField as uploads land, already split into the
-  // arrays the incident document expects.
-  const [attachments, setAttachments] = useState({ photoUrls: [], videoUrls: [], attachmentUrls: [], videoMeta: [] })
+  // Photos, video and documents; already split into the arrays the incident
+  // document expects as they land.
+  const attachments = useEvidenceUploads({ maxVideos: Infinity, documents: true })
+  const uploading = attachments.busy
 
   // A resident who loses verification (or is removed) while selected is
   // dropped from the draft, not silently filed against.
@@ -203,6 +203,12 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
     setAttempted(true)
     setError('')
     if (Object.keys(errors).length || busy) return
+    // A failed tile is evidence the guard meant to attach. Filing without it
+    // would drop it silently, so it must be retried or removed first.
+    if (attachments.failed) {
+      setError('One file did not upload. Retry it or remove it, then submit again.')
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -280,10 +286,10 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
             <FilePlus2 size={22} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id="file-report-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
+            <h2 id="file-report-title" className="type-h3 truncate text-text-primary">
               File incident report
             </h2>
-            <p className="mt-0.5 text-xs text-text-muted">
+            <p className="mt-0.5 text-small text-text-muted">
               Filed as {user?.displayName || user?.email || 'Guard'} · lands on the Admin console the moment it is
               submitted
             </p>
@@ -413,7 +419,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
               required
               error={shown.description}
               action={
-                <span className="text-[11px] tabular-nums text-text-muted">
+                <span className="text-small tabular-nums text-text-muted">
                   {form.description.length}/{DESCRIPTION_MAX}
                 </span>
               }
@@ -424,7 +430,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
                 maxLength={DESCRIPTION_MAX}
                 aria-invalid={Boolean(shown.description)}
                 aria-describedby={shown.description ? 'report-description-error' : undefined}
-                className={`w-full resize-none rounded-lg border bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-primary shadow-inner outline-none transition-[border-color,box-shadow] duration-150 placeholder:font-normal placeholder:text-text-muted ${
+                className={`w-full resize-none rounded-lg border bg-base-950 p-4 text-body font-medium leading-relaxed text-text-primary shadow-inner outline-none transition-[border-color,box-shadow] duration-150 placeholder:font-normal placeholder:text-text-muted ${
                   shown.description
                     ? 'border-danger/70 focus:border-danger focus:ring-4 focus:ring-danger/15'
                     : 'border-hairline hover:border-brand-500/30 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15'
@@ -438,18 +444,19 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
           </DetailCard>
 
           <DetailCard icon={ImagePlus} title="Evidence upload">
-            <AttachFileField
+            <EvidenceUploader
+              uploads={attachments}
               heading="Photos, video or documents"
-              onChange={setAttachments}
-              onBusyChange={setUploading}
+              hint="Supports photos, videos and PDFs up to 25 MB"
               disabled={submitting}
+              inputLabel="Attach files to this report"
             />
           </DetailCard>
 
           {error ? (
             <p
               role="alert"
-              className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger"
+              className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-small text-danger"
             >
               <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
               {error}
@@ -464,7 +471,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
             broken. Hidden below `sm:`, where the buttons take the row. */}
         <p
           aria-live="polite"
-          className={`hidden min-w-0 flex-1 items-center gap-2 truncate text-xs sm:flex ${
+          className={`hidden min-w-0 flex-1 items-center gap-2 truncate text-small sm:flex ${
             attempted && blockers.length ? 'text-danger' : 'text-text-muted'
           }`}
         >
@@ -476,7 +483,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="inline-flex flex-1 items-center justify-center rounded-full border border-hairline px-5 py-2 text-xs font-semibold text-text-secondary transition-colors hover:bg-tint/[0.08] hover:text-text-primary disabled:opacity-50 sm:flex-none"
+            className="inline-flex flex-1 items-center justify-center rounded-full border border-hairline px-5 py-2 text-small font-semibold text-text-secondary transition-colors hover:bg-tint/[0.08] hover:text-text-primary disabled:opacity-50 sm:flex-none"
           >
             Cancel
           </button>
@@ -487,7 +494,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
             type="submit"
             disabled={busy}
             title={uploading ? 'Waiting for every attachment to finish uploading' : undefined}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-colors hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:opacity-60 sm:flex-none sm:min-w-[9rem]"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-small font-semibold text-[var(--color-cta-fg)] shadow-md transition-colors hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:opacity-60 sm:flex-none sm:min-w-[9rem]"
           >
             {busy ? <Loader2 size="sm" className="animate-spin" /> : <Send size="sm" />}
             {uploading ? 'Uploading…' : submitting ? 'Filing…' : 'Submit report'}

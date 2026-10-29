@@ -53,7 +53,7 @@
 const FLOATED_TONE = 'text-[#059669]'
 
 const FLOATED =
-  `-top-2.5 left-4 translate-y-0 bg-white px-2 text-xs font-medium ${FLOATED_TONE}`
+  `-top-2.5 left-4 translate-y-0 bg-white px-2 text-small font-medium ${FLOATED_TONE}`
 
 /**
  * `surface="theme"`: the same field on a THEMED surface — the Settings
@@ -65,10 +65,10 @@ const FLOATED =
  * padding, type scale, label motion and the brand focus ring are identical.
  */
 const FLOATED_THEME =
-  `-top-2.5 left-4 translate-y-0 bg-base-950 px-2 text-xs font-medium ${FLOATED_TONE}`
+  `-top-2.5 left-4 translate-y-0 bg-base-950 px-2 text-small font-medium ${FLOATED_TONE}`
 
 /** Resting: inside the field, vertically centred, on the text's left edge. */
-const RESTING = 'top-1/2 left-6 -translate-y-1/2 px-0 text-sm text-text-muted'
+const RESTING = 'top-1/2 left-6 -translate-y-1/2 px-0 text-body text-text-muted'
 
 /**
  * The same values as FLOATED, applied while anything inside the wrapper has
@@ -81,7 +81,7 @@ const FLOATED_ON_FOCUS = [
   'group-focus-within:translate-y-0',
   'group-focus-within:bg-white',
   'group-focus-within:px-2',
-  'group-focus-within:text-xs',
+  'group-focus-within:text-small',
   'group-focus-within:font-medium',
   'group-focus-within:text-[#059669]',
 ].join(' ')
@@ -136,7 +136,7 @@ export default function FloatingField({
           id={id}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-          className={`min-w-0 flex-1 bg-transparent py-3.5 text-sm text-text-primary outline-none placeholder:text-transparent focus:placeholder:text-text-muted ${inputClassName}`}
+          className={`min-w-0 flex-1 bg-transparent py-3.5 text-body leading-6 text-text-primary outline-none placeholder:text-transparent focus:placeholder:text-text-muted ${inputClassName}`}
           {...inputProps}
         />
         {trailing}
@@ -157,11 +157,11 @@ export default function FloatingField({
       {/* Inside the field's own wrapper, indented to the text rather than the
           capsule's edge, so it reads as belonging to the control above it. */}
       {error ? (
-        <p id={`${id}-error`} className="mt-1.5 px-6 text-xs font-medium text-danger">
+        <p id={`${id}-error`} className="mt-1.5 px-6 text-small font-medium text-danger">
           {error}
         </p>
       ) : hint ? (
-        <p id={`${id}-hint`} className="mt-1.5 px-6 text-xs leading-snug text-text-muted">
+        <p id={`${id}-hint`} className="mt-1.5 px-6 text-small leading-snug text-text-muted">
           {hint}
         </p>
       ) : null}

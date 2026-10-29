@@ -320,7 +320,7 @@ function ReportDetailsModal({ report, closing, units = [], onClose, navigation =
   } else if (stage === 'dispatched') {
     status = (
       <div
-        className={`flex min-w-0 items-center gap-1.5 text-xs font-semibold ${ack?.expired ? 'text-danger' : 'text-text-secondary'}`}
+        className={`flex min-w-0 items-center gap-1.5 text-small font-semibold ${ack?.expired ? 'text-danger' : 'text-text-secondary'}`}
         aria-live="polite"
       >
         {claimedByOther && !ack?.expired ? (
@@ -437,10 +437,10 @@ function ReportDetailsModal({ report, closing, units = [], onClose, navigation =
           <div className="flex items-start gap-3">
             <CategoryIconBadge category={report.category} />
             <div className="min-w-0 flex-1">
-              <h2 className="line-clamp-2 text-base font-bold leading-snug tracking-tight text-text-primary">
+              <h2 className="type-h3 line-clamp-2 text-text-primary">
                 {report.title || `${categoryLabel(report.category)} report`}
               </h2>
-              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-text-muted">
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-small text-text-muted">
                 <span className="font-mono font-semibold tracking-wider text-text-secondary">{reference}</span>
                 <span aria-hidden="true">·</span>
                 <span>Reported {clock(report.reportedAt)}</span>
@@ -489,13 +489,13 @@ function ReportDetailsModal({ report, closing, units = [], onClose, navigation =
               resident showed and what they said belong together. */}
           <MediaEvidenceCard report={report} compact title="Evidence & notes" onLightboxChange={setMediaLightbox}>
             <div className="border-t border-hairline pt-3">
-              <span className="mb-1.5 flex items-center gap-1.5 text-[11px] text-text-muted">
+              <span className="mb-1.5 flex items-center gap-1.5 text-small text-text-muted">
                 <FileText size={12} aria-hidden="true" />
                 Resident&rsquo;s notes
               </span>
               {/* `[overflow-wrap:anywhere]`: a resident's text can be one
                   unbroken string, which pre-wrap alone runs out of the card. */}
-              <p className="whitespace-pre-wrap rounded-lg border border-hairline bg-base-950 p-3 text-sm font-medium leading-relaxed text-text-secondary shadow-inner [overflow-wrap:anywhere]">
+              <p className="whitespace-pre-wrap rounded-lg border border-hairline bg-base-950 p-3 text-body font-medium leading-relaxed text-text-secondary shadow-inner [overflow-wrap:anywhere]">
                 {report.description || 'No written description.'}
               </p>
             </div>
@@ -553,7 +553,7 @@ function ReportDetailsModal({ report, closing, units = [], onClose, navigation =
                   </Field>
                 ) : null}
               </div>
-              <p className="whitespace-pre-wrap rounded-lg border border-hairline bg-base-950 p-3 text-sm leading-relaxed text-text-secondary">
+              <p className="whitespace-pre-wrap rounded-lg border border-hairline bg-base-950 p-3 text-body leading-relaxed text-text-secondary">
                 {report.resolution.notes}
               </p>
               <EvidenceGrid
@@ -593,7 +593,7 @@ function ReportDetailsModal({ report, closing, units = [], onClose, navigation =
                 </button>
               )}
               {navigation.state === 'unavailable' && navigation.reason ? (
-                <p className="mt-1.5 text-caption leading-snug text-text-muted">{navigation.reason}</p>
+                <p className="mt-1.5 text-small leading-snug text-text-muted">{navigation.reason}</p>
               ) : null}
             </div>
           ) : null}
@@ -620,12 +620,12 @@ function ReportDetailsModal({ report, closing, units = [], onClose, navigation =
             <div className="mt-2 flex flex-wrap items-center gap-2 [&>*]:min-w-[8.5rem] [&>*]:flex-1">{footer}</div>
           ) : null}
           {offline && stage !== 'resolved' ? (
-            <p className="mt-2 flex items-center gap-1.5 text-caption font-semibold leading-snug text-warning" role="status">
+            <p className="mt-2 flex items-center gap-1.5 text-small font-semibold leading-snug text-warning" role="status">
               <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
               Offline — actions save on this device and sync when the signal returns.
             </p>
           ) : null}
-          {hint ? <p className="mt-2 text-caption leading-snug text-text-muted">{hint}</p> : null}
+          {hint ? <p className="mt-2 text-small leading-snug text-text-muted">{hint}</p> : null}
         </footer>
       </section>
 
@@ -684,11 +684,11 @@ function ArrivalOverride({ check, reason, onReason, busy, onCancel, onConfirm })
   const ready = reason.trim().length >= 3
   return (
     <div className="mt-2 rounded-xl border border-warning/30 bg-warning/10 p-3" role="group" aria-label="Confirm arrival">
-      <p className="flex items-start gap-2 text-sm font-semibold text-text-primary">
+      <p className="flex items-start gap-2 text-small font-semibold text-text-primary">
         <AlertTriangle size="sm" className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
         {arrivalVerdictText(check)}
       </p>
-      <label className="mt-2 block text-caption font-medium text-text-secondary" htmlFor="arrival-reason">
+      <label className="mt-2 block text-small font-medium text-text-secondary" htmlFor="arrival-reason">
         Confirm you are on scene anyway — why couldn&rsquo;t GPS confirm it?
       </label>
       <textarea

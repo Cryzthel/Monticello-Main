@@ -9,11 +9,10 @@ import {
   RESOLUTION_PHOTOS_MAX,
   RESOLUTION_VIDEOS_MAX,
 } from '@shared/lib/dispatchStage'
-import { MEDIA_ACCEPT_ATTRIBUTE } from '@shared/lib/attachments'
 import { incidentReference } from '@/lib/dispatch'
-import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
+import { useEvidenceUploads } from '@shared/hooks/useEvidenceUploads'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
-import MediaAttachmentField from '@shared/components/MediaAttachmentField'
+import EvidenceUploader from '@shared/components/EvidenceUploader'
 import Select from '@shared/components/Select'
 
 /**
@@ -53,11 +52,9 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
    * true answer is how you train people to tick the nearest box.
    */
   const [tags, setTags] = useState([])
-  const [dragging, setDragging] = useState(false)
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
-  const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX, maxVideos: RESOLUTION_VIDEOS_MAX })
-  const fileRef = useRef(null)
+  const photos = useEvidenceUploads({ maxPhotos: RESOLUTION_PHOTOS_MAX, maxVideos: RESOLUTION_VIDEOS_MAX })
   const notesId = useId()
   const cancelRef = useRef(onCancel)
   cancelRef.current = onCancel
@@ -76,7 +73,13 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
       if (event.key === 'Escape' && !busyRef.current) cancelRef.current()
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      // Closing cancels what is still uploading. The hook outlives the
+      // dialog (this component stays mounted), so without this a cancelled
+      // resolve kept uploading and landed files nothing would reference.
+      reset()
+    }
   }, [open, reset])
 
   const panelRef = useRef(null)
@@ -86,38 +89,21 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
 
   const trimmed = notes.trim()
   const notesOk = trimmed.length >= RESOLUTION_NOTES_MIN && trimmed.length <= RESOLUTION_NOTES_MAX
-  /**
-   * Two vocabularies, bridged here rather than in either of them.
-   *
-   * `usePhotoUploads` tracks an upload as "has a url yet, has an error yet".
-   * `MediaAttachmentField` renders a status string. Translating at the call
-   * site keeps the hook free of presentation and the field free of this
-   * screen's upload mechanics.
-   */
-  const tiles = photos.items.map((item) => ({
-    id: item.id,
-    name: item.name,
-    type: item.type,
-    src: item.previewUrl,
-    status: item.status,
-    progress: item.progress,
-    error: item.error,
-  }))
-
-  const photosOk = photos.urls.length >= 1 && !photos.uploading && !photos.failed
+  const photosOk = photos.photoUrls.length >= 1 && !photos.busy && !photos.failed
   const ready = Boolean(outcome) && notesOk && photosOk
 
   const missing = [
     !outcome && 'an outcome',
     !notesOk && `notes of at least ${RESOLUTION_NOTES_MIN} characters`,
-    photos.urls.length < 1 && 'at least one photo',
+    photos.photoUrls.length < 1 && 'at least one photo',
+    photos.failed && 'the failed upload retried or removed',
   ].filter(Boolean)
 
   const submit = (event) => {
     event.preventDefault()
     setTouched(true)
     if (!ready || busy) return
-    onSubmit({ outcome, notes: trimmed, photoUrls: photos.urls, videoUrls: photos.videoUrls, videoMeta: photos.videoMeta, tags })
+    onSubmit({ outcome, notes: trimmed, photoUrls: photos.photoUrls, videoUrls: photos.videoUrls, videoMeta: photos.videoMeta, tags })
   }
 
   return createPortal(
@@ -140,10 +126,10 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
             <CheckCircle2 size="md" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 id="resolve-title" className="text-base font-semibold text-text-primary">
+            <h2 id="resolve-title" className="type-h3 text-text-primary">
               Resolve incident
             </h2>
-            <p className="font-mono text-caption text-text-muted">{incidentReference(report.id)}</p>
+            <p className="font-mono text-small text-text-muted">{incidentReference(report.id)}</p>
           </div>
           <button
             type="button"
@@ -170,7 +156,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
               was never observed, so it says so here, where the person
               writing the record can see it. */}
           {report && !report.onSceneAt ? (
-            <p className="flex items-start gap-2 rounded-xl border border-warning/25 bg-warning/10 p-3 text-caption leading-snug text-warning">
+            <p className="flex items-start gap-2 rounded-xl border border-warning/25 bg-warning/10 p-3 text-small leading-snug text-warning">
               <TriangleAlert size="sm" aria-hidden="true" className="mt-px shrink-0" />
               <span>
                 No arrival was recorded for this call — your position never reached the pin. You can
@@ -190,7 +176,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
               do not, which is the right shape for a question asked once at
               the end of a call. */}
           <div>
-            <p className="text-xs font-semibold text-text-secondary">What happened?</p>
+            <p className="text-small font-semibold text-text-secondary">What happened?</p>
             <Select
               className="mt-2 w-full"
               size="touch"
@@ -215,7 +201,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
               required field that sometimes has no true answer is how you
               train people to tick the nearest box. */}
           <div>
-            <p className="text-xs font-semibold text-text-secondary">
+            <p className="text-small font-semibold text-text-secondary">
               What was done? <span className="font-normal text-text-muted">· optional</span>
             </p>
             {/* MULTI-select, where the outcome is single. A call can end with
@@ -237,11 +223,11 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
 
           <div>
             <div className="flex items-baseline justify-between gap-3">
-              <label htmlFor={notesId} className="text-xs font-semibold text-text-secondary">
+              <label htmlFor={notesId} className="text-small font-semibold text-text-secondary">
                 Notes
               </label>
               <span
-                className={`font-mono text-2xs tabular-nums ${
+                className={`font-mono text-small tabular-nums ${
                   trimmed.length > RESOLUTION_NOTES_MAX ? 'text-danger' : 'text-text-muted'
                 }`}
               >
@@ -267,59 +253,28 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
                 with no drop target, on the surface most likely to be used from
                 a laptop at the gate.
 
-                `MediaAttachmentField` is the shared component behind the
-                announcement composer and the report attacher. Adopting it is
-                what the brief is really asking for: not a dropzone styled to
-                LOOK like that one, which is how two things drift apart, but
-                that one. Drag-and-drop, the progress bar, the failed-upload
-                state and the per-item remove all come with it.
-
-                The capacity counter and the heading move inside it too, which
-                is why the header row above is gone rather than kept. */}
-            <MediaAttachmentField
-              items={tiles}
-              capacity={RESOLUTION_PHOTOS_MAX + RESOLUTION_VIDEOS_MAX}
+                `EvidenceUploader` is the one uploader in both portals, so
+                drag-and-drop, the progress ring, retry and the per-item remove
+                all come with it. */}
+            <EvidenceUploader
+              uploads={photos}
               heading="Photos & video"
-              hint={`At least one photo (JPG, PNG, WebP). Up to ${RESOLUTION_VIDEOS_MAX} clips (MP4, MOV, WebM, AVI) — over 25 MB they are compressed on this device. Uploading needs a connection.`}
+              hint="At least one photo · photos and videos up to 25 MB"
               disabled={busy}
-              onPick={() => fileRef.current?.click()}
-              onRemove={photos.remove}
-              dragging={dragging}
-              onDragOver={(event) => {
-                event.preventDefault()
-                if (!busy) setDragging(true)
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(event) => {
-                event.preventDefault()
-                setDragging(false)
-                if (!busy) photos.add(event.dataTransfer?.files)
-              }}
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept={MEDIA_ACCEPT_ATTRIBUTE}
               capture="environment"
-              multiple
-              className="sr-only"
-              tabIndex={-1}
-              onChange={(event) => {
-                photos.add(event.target.files)
-                event.target.value = ''
-              }}
+              inputLabel="Add scene photos or video"
             />
           </div>
         </div>
 
         <footer className="flex shrink-0 flex-col gap-2 border-t border-hairline px-6 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex min-w-0 items-center gap-1.5 text-caption text-text-muted" aria-live="polite">
+          <p className="flex min-w-0 items-center gap-1.5 text-small text-text-muted" aria-live="polite">
             {touched && missing.length ? (
               <>
                 <TriangleAlert size="sm" className="shrink-0 text-warning" aria-hidden="true" />
                 <span>Still needs {missing.join(', ')}.</span>
               </>
-            ) : photos.uploading ? (
+            ) : photos.busy ? (
               'Uploading evidence…'
             ) : (
               'The resident is asked to rate the response.'
@@ -331,7 +286,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
             </button>
             <button
               type="submit"
-              disabled={busy || (touched && !ready) || photos.uploading}
+              disabled={busy || (touched && !ready) || photos.busy}
               className="btn btn-sm btn-brand flex-1 sm:flex-none"
             >
               {busy ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <CheckCircle2 size="sm" aria-hidden="true" />}

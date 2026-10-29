@@ -99,8 +99,8 @@ export default function ConfirmDialog({
       onClick={onCancel}
       className={
         centered
-          ? 'btn btn-outline h-11 flex-1 rounded-full px-4 text-sm'
-          : 'btn btn-outline h-11 w-full px-4 text-xs sm:h-9 sm:w-auto'
+          ? 'btn btn-outline h-11 flex-1 rounded-full px-4 text-small'
+          : 'btn btn-outline h-11 w-full px-4 text-small sm:h-9 sm:w-auto'
       }
     >
       {cancelLabel}
@@ -114,8 +114,8 @@ export default function ConfirmDialog({
       onClick={onConfirm}
       className={
         centered
-          ? `btn h-11 flex-1 rounded-full px-4 text-sm font-semibold ${confirm}`
-          : `btn h-11 w-full px-4 text-xs sm:h-9 sm:w-auto ${confirm}`
+          ? `btn h-11 flex-1 rounded-full px-4 text-small font-semibold ${confirm}`
+          : `btn h-11 w-full px-4 text-small sm:h-9 sm:w-auto ${confirm}`
       }
     >
       {busy ? <Loader2 size="sm" className="animate-spin" /> : null}
@@ -140,9 +140,9 @@ export default function ConfirmDialog({
           <span className={`mx-auto flex h-12 w-12 items-center justify-center rounded-full ring-1 ring-inset ${ring}`}>
             <Icon size="md" />
           </span>
-          <h2 className="mt-4 text-lg font-semibold leading-snug tracking-[-0.01em] text-text-primary">{title}</h2>
+          <h2 className="type-h3 mt-4 text-text-primary">{title}</h2>
           {message ? (
-            <p className="mx-auto mt-2 max-w-[34ch] text-sm leading-relaxed text-text-secondary">{message}</p>
+            <p className="mx-auto mt-2 max-w-[34ch] text-body leading-relaxed text-text-secondary">{message}</p>
           ) : null}
           {children ? <div className="mt-4 text-left">{children}</div> : null}
           {/* Cancel first in the DOM, so focus and Tab land on the safe choice;
@@ -177,9 +177,9 @@ export default function ConfirmDialog({
             <Icon size="md" />
           </span>
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-semibold leading-snug text-text-primary">{title}</h2>
+            <h2 className="type-h3 text-text-primary">{title}</h2>
             {message ? (
-              <p className="mt-1.5 text-sm leading-relaxed text-text-secondary">{message}</p>
+              <p className="mt-1.5 text-body leading-relaxed text-text-secondary">{message}</p>
             ) : null}
             {children ? <div className="mt-4">{children}</div> : null}
           </div>

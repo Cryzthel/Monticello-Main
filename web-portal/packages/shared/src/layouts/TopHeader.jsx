@@ -117,7 +117,7 @@ export default function TopHeader({
       ) : null}
 
       {inlineTitle && title ? (
-        <h1 className="hidden shrink-0 truncate text-base font-semibold text-text-primary md:block">{title}</h1>
+        <h1 className="type-h3 hidden shrink-0 truncate text-text-primary md:block">{title}</h1>
       ) : null}
 
       {/* Full width up to a readable measure; an icon button below `sm`,
@@ -133,11 +133,11 @@ export default function TopHeader({
         // even `px-4`: the ⌘K cap needs less room inside the curve than the
         // leading glyph does, and an even padding left it crowding the right
         // edge. `shadow-none` drops the 1px lift a flat oblong does not want.
-        className="hidden h-10 min-w-0 max-w-xl flex-1 items-center gap-2.5 rounded-full border border-slate-200 bg-base-900 pl-4 pr-2 text-left text-sm text-text-muted transition-[border-color,color] duration-150 hover:border-slate-300 hover:text-text-secondary sm:flex"
+        className="hidden h-10 min-w-0 max-w-xl flex-1 items-center gap-2.5 rounded-full border border-slate-200 bg-base-900 pl-4 pr-2 text-left text-small text-text-muted transition-[border-color,color] duration-150 hover:border-slate-300 hover:text-text-secondary sm:flex"
       >
         <Search size="sm" className="shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">Search pages…</span>
-        <kbd className="shrink-0 rounded-full border border-hairline bg-slate-50 px-2 py-0.5 font-sans text-2xs text-text-muted">
+        <kbd className="shrink-0 rounded-full border border-hairline bg-slate-50 px-2 py-0.5 font-sans text-small text-text-muted">
           ⌘K
         </kbd>
       </button>

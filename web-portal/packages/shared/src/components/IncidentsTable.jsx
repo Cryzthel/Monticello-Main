@@ -290,7 +290,7 @@ export default function IncidentsTable({
 
       {selectedIds.size > 0 ? (
         <div className="flex items-center gap-3 border-b border-hairline bg-brand-50 px-4 py-2.5">
-          <span className="text-xs font-medium text-text-primary">{selectedIds.size} selected</span>
+          <span className="text-small font-medium text-text-primary">{selectedIds.size} selected</span>
           <div className="ml-auto flex items-center gap-2">
             <button
               type="button"
@@ -404,7 +404,7 @@ export default function IncidentsTable({
                   {/* Machine data — mono, so an operator reading an id off a
                       radio can compare it glyph-by-glyph against the column. */}
                   {!compact ? (
-                    <td className="px-4 py-3.5 font-mono text-xs font-medium text-text-secondary">
+                    <td className="px-4 py-3.5 font-mono text-small font-medium text-text-secondary">
                       {ticketId(incident.id)}
                     </td>
                   ) : null}
@@ -449,7 +449,7 @@ export default function IncidentsTable({
                   </td>
                   {/* Log timestamp — mono + tnum, so the column aligns on the
                       separators without a fixed-width hack. */}
-                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs text-text-secondary">
+                  <td className="whitespace-nowrap px-4 py-3.5 font-mono text-small text-text-secondary">
                     {incident.reportedAt ? formatLogTime(incident.reportedAt) : '—'}
                   </td>
                   {!compact ? (

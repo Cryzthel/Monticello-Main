@@ -13,19 +13,13 @@ import {
   X,
 } from '@shared/icons'
 import TablePagination from '@shared/components/TablePagination'
-import MediaAttachmentField from '@shared/components/MediaAttachmentField'
 import StatusBadge from '@shared/components/StatusBadge'
 import ConfirmDialog from '@shared/components/ConfirmDialog'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { useWaitWhile } from '@/lib/waitState'
 import { db } from '@shared/lib/firebase'
-import {
-  MAX_EDGE_PX,
-  MAX_SOURCE_IMAGE_BYTES,
-  compressImage,
-  describeCompression,
-} from '@shared/lib/imageCompression'
-import { formatBytes } from '@shared/lib/attachments'
+import EvidenceUploader from '@shared/components/EvidenceUploader'
+import { useEvidenceUploads } from '@shared/hooks/useEvidenceUploads'
 import {
   ANNOUNCEMENT_CATEGORIES,
   CATEGORY_TONES,
@@ -156,13 +150,13 @@ function Field({ label, htmlFor, hint, counter, children }) {
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <Label htmlFor={htmlFor} className="text-xs font-medium text-text-secondary">
+        <Label htmlFor={htmlFor} className="text-small font-medium text-text-secondary">
           {label}
         </Label>
-        {counter ? <span className="text-2xs tabular-nums text-text-muted">{counter}</span> : null}
+        {counter ? <span className="text-small tabular-nums text-text-muted">{counter}</span> : null}
       </div>
       {children}
-      {hint ? <p className="mt-1.5 text-caption leading-snug text-text-muted">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 text-small leading-snug text-text-muted">{hint}</p> : null}
     </div>
   )
 }
@@ -272,7 +266,6 @@ function ComposerModal({ open, busy, onClose, children }) {
 
 // ── Composer ────────────────────────────────────────────────────────────────
 
-let imageSeq = 0
 
 function Composer({
   draft,
@@ -286,193 +279,37 @@ function Composer({
   /** 'media' opens the file picker as soon as the dialog appears. */
   intent,
 }) {
-  const fileRef = useRef(null)
-  const [uploadError, setUploadError] = useState('')
-
   /**
-   * One entry per attached image:
-   * `{ id, name, src, status, progress, url, task, error, note }`
-   * where status is 'compressing' | 'uploading' | 'done' | 'error'.
+   * The images go through the same engine and uploader as the Guardhouse
+   * evidence pickers (useEvidenceUploads / EvidenceUploader): resized on the
+   * device, uploaded eagerly to `announcements/`, cancelled when removed,
+   * retryable when they fail.
    *
    * Seeded ONCE from the draft, which is correct rather than lazy: the parent
    * remounts this component (via `formKey`) on both reset and startEdit, so
-   * "initial state" and "the notice being edited" are the same moment. A
-   * `useEffect` syncing draft→items would instead fight the effect below that
-   * syncs items→draft.
+   * "initial state" and "the notice being edited" are the same moment.
    */
-  const [items, setItems] = useState(() =>
-    (draft.imageUrls ?? []).map((url) => ({
-      id: `existing-${(imageSeq += 1)}`,
-      name: 'Current attachment',
-      src: url,
-      status: 'done',
-      progress: 100,
-      url,
-    })),
-  )
-
-  const update = useCallback((id, patch) => {
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)))
-  }, [])
+  const uploads = useEvidenceUploads({
+    maxPhotos: MAX_ANNOUNCEMENT_IMAGES,
+    maxFileBytes: MAX_IMAGE_BYTES,
+    uploadFile: uploadAnnouncementImage,
+    initialUrls: draft.imageUrls ?? [],
+  })
 
   // Publish only what actually landed. The equality check matters: this effect
   // writes to the parent's draft, and returning `prev` unchanged when the URL
   // list is identical is what stops that write from re-rendering us into a loop.
+  const { photoUrls } = uploads
   useEffect(() => {
-    const urls = items.filter((item) => item.status === 'done' && item.url).map((item) => item.url)
     setDraft((prev) => {
       const same =
-        prev.imageUrls.length === urls.length && prev.imageUrls.every((url, i) => url === urls[i])
-      return same ? prev : { ...prev, imageUrls: urls }
+        prev.imageUrls.length === photoUrls.length && prev.imageUrls.every((url, i) => url === photoUrls[i])
+      return same ? prev : { ...prev, imageUrls: photoUrls }
     })
-  }, [items, setDraft])
-
-  /**
-   * Blob previews are held by the document until revoked, so they have to be
-   * released — but the release must be tied to the COMPONENT's lifetime, not to
-   * `items`.
-   *
-   * The obvious version, `useEffect(() => () => revokeAll(items), [items])`, is
-   * wrong and was wrong here before this change. React runs the previous
-   * cleanup before every re-run, so an effect keyed on `items` revokes every
-   * preview on every state change — which, during an upload, is on every
-   * progress tick. The thumbnails survive only because React reuses the same
-   * `<img>` DOM node and the browser never re-reads an already-decoded src; a
-   * revoked blob: URL is genuinely dead for any NEW element, so the moment
-   * anything remounts a tile the picture is gone.
-   *
-   * A ref holding the URLs we created, released on unmount, has neither
-   * problem: nothing is revoked while it is still on screen, and nothing leaks
-   * when the composer goes away. Individual previews are revoked eagerly in
-   * removeImage, where the tile is genuinely finished with.
-   */
-  const previewUrls = useRef(new Set())
-  useEffect(
-    () => () => {
-      previewUrls.current.forEach((url) => URL.revokeObjectURL(url))
-      previewUrls.current.clear()
-    },
-    [],
-  )
+  }, [photoUrls, setDraft])
 
   function updateField(field, value) {
     setDraft((prev) => ({ ...prev, [field]: value }))
-  }
-
-  function removeImage(item) {
-    // Cancel first. Without this the transfer continues after the tile is gone
-    // and the file lands in Storage referenced by nothing.
-    item.task?.cancel?.()
-    if (item.src?.startsWith('blob:')) {
-      URL.revokeObjectURL(item.src)
-      previewUrls.current.delete(item.src)
-    }
-    setUploadError('')
-    setItems((prev) => prev.filter((entry) => entry.id !== item.id))
-  }
-
-  /**
-   * Accept, downscale, then upload — in that order, and eagerly.
-   *
-   * COMPRESSION COMES FIRST because it is what makes the size limit humane. A
-   * 12 MB photo off a phone used to be rejected outright against a 5 MB
-   * ceiling, leaving the admin to go and resize it somewhere else. Now the
-   * ceiling applies to the COMPRESSED payload, which a 24 MP photo clears
-   * comfortably, so the common case simply works and the limit is only ever
-   * met by something genuinely pathological.
-   *
-   * Each file walks its own pipeline independently, so one slow upload does not
-   * hold up the rest and one failure does not discard the others.
-   */
-  async function handleFiles(event) {
-    const picked = [...(event.target.files ?? [])]
-    // Reset so re-picking the SAME file still fires onChange. Safe: the File
-    // references above outlive the input's value.
-    event.target.value = ''
-    if (!picked.length) return
-
-    setUploadError('')
-
-    const room = MAX_ANNOUNCEMENT_IMAGES - items.length
-    const problems = []
-    const admitted = []
-
-    picked.forEach((file) => {
-      if (!file.type.startsWith('image/')) {
-        problems.push(`${file.name} — not an image`)
-      } else if (file.size > MAX_SOURCE_IMAGE_BYTES) {
-        problems.push(`${file.name} — ${formatBytes(file.size)} is too large to process`)
-      } else if (admitted.length >= room) {
-        problems.push(`${file.name} — limit is ${MAX_ANNOUNCEMENT_IMAGES} images`)
-      } else {
-        admitted.push(file)
-      }
-    })
-
-    if (problems.length) setUploadError(problems.join(' · '))
-
-    admitted.forEach(async (source) => {
-      const id = `img-${(imageSeq += 1)}`
-      setItems((prev) => [
-        ...prev,
-        {
-          id,
-          name: source.name,
-          src: null,
-          status: 'compressing',
-          progress: 0,
-          originalBytes: source.size,
-        },
-      ])
-
-      let file = source
-      let note = null
-      try {
-        const { file: compressed, meta } = await compressImage(source)
-        file = compressed
-        note = describeCompression(meta)
-      } catch {
-        // Compression is an optimisation, never a gate. If canvas fails we
-        // upload the original and let the size check below have the final say.
-      }
-
-      if (file.size > MAX_IMAGE_BYTES) {
-        update(id, {
-          status: 'error',
-          error: `Still ${formatBytes(file.size)} after optimising — over the ${Math.round(
-            MAX_IMAGE_BYTES / 1048576,
-          )} MB limit.`,
-          task: null,
-        })
-        return
-      }
-
-      // Preview the COMPRESSED bytes, not the original: what the admin sees is
-      // then exactly what residents get, including any quality loss.
-      const preview = URL.createObjectURL(file)
-      previewUrls.current.add(preview)
-      update(id, { src: preview, status: 'uploading', progress: 0, note })
-
-      const { task, done } = uploadAnnouncementImage(file, (progress) => update(id, { progress }))
-      update(id, { task })
-
-      try {
-        const url = await done
-        update(id, { status: 'done', url, progress: 100, task: null })
-      } catch (err) {
-        if (err?.code === 'storage/canceled') return
-        update(id, {
-          status: 'error',
-          task: null,
-          error:
-            err?.code === 'storage/unauthorized'
-              ? 'Denied by Storage rules — run "firebase deploy --only storage".'
-              : err?.code === 'storage/retry-limit-exceeded'
-                ? 'Upload timed out. Check your connection.'
-                : err?.message || 'Upload failed.',
-        })
-      }
-    })
   }
 
   // No schedule branch any more: the composer publishes, full stop. See the
@@ -481,7 +318,7 @@ function Composer({
   /*
    * THE UPLOAD COMPLETION GUARD — now counting, not toggling.
    *
-   * A tile is "pending" while it is compressing OR uploading. Both states mean
+   * A tile is pending while it is being prepared OR uploading. Both states mean
    * the same thing to this guard: there is no committed download URL yet, so
    * the draft's `imageUrls` does not contain it, so publishing now would write
    * an announcement missing that image.
@@ -499,16 +336,7 @@ function Composer({
    * look. With several images per notice there are now several chances for that
    * race, which is exactly why the guard counts them.
    */
-  const pending = items.filter(
-    (item) => item.status === 'compressing' || item.status === 'uploading',
-  )
-  const uploadIncomplete = pending.length > 0
-  const compressingCount = pending.filter((item) => item.status === 'compressing').length
-  // Mean progress across live transfers, so the button reads as one job rather
-  // than jumping between individual files' percentages.
-  const aggregatePct = pending.length
-    ? Math.round(pending.reduce((sum, item) => sum + (item.progress ?? 0), 0) / pending.length)
-    : 0
+  const uploadIncomplete = uploads.busy
   const submitLabel = editing ? 'Save changes' : 'Publish announcement'
 
   /**
@@ -524,28 +352,9 @@ function Composer({
     onBusyChange?.(busy)
   }, [busy, onBusyChange])
 
-  /**
-   * "Photo" on the compose bar should land the operator in the file picker,
-   * not merely in a dialog with a picker somewhere inside it — that is the
-   * whole point of a quick action.
-   *
-   * Runs once on mount (the dialog is remounted per open via `formKey`), and
-   * only when that was the intent.
-   */
-  useEffect(() => {
-    if (intent === 'media') fileRef.current?.click()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
-  }, [])
-
-  const tiles = items.map((item) => ({
-    id: item.id,
-    name: item.note && item.status === 'done' ? `${item.name} · ${item.note}` : item.name,
-    type: 'image/*',
-    src: item.src,
-    status: item.status,
-    progress: item.progress,
-    error: item.error,
-  }))
+  // "Photo" on the compose bar lands the operator in the file picker, not
+  // merely in a dialog with a picker somewhere inside it: EvidenceUploader
+  // opens it on mount when `autoOpen` (the dialog remounts per open).
 
   /*
    * THREE BANDS, NOT ONE SCROLLING COLUMN.
@@ -566,7 +375,7 @@ function Composer({
       {/* ── Header ── */}
       <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
         <Megaphone size="sm" className="shrink-0 text-brand-500" />
-        <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
+        <h2 className="type-h3 min-w-0 flex-1 truncate text-text-primary">
           {editing ? 'Edit announcement' : 'Create announcement'}
         </h2>
         <button
@@ -589,7 +398,7 @@ function Composer({
         {editing ? (
           <div className="flex items-center gap-2 rounded-xl border border-info/25 bg-info/10 px-3 py-2.5">
             <Pencil size="sm" className="shrink-0 text-info" />
-            <p className="min-w-0 flex-1 truncate text-xs text-info">Editing a published notice</p>
+            <p className="min-w-0 flex-1 truncate text-small text-info">Editing a published notice</p>
           </div>
         ) : null}
 
@@ -660,57 +469,20 @@ function Composer({
         </Field>
 
         {/* ── Media ──
-            `MediaAttachmentField` is shared with the Guardhouse report
-            composer, so attaching a file looks and behaves identically in both
-            consoles. It is a port of the mobile app's `_MediaStep` /
-            `PhotoEvidenceDropzone`; progress, the remove badge and the error
-            line all live inside it, which is why the separate bar and error
-            paragraph that used to sit here are gone.
-
-            `capacity` is the announcement-specific part. It used to be 1,
-            because the document held a single `imageUrl`; it is now
-            MAX_ANNOUNCEMENT_IMAGES, because the document holds an `imageUrls`
-            array (with `imageUrl` still written as the lead image for the
-            mobile reader — see lib/announcements.js). The grid, the per-tile
-            progress bar and the remove badge all come free: this is the same
-            component, rendering more of the same tiles. */}
-        <MediaAttachmentField
+            `EvidenceUploader` is the one uploader in both portals, so
+            attaching a file looks and behaves identically everywhere.
+            The cap is MAX_ANNOUNCEMENT_IMAGES because the document holds an
+            `imageUrls` array (with `imageUrl` still written as the lead image
+            for the mobile reader — see lib/announcements.js). */}
+        <EvidenceUploader
+          uploads={uploads}
           heading="Media"
-          hint={`Up to ${MAX_ANNOUNCEMENT_IMAGES} images — large photos are resized automatically`}
-          capacity={MAX_ANNOUNCEMENT_IMAGES}
-          items={tiles}
-          error={uploadError}
-          onPick={() => fileRef.current?.click()}
-          onRemove={removeImage}
+          hint={`Supports up to ${MAX_ANNOUNCEMENT_IMAGES} photos`}
+          autoOpen={intent === 'media'}
+          inputLabel="Attach images"
         />
 
-        {/* `sr-only`, NOT `hidden`. A `display:none` input is not reliably
-            clickable via `.click()` across browsers — Safari in particular
-            refuses to open the picker for one — and it drops out of the
-            accessibility tree entirely. sr-only keeps it rendered and
-            focusable while staying invisible.
-
-            `multiple` is the whole feature at the markup level; everything else
-            is what happens to the files afterwards. */}
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          accept="image/png,image/jpeg,image/webp,image/gif"
-          className="sr-only"
-          aria-label="Attach images"
-          onChange={handleFiles}
-        />
-
-        {compressingCount > 0 ? (
-          <p className="-mt-2 text-caption text-text-muted">
-            Optimising {compressingCount} image{compressingCount === 1 ? '' : 's'} for the web —
-            large photos are downscaled to {MAX_EDGE_PX}px before upload.
-          </p>
-        ) : null}
-
-
-        <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-text-secondary">
+        <label className="flex cursor-pointer select-none items-center gap-2.5 text-small text-text-secondary">
           <input
             type="checkbox"
             checked={draft.isPinned}
@@ -723,7 +495,7 @@ function Composer({
 
         {feedback ? (
           <p
-            className={`flex items-start gap-2 rounded-xl border p-3 text-sm ${
+            className={`flex items-start gap-2 rounded-xl border p-3 text-small ${
               feedback.tone === 'danger'
                 ? 'border-danger/30 bg-danger/10 text-danger'
                 : 'border-success/30 bg-success/10 text-success'
@@ -748,13 +520,15 @@ function Composer({
           <button
             type="submit"
             className="btn btn-sm btn-brand min-w-[9rem]"
-            disabled={submitting || uploadIncomplete}
+            disabled={submitting || uploadIncomplete || uploads.failed}
             // Stated on the control, not left to the disabled look alone: a
             // button that goes grey with no reason given reads as broken.
             title={
               uploadIncomplete
                 ? 'Waiting for every attachment to finish uploading'
-                : undefined
+                : uploads.failed
+                  ? 'Retry or remove the image that failed to upload'
+                  : undefined
             }
           >
             {submitting || uploadIncomplete ? (
@@ -762,13 +536,7 @@ function Composer({
             ) : (
               <Send size="sm" />
             )}
-            {compressingCount > 0
-              ? 'Optimising images…'
-              : uploadIncomplete
-                ? `Uploading ${pending.length > 1 ? `${pending.length} images ` : ''}${aggregatePct}%…`
-                : submitting
-                  ? 'Working…'
-                  : submitLabel}
+            {uploadIncomplete ? 'Uploading images…' : submitting ? 'Working…' : submitLabel}
         </button>
       </div>
     </form>
@@ -910,7 +678,7 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
       >
         <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
           <Megaphone size="sm" className="shrink-0 text-brand-500" />
-          <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
+          <h2 className="type-h3 min-w-0 flex-1 truncate text-text-primary">
             Announcement details
           </h2>
           <button
@@ -936,16 +704,16 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
                 Pinned
               </StatusBadge>
             ) : null}
-            <span className="text-caption text-text-muted">
+            <span className="text-small text-text-muted">
               · {goLive ? formatTimestamp(goLive) : 'not yet published'}
             </span>
           </div>
 
-          <h3 className="text-lg font-semibold leading-snug tracking-tight text-text-primary">
+          <h3 className="type-h3 text-text-primary">
             {a.title}
           </h3>
 
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-text-secondary">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-small text-text-secondary">
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <UserRound size="sm" className="shrink-0 text-text-muted" />
               <span className="truncate">{a.authorName || 'Admin'}</span>
@@ -955,7 +723,7 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
           {/* The whole notice, line breaks intact — this is the surface the
               card's two-line clamp defers to, so nothing here may be trimmed. */}
           {a.body ? (
-            <p className="whitespace-pre-line text-sm leading-relaxed text-text-secondary">
+            <p className="whitespace-pre-line text-small leading-relaxed text-text-secondary">
               {a.body}
             </p>
           ) : null}

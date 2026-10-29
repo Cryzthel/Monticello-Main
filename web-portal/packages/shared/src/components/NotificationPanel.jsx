@@ -43,7 +43,7 @@ export function NotificationFilterTabs({ filter, counts, onChange }) {
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(tab.id)}
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-small font-semibold transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
               selected
                 ? 'border-hairline bg-base-800 text-text-primary shadow-sm'
                 : 'border-transparent text-text-secondary hover:bg-base-900 hover:text-text-primary'
@@ -96,13 +96,13 @@ export function NotificationItem({ notification, unread, onOpen }) {
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="flex items-start justify-between gap-2">
-            <span className={`truncate text-[13px] font-medium ${unread ? 'text-text-primary' : 'text-text-secondary'}`}>
+            <span className={`truncate text-small font-medium ${unread ? 'text-text-primary' : 'text-text-secondary'}`}>
               {title}
             </span>
-            <span className="mt-0.5 whitespace-nowrap text-[11px] tabular-nums text-text-muted">{clockTime(at)}</span>
+            <span className="mt-0.5 whitespace-nowrap text-small tabular-nums text-text-muted">{clockTime(at)}</span>
           </span>
           {detail ? (
-            <span className="truncate text-xs text-text-secondary">
+            <span className="truncate text-small text-text-secondary">
               {lead}
               {status ? (
                 <>
@@ -113,7 +113,7 @@ export function NotificationItem({ notification, unread, onOpen }) {
             </span>
           ) : null}
           {propertyLabel ? (
-            <span className={`mt-1.5 flex items-center gap-1.5 text-[11px] font-medium ${unknownPlace ? 'text-text-muted/80' : 'text-text-muted'}`}>
+            <span className={`mt-1.5 flex items-center gap-1.5 text-small font-medium ${unknownPlace ? 'text-text-muted/80' : 'text-text-muted'}`}>
               <MapPin size="sm" aria-hidden="true" className="shrink-0" />
               <span className="truncate">{propertyLabel}</span>
             </span>
@@ -127,7 +127,7 @@ export function NotificationItem({ notification, unread, onOpen }) {
 export function NotificationGroup({ section, isUnread, onOpen }) {
   return (
     <section className="space-y-1">
-      <h3 className="pb-1 text-[11px] font-medium uppercase tracking-wider text-text-muted">{section.label}</h3>
+      <h3 className="pb-1 text-small font-medium uppercase tracking-wider text-text-muted">{section.label}</h3>
       <ul className="space-y-0.5">
         {section.items.map((item) => (
           <NotificationItem key={item.id} notification={item} unread={isUnread(item)} onOpen={onOpen} />
@@ -150,12 +150,12 @@ export default function NotificationPanel({
   return (
     <>
       <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-5">
-        <h2 className="text-[15px] font-semibold tracking-tight text-text-primary">Notifications</h2>
+        <h2 className="type-h3 text-text-primary">Notifications</h2>
         <button
           type="button"
           onClick={onMarkAllRead}
           disabled={counts.unread === 0}
-          className="inline-flex items-center gap-1.5 rounded-md text-xs font-medium text-text-muted transition-colors duration-200 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-default disabled:opacity-40 disabled:hover:text-text-muted"
+          className="inline-flex items-center gap-1.5 rounded-md text-small font-medium text-text-muted transition-colors duration-200 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-default disabled:opacity-40 disabled:hover:text-text-muted"
         >
           <Check size="sm" aria-hidden="true" />
           Mark all read
@@ -167,7 +167,7 @@ export default function NotificationPanel({
       {sections.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-14 text-center">
           <BellOff size="lg" className="text-text-muted" />
-          <p className="text-sm text-text-secondary">{filter === 'unread' ? "You're all caught up." : 'No activity yet.'}</p>
+          <p className="text-small text-text-secondary">{filter === 'unread' ? "You're all caught up." : 'No activity yet.'}</p>
         </div>
       ) : (
         <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">
@@ -181,7 +181,7 @@ export default function NotificationPanel({
         <button
           type="button"
           onClick={onViewAll}
-          className="flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-xs font-medium text-text-secondary transition-colors duration-200 hover:bg-base-900 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+          className="flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-small font-medium text-text-secondary transition-colors duration-200 hover:bg-base-900 hover:text-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
         >
           View all activity
           <ArrowRight size="sm" aria-hidden="true" />

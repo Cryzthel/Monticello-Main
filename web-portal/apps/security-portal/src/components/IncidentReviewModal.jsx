@@ -128,11 +128,11 @@ export default function IncidentReviewModal({ report, onClose }) {
             <div className="flex flex-wrap items-center gap-2">
               <PriorityBadge severity={report.severity}>{formatCategory(report.category)}</PriorityBadge>
               <StatusBadge status={report.status ?? 'Pending'} />
-              <span className="font-mono text-caption font-medium text-text-muted">
+              <span className="font-mono text-small font-medium text-text-muted">
                 {incidentReference(report.id)}
               </span>
             </div>
-            <h2 className="mt-2 truncate text-base font-semibold leading-snug text-text-primary">
+            <h2 className="type-h3 mt-2 truncate text-text-primary">
               {report.title || formatCategory(report.category)}
             </h2>
             {/* The resident and the address, together, directly under the
@@ -140,7 +140,7 @@ export default function IncidentReviewModal({ report, onClose }) {
                 confirm, and it was previously only legible burned into the
                 corner of a photograph — which reports with no evidence do not
                 have. */}
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-secondary">
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-small text-text-secondary">
               <span className="inline-flex items-center gap-1">
                 <MapPin size="sm" className="shrink-0 text-brand-400" />
                 {address || 'Location not recorded'}
@@ -179,11 +179,11 @@ export default function IncidentReviewModal({ report, onClose }) {
               so kept `min-height: auto`. */}
           <section className="shrink-0 overflow-hidden rounded-xl border border-hairline bg-base-800">
             <header className="flex items-center justify-between gap-3 border-b border-hairline px-4 py-2.5">
-              <h3 className="flex items-center gap-2 text-xs font-semibold tracking-normal text-text-secondary">
+              <h3 className="flex items-center gap-2 text-small font-semibold tracking-normal text-text-secondary">
                 <ImageOff size="sm" className="shrink-0 text-brand-400" />
                 Attachments
               </h3>
-              <span className="shrink-0 text-2xs text-text-muted">
+              <span className="shrink-0 text-small text-text-muted">
                 {`${media.length} file${media.length === 1 ? '' : 's'}`}
               </span>
             </header>
@@ -228,22 +228,22 @@ export default function IncidentReviewModal({ report, onClose }) {
                       a black gradient in BOTH themes, and tint is slate-900 in
                       light mode — a dark ring on a dark photo, i.e. no ring. */}
                   <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/80 to-transparent p-3">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white/90 ring-1 ring-inset ring-white/20">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1 text-small font-semibold text-white/90 ring-1 ring-inset ring-white/20">
                       <ShieldCheck size="sm" className="text-success" />
                       Watermark verified
                     </span>
-                    <span className="rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white/80 ring-1 ring-inset ring-white/20">
+                    <span className="rounded-full bg-black/50 px-3 py-1 text-small font-semibold text-white/80 ring-1 ring-inset ring-white/20">
                       {activeIndex + 1} / {media.length}
                     </span>
                   </div>
 
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4 text-left">
-                    <p className="text-sm font-semibold text-white">{watermark.name}</p>
-                    <p className="mt-0.5 flex items-center gap-1 text-xs text-white/80">
+                    <p className="text-small font-semibold text-white">{watermark.name}</p>
+                    <p className="mt-0.5 flex items-center gap-1 text-small text-white/80">
                       <MapPin size="sm" className="shrink-0" />
                       {watermark.address}
                     </p>
-                    <p className="mt-0.5 flex items-center gap-1 text-xs text-white/60">
+                    <p className="mt-0.5 flex items-center gap-1 text-small text-white/60">
                       <Clock size="sm" className="shrink-0" />
                       {watermark.timestamp}
                     </p>
@@ -251,7 +251,7 @@ export default function IncidentReviewModal({ report, onClose }) {
                 </button>
               </div>
             ) : (
-              <p className="flex items-center gap-2 p-4 text-sm text-text-muted">
+              <p className="flex items-center gap-2 p-4 text-small text-text-muted">
                 {stillUploading ? (
                   <ShieldQuestion size="sm" className="shrink-0 text-warning" />
                 ) : (

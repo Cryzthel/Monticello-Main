@@ -282,7 +282,7 @@ function ProfileCard({ settings }) {
           ) : (
             <span
               aria-hidden="true"
-              className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-lg font-semibold text-[#047857]"
+              className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-body font-semibold text-[#047857]"
             >
               {initial}
             </span>
@@ -336,14 +336,14 @@ function ProfileCard({ settings }) {
           {loading ? (
             <Skeleton className="h-4 w-32" />
           ) : (
-            <span className="min-w-0 truncate text-sm font-medium text-text-secondary">{officer.email || '—'}</span>
+            <span className="min-w-0 truncate text-small font-medium text-text-secondary">{officer.email || '—'}</span>
           )}
         </div>
       </SettingsItem>
       {!loading && !profile ? (
         <p
           role="status"
-          className="mt-5 flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3.5 text-xs leading-relaxed text-text-primary"
+          className="mt-5 flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3.5 text-small leading-relaxed text-text-primary"
         >
           <AlertTriangle size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
           No staff record was found for this account, so these details come from the sign-in account. An
@@ -439,7 +439,7 @@ function NotificationsCard({ settings }) {
               onPointerUp={(event) => previewAt(Number(event.currentTarget.value) / 100, true)}
               className="h-1.5 flex-1 cursor-pointer accent-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <span className="w-10 shrink-0 text-right text-sm font-medium tabular-nums text-text-secondary">
+            <span className="w-10 shrink-0 text-right text-small font-medium tabular-nums text-text-secondary">
               {percent}%
             </span>
           </div>
@@ -452,15 +452,15 @@ function NotificationsCard({ settings }) {
                 type="button"
                 onClick={() => settings.set('sirenVolume', null)}
                 disabled={settings.saving}
-                className="text-xs font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
+                className="text-small font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary"
               >
                 Use console level
               </button>
             ) : null}
             {muted ? (
-              <p className="text-xs text-text-muted">Turn on audible alerts to test.</p>
+              <p className="text-small text-text-muted">Turn on audible alerts to test.</p>
             ) : sound.blocked ? (
-              <p className="text-xs text-warning">Sound is held until you press Test tone once this shift.</p>
+              <p className="text-small text-warning">Sound is held until you press Test tone once this shift.</p>
             ) : null}
           </div>
         </div>
@@ -508,6 +508,6 @@ function SystemCard({ settings }) {
  */
 function AccountValue({ loading, value, empty = '—' }) {
   if (loading) return <Skeleton className="h-4 w-32" />
-  if (!value) return <span className="text-sm text-text-muted">{empty}</span>
-  return <span className="block truncate text-sm font-medium text-text-primary">{value}</span>
+  if (!value) return <span className="text-small text-text-muted">{empty}</span>
+  return <span className="block truncate text-small font-medium text-text-primary">{value}</span>
 }

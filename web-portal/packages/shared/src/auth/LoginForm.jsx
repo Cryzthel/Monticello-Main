@@ -240,10 +240,10 @@ export default function LoginForm({
         noValidate
       >
         <div className="step-enter">
-          <p className="text-sm font-semibold text-text-primary" id="totp-code-label">
+          <p className="text-small font-semibold text-text-primary" id="totp-code-label">
             Two-step verification
           </p>
-          <p className="mt-1.5 text-xs leading-relaxed text-text-muted">
+          <p className="mt-1.5 text-small leading-relaxed text-text-muted">
             Open your authenticator app and enter the 6-digit code for{' '}
             <span className="font-medium text-text-primary">{email}</span>.
           </p>
@@ -340,7 +340,7 @@ export default function LoginForm({
             right size to look at and the wrong size to hit; a label is already
             a hit area for the input it wraps, so growing it costs nothing
             visually and gives the whole "Remember me" phrase a 44px row. */}
-        <label className="inline-flex min-h-11 cursor-pointer select-none items-center gap-2.5 text-xs text-text-secondary sm:min-h-0">
+        <label className="inline-flex min-h-11 cursor-pointer select-none items-center gap-2.5 text-small text-text-secondary sm:min-h-0">
           <input
             type="checkbox"
             checked={rememberMe}
@@ -359,7 +359,7 @@ export default function LoginForm({
           /* Same floor, same reasoning: 16px of text is a 16px target. The
              padding is horizontal too, so the tap area does not stop exactly
              at the glyphs. */
-          className={`inline-flex min-h-11 items-center px-1 text-xs font-medium transition sm:min-h-0 sm:px-0 ${accentLink}`}
+          className={`inline-flex min-h-11 items-center px-1 text-small font-medium transition sm:min-h-0 sm:px-0 ${accentLink}`}
         >
           Forgot password?
         </button>

@@ -55,7 +55,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
       }}
     >
       <div className="flex shrink-0 items-center justify-between p-4">
-        <span className="text-xs font-medium text-white/70">
+        <span className="text-small font-medium text-white/70">
           {index + 1} of {media.length}
         </span>
         <button
@@ -94,9 +94,9 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
 
           {watermark ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-lg bg-gradient-to-t from-black/85 to-transparent p-4">
-              <p className="text-sm font-semibold text-text-primary">{watermark.name}</p>
-              <p className="text-xs text-white/80">{watermark.address}</p>
-              <p className="text-xs text-white/60">{watermark.timestamp}</p>
+              <p className="text-small font-semibold text-text-primary">{watermark.name}</p>
+              <p className="text-small text-white/80">{watermark.address}</p>
+              <p className="text-small text-white/60">{watermark.timestamp}</p>
             </div>
           ) : null}
         </div>

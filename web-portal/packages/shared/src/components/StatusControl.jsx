@@ -89,7 +89,7 @@ export default function StatusSelect({
     }
   }, [open])
 
-  const height = size === 'sm' ? 'h-8 text-xs' : 'h-9 text-sm'
+  const height = size === 'sm' ? 'h-8 text-small' : 'h-9 text-small'
   const { dot } = statusStyle(value)
 
   return (
@@ -142,7 +142,7 @@ export default function StatusSelect({
                       setOpen(false)
                       if (option !== value) onChange?.(option)
                     }}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium transition ${
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-small font-medium transition ${
                       active ? 'bg-tint/[0.07] text-text-primary' : 'text-text-secondary hover:bg-tint/5 hover:text-text-primary'
                     }`}
                   >

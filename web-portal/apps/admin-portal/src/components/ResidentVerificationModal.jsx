@@ -79,9 +79,9 @@ import { safeHttpUrl } from '@shared/lib/safeUrl'
 const STATUS_TONE = { pending: 'warning', verified: 'success', rejected: 'danger' }
 const EXIT_MS = 200
 const SECONDARY_BTN =
-  'inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-xs font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex items-center gap-2 rounded-full border border-hairline bg-tint/[0.06] px-5 py-2 text-small font-semibold text-text-secondary shadow-sm transition-colors hover:bg-tint/[0.1] hover:text-text-primary disabled:pointer-events-none disabled:opacity-50'
 const DANGER_BTN =
-  'inline-flex items-center gap-2 rounded-full border border-danger/20 bg-danger/10 px-5 py-2 text-xs font-semibold text-danger transition-[background-color,transform] hover:bg-danger/20 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:pointer-events-none disabled:opacity-50'
+  'inline-flex items-center gap-2 rounded-full border border-danger/20 bg-danger/10 px-5 py-2 text-small font-semibold text-danger transition-[background-color,transform] hover:bg-danger/20 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40 disabled:pointer-events-none disabled:opacity-50'
 
 /** A Storage download URL keeps the object path URL-encoded under `/o/`. */
 function isPdfUrl(url) {
@@ -120,7 +120,7 @@ function Avatar({ name, photoUrl }) {
   return (
     <div
       aria-hidden="true"
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-500/25 bg-brand-500/15 text-lg font-semibold text-brand-500"
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-500/25 bg-brand-500/15 text-body font-semibold text-brand-500"
     >
       {(name || '?').trim().charAt(0).toUpperCase()}
     </div>
@@ -131,7 +131,7 @@ function Avatar({ name, photoUrl }) {
 function Note({ warn = false, children }) {
   return (
     <p
-      className={`flex items-start gap-3 rounded-xl border border-dashed p-4 text-[13px] leading-relaxed text-text-secondary ${
+      className={`flex items-start gap-3 rounded-xl border border-dashed p-4 text-small leading-relaxed text-text-secondary ${
         warn ? 'border-warning/30 bg-warning/5' : 'border-hairline'
       }`}
     >
@@ -161,12 +161,12 @@ function DocumentTile({ url, onOpen, lead }) {
       />
       {lead ? <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" /> : null}
       {lead && name ? (
-        <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate rounded-md border border-white/10 bg-black/60 px-2.5 py-1 font-mono text-xs font-medium text-zinc-200 backdrop-blur-md">
+        <span className="absolute bottom-3 left-3 max-w-[calc(100%-1.5rem)] truncate rounded-md border border-white/10 bg-black/60 px-2.5 py-1 font-mono text-small font-medium text-zinc-200 backdrop-blur-md">
           {name}
         </span>
       ) : null}
       {lead ? (
-        <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-white/10 bg-black/60 px-2 py-1 text-xs font-medium text-zinc-100 opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
+        <span className="absolute right-3 top-3 flex items-center gap-1.5 rounded-md border border-white/10 bg-black/60 px-2 py-1 text-small font-medium text-zinc-100 opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100">
           <ZoomIn size={14} aria-hidden="true" />
           View
         </span>
@@ -339,7 +339,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
             <Avatar name={name} photoUrl={photoUrl} />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <h2 id="resident-modal-title" className="min-w-0 break-words text-xl font-bold tracking-tight text-text-primary">
+                <h2 id="resident-modal-title" className="type-h3 min-w-0 break-words text-text-primary">
                   {name}
                 </h2>
                 {phase || block || lot ? (
@@ -348,7 +348,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
                   </Pill>
                 ) : null}
               </div>
-              <p className="mt-0.5 break-all text-xs text-text-muted">{email || 'No email on file'}</p>
+              <p className="mt-0.5 break-all text-small text-text-muted">{email || 'No email on file'}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Pill
                   tone={STATUS_TONE[status] ?? 'warning'}
@@ -453,7 +453,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
                           className="flex h-12 w-12 shrink-0 flex-col items-center justify-center gap-0.5 rounded border border-hairline bg-base-950 text-text-secondary transition-colors hover:border-brand-500/40 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
                         >
                           <FileText size="sm" aria-hidden="true" />
-                          <span className="text-[9px] font-semibold uppercase tracking-wider">PDF</span>
+                          <span className="text-small font-semibold uppercase tracking-wider">PDF</span>
                         </a>
                       ))}
                     </div>
@@ -466,8 +466,8 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
               <DetailTimeline items={timeline} />
               {rejected && current.rejectionReason ? (
                 <div className="mt-6 border-t border-hairline pt-6">
-                  <span className="mb-1.5 block text-[11px] text-text-muted">Rejection reason</span>
-                  <p className="whitespace-pre-wrap break-words rounded-lg border border-danger/25 bg-danger/5 p-4 text-sm font-medium leading-relaxed text-text-secondary">
+                  <span className="mb-1.5 block text-small text-text-muted">Rejection reason</span>
+                  <p className="whitespace-pre-wrap break-words rounded-lg border border-danger/25 bg-danger/5 p-4 text-body font-medium leading-relaxed text-text-secondary">
                     {current.rejectionReason}
                   </p>
                 </div>
@@ -482,14 +482,14 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
         {final && !error ? null : (
         <footer className="shrink-0 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
           {error ? (
-            <p role="alert" className="mb-3 rounded-xl border border-danger/25 bg-danger/10 p-2.5 text-xs text-danger">
+            <p role="alert" className="mb-3 rounded-xl border border-danger/25 bg-danger/10 p-2.5 text-small text-danger">
               {error}
             </p>
           ) : null}
 
           {final ? null : rejecting ? (
             <div className="space-y-3 py-1">
-              <label htmlFor="resident-reject-reason" className="block text-[11px] font-medium text-text-muted">
+              <label htmlFor="resident-reject-reason" className="block text-small font-medium text-text-muted">
                 Reason (optional, shown to the resident)
               </label>
               <textarea
@@ -499,7 +499,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="e.g. Block/Lot does not match HOA records, or the ID photo is unclear"
-                className="w-full resize-none rounded-lg border border-hairline bg-base-950 p-3 text-sm text-text-primary shadow-inner outline-none transition-[border-color,box-shadow] placeholder:text-text-muted focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
+                className="w-full resize-none rounded-lg border border-hairline bg-base-950 p-3 text-body text-text-primary shadow-inner outline-none transition-[border-color,box-shadow] placeholder:text-text-muted focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15"
               />
               <div className="flex items-center justify-end gap-2">
                 <button type="button" disabled={Boolean(busy)} onClick={() => setRejecting(false)} className={SECONDARY_BTN}>
@@ -513,7 +513,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="flex items-center gap-2 text-xs text-text-muted">
+              <p className="flex items-center gap-2 text-small text-text-muted">
                 <ShieldCheck size={14} className="text-success/70" aria-hidden="true" />
                 <span>The resident sees the decision in the app</span>
               </p>
@@ -532,7 +532,7 @@ export default function ResidentVerificationModal({ isOpen, resident, onClose, o
                   disabled={Boolean(busy) || approved}
                   onClick={() => decide('approve')}
                   aria-busy={busy === 'approve'}
-                  className="inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
+                  className="inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-small font-semibold text-[var(--color-cta-fg)] shadow-md transition-[background-color,transform] hover:bg-[var(--color-cta-hover)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
                 >
                   {busy === 'approve' ? <Loader2 size="sm" className="animate-spin" aria-hidden="true" /> : <Check size="sm" aria-hidden="true" />}
                   {approved ? 'Approved' : busy === 'approve' ? 'Approving…' : 'Approve'}

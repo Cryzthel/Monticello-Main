@@ -70,9 +70,9 @@ export function CoordinatesBlock({ lat, lng }) {
 
   return (
     <div className="border-l-2 border-hairline pl-3 pt-2">
-      <span className="mb-1.5 block text-[11px] text-text-muted">GPS coordinates</span>
+      <span className="mb-1.5 block text-small text-text-muted">GPS coordinates</span>
       <div className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-base-950 px-3 py-2">
-        <span className="select-all font-mono text-xs text-brand-500">{coordinates || 'No GPS fix'}</span>
+        <span className="select-all font-mono text-small text-brand-500">{coordinates || 'No GPS fix'}</span>
         {coordinates ? (
           <button
             type="button"
@@ -81,7 +81,7 @@ export function CoordinatesBlock({ lat, lng }) {
             className="inline-flex items-center gap-1 rounded text-text-muted transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
           >
             {copied ? <Check size={14} className="text-success" aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-            <span className="text-[10px] font-medium uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
+            <span className="text-small font-medium uppercase tracking-wider">{copied ? 'Copied' : 'Copy'}</span>
           </button>
         ) : null}
       </div>
@@ -170,7 +170,7 @@ export function MediaEvidenceCard({ report, compact = false, onLightboxChange, t
               <Maximize2 size="sm" />
             </button>
             {/* Caption — white on the photo's own scrim in both themes. */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-4 text-xs">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-4 text-small">
               <p className="flex items-center gap-2 text-zinc-300">
                 <Calendar size={14} className="shrink-0 text-zinc-400" aria-hidden="true" />
                 <span className="font-mono">Captured: {capturedAt}</span>
@@ -184,7 +184,7 @@ export function MediaEvidenceCard({ report, compact = false, onLightboxChange, t
             </div>
           </>
         ) : (
-          <span className="flex flex-col items-center gap-2 text-sm text-zinc-400">
+          <span className="flex flex-col items-center gap-2 text-small text-zinc-400">
             <ImageOff size="lg" aria-hidden="true" />
             {report.hasMedia ? 'Media still uploading…' : 'No media attached'}
           </span>

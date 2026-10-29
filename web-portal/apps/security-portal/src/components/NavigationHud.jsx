@@ -97,13 +97,13 @@ export default function NavigationHud({ route, progress, offRoute = false, targe
         </span>
         <div className="min-w-0 flex-1" aria-live="polite">
           {arrived ? (
-            <p className="text-lg font-semibold leading-tight text-emerald-300">You have arrived</p>
+            <p className="text-body font-semibold leading-tight text-emerald-300">You have arrived</p>
           ) : (
             <>
-              <p className="text-lg font-semibold leading-tight tabular-nums">
+              <p className="text-body font-semibold leading-tight tabular-nums">
                 {Number.isFinite(step?.distanceM) ? `In ${formatDistance(step.distanceM)}` : 'Head to the call'}
               </p>
-              <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-white/75">
+              <p className="mt-0.5 line-clamp-2 text-small leading-snug text-white/75">
                 {step?.instruction ?? 'Follow the highlighted route.'}
               </p>
             </>
@@ -112,7 +112,7 @@ export default function NavigationHud({ route, progress, offRoute = false, targe
         <button
           type="button"
           onClick={onExit}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-2 text-xs font-semibold text-red-300 ring-1 ring-inset ring-red-400/30 transition-[background-color,transform] duration-150 ease-out hover:bg-red-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 active:scale-[0.97]"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-red-500/15 px-3 py-2 text-small font-semibold text-red-300 ring-1 ring-inset ring-red-400/30 transition-[background-color,transform] duration-150 ease-out hover:bg-red-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 active:scale-[0.97]"
         >
           <X size="sm" aria-hidden="true" />
           Exit
@@ -124,15 +124,15 @@ export default function NavigationHud({ route, progress, offRoute = false, targe
       <div className="border-t border-white/10 bg-white/[0.03] px-4 py-2.5">
         <dl className="flex items-center gap-6 tabular-nums">
           <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-white/45">ETA</dt>
-            <dd className="text-base font-semibold text-white">{eta ? formatClockTime(eta) : '—'}</dd>
+            <dt className="text-small font-medium uppercase tracking-wider text-white/45">ETA</dt>
+            <dd className="text-body font-semibold text-white">{eta ? formatClockTime(eta) : '—'}</dd>
           </div>
           <div>
-            <dt className="text-[11px] font-medium uppercase tracking-wider text-white/45">Distance</dt>
-            <dd className="text-base font-semibold text-white">{formatDistance(remainingM)}</dd>
+            <dt className="text-small font-medium uppercase tracking-wider text-white/45">Distance</dt>
+            <dd className="text-body font-semibold text-white">{formatDistance(remainingM)}</dd>
           </div>
           <span
-            className={`ml-auto inline-flex items-center gap-1.5 text-[11px] font-medium ${live ? 'text-white/45' : 'text-amber-300'}`}
+            className={`ml-auto inline-flex items-center gap-1.5 text-small font-medium ${live ? 'text-white/45' : 'text-amber-300'}`}
             aria-live="polite"
           >
             <span

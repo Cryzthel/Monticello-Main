@@ -73,23 +73,23 @@ export default function ShiftSummary({ shift, open }) {
             clocked out. Printing an end time there would be stating a time that
             has not happened yet, and if they cancel, it never does. The end
             time belongs on the admin timesheet, which reads the finished row. */}
-        <p className="text-xs font-medium text-text-secondary">
+        <p className="text-small font-medium text-text-secondary">
           {shiftLabel}
           <span className="text-text-muted"> · in at </span>
           <span className="font-mono tabular-nums">{clockInAt}</span>
         </p>
         {/* `tabular-nums` so the seconds column cannot shift the label beside
             it once a second. */}
-        <p className="font-mono text-sm font-semibold tabular-nums text-text-primary">{elapsed}</p>
+        <p className="font-mono text-small font-semibold tabular-nums text-text-primary">{elapsed}</p>
       </div>
 
       <dl className="mt-3 grid grid-cols-3 gap-2">
         {counts.map((item) => (
           <div key={item.key} className="rounded-lg bg-base-900 px-3 py-2 text-center">
-            <dt className="text-2xs font-medium uppercase tracking-wider text-text-muted">
+            <dt className="text-small font-medium uppercase tracking-wider text-text-muted">
               {item.label}
             </dt>
-            <dd className="mt-0.5 text-lg font-semibold tabular-nums leading-none text-text-primary">
+            <dd className="mt-0.5 text-body font-semibold tabular-nums leading-none text-text-primary">
               {loading ? '—' : item.value}
             </dd>
           </div>
@@ -107,7 +107,7 @@ export default function ShiftSummary({ shift, open }) {
           zeroes mean "a quiet shift" or "still counting", and only this line
           says which. Once the count lands the numbers speak for themselves. */}
       {loading ? (
-        <p className="mt-2.5 text-2xs leading-relaxed text-text-muted">
+        <p className="mt-2.5 text-small leading-relaxed text-text-muted">
           Counting what you handled on this shift…
         </p>
       ) : null}

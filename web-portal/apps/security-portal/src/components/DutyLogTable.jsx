@@ -69,7 +69,7 @@ function timeCell(value) {
   return (
     <span className="whitespace-nowrap">
       {formatDate(value)}{' '}
-      <span className="font-mono text-xs text-text-muted">
+      <span className="font-mono text-small text-text-muted">
         {formatInZone(value, { hour: '2-digit', minute: '2-digit' }, undefined)}
       </span>
     </span>
@@ -226,10 +226,10 @@ export default function DutyLogTable() {
               {error ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-12 text-center">
-                    <p className="text-sm font-medium text-danger">Could not load your duty history.</p>
+                    <p className="text-small font-medium text-danger">Could not load your duty history.</p>
                     {/* The code matters: a permission-denied points at
                         firestore.rules (guard_shifts), not at the query. */}
-                    <p className="mt-1 text-xs text-text-secondary">
+                    <p className="mt-1 text-small text-text-secondary">
                       {error.code ? `Firestore error: ${error.code}` : error.message}
                     </p>
                   </td>
@@ -248,7 +248,7 @@ export default function DutyLogTable() {
                 <tr>
                   <td colSpan={5} className="px-4 py-14 text-center">
                     <ShieldOff size="lg" className="mx-auto mb-2 text-text-muted" />
-                    <p className="text-sm text-text-secondary">
+                    <p className="text-small text-text-secondary">
                       {filtersActive
                         ? 'No shifts match these filters.'
                         : 'No shifts recorded yet. Clock in from the dashboard to start one.'}
@@ -278,11 +278,11 @@ export default function DutyLogTable() {
                     </td>
                     <td className="max-w-xs px-4 py-3.5 text-text-secondary">
                       {shift.handover?.summary ? (
-                        <span className="line-clamp-2 text-xs leading-relaxed">
+                        <span className="line-clamp-2 text-small leading-relaxed">
                           {shift.handover.summary}
                         </span>
                       ) : (
-                        <span className="text-xs text-text-muted">{shift.open ? '—' : 'None filed'}</span>
+                        <span className="text-small text-text-muted">{shift.open ? '—' : 'None filed'}</span>
                       )}
                     </td>
                   </tr>

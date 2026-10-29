@@ -29,15 +29,13 @@ export default function SectionHeading({
     <div
       className={`flex shrink-0 flex-wrap ${description ? 'items-end' : 'items-center'} justify-between gap-x-4 gap-y-1 ${className}`}
     >
-      {/* H2 in the type scale: text-base / semibold. These sit above panels
-          ("System events", "Broadcast feed"), one level under the page
-          title's text-2xl bold (PageHeader) and one above the text-sm body
-          inside the panel, so the three ranks read as ranks without any of
-          them shouting. The reference's section titles are this size. */}
+      {/* H3 in the type scale (28px Space Grotesk). These sit above panels
+          ("System events", "Broadcast feed"), one rank under the page title's
+          H2 (PageHeader) and above the Body/Small text inside the panel. */}
       <div className="min-w-0">
-        <h2 className="text-base font-semibold leading-tight tracking-tight text-text-primary">{title}</h2>
+        <h2 className="type-h3 text-text-primary">{title}</h2>
         {description ? (
-          <p className="mt-1 text-sm leading-snug text-text-muted">{description}</p>
+          <p className="mt-1 text-body leading-snug text-text-muted">{description}</p>
         ) : null}
       </div>
       {action ? <div className={`shrink-0 ${actionClassName}`}>{action}</div> : null}

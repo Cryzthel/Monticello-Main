@@ -40,8 +40,8 @@ export default class ErrorBoundary extends Component {
 
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-2 bg-base-950 px-4 text-center text-text-primary">
-        <p className="text-lg font-semibold">Something went wrong.</p>
-        <p className="max-w-md text-sm text-text-secondary">{error.message}</p>
+        <p className="type-h3">Something went wrong.</p>
+        <p className="max-w-md text-small text-text-secondary">{error.message}</p>
       </div>
     )
   }

@@ -117,7 +117,7 @@ function AnnouncementRow({ announcement: a, onView, onDelete, onPin, onArchive, 
               ) : null}
               <span className="truncate">{title}</span>
             </p>
-            {a.body ? <p className="line-clamp-1 text-xs text-text-secondary">{a.body}</p> : null}
+            {a.body ? <p className="line-clamp-1 text-small text-text-secondary">{a.body}</p> : null}
           </div>
         </div>
       </td>
@@ -134,14 +134,14 @@ function AnnouncementRow({ announcement: a, onView, onDelete, onPin, onArchive, 
 
       <td className="whitespace-nowrap px-4 py-3">
         {goLive ? (
-          <span className="text-xs text-text-secondary" title={formatDateTime(goLive)}>
+          <span className="text-small text-text-secondary" title={formatDateTime(goLive)}>
             {formatDate(goLive)}
           </span>
         ) : (
-          <span className="text-xs text-text-muted">Not published</span>
+          <span className="text-small text-text-muted">Not published</span>
         )}
         {state === 'scheduled' ? (
-          <span className="block text-2xs text-text-muted">{timeUntil(a.scheduledFor)}</span>
+          <span className="block text-small text-text-muted">{timeUntil(a.scheduledFor)}</span>
         ) : null}
       </td>
 

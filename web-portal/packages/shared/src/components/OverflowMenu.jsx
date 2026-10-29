@@ -102,7 +102,7 @@ export default function OverflowMenu({ items = [], ariaLabel = 'Row actions' }) 
                     setOpen(false)
                     onSelect?.()
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium transition-colors duration-100 ${
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-small font-medium transition-colors duration-100 ${
                     tone === 'danger'
                       ? 'text-danger hover:bg-danger/10'
                       : 'text-text-secondary hover:bg-tint/5 hover:text-text-primary'

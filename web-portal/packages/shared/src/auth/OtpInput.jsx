@@ -177,7 +177,7 @@ export default function OtpInput({
           onKeyDown={handleKeyDown(index)}
           onPaste={handlePaste(index)}
           onFocus={(event) => event.target.select()}
-          className={`h-16 min-w-0 max-w-[60px] flex-1 rounded-[14px] border bg-field text-center text-[1.75rem] font-bold tabular-nums text-text-primary caret-brand-500 outline-none transition-[border-color,box-shadow,background-color] duration-200 ease-in-out disabled:opacity-60 ${
+          className={`h-16 min-w-0 max-w-[60px] flex-1 rounded-[14px] border bg-field text-center font-heading text-h3 font-bold tabular-nums text-text-primary caret-brand-500 outline-none transition-[border-color,box-shadow,background-color] duration-200 ease-in-out disabled:opacity-60 ${
             invalid
               ? 'border-danger bg-danger/5 text-danger focus:border-danger focus:ring-2 focus:ring-danger/20'
               : `${digits[index] ? 'border-brand-500/45' : 'border-slate-200/80 hover:border-slate-300'} focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20`

@@ -76,7 +76,7 @@ export default function SearchField({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="h-full w-full min-w-0 bg-transparent text-base text-text-primary outline-none placeholder:text-text-muted sm:text-sm"
+        className="h-full w-full min-w-0 bg-transparent text-body text-text-primary outline-none placeholder:text-text-muted"
         {...rest}
       />
       {clearable ? (
