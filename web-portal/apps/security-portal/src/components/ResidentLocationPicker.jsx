@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, MapPin, Search, ShieldAlert, UserRound, X } from '@shared/icons'
+import { detailInputClass } from '@shared/components/detail/DetailFormField'
 
 /**
  * Pick the resident a report concerns, and bind the location fields to their
@@ -13,18 +14,11 @@ import { Check, MapPin, Search, ShieldAlert, UserRound, X } from '@shared/icons'
  * registered. Selecting the person instead makes the address a LOOKUP rather
  * than a recollection.
  *
- * ── THE OVERRIDE IS DELIBERATE, NOT A LOOPHOLE ────────────────────────────
- * Choosing a resident fills the three fields and marks them as synced; it does
- * NOT lock them. Incidents happen away from the reporter's own lot — a guard
- * called about a resident's car in someone else's driveway must be able to
- * name the person AND the real location. Editing a synced field clears the
- * synced flag (handled by the parent) so the card stops claiming the address
- * came from a profile once it no longer does.
- *
- * A resident whose profile carries no address is still listed and still
- * selectable, with the gap stated on the row. Excluding them would make the
- * picker quietly incomplete, and "this person has not verified a property" is
- * information a guard wants at exactly that moment.
+ * ── THE ADDRESS IS THE RESIDENT'S, NOT TYPED (2026-10-29) ─────────────────
+ * The composer used to let a guard override the filled Phase / Block / Lot.
+ * By request it no longer does: FileReportModal passes only VERIFIED residents
+ * with a complete registered address, and the chosen resident's address IS the
+ * report's. This component just searches and selects whatever list it is given.
  */
 export default function ResidentLocationPicker({
   residents,
@@ -34,6 +28,10 @@ export default function ResidentLocationPicker({
   onSelect,
   onClear,
   disabled = false,
+  /** Id for the search input, so a field label can point at it. */
+  inputId,
+  /** Draws the input in the error state (a required pick that was skipped). */
+  invalid = false,
 }) {
   const [term, setTerm] = useState('')
   const [open, setOpen] = useState(false)
@@ -157,11 +155,18 @@ export default function ResidentLocationPicker({
   }
 
   return (
-    <div className="relative" ref={fieldRef}>
+    <div>
+      {/* The icon is centred on the INPUT's own box. It sat on the whole
+          wrapper, so the error line below pushed it off the field. */}
+      <div className="relative" ref={fieldRef}>
       <Search size="sm" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
       <input
+        id={inputId}
         type="text"
-        className="field pl-9"
+        aria-invalid={invalid || undefined}
+        aria-describedby={invalid && inputId ? `${inputId}-error` : undefined}
+        // The detail-form well, matching the other fields in the composer.
+        className={detailInputClass({ icon: true, error: invalid, disabled: disabled || Boolean(error) })}
         placeholder={loading ? 'Loading residents…' : 'Search by name, address or email'}
         value={term}
         disabled={disabled || Boolean(error)}
@@ -195,11 +200,12 @@ export default function ResidentLocationPicker({
           setOpen(false)
         }}
       />
+      </div>
 
       {error ? (
         <p className="mt-1.5 flex items-start gap-1.5 text-2xs leading-snug text-danger">
           <ShieldAlert size="sm" className="mt-px shrink-0" />
-          Resident directory unavailable — enter the location manually below.
+          Resident directory unavailable — check the connection and reopen this form.
         </p>
       ) : null}
 

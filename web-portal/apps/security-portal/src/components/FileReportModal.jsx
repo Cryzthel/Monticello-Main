@@ -1,34 +1,44 @@
 import { describeError } from '@shared/lib/toast'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { FilePlus2, Loader2, Send, ShieldAlert, X } from '@shared/icons'
+import {
+  FilePlus2,
+  FileText,
+  Home,
+  ImagePlus,
+  Loader2,
+  Send,
+  ShieldAlert,
+  ShieldCheck,
+  Tags,
+  User,
+  X,
+} from '@shared/icons'
 import Select from '@shared/components/Select'
-import AddressSelect from '@/components/AddressSelect'
+import { DetailCard, DetailField } from '@shared/components/detail/DetailCard'
+import { DetailFormField, detailInputClass } from '@shared/components/detail/DetailFormField'
 import ResidentLocationPicker from '@/components/ResidentLocationPicker'
 import AttachFileField from '@/components/AttachFileField'
-import { usePropertyDirectory } from '@/hooks/usePropertyDirectory'
 import { useResidentAddresses } from '@shared/hooks/useResidentAddresses'
 import { useAuth } from '@shared/auth/AuthContext'
 import { db } from '@shared/lib/firebase'
 import { computePriorityScore } from '@shared/lib/wpda'
+import { INCIDENT_CATEGORIES, categoryLabel } from '@shared/lib/incidentCategories'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 
 /**
- * What an officer-filed report is categorised as, now that the picker is gone.
+ * ── THE CATEGORY IS CHOSEN AGAIN, AND HAS NO DEFAULT (2026-10-29) ──────────
+ * Officer reports were pinned to `security` after the old picker defaulted to
+ * `fire` — the highest WPDA weight — and filed every report as a fire with
+ * nothing on screen to say so. The picker is back by request, and the lesson
+ * is kept: it opens EMPTY and the form will not file until a guard picks one,
+ * so no report can inherit a category nobody chose.
  *
- * ── WHY A NAMED CONSTANT AND NOT THE OLD DEFAULT ──────────────────────────
- * The form defaulted to `Object.keys(CATEGORY_WEIGHTS)[0]`, which is `fire` —
- * the HIGHEST weight in the table at 10. Deleting the selector and leaving
- * that in place would have filed every guard report as a fire at maximum
- * dispatch weight: silently, with nothing on screen to contradict it, and
- * poisoning both the WPDA queue order and the Overview category breakdown.
- *
- * `security` (weight 7) is the honest answer for a report an officer files
- * from the guardhouse. It is also what makes the strict separation legible —
- * these records now live in their own view, and the one category they carry
- * says which view that is.
+ * Officer-filed reports are told apart by `reporterUid` against
+ * `staff_accounts`, never by category, so a choice here does not move a report
+ * between the officer and resident queues.
  */
-const FILED_CATEGORY = 'security'
+const CATEGORY_OPTIONS = INCIDENT_CATEGORIES.map((value) => ({ value, label: categoryLabel(value) }))
 
 const PRIORITY_OPTIONS = [
   { value: 'low', label: 'Low' },
@@ -38,58 +48,41 @@ const PRIORITY_OPTIONS = [
 ]
 
 const TITLE_MAX = 90
+const DESCRIPTION_MIN = 10
 const DESCRIPTION_MAX = 1200
 
 const INITIAL_FORM = {
   title: '',
+  category: '',
   priority: 'medium',
-  phase: '',
-  block: '',
-  lot: '',
   description: '',
 }
 
-function Field({ label, htmlFor, hint, counter, children }) {
-  // A <label> with no `for` is a label for nothing — Priority and Location are
-  // a Select trigger and a group of three controls respectively, not single
-  // form elements, so those render a plain <span> and name themselves via
-  // aria-label instead. Same rule as the announcement composer's Field.
-  const Label = htmlFor ? 'label' : 'span'
-  return (
-    <div>
-      <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <Label htmlFor={htmlFor} className="text-xs font-medium text-text-secondary">
-          {label}
-        </Label>
-        {counter ? <span className="text-2xs tabular-nums text-text-muted">{counter}</span> : null}
-      </div>
-      {children}
-      {hint ? <p className="mt-1.5 text-2xs leading-snug text-text-muted">{hint}</p> : null}
-    </div>
-  )
+/** What blocks filing, field by field. Empty object = ready. */
+function validate(form, resident) {
+  const errors = {}
+  if (!resident) errors.resident = 'Choose the verified resident this report concerns.'
+  if (!form.category) errors.category = 'Choose a category.'
+  const notes = form.description.trim()
+  if (!notes) errors.description = 'Describe what happened.'
+  else if (notes.length < DESCRIPTION_MIN) errors.description = `At least ${DESCRIPTION_MIN} characters.`
+  return errors
 }
 
 /**
- * The dialog shell.
- *
- * Deliberately the same object the Admin announcement composer sits in — scrim,
- * Escape, a bottom sheet below `sm:` and a centred card above it — so a modal in
- * the Guardhouse and a modal in the Admin console are one pattern rather than
- * two.
+ * The dialog shell — the Admin Incident ticket details' own frame (2026-10-29,
+ * by request): black scrim with blur, a 3xl rounded-2xl panel, a phone bottom
+ * sheet with a grab handle, and a fixed header and footer around the one band
+ * that scrolls.
  *
  * `busy` disables every dismissal route at once (scrim, Escape, ×, Cancel).
- * The alternative, closing anyway, silently orphans an in-flight upload in
- * Storage: AttachFileField cancels a resumable task on `remove`, but NOT on
- * unmount, so a dismissed dialog leaves the bytes flowing. The alternative to
- * THAT — cancelling on close — throws away a transfer the guard has already
- * waited for, on the one console where that transfer is evidence. Refusing for
- * the few seconds it takes is the only option that loses nothing.
+ * Closing anyway would orphan an in-flight upload in Storage: AttachFileField
+ * cancels a resumable task on `remove` but NOT on unmount, and cancelling on
+ * close would throw away evidence the guard already waited for.
  *
- * Children render ONLY while open, which is load-bearing rather than tidy: the
- * composer below opens the resident directory and the property directory
- * listeners, and mounting it behind a closed dialog would hold both for the
- * whole shift to serve a form nobody has asked for yet. It also means the draft
- * resets on every open without a remount key.
+ * Children render ONLY while open: the composer opens the resident directory
+ * listeners, and mounting it behind a closed dialog would hold them for the
+ * whole shift. It also resets the draft on every open without a remount key.
  */
 function ModalShell({ open, busy, onClose, children }) {
   useEffect(() => {
@@ -112,13 +105,13 @@ function ModalShell({ open, busy, onClose, children }) {
   }, [open])
 
   const panelRef = useRef(null)
-  useDialogFocus({ open: open, containerRef: panelRef })
+  useDialogFocus({ open, containerRef: panelRef })
 
   if (!open) return null
 
   return (
     <div
-      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-scrim sm:items-center sm:p-4"
+      className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/80 backdrop-blur-sm sm:items-center sm:p-4 md:p-6"
       onClick={() => {
         if (!busy) onClose()
       }}
@@ -128,8 +121,8 @@ function ModalShell({ open, busy, onClose, children }) {
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label="File an incident report"
-        className="card dialog-panel flex max-h-[80dvh] w-full max-w-2xl flex-col overflow-hidden rounded-b-none bg-base-900 shadow-modal sm:h-auto sm:max-h-[46rem] sm:rounded-b-xl"
+        aria-labelledby="file-report-title"
+        className="dialog-panel relative flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-hairline bg-base-900 shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         {children}
@@ -139,41 +132,34 @@ function ModalShell({ open, busy, onClose, children }) {
 }
 
 /**
- * The report form itself.
+ * The report form, as four cards in the order a guard decides them: who it
+ * concerns (and so where), what kind of incident, what happened, and the
+ * evidence.
  *
- * ── THREE BANDS, NOT ONE SCROLLING COLUMN ─────────────────────────────────
- * This was a single scrolling Card in the page's left rail with "Submit report"
- * as the last thing in the scroll. Inside a dialog that shape fails: the
- * resident picker, the Phase/Block/Lot cascade and the media grid push the
- * commit button below the fold, so the primary action of the dialog is
- * reachable only by scrolling to the end of a form you may not have finished
- * reading.
- *
- * Header / scrolling body / pinned footer instead. Only the middle band
- * scrolls, so the dialog's title and the button that commits it are both always
- * on screen — which is the whole reason to put this in a modal rather than
- * leaving it in a rail.
- *
- * Field order still follows the report itself: what happened, then who and
- * where, then evidence, then the guard's own account of it.
+ * ── ONE PICKER FOR WHO AND WHERE (2026-10-29, by request) ──────────────────
+ * This had a resident search AND a Phase / Block / Lot cascade a guard could
+ * type over. Both are now one decision: the picker lists VERIFIED residents
+ * only, and the chosen resident's registered address is the report's address,
+ * shown read-only beneath them. Nothing about the location is typed, so a
+ * report can no longer carry an address that belongs to nobody. Residents who
+ * are verified but have no complete address on file are left out — there is
+ * nothing to bind — and the card says how many, so a missing name has a reason.
  */
 function ReportComposer({ onClose, onFiled, onBusyChange }) {
   const { user } = useAuth()
-  const directory = usePropertyDirectory()
-  const {
-    residents: residentDirectory,
-    loading: residentsLoading,
-    error: residentsError,
-  } = useResidentAddresses()
+  const { residents: directory, loading: residentsLoading, error: residentsError } = useResidentAddresses()
+
+  const verified = useMemo(() => directory.filter((r) => r.verified && r.hasAddress), [directory])
+  const verifiedWithoutAddress = useMemo(
+    () => directory.filter((r) => r.verified && !r.hasAddress).length,
+    [directory],
+  )
 
   const [form, setForm] = useState(INITIAL_FORM)
-  // The resident a report is filed ABOUT. Holding the whole record rather than
-  // a uid keeps the confirmation card and the submitted document reading from
-  // one object, so what the guard saw is what gets written.
+  // Held whole, so the profile card and the written document read one object:
+  // what the guard confirmed is what gets filed.
   const [resident, setResident] = useState(null)
-  // True only while the three location fields still hold exactly what the
-  // profile supplied. Any manual edit drops it — see updateLocation.
-  const [addressSynced, setAddressSynced] = useState(false)
+  const [attempted, setAttempted] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -181,9 +167,12 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
   // arrays the incident document expects.
   const [attachments, setAttachments] = useState({ photoUrls: [], videoUrls: [], attachmentUrls: [] })
 
-  // One busy signal for the shell: a write in flight and a transfer in flight
-  // both have to hold the dialog open, and the shell should not have to know
-  // which of the two it is waiting on.
+  // A resident who loses verification (or is removed) while selected is
+  // dropped from the draft, not silently filed against.
+  useEffect(() => {
+    if (resident && !residentsLoading && !verified.some((r) => r.uid === resident.uid)) setResident(null)
+  }, [resident, verified, residentsLoading])
+
   const busy = submitting || uploading
   useEffect(() => {
     onBusyChange(busy)
@@ -193,101 +182,45 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  // Selecting a resident is the whole point of the picker: it fills Phase,
-  // Block and Lot from what they registered on the phone, so the guard is
-  // confirming an address rather than recalling one.
-  //
-  // A resident with no verified property fills nothing and leaves the fields
-  // open. Blanking them would be worse than leaving them: a guard who picked
-  // the person AFTER typing the location would silently lose their own input.
-  function selectResident(next) {
-    setResident(next)
-    if (!next) return
+  const errors = validate(form, resident)
+  // Errors show once a submit has been tried, then update live as each is fixed.
+  const shown = attempted ? errors : {}
 
-    // FIELD BY FIELD, not all-or-nothing. This used to bail on
-    // `if (!next.hasAddress) return`, and `hasAddress` is
-    // `Boolean(phase && block && lot)` — so a resident who had registered a
-    // phase and a block but no lot filled NOTHING, including the two fields
-    // that were known. From the guard's side that is indistinguishable from a
-    // picker that does not work, which is exactly how it was reported.
-    //
-    // A field the resident has no answer for keeps whatever is already in the
-    // form rather than being blanked: a guard who typed the location first and
-    // picked the person second must not lose their own input.
-    setForm((prev) => ({
-      ...prev,
-      phase: next.phase || prev.phase,
-      block: next.block || prev.block,
-      lot: next.lot || prev.lot,
-    }))
-
-    // The badge claims "synced from profile", so it is true when ANY part of
-    // the address came from there — and false for a resident with none, whose
-    // fields are still entirely the guard's own.
-    setAddressSynced(Boolean(next.phase || next.block || next.lot))
-  }
-
-  function clearResident() {
-    setResident(null)
-    setAddressSynced(false)
-  }
-
-  // Any hand edit to a location field means it is no longer the profile's
-  // answer, so the 'synced' claim has to go with it. The resident stays
-  // selected — the report is still ABOUT them, it just happened elsewhere.
-  function updateLocation(patch) {
-    setAddressSynced(false)
-    setForm((prev) => ({ ...prev, ...patch }))
-  }
-
-  const locationLabel = [
-    form.phase && `Phase ${form.phase}`,
-    form.block && `Block ${form.block}`,
-    form.lot && `Lot ${form.lot}`,
-  ]
-    .filter(Boolean)
-    .join(' • ')
-
-  const complete = Boolean(form.phase && form.block && form.lot && form.description.trim())
-
-  // Same scorer the dispatch queue sorts by, run on the draft — the guard sees
-  // the urgency their choices produce rather than a number invented for display.
   const previewScore = useMemo(
     () =>
       Math.round(
         computePriorityScore({
-          category: FILED_CATEGORY,
+          category: form.category || 'other',
           severity: form.priority,
           reportedAt: new Date(),
         }),
       ),
-    [form.priority],
+    [form.category, form.priority],
   )
 
   async function handleSubmit(event) {
     event.preventDefault()
+    setAttempted(true)
     setError('')
-    setSubmitting(true)
+    if (Object.keys(errors).length || busy) return
 
+    setSubmitting(true)
     try {
+      // One addDoc: the document lands whole, and every console's incidents
+      // listener (Admin tickets and Reports, this directory) receives it in
+      // the same snapshot.
       await addDoc(collection(db, 'incidents'), {
-        title: form.title.trim() || 'Security report',
-        category: FILED_CATEGORY,
-        phase: form.phase,
-        block: form.block,
-        lot: form.lot,
-        propertyLabel: locationLabel,
-        // The resident the report concerns. Stored alongside the address so a
-        // reviewer can tell 'Phase 2 Block 7 Lot 14' apart from 'the lot Ana
-        // Cruz registered', and so a later profile correction is traceable to
-        // the reports filed against the old value.
-        subjectUid: resident?.uid ?? '',
-        subjectName: resident?.name ?? '',
-        // Whether the three location fields came from that profile untouched.
-        // Written rather than inferred: once the report is saved, an address
-        // that matches the profile is indistinguishable from one a guard typed
-        // to be identical, and only one of those is a verified lookup.
-        locationFromProfile: addressSynced,
+        title: form.title.trim() || `${categoryLabel(form.category)} report`,
+        category: form.category,
+        phase: resident.phase,
+        block: resident.block,
+        lot: resident.lot,
+        propertyLabel: resident.label,
+        // The resident the report concerns, and that the address is theirs
+        // as registered — always true now, since nothing else can supply one.
+        subjectUid: resident.uid,
+        subjectName: resident.name,
+        locationFromProfile: true,
         description: form.description.trim(),
         reportedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
@@ -304,10 +237,8 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
         attachmentUrls: attachments.attachmentUrls,
         wpdaScore: 0,
       })
-      // The dialog closes on success and the page reports it above the feed.
-      // Leaving it open over a blank form reads as "that did not work" — the
-      // directory behind it has already taken the new row, and that row is the
-      // one thing that would confirm the filing worked.
+      // Closes on success; the page reports it above the directory, which
+      // has already taken the new row.
       onFiled()
     } catch (err) {
       setError(describeError(err))
@@ -316,205 +247,249 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
     }
   }
 
+  const blockers = Object.values(errors)
+  const footerHint = uploading
+    ? 'Waiting for the attachments to finish uploading'
+    : blockers.length
+      ? attempted
+        ? blockers[0]
+        : 'Resident, category and description are required'
+      : 'Ready to file'
+
   return (
-    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit}>
-      {/* ── Header ── */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-hairline px-6 py-3.5">
-        <FilePlus2 size="sm" className="shrink-0 text-brand-500" />
-        <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text-primary">
-          File incident report
-        </h2>
+    <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleSubmit} noValidate>
+      {/* Grab handle — phone sheet only. */}
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={busy}
+        aria-label="Close"
+        className="flex h-6 shrink-0 items-center justify-center pt-2 sm:hidden"
+      >
+        <span className="h-1 w-9 rounded-full bg-tint/25" />
+      </button>
+
+      {/* ═══ HEADER ═══ */}
+      <header className="relative shrink-0 border-b border-hairline px-6 py-5 pr-14 sm:px-8 sm:pr-16">
+        <div className="flex min-w-0 items-start gap-4">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 text-brand-500 shadow-inner">
+            <FilePlus2 size={22} aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 id="file-report-title" className="truncate text-xl font-bold tracking-tight text-text-primary">
+              File incident report
+            </h2>
+            <p className="mt-0.5 text-xs text-text-muted">
+              Filed as {user?.displayName || user?.email || 'Guard'} · lands on the Admin console the moment it is
+              submitted
+            </p>
+          </div>
+        </div>
         <button
           type="button"
           onClick={onClose}
-          // Disabled rather than hidden while work is in flight: the control
-          // staying put and refusing is clearer than a close button that
-          // vanishes, and it keeps the header from reflowing mid-upload.
+          // Disabled rather than hidden while work is in flight, so the header
+          // never reflows mid-upload.
           disabled={busy}
           aria-label="Close report composer"
           title={busy ? 'Wait for the upload to finish' : 'Close'}
-          className="icon-btn icon-btn-sm -mr-1.5"
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-text-muted transition-colors hover:bg-tint/[0.08] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:opacity-40 sm:right-6 sm:top-5"
         >
-          <X size="sm" />
+          <X size={20} />
         </button>
       </header>
 
-      {/* ── Body (the only band that scrolls) ── */}
-      <div className="custom-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6 pb-8">
-        <Field
-          label="Title"
-          htmlFor="report-title"
-          counter={`${form.title.length}/${TITLE_MAX}`}
-          hint={'Left blank, the ticket is titled "Security report".'}
-        >
-          <input
-            id="report-title"
-            type="text"
-            maxLength={TITLE_MAX}
-            className="field"
-            value={form.title}
-            onChange={(event) => update('title', event.target.value)}
-            placeholder="Short summary of what happened"
-          />
-        </Field>
-
-        {/* Rectangular dropdown, not pills: priority is an ordered scale and
-            equal-weight chips flatten that ordering. */}
-        <Field
-          label="Priority"
-          hint={`Drives dispatch ordering. This draft scores WPDA ${previewScore}.`}
-        >
-          <Select
-            ariaLabel="Priority"
-            value={form.priority}
-            onChange={(next) => update('priority', next)}
-            options={PRIORITY_OPTIONS}
-            variant="field"
-            className="w-full"
-          />
-        </Field>
-
-        {/* ══ WHO AND WHERE ══
-            One bordered group, not five loose fields. Resident and location
-            are a single decision — picking the person answers the address —
-            so they are framed together and the visual hierarchy says so: the
-            picker first, the cascade indented under it as the result. */}
-        <fieldset className="rounded-xl border border-hairline p-4">
-          <legend className="px-1.5 text-xs font-semibold text-text-primary">
-            Resident &amp; location
-          </legend>
-
-          <div className="flex flex-col gap-4">
-            <Field
-              label="Resident"
-              hint="Optional. Choosing one fills the address below from their registered profile."
+      {/* ═══ BODY: ONE COLUMN OF STACKED CARDS (the only band that scrolls) ═══
+          `relative` makes this band the containing block for anything
+          absolutely positioned inside it (the attachment field's visually
+          hidden file input). Without it they resolved against the `relative`
+          panel, overflowed it, and the panel itself scrolled — header and
+          all — the moment the browser scrolled a field into view. */}
+      <div className="custom-scrollbar relative min-h-0 flex-1 overflow-y-auto overscroll-contain bg-base-950/40 p-6 sm:p-8">
+        <div className="flex flex-col gap-6">
+          <DetailCard icon={User} title="Resident profile">
+            <DetailFormField
+              label="Verified resident"
+              htmlFor="report-resident"
+              required
+              error={shown.resident}
+              hint={
+                residentsError
+                  ? undefined
+                  : verifiedWithoutAddress
+                    ? `${verifiedWithoutAddress} verified ${verifiedWithoutAddress === 1 ? 'resident has' : 'residents have'} no complete address yet and ${verifiedWithoutAddress === 1 ? 'is' : 'are'} not listed.`
+                    : 'Only verified residents are listed. Their registered address is used for the report.'
+              }
             >
               <ResidentLocationPicker
-                residents={residentDirectory}
+                inputId="report-resident"
+                residents={verified}
                 loading={residentsLoading}
                 error={residentsError}
                 selected={resident}
-                onSelect={selectResident}
-                onClear={clearResident}
+                onSelect={setResident}
+                onClear={() => setResident(null)}
+                disabled={submitting}
+                invalid={Boolean(shown.resident)}
+              />
+            </DetailFormField>
+
+            {resident ? (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <DetailField label="Full name">{resident.name}</DetailField>
+                <DetailField label="Property address" accent="border-brand-500/60">
+                  <span className="mt-0.5 flex items-center gap-1.5">
+                    <Home size={14} className="shrink-0 text-text-muted" aria-hidden="true" />
+                    {resident.label}
+                  </span>
+                </DetailField>
+                {resident.phone || resident.email ? (
+                  <DetailField label="Contact" className="sm:col-span-2">
+                    {[resident.phone, resident.email].filter(Boolean).join(' · ')}
+                  </DetailField>
+                ) : null}
+              </div>
+            ) : null}
+          </DetailCard>
+
+          <DetailCard icon={Tags} title="Incident details" bodyClassName="space-y-1">
+            <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
+              <DetailFormField label="Category" htmlFor="report-category" required error={shown.category}>
+                <Select
+                  ariaLabel="Category"
+                  value={form.category}
+                  onChange={(next) => update('category', next)}
+                  options={CATEGORY_OPTIONS}
+                  placeholder="Choose a category"
+                  variant="field"
+                  className="w-full"
+                  disabled={submitting}
+                />
+              </DetailFormField>
+              {/* Rectangular dropdown, not pills: priority is an ordered scale
+                  and equal-weight chips flatten that ordering. */}
+              <DetailFormField
+                label="Priority"
+                htmlFor="report-priority"
+                hint={`Drives dispatch order · WPDA ${previewScore}`}
+              >
+                <Select
+                  ariaLabel="Priority"
+                  value={form.priority}
+                  onChange={(next) => update('priority', next)}
+                  options={PRIORITY_OPTIONS}
+                  variant="field"
+                  className="w-full"
+                  disabled={submitting}
+                />
+              </DetailFormField>
+            </div>
+            <DetailFormField
+              label="Title"
+              htmlFor="report-title"
+              hint={`Optional · ${form.title.length}/${TITLE_MAX}. Left blank, it is titled after the category.`}
+            >
+              <input
+                id="report-title"
+                type="text"
+                maxLength={TITLE_MAX}
+                className={detailInputClass()}
+                value={form.title}
+                onChange={(event) => update('title', event.target.value)}
+                placeholder="Short summary of what happened"
                 disabled={submitting}
               />
-            </Field>
+            </DetailFormField>
+          </DetailCard>
 
-            <div>
-              {/* No "Synced from profile" tag. Picking a resident fills the
-                  cascade below, and the filled fields ARE the confirmation —
-                  a badge announcing that the thing you can see happened is a
-                  second copy of the same message. `addressSynced` still
-                  travels to the document as `locationFromProfile`, since the
-                  provenance of an address is an audit fact. */}
-              <div className="mb-1.5">
-                <span className="text-xs font-medium text-text-secondary">Location</span>
-              </div>
+          <DetailCard icon={FileText} title="Incident notes / description" bodyClassName="">
+            <DetailFormField
+              label="Guard notes"
+              htmlFor="report-description"
+              required
+              error={shown.description}
+              action={
+                <span className="text-[11px] tabular-nums text-text-muted">
+                  {form.description.length}/{DESCRIPTION_MAX}
+                </span>
+              }
+            >
+              <textarea
+                id="report-description"
+                rows={6}
+                maxLength={DESCRIPTION_MAX}
+                aria-invalid={Boolean(shown.description)}
+                aria-describedby={shown.description ? 'report-description-error' : undefined}
+                className={`w-full resize-none rounded-lg border bg-base-950 p-4 text-sm font-medium leading-relaxed text-text-primary shadow-inner outline-none transition-[border-color,box-shadow] duration-150 placeholder:font-normal placeholder:text-text-muted ${
+                  shown.description
+                    ? 'border-danger/70 focus:border-danger focus:ring-4 focus:ring-danger/15'
+                    : 'border-hairline hover:border-brand-500/30 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15'
+                }`}
+                value={form.description}
+                onChange={(event) => update('description', event.target.value)}
+                placeholder="What did you observe on arrival? Who was spoken to? Actions taken."
+                disabled={submitting}
+              />
+            </DetailFormField>
+          </DetailCard>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <AddressSelect
-                  id="report-phase"
-                  label="Phase"
-                  value={form.phase}
-                  onChange={(next) => updateLocation({ phase: next, block: '', lot: '' })}
-                  options={directory.phases}
-                  placeholder="Phase"
-                />
-                <AddressSelect
-                  id="report-block"
-                  label="Block"
-                  value={form.block}
-                  onChange={(next) => updateLocation({ block: next, lot: '' })}
-                  options={form.phase ? directory.blocksFor(form.phase) : []}
-                  disabled={!form.phase}
-                  disabledHint="Pick a phase"
-                  placeholder="Block"
-                />
-                <AddressSelect
-                  id="report-lot"
-                  label="Lot"
-                  value={form.lot}
-                  onChange={(next) => updateLocation({ lot: next })}
-                  options={form.phase && form.block ? directory.lotsFor(form.phase, form.block) : []}
-                  disabled={!form.block}
-                  disabledHint="Pick a block"
-                  placeholder="Lot"
-                />
-              </div>
+          <DetailCard icon={ImagePlus} title="Evidence upload">
+            <AttachFileField
+              heading="Photos, video or documents"
+              onChange={setAttachments}
+              onBusyChange={setUploading}
+              disabled={submitting}
+            />
+          </DetailCard>
 
-              {resident && !resident.hasAddress ? (
-                <p className="mt-2 text-2xs leading-snug text-text-muted">
-                  {resident.name} has not verified a property yet — enter the location manually.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </fieldset>
-
-        {/* No outer Field. The attachment control draws its own heading and
-            hint, so a label over a heading over a hint restating both was three
-            names for one control. The wrapper keeps the field and its
-            "uploads finish in the background" note in one flex item. */}
-        <div>
-          <AttachFileField
-            heading="Attachments"
-            onChange={setAttachments}
-            onBusyChange={setUploading}
-            disabled={submitting}
-          />
+          {error ? (
+            <p
+              role="alert"
+              className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger"
+            >
+              <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
+              {error}
+            </p>
+          ) : null}
         </div>
-
-        <Field
-          label="Guard notes"
-          htmlFor="report-description"
-          counter={`${form.description.length}/${DESCRIPTION_MAX}`}
-        >
-          <textarea
-            id="report-description"
-            rows={6}
-            required
-            maxLength={DESCRIPTION_MAX}
-            className="field-textarea resize-none leading-relaxed"
-            value={form.description}
-            onChange={(event) => update('description', event.target.value)}
-            placeholder="What did you observe on arrival? Who was spoken to? Actions taken."
-          />
-        </Field>
-
-        {error ? (
-          <p className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-sm text-danger">
-            <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
-            {error}
-          </p>
-        ) : null}
       </div>
 
-      {/* ── Footer: pinned, never scrolled past ── */}
-      <div className="flex shrink-0 items-center gap-2 border-t border-hairline px-6 py-3">
-        {/* The gate, stated in words beside the button rather than left to the
-            disabled look alone: a control that goes grey with no reason given
-            reads as broken. Hidden below `sm:`, where the two buttons already
-            take the whole row. */}
-        <p className="hidden min-w-0 flex-1 truncate text-2xs text-text-muted sm:block">
-          {uploading
-            ? 'Waiting for the attachments to finish uploading'
-            : complete
-              ? 'Ready to file'
-              : 'Location and notes are required'}
+      {/* ═══ FOOTER: pinned, never scrolled past ═══ */}
+      <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-hairline bg-base-950 px-6 py-3 sm:px-8">
+        {/* The gate in words: a button that refuses with no reason reads as
+            broken. Hidden below `sm:`, where the buttons take the row. */}
+        <p
+          aria-live="polite"
+          className={`hidden min-w-0 flex-1 items-center gap-2 truncate text-xs sm:flex ${
+            attempted && blockers.length ? 'text-danger' : 'text-text-muted'
+          }`}
+        >
+          <ShieldCheck size={14} className="shrink-0 text-success/70" aria-hidden="true" />
+          <span className="truncate">{footerHint}</span>
         </p>
-        <button type="button" onClick={onClose} disabled={busy} className="btn btn-sm btn-outline">
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={busy || !complete}
-          title={uploading ? 'Waiting for every attachment to finish uploading' : undefined}
-          className="btn btn-sm btn-brand min-w-[8.5rem] flex-1 sm:flex-none"
-        >
-          {busy ? <Loader2 size="sm" className="animate-spin" /> : <Send size="sm" />}
-          {uploading ? 'Uploading…' : submitting ? 'Filing…' : 'Submit report'}
-        </button>
-      </div>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="inline-flex flex-1 items-center justify-center rounded-full border border-hairline px-5 py-2 text-xs font-semibold text-text-secondary transition-colors hover:bg-tint/[0.08] hover:text-text-primary disabled:opacity-50 sm:flex-none"
+          >
+            Cancel
+          </button>
+          {/* Enabled while incomplete, on purpose: pressing it is how a guard
+              finds out what is missing, with each field marked. Disabled only
+              while something is in flight. */}
+          <button
+            type="submit"
+            disabled={busy}
+            title={uploading ? 'Waiting for every attachment to finish uploading' : undefined}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-xs font-semibold text-[var(--color-cta-fg)] shadow-md transition-colors hover:bg-[var(--color-cta-hover)] active:scale-[0.97] disabled:opacity-60 sm:flex-none sm:min-w-[9rem]"
+          >
+            {busy ? <Loader2 size="sm" className="animate-spin" /> : <Send size="sm" />}
+            {uploading ? 'Uploading…' : submitting ? 'Filing…' : 'Submit report'}
+          </button>
+        </div>
+      </footer>
     </form>
   )
 }
@@ -522,20 +497,10 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
 /**
  * "File Incident Report", as a dialog over the report directory.
  *
- * ── WHY THIS IS NO LONGER HALF THE PAGE ────────────────────────────────────
- * It used to be a fixed 27rem authoring rail beside the filed-reports table, on
- * the reasoning that composing and reviewing are two jobs at two tempos and each
- * deserved a column. The tempos were right; the conclusion was not. Filing takes
- * a minute at the end of a call; checking what has been filed is what the page
- * is open for the rest of the shift. A permanent split gave half the screen to
- * the rare task and cramped the frequent one — the directory never got the width
- * to show Location and Status without truncating, and the form never got the
- * room to lay its own fields out either.
- *
- * One primary action plus a dialog gives each task the whole width at the moment
- * it is being done, which is the trade the split was trying and failing to make.
- * It is also the shape the Admin announcements page already has, so a supervisor
- * moving between the two consoles meets one workflow rather than two.
+ * A dialog rather than a permanent rail beside the directory: filing takes a
+ * minute at the end of a call, while checking what has been filed is what the
+ * page is open for the rest of the shift. One primary action plus a dialog
+ * gives each task the whole width at the moment it is being done.
  */
 export default function FileReportModal({ open, onClose, onFiled }) {
   const [busy, setBusy] = useState(false)

@@ -57,6 +57,21 @@ import { db } from '@shared/lib/firebase'
 
 const norm = (value) => String(value ?? '').trim()
 
+/**
+ * Whether a `residents` document is VERIFIED — the exact test
+ * firestore.rules `isVerifiedResident()` makes: `verificationStatus`, else
+ * `status`, lower-cased and trimmed, in the three accepted spellings.
+ *
+ * Deliberately not `normalizeResidentStatus` from lib/residents. That parser is
+ * tolerant on purpose, for sorting the Admin review tabs; this answers "would
+ * the server treat this person as verified", and only the rule's own reading
+ * can answer that.
+ */
+const VERIFIED_VALUES = new Set(['verified', 'approved', 'accepted'])
+export function isVerifiedResidentDoc(d) {
+  return VERIFIED_VALUES.has(norm(d?.verificationStatus ?? d?.status).toLowerCase())
+}
+
 /** `Phase 2 • Block 7 • Lot 14`, skipping whatever is missing. */
 export function addressLabel({ phase, block, lot }) {
   return [phase && `Phase ${phase}`, block && `Block ${block}`, lot && `Lot ${lot}`]
@@ -105,6 +120,7 @@ export function useResidentAddresses() {
             // against them — but the picker says so rather than silently
             // filling nothing.
             hasAddress: Boolean(phase && block && lot),
+            verified: isVerifiedResidentDoc(d),
           }
         })
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
