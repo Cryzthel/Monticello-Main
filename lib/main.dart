@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +10,7 @@ import 'package:monticello_villas_app/app/app.dart';
 import 'package:monticello_villas_app/core/config/map_constants.dart';
 import 'package:monticello_villas_app/core/config/subdivision_boundary.dart';
 import 'package:monticello_villas_app/core/firebase/firebase_bootstrap.dart';
+import 'package:monticello_villas_app/features/panic_button/services/sos_sms_recipients.dart';
 import 'package:monticello_villas_app/features/panic_button/services/sos_sync_service.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/theme/theme_mode_controller.dart';
@@ -73,6 +76,14 @@ Future<void> main() async {
   // the resident ever goes back to that screen — most will not; from their side
   // the emergency is already over.
   await _bootStep('Offline SOS queue', SosSyncService.instance.start);
+
+  // The guardhouse numbers the offline SOS texts, cached while there is
+  // signal, because the moment they are needed is the moment there is none.
+  // Not awaited: a slow network must not hold up the first frame.
+  await _bootStep('SOS SMS numbers', () async {
+    await SosSmsRecipients.load();
+    unawaited(SosSmsRecipients.refresh());
+  });
 
   runApp(const MonticelloVillasApp());
 }

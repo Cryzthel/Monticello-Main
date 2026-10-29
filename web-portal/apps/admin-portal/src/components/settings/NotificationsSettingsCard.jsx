@@ -2,9 +2,11 @@ import { Bell, Volume2 } from '@shared/icons'
 import Switch from '@shared/components/Switch'
 import SettingsItem from '@shared/components/settings/SettingsItem'
 import SettingsSection from '@shared/components/settings/SettingsSection'
+import SmsRecipientsField from '@/components/settings/SmsRecipientsField'
 
 /**
- * Notifications: the guardhouse siren, resident pushes and alarm volume.
+ * Notifications: the guardhouse siren, the numbers an offline SOS is texted
+ * to, resident pushes and alarm volume.
  * Edits the page's draft only; the sticky header's Save commits them.
  */
 export default function NotificationsSettingsCard({ draft, disabled, setGroup, onTestSiren, action }) {
@@ -18,6 +20,17 @@ export default function NotificationsSettingsCard({ draft, disabled, setGroup, o
           checked={draft.sos.sirenEnabled}
           disabled={disabled}
           onChange={(sirenEnabled) => setGroup('sos', { sirenEnabled })}
+        />
+      </SettingsItem>
+      <SettingsItem
+        title="Guardhouse SMS numbers"
+        description="When a resident's SOS cannot reach the server, their phone offers to text it to these numbers (up to 3)."
+        align="start"
+      >
+        <SmsRecipientsField
+          value={draft.sos.hotlines}
+          disabled={disabled}
+          onChange={(hotlines) => setGroup('sos', { hotlines })}
         />
       </SettingsItem>
       <SettingsItem

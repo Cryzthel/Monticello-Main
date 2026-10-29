@@ -72,11 +72,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _ready = false;
   bool _showPrevious = false;
 
-  /// How many "Earlier" rows show before the history toggle takes over.
+  /// How many "Older" rows show before the history toggle takes over.
   ///
-  /// Five is about a screen's worth under the New section — enough that the
-  /// toggle is an option rather than a step everyone has to take, few enough
-  /// that the initial view stays short.
+  /// Five is enough that the toggle is an option rather than a step everyone
+  /// has to take, few enough that the initial view stays short.
   static const int _earlierPreview = 5;
 
   /// First-visit fallback for the New boundary.
@@ -312,33 +311,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     // the feed anyway would flash every row as New and then re-sort it.
     if (!_ready) return const [];
 
-    final boundary = _lastOpened ?? DateTime.now().subtract(_firstVisitWindow);
+    final now = DateTime.now();
+    final boundary = _lastOpened ?? now.subtract(_firstVisitWindow);
 
-    final sections = NotificationSections.split(feed, boundary);
-    final fresh = sections.fresh;
-    final earlier = sections.earlier;
+    // What arrived since the last visit still gets the unread wash; the
+    // SECTIONS are now by date (2026-10-29, by request), Instagram-style:
+    // Today, Yesterday, Last 7 Days, Last 30 Days, then Older — which is the
+    // one group long enough to fold behind "See previous".
+    final fresh = {for (final n in NotificationSections.split(feed, boundary).fresh) n.id};
+    final groups = groupNotificationsByDate(feed, now);
 
-    final hidden = earlier.length - _earlierPreview;
-    final visibleEarlier = _showPrevious || hidden <= 0
-        ? earlier
-        : earlier.sublist(0, _earlierPreview);
-
-    return [
-      if (fresh.isNotEmpty) ...[
-        _SectionHeader(label: 'New', count: fresh.length, accent: true),
-        for (final notification in fresh) _row(notification, unread: true),
-      ],
-      if (visibleEarlier.isNotEmpty) ...[
-        _SectionHeader(label: 'Earlier', count: earlier.length),
-        for (final notification in visibleEarlier) _row(notification),
-      ],
-      if (hidden > 0)
-        _SeePreviousButton(
+    final widgets = <Widget>[];
+    for (final group in groups) {
+      final older = group.label == 'Older';
+      final hidden = older ? group.items.length - _earlierPreview : 0;
+      final visible = older && hidden > 0 && !_showPrevious
+          ? group.items.sublist(0, _earlierPreview)
+          : group.items;
+      widgets
+        ..add(_SectionHeader(label: group.label, count: group.items.length, accent: group.label == 'Today'))
+        ..addAll(visible.map((n) => _row(n, unread: fresh.contains(n.id))));
+      if (hidden > 0) {
+        widgets.add(_SeePreviousButton(
           expanded: _showPrevious,
           hidden: hidden,
           onTap: () => setState(() => _showPrevious = !_showPrevious),
-        ),
-    ];
+        ));
+      }
+    }
+    return widgets;
   }
 
   Widget _row(ResidentNotification notification, {bool unread = false}) {

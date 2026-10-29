@@ -61,11 +61,10 @@ extension ResidentVerificationX on ResidentVerification {
   String get sosLockBody => switch (this) {
         ResidentVerification.rejected =>
           'The HOA office did not approve this account, so SOS alerts cannot '
-              'be sent from it. In an emergency, call the main gate guard or '
-              '911 directly.',
+              'be sent from it. In an emergency, call 911 directly.',
         _ => 'Your account is still under review by the HOA, so SOS alerts '
-            'can be sent once it is verified. In an emergency, call the main '
-            'gate guard or 911 directly.',
+            'can be sent once it is verified. In an emergency, call 911 '
+            'directly.',
       };
 
   /// The read-only status badge for the profile and settings screens.

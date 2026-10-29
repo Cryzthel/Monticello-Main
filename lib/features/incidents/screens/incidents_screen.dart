@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import 'package:monticello_villas_app/features/panic_button/widgets/sos_history.dart';
 import 'package:monticello_villas_app/core/network/request_pace.dart';
 import 'package:monticello_villas_app/core/widgets/page_title_bar.dart';
 import 'package:monticello_villas_app/features/incidents/models/incident.dart';
@@ -50,8 +51,10 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   static const _all = 0;
   static const _active = 1;
   static const _resolved = 2;
+  // The resident's SOS alerts, with their own live timeline (sos_history.dart).
+  static const _sos = 3;
 
-  static const _statuses = ['All', 'Active', 'Resolved'];
+  static const _statuses = ['All', 'Active', 'Resolved', 'SOS'];
 
   /// ── THREE PAGES, NOT ONE FILTERED LIST ───────────────────────────────────
   /// The status filter narrowed a single list until now, and the comment that
@@ -231,9 +234,7 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
                 builder: (context, _) {
                   // Nothing has been fetched yet — not "you have no reports".
                   // See LocalDataStore.hasLoadedIncidents.
-                  if (!LocalDataStore.instance.hasLoadedIncidents) {
-                    return const HistoryFeedSkeleton();
-                  }
+                  final loaded = LocalDataStore.instance.hasLoadedIncidents;
 
                   // Reports being deleted are merged back in: Firestore has
                   // already dropped them locally, and their rows have to stay
@@ -254,7 +255,11 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
                     // rebuilds a page mid-swipe. The INDICATOR does not wait
                     // for it — that follows `_tabPosition` continuously.
                     onPageChanged: (i) => setState(() => _index = i),
-                    itemBuilder: (context, tab) => IncidentHistoryList(
+                    itemBuilder: (context, tab) => tab == _sos
+                        ? const SosHistoryList()
+                        : !loaded
+                        ? const HistoryFeedSkeleton()
+                        : IncidentHistoryList(
                       incidents:
                           source.where((i) => _matches(i, tab)).toList(),
                       onRefresh: LocalDataStore.instance.refresh,

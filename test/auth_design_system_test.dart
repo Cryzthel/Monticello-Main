@@ -10,7 +10,7 @@ import 'package:monticello_villas_app/core/brand/brand_mark.dart';
 import 'package:monticello_villas_app/core/network/connectivity_probe.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/features/contact/widgets/hoa_contact_sheet.dart';
-import 'package:monticello_villas_app/features/panic_button/services/sos_sms_fallback.dart';
+import 'package:monticello_villas_app/features/panic_button/services/sos_sms_recipients.dart';
 import 'package:monticello_villas_app/core/widgets/modern_back_button.dart';
 import 'package:monticello_villas_app/core/widgets/staged_submit_button.dart';
 import 'package:monticello_villas_app/features/auth/screens/login_screen.dart';
@@ -891,12 +891,15 @@ void main() {
       ]);
     });
 
-    test('the offline SOS still has a staffed number to text', () {
-      // The SMS fallback addressed `hotlineNumber`, which the real directory
-      // deleted. Had that gone unnoticed, the one path that exists for "no
-      // data at all" would have been texting a dead placeholder.
-      expect(SosSmsFallback.recipient, HoaContact.mainGateNumber);
-      expect(SosSmsFallback.recipient, isNot(HoaContact.officeNumber));
+    test('the offline SOS still has staffed numbers to text', () {
+      // Before Admin › Settings has saved any guardhouse numbers (or before
+      // this phone has fetched them), the fallback texts the guard roster
+      // built into the app — never nobody, and never the office line.
+      SosSmsRecipients.debugSet(const []);
+      expect(SosSmsRecipients.current.map((r) => r.number),
+          HoaContact.guards.map((g) => g.number));
+      expect(SosSmsRecipients.current.map((r) => r.number),
+          isNot(contains(HoaContact.officeNumber)));
     });
   });
 

@@ -58,6 +58,59 @@ class NotificationSections {
   }
 }
 
+/// One dated section of the notification feed: "Today", "Yesterday", "Last 7
+/// Days", "Last 30 Days", then "Older".
+class NotificationDateGroup {
+  const NotificationDateGroup({required this.label, required this.items});
+
+  final String label;
+
+  /// Newest first.
+  final List<ResidentNotification> items;
+}
+
+/// Groups [feed] by how long ago each alert arrived, relative to [now].
+///
+/// Calendar days, not 24-hour windows: something from 11pm last night is
+/// "Yesterday" at 1am, as anyone would say it. "Last 7 Days" covers the five
+/// days before yesterday and "Last 30 Days" the rest of the month; anything
+/// older lands in "Older". Empty groups are left out, and each group is
+/// sorted newest first whatever order [feed] arrived in.
+List<NotificationDateGroup> groupNotificationsByDate(
+  List<ResidentNotification> feed,
+  DateTime now,
+) {
+  final today = DateTime(now.year, now.month, now.day);
+  int daysAgo(DateTime at) {
+    final local = at.toLocal();
+    return today.difference(DateTime(local.year, local.month, local.day)).inDays;
+  }
+
+  const labels = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
+  final buckets = List.generate(labels.length, (_) => <ResidentNotification>[]);
+  for (final n in feed) {
+    final d = daysAgo(n.at);
+    final index = d <= 0
+        ? 0
+        : d == 1
+            ? 1
+            : d < 7
+                ? 2
+                : d < 30
+                    ? 3
+                    : 4;
+    buckets[index].add(n);
+  }
+  return [
+    for (var i = 0; i < labels.length; i++)
+      if (buckets[i].isNotEmpty)
+        NotificationDateGroup(
+          label: labels[i],
+          items: buckets[i]..sort((a, b) => b.at.compareTo(a.at)),
+        ),
+  ];
+}
+
 /// One alert in the notification drawer.
 ///
 /// ── WHAT THIS FEED IS, AFTER THE ANNOUNCEMENT ALERTS ──────────────────────

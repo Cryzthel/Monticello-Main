@@ -41,6 +41,13 @@ class SosSyncService with WidgetsBindingObserver {
   /// feature is therefore raced against a clock rather than awaited.
   static const Duration ackTimeout = Duration(seconds: 8);
 
+  /// The FIRST attempt, made while the resident watches the SOS sheet, gets
+  /// less: after this the sheet offers the SMS fallback. Waiting the full
+  /// [ackTimeout] there is three more seconds of someone in trouble looking
+  /// at a spinner, and a write that lands late costs nothing — every retry
+  /// and the SMS name the same alert.
+  static const Duration firstAckTimeout = Duration(seconds: 5);
+
   StreamSubscription<ConnectivityResult>? _connectivitySub;
   bool _draining = false;
   bool _started = false;
@@ -120,7 +127,7 @@ class SosSyncService with WidgetsBindingObserver {
   /// may still land later, and that ambiguity is harmless: every retry
   /// targets the same document id.
   static Future<SosDelivery> deliverFirst(SosPayload payload) =>
-      _deliver(payload, queued: false);
+      _deliver(payload, queued: false, timeout: firstAckTimeout);
 
   /// A retry from the queue.
   ///
@@ -145,6 +152,7 @@ class SosSyncService with WidgetsBindingObserver {
   static Future<SosDelivery> _deliver(
     SosPayload payload, {
     required bool queued,
+    Duration timeout = ackTimeout,
   }) {
     final ref = FirebaseFirestore.instance
         .collection(PanicAlertService.collection)
@@ -156,7 +164,7 @@ class SosSyncService with WidgetsBindingObserver {
       // write, still pending, and would read as "already delivered".
       exists: () async =>
           (await ref.get(const GetOptions(source: Source.server))).exists,
-      timeout: ackTimeout,
+      timeout: timeout,
     );
   }
 

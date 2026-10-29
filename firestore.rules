@@ -889,6 +889,20 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // The guardhouse numbers the resident app texts when an SOS cannot reach
+    // the server (lib/features/panic_button/services/sos_sms_recipients.dart).
+    // A MIRROR of `sos.hotlines` on system_settings/operations, which only
+    // staff may read: Admin › Settings writes both in one batch, so residents
+    // can read these three numbers and nothing else in the settings.
+    match /system_settings/resident_sos {
+      allow read: if isSignedIn();
+      allow create, update: if isAdminStaff()
+        && request.resource.data.keys().hasOnly(['smsRecipients', 'updatedAt', 'updatedBy'])
+        && request.resource.data.smsRecipients is list
+        && request.resource.data.smsRecipients.size() <= 3;
+      allow delete: if false;
+    }
+
     // The Settings audit trail: one entry per confirmed Save on Admin ›
     // Settings, naming every field that moved. Append-only — stamped as the
     // writer, at server time, and never edited or removed from a console.

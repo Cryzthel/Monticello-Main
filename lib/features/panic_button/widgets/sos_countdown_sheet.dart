@@ -4,17 +4,17 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/leaf_loader.dart';
 import 'package:monticello_villas_app/core/widgets/staged_progress.dart'
     show AnimatedCheckmark;
 import 'package:monticello_villas_app/features/auth/widgets/verification_lock.dart';
-import 'package:monticello_villas_app/features/contact/widgets/hoa_contact_sheet.dart'
-    show HoaContact;
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
+import 'package:monticello_villas_app/features/panic_button/models/sos_payload.dart';
 import 'package:monticello_villas_app/features/panic_button/services/sos_alert_status.dart';
+import 'package:monticello_villas_app/features/panic_button/services/sos_sms_fallback.dart';
+import 'package:monticello_villas_app/features/panic_button/services/sos_sms_recipients.dart';
 
 /// Opens the emergency countdown over whatever the resident was doing.
 ///
@@ -25,14 +25,23 @@ import 'package:monticello_villas_app/features/panic_button/services/sos_alert_s
 /// the confirmation, and they run in the resident's favour: doing nothing sends
 /// the alert, and only a deliberate hold stops it.
 ///
-/// [dispatcher] exists for tests, which must be able to drive the whole timing
-/// and cancellation flow without a Firebase app or a GPS fix.
+/// [dispatcher] and [smsComposer] exist for tests, which must be able to drive
+/// the whole timing, cancellation and offline flow without a Firebase app, a
+/// GPS fix or a messaging app.
+///
+/// ── NO SIGNAL: THE SMS FALLBACK ─────────────────────────────────────────
+/// When the alert cannot reach the server — no connection at all, or no
+/// acknowledgement within the first-send timeout (five seconds) — it is queued on
+/// the phone and a "No Internet Connection" prompt offers to text it to the
+/// guardhouse numbers in [SosSmsRecipients]. Dismissable: the queued alert
+/// still sends itself when the connection returns, and the same "Send SMS
+/// alert" button stays on the sheet.
 ///
 /// ── LOCKED FOR AN UNVERIFIED ACCOUNT ─────────────────────────────────────
 /// Like filing a report, raising an SOS needs an account the HOA office has
 /// verified (the user's decision, 2026-10-18). A resident whose standing we
 /// have OBSERVED as pending or rejected gets the sheet in its locked form:
-/// no countdown, the reason, and the main gate's number to call instead.
+/// no countdown, and the reason.
 /// [verification] reads the standing; it is checked on open, on every tick
 /// of the countdown and once more right before dispatch, so a status that
 /// lands mid-countdown still stops the alert. An UNKNOWN standing does not
@@ -43,6 +52,7 @@ Future<void> showSosCountdown(
   Future<SosDispatchReceipt> Function()? dispatcher,
   SosStatusStream? statusStream,
   ResidentVerification Function()? verification,
+  Future<bool> Function(SosPayload payload)? smsComposer,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -58,6 +68,7 @@ Future<void> showSosCountdown(
       dispatcher: dispatcher ?? PanicAlertService.dispatch,
       statusStream: statusStream ?? watchSosAlert,
       verification: verification ?? cachedResidentVerification,
+      smsComposer: smsComposer ?? SosSmsFallback.compose,
     ),
   );
 }
@@ -72,7 +83,11 @@ class _SosCountdownSheet extends StatefulWidget {
     required this.dispatcher,
     required this.statusStream,
     required this.verification,
+    required this.smsComposer,
   });
+
+  /// Opens the SMS composer for an alert. See [showSosCountdown].
+  final Future<bool> Function(SosPayload payload) smsComposer;
 
   /// The resident's standing as last observed. See [showSosCountdown].
   final ResidentVerification Function() verification;
@@ -176,6 +191,10 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       return;
     }
 
+    // The guardhouse numbers, fetched while the countdown runs: if this alert
+    // ends up needing the SMS fallback, the list is as fresh as it can be.
+    unawaited(SosSmsRecipients.refresh());
+
     // A firm tap the instant the sheet appears, so the resident knows the
     // trigger registered before they have looked at the screen.
     HapticFeedback.heavyImpact();
@@ -197,6 +216,13 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
 
   /// The alert this sheet raised, once it has; what its document says now.
   String? _alertId;
+
+  /// What was sent, kept for the SMS fallback (same alert, same reference).
+  SosPayload? _payload;
+
+  /// The SMS composer was opened at least once / could not be opened.
+  bool _smsOpened = false;
+  bool _smsUnavailable = false;
   SosAlertStatus _status = SosAlertStatus.unknown;
   StreamSubscription<SosAlertStatus>? _statusSub;
 
@@ -303,17 +329,42 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       }
       setState(() {
         _alertId = receipt.alertId;
+        _payload = receipt.payload;
         _phase = receipt.outcome == SosDispatchOutcome.delivered
             ? _Phase.sent
             : _Phase.queued;
       });
       HapticFeedback.heavyImpact();
       _watch(receipt.alertId);
+      if (_phase == _Phase.queued) unawaited(_offerSms());
     } catch (_) {
       if (!mounted) return;
       setState(() => _phase = _Phase.failed);
       HapticFeedback.heavyImpact();
     }
+  }
+
+  /// The "No Internet Connection" prompt. Dismissable on purpose: the alert
+  /// is already queued and sends itself when a connection returns, so this is
+  /// an extra way out, never a gate.
+  Future<void> _offerSms() async {
+    if (!mounted || _payload == null) return;
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => _NoInternetDialog(recipients: SosSmsRecipients.current),
+    );
+    if (send == true) await _sendSms();
+  }
+
+  Future<void> _sendSms() async {
+    final payload = _payload;
+    if (payload == null) return;
+    final opened = await widget.smsComposer(payload);
+    if (!mounted) return;
+    setState(() {
+      _smsOpened = _smsOpened || opened;
+      _smsUnavailable = !opened;
+    });
   }
 
   Future<void> _retry() async {
@@ -507,10 +558,19 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       _Phase.sent =>
         'Security has your alert, with your location and property details.\n'
             'Stay where you are if it is safe to do so.',
-      _Phase.queued =>
-        'No signal. Your alert is saved on this phone, encrypted, and will '
-            'send itself as soon as you are back in range.\n'
-            'The guardhouse has not seen it yet — call the hotline if you can.',
+      _Phase.queued => _smsUnavailable
+          ? 'No internet. Your alert is saved on this phone and will send itself '
+              'when you are back online.\n'
+              'This phone could not open a messaging app — call the guardhouse '
+              'if you can.'
+          : _smsOpened
+              ? 'No internet. Your alert is saved on this phone and will send '
+                  'itself when you are back online.\n'
+                  'The text to the guardhouse is in your messaging app — make sure '
+                  'you pressed Send.'
+              : 'No internet. Your alert is saved on this phone, encrypted, and '
+                  'will send itself as soon as you are back online.\n'
+                  'The guardhouse has not seen it yet — send it by SMS below.',
       _Phase.failed =>
         'The alert could not be sent. Check your connection and try again, '
             'or call the security hotline.',
@@ -541,11 +601,26 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
           onTap: () => Navigator.of(context).pop(),
         );
       case _Phase.queued:
-        return _FlatButton(
-          label: 'Done',
-          background: AppColors.warning,
-          foreground: AppColors.background,
-          onTap: () => Navigator.of(context).pop(),
+        return Row(
+          children: [
+            Expanded(
+              child: _FlatButton(
+                label: 'Done',
+                background: AppColors.backgroundElevated,
+                foreground: AppColors.textSecondary,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _FlatButton(
+                label: _smsOpened ? 'Text again' : 'Send SMS alert',
+                background: AppColors.panicOxblood,
+                foreground: Colors.white,
+                onTap: _sendSms,
+              ),
+            ),
+          ],
         );
       case _Phase.failed:
         return Row(
@@ -598,32 +673,19 @@ class _SheetSurface extends StatelessWidget {
   }
 }
 
-/// SOS for an account that is not verified: why, and who to call instead.
+/// SOS for an account that is not verified: why it is unavailable.
 ///
 /// Same layout as the live sheet (left-aligned header, centred badge,
 /// left-aligned caption, actions at the foot), so a resident who has seen
 /// one recognises the other. The badge is a lock, not a warning: nothing has
 /// gone wrong, the control simply is not available to this account yet.
 ///
-/// The PRIMARY action is the call, not Close. Whoever pressed SOS may be in
-/// an emergency regardless of their paperwork, and the one useful thing this
-/// sheet can still do is put the guardhouse's number under their thumb.
+/// The "Call main gate" button that used to lead this sheet was removed by
+/// request (2026-10-29); the copy points to 911 instead.
 class _SosLockedBody extends StatelessWidget {
   const _SosLockedBody({required this.standing});
 
   final ResidentVerification standing;
-
-  Future<void> _callGate() async {
-    try {
-      await launchUrl(
-        HoaContact.dialUri(HoaContact.mainGateNumber),
-        mode: LaunchMode.externalApplication,
-      );
-    } catch (_) {
-      // No dialer (a tablet, an emulator). The number is printed on the
-      // button, so failing quietly still leaves the resident with it.
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -683,17 +745,74 @@ class _SosLockedBody extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         _FlatButton(
-          label: 'Call main gate · ${HoaContact.mainGateNumber}',
-          background: AppColors.panicOxblood,
-          foreground: Colors.white,
-          onTap: _callGate,
-        ),
-        const SizedBox(height: 10),
-        _FlatButton(
           label: 'Close',
           background: AppColors.backgroundElevated,
           foreground: AppColors.textSecondary,
           onTap: () => Navigator.of(context).pop(),
+        ),
+      ],
+    );
+  }
+}
+
+/// "No Internet Connection": offered once the alert is queued for want of a
+/// connection. Pops `true` to open the SMS composer.
+class _NoInternetDialog extends StatelessWidget {
+  const _NoInternetDialog({required this.recipients});
+
+  final List<SmsRecipient> recipients;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.backgroundSecondary,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        side: const BorderSide(color: AppColors.innerStroke),
+      ),
+      icon: const Icon(PhosphorIconsFill.wifiSlash, size: 30, color: AppColors.panicOxblood),
+      title: Text(
+        'No Internet Connection',
+        textAlign: TextAlign.center,
+        style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "We couldn't reach the backend server over mobile data. Would you like "
+            'to send an Emergency SMS alert instead?',
+            style: sfPro(fontSize: 14.5, color: AppColors.textSecondary, height: 1.45),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Your messaging app opens with your name, address, location and the time '
+            'already written, addressed to '
+            '${recipients.map((r) => r.label).join(', ')}. Press Send there.',
+            style: sfPro(fontSize: 12.5, color: AppColors.textMuted, height: 1.45),
+          ),
+        ],
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text('Not now',
+              style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+        ),
+        ElevatedButton.icon(
+          onPressed: () => Navigator.of(context).pop(true),
+          icon: const Icon(PhosphorIconsBold.chatText, size: 16),
+          label: Text('Send SMS Alert',
+              style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.panicOxblood,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
         ),
       ],
     );

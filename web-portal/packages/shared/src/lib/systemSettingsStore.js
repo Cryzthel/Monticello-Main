@@ -108,7 +108,10 @@ export const DEFAULTS = Object.freeze({
    *                console, and it names the fix as "a server-side escalation".
    * geofenceAlert  ENFORCED — panicGeofence compares the fix to the
    *                boundary ring on every alert surface.
-   * hotlines       STORED — the resident app does not read them yet.
+   * hotlines       ENFORCED — the first SMS_RECIPIENTS_MAX are the guardhouse
+   *                numbers the resident app texts when an SOS cannot reach
+   *                the server; saveSettings mirrors them to
+   *                system_settings/resident_sos, which residents can read.
    */
   sos: Object.freeze({
     sirenEnabled: true,
@@ -353,6 +356,9 @@ function ipRules(value) {
  */
 export const MAX_HOTLINES = 8
 
+/** How many hotlines the resident app texts on an offline SOS (the rule caps it too). */
+export const SMS_RECIPIENTS_MAX = 3
+
 function hotlines(value) {
   if (!Array.isArray(value)) return []
   return value
@@ -362,7 +368,9 @@ function hotlines(value) {
       label: text(entry.label, '', 60).trim(),
       number: text(entry.number, '', 40).trim(),
     }))
-    .filter((entry) => entry.label && entry.number)
+    // A number must hold 7–13 digits once spacing is stripped: a phone is
+    // about to address an emergency text to it.
+    .filter((entry) => entry.label && /^\d{7,13}$/.test(entry.number.replace(/\D/g, '')))
     .slice(0, MAX_HOTLINES)
 }
 

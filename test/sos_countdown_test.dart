@@ -75,8 +75,19 @@ Future<void> _advance(WidgetTester tester,
   }
 }
 
+/// Stands in for the SMS composer: records what it was asked to send.
+class _Sms {
+  final List<SosPayload> sent = [];
+  bool available = true;
+
+  Future<bool> call(SosPayload payload) async {
+    sent.add(payload);
+    return available;
+  }
+}
+
 Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
-    {_StatusFeed? feed, ResidentVerification Function()? verification}) async {
+    {_StatusFeed? feed, ResidentVerification Function()? verification, _Sms? sms}) async {
   // Always a fake feed: the real one needs a Firebase app.
   final statusFeed = feed ?? _StatusFeed();
   await tester.pumpWidget(
@@ -93,6 +104,7 @@ Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
                 // tests below, and the rest are about the countdown.
                 verification:
                     verification ?? () => ResidentVerification.verified,
+                smsComposer: (sms ?? _Sms()).call,
               ),
               child: const Text('SOS'),
             ),
@@ -180,11 +192,71 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await _advance(tester);
 
+    // The SMS prompt comes up first; it is dismissable.
+    expect(find.text('No Internet Connection'), findsOneWidget);
+    await tester.tap(find.text('Not now'));
+    await _advance(tester, frames: 4);
+    expect(find.text('No Internet Connection'), findsNothing);
+
     // No retry button: there is nothing to retry, the queue owns it now.
     expect(find.text('Done'), findsOneWidget);
     await tester.tap(find.text('Done'));
     await _advance(tester);
     expect(find.text('SAVED — NO SIGNAL'), findsNothing);
+  });
+
+  // ── NO SIGNAL: THE SMS FALLBACK ─────────────────────────────────────────
+
+  testWidgets('a queued alert offers the SMS fallback, which drafts that alert',
+      (tester) async {
+    final sms = _Sms();
+    await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
+    await tester.pump(const Duration(seconds: 5));
+    await _advance(tester);
+
+    expect(find.text('No Internet Connection'), findsOneWidget);
+    expect(find.textContaining("couldn't reach the backend server"), findsOneWidget);
+    await tester.tap(find.text('Send SMS Alert'));
+    await _advance(tester, frames: 4);
+
+    expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
+    expect(find.textContaining('make sure you pressed Send'), findsOneWidget);
+    // Still offered on the sheet, for a second try.
+    expect(find.text('Text again'), findsOneWidget);
+  });
+
+  testWidgets('declining the prompt leaves "Send SMS alert" on the sheet',
+      (tester) async {
+    final sms = _Sms();
+    await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
+    await tester.pump(const Duration(seconds: 5));
+    await _advance(tester);
+    await tester.tap(find.text('Not now'));
+    await _advance(tester, frames: 4);
+    expect(sms.sent, isEmpty);
+
+    await tester.tap(find.text('Send SMS alert'));
+    await _advance(tester, frames: 2);
+    expect(sms.sent, hasLength(1));
+  });
+
+  testWidgets('a phone with no messaging app is told so', (tester) async {
+    final sms = _Sms()..available = false;
+    await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
+    await tester.pump(const Duration(seconds: 5));
+    await _advance(tester);
+    await tester.tap(find.text('Send SMS Alert'));
+    await _advance(tester, frames: 4);
+    expect(find.textContaining('could not open a messaging app'), findsOneWidget);
+  });
+
+  testWidgets('a delivered alert never offers SMS', (tester) async {
+    final sms = _Sms();
+    await _open(tester, _Dispatcher(), sms: sms);
+    await tester.pump(const Duration(seconds: 5));
+    await _advance(tester);
+    expect(find.text('No Internet Connection'), findsNothing);
+    expect(find.text('Send SMS alert'), findsNothing);
   });
 
   testWidgets('a hold shorter than a second does NOT cancel', (tester) async {
@@ -463,7 +535,9 @@ void main() {
     expect(find.text('SOS UNAVAILABLE'), findsOneWidget);
     expect(find.text('Verification Pending'), findsOneWidget);
     expect(find.textContaining('under review'), findsOneWidget);
-    expect(find.textContaining('Call main gate'), findsOneWidget);
+    // "Call main gate" was removed from this screen by request.
+    expect(find.textContaining('Call main gate'), findsNothing);
+    expect(find.textContaining('911'), findsOneWidget);
     // No countdown, no cancel control.
     expect(find.text('EMERGENCY ALERT'), findsNothing);
     expect(find.text('Hold to cancel'), findsNothing);

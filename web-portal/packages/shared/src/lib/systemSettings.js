@@ -1,9 +1,10 @@
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore'
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { subscribeWithRetry } from '@shared/lib/liveSubscribe'
 import { auth, db } from '@shared/lib/firebase'
 import {
   SETTINGS_COLLECTION,
   SETTINGS_DOC,
+  SMS_RECIPIENTS_MAX,
   commitSettings,
   readMeta,
   sanitizeSettings,
@@ -65,8 +66,26 @@ function stamp() {
  * never validated — a pasted number, an old build's field — out of the
  * document the mobile app reads.
  *
+ * ── THE RESIDENT MIRROR ─────────────────────────────────────────────────────
+ * The first three `sos.hotlines` are the guardhouse numbers the resident app
+ * texts when an SOS cannot reach the server. Residents may not read this
+ * document, so a save that carries `sos` also writes them to
+ * `system_settings/resident_sos`, in the same batch: the two can never
+ * disagree, and a failed save changes neither.
+ *
  * @param {object} groups e.g. `{ sos: {...} }` or several groups at once.
  */
 export function saveSettings(groups) {
-  return setDoc(settingsRef(), { ...groups, ...stamp() }, { merge: true })
+  const batch = writeBatch(db)
+  const stamped = stamp()
+  batch.set(settingsRef(), { ...groups, ...stamped }, { merge: true })
+  if (Array.isArray(groups?.sos?.hotlines)) {
+    batch.set(doc(db, SETTINGS_COLLECTION, 'resident_sos'), {
+      smsRecipients: groups.sos.hotlines
+        .slice(0, SMS_RECIPIENTS_MAX)
+        .map(({ label, number }) => ({ label, number })),
+      ...stamped,
+    })
+  }
+  return batch.commit()
 }

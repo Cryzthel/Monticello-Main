@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -107,6 +108,11 @@ class PanicAlertService {
     // still on disk and the sync service will deliver it.
     await SosQueue.enqueue(payload);
 
+    // No network at all: say so now rather than after a timeout. The write
+    // would only hang, and the sheet uses this answer to offer the SMS
+    // fallback. The queue delivers it when a connection returns.
+    if (await _offline()) return SosDispatchOutcome.queued;
+
     switch (await SosSyncService.deliverFirst(payload)) {
       case SosDelivery.delivered:
         await SosQueue.remove(payload.alertId);
@@ -124,6 +130,16 @@ class PanicAlertService {
   /// Every lookup here is cached-or-best-effort by design. A resident in an
   /// emergency cannot wait on a profile fetch, and an alert carrying a blank
   /// name still carries the lot number that tells a guard where to go.
+  static Future<bool> _offline() async {
+    try {
+      final result = await Connectivity().checkConnectivity().timeout(const Duration(seconds: 1));
+      return result == ConnectivityResult.none;
+    } catch (_) {
+      // Unknown is not offline: try the server and let the timeout decide.
+      return false;
+    }
+  }
+
   static Future<SosPayload> buildPayload({
     String emergencyType = 'general',
   }) async {

@@ -203,13 +203,19 @@ extension SosPayloadWire on SosPayload {
     final at = capturedAt.toLocal();
     final hh = at.hour.toString().padLeft(2, '0');
     final mm = at.minute.toString().padLeft(2, '0');
+    // The date as well as the time: a text read the next morning, or held in
+    // a phone's outbox overnight, must not look like a fresh emergency.
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     final parts = <String>[
       'SOS Monticello Villas',
       residentName.isEmpty ? 'Resident' : residentName,
       where,
-      'at $hh:$mm',
+      'at $hh:$mm ${months[at.month - 1]} ${at.day}',
       if (residentPhone.isNotEmpty) residentPhone,
-      if (hasLocation) '${lat!.toStringAsFixed(5)},${lng!.toStringAsFixed(5)}',
+      // As a map link a guard can tap, which still carries the bare
+      // coordinates for anyone reading it on a basic phone.
+      if (hasLocation)
+        'https://maps.google.com/?q=${lat!.toStringAsFixed(5)},${lng!.toStringAsFixed(5)}',
       'Ref $alertId',
     ];
     return parts.join(' | ');

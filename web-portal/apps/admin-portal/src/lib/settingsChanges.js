@@ -22,7 +22,7 @@ const FIELDS = [
   ['sos.sirenEnabled', 'Emergency siren'],
   ['sos.escalateAfterMinutes', 'Auto-escalation window', (v) => `${v} min`],
   ['sos.geofenceAlert', 'Geofence boundary alert'],
-  ['sos.hotlines', 'Emergency hotlines', (v) => (Array.isArray(v) ? v.map((h) => h?.label || h?.number).filter(Boolean).join(', ') || 'None' : '')],
+  ['sos.hotlines', 'Guardhouse SMS numbers', (v) => (Array.isArray(v) ? v.map((h) => h?.label || h?.number).filter(Boolean).join(', ') || 'None' : '')],
   ['push.enabled', 'Resident push notifications'],
   ['incidents.autoAssign', 'Automatic assignment'],
   ['incidents.ackTargetMinutes', 'Acknowledgement target', (v) => `${v} min`],
