@@ -379,9 +379,7 @@ class _AnnouncementFocusModal extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    announcement.author.isEmpty
-                        ? 'Monticello Villas HOA'
-                        : announcement.author,
+                    announcement.publisher,
                     style: sfPro(
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,

@@ -166,7 +166,7 @@ void main() {
       await _pumpCard(tester, _post(pinned: true));
       expect(find.text('Pinned'), findsNothing);
       expect(find.text('New'), findsNothing);
-      final pin = tester.getRect(find.byIcon(PhosphorIconsFill.pushPin));
+      final pin = tester.getRect(find.byIcon(Icons.push_pin_rounded));
       final card = tester.getRect(find.byType(AnnouncementCard));
       expect(pin.right, closeTo(card.right, 24));
       expect(pin.top, closeTo(card.top, 24));
@@ -175,7 +175,7 @@ void main() {
 
     testWidgets('an unpinned post has no pin', (tester) async {
       await _pumpCard(tester, _post());
-      expect(find.byIcon(PhosphorIconsFill.pushPin), findsNothing);
+      expect(find.byIcon(Icons.push_pin_rounded), findsNothing);
     });
 
     testWidgets('fits a narrow card with the pin', (tester) async {

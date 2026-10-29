@@ -12,13 +12,17 @@ import 'package:monticello_villas_app/core/widgets/ui_primitives.dart';
 ///
 ///   required  → [ForcedUpdateScreen] replaces the app. It cannot be
 ///               dismissed or navigated around; the only way on is the update.
-///   optional  → the app as normal, with [_UpdateBanner] over the top of it
-///               until the resident updates or taps Later.
+///   optional  → "Do you want to update?" over a scrim, before the app is
+///               used ([_UpdatePrompt]); Later lets the resident in.
 ///   none      → the app, untouched.
 ///
-/// Checks once at start-up and again whenever the app comes back to the
-/// foreground (throttled in the service), which is also how a download that
-/// was waiting on "Install unknown apps" carries on by itself.
+/// The check runs in `main()` BEFORE the first frame (lib/main.dart), so the
+/// prompt is the first thing a resident sees rather than something that
+/// lands on top of a screen they have started using. It runs again whenever
+/// the app comes back to the foreground (throttled in the service), which is
+/// also how a download that was waiting on "Install unknown apps" carries on
+/// by itself. If Android does not yet allow this app to install packages,
+/// the prompt's own button asks for that first.
 class UpdateGate extends StatefulWidget {
   const UpdateGate({super.key, required this.child});
 
@@ -35,7 +39,8 @@ class _UpdateGateState extends State<UpdateGate> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _service.check(force: true);
+    // Normally already answered in main(); this covers a slow network there.
+    _service.check();
   }
 
   @override
@@ -57,91 +62,21 @@ class _UpdateGateState extends State<UpdateGate> with WidgetsBindingObserver {
         if (_service.urgency == UpdateUrgency.required) {
           return ForcedUpdateScreen(service: _service);
         }
-        // An update is waiting but Android would refuse to install it: the
-        // permission prompt comes first, over a scrim, before the app is used.
-        if (_service.offerInstallPermission) {
-          return Stack(
-            children: [
-              widget.child,
+        return Stack(
+          children: [
+            widget.child,
+            if (_service.offerOptional) ...[
               const ModalBarrier(dismissible: false, color: Color(0x8C000000)),
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: _InstallPermissionCard(service: _service),
+                  child: _UpdatePrompt(service: _service),
                 ),
               ),
             ],
-          );
-        }
-        return Stack(
-          children: [
-            widget.child,
-            if (_service.offerOptional)
-              Positioned(
-                left: 12,
-                right: 12,
-                top: MediaQuery.paddingOf(context).top + 8,
-                child: _UpdateBanner(service: _service),
-              ),
           ],
         );
       },
-    );
-  }
-}
-
-/// "Allow app updates": the one-time Android permission an in-place update
-/// needs, asked for at start-up when an update is waiting and the permission
-/// is not yet granted. "Allow" opens this app's "Install unknown apps" page;
-/// on return [UpdateService.onResume] re-reads it and the prompt gives way to
-/// the update itself.
-class _InstallPermissionCard extends StatelessWidget {
-  const _InstallPermissionCard({required this.service});
-
-  final UpdateService service;
-
-  @override
-  Widget build(BuildContext context) {
-    final required = service.urgency == UpdateUrgency.required;
-    return Material(
-      color: AppColors.background,
-      borderRadius: BorderRadius.circular(AppRadius.lg),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 14),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Icon(PhosphorIconsFill.shieldCheck, size: 40, color: AppColors.primary),
-            const SizedBox(height: 12),
-            Text('Allow app updates',
-                textAlign: TextAlign.center,
-                style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-            const SizedBox(height: 8),
-            Text(
-              'Version ${service.release?.version ?? ''} is ready. To install it inside the app, '
-              'Android needs you to allow Monticello Villas to install updates — once. '
-              'Turn on "Allow from this source", then come back.',
-              textAlign: TextAlign.center,
-              style: sfPro(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-            ),
-            const SizedBox(height: 18),
-            PrimaryButton(
-              label: 'Allow',
-              icon: PhosphorIconsBold.gear,
-              onPressed: service.openInstallSettings,
-            ),
-            if (!required) ...[
-              const SizedBox(height: 4),
-              TextButton(
-                onPressed: service.dismissPermissionPrompt,
-                child: Text('Not now',
-                    style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 }
@@ -201,9 +136,12 @@ class ForcedUpdateScreen extends StatelessWidget {
   }
 }
 
-/// The optional prompt: a card over the top of the app.
-class _UpdateBanner extends StatelessWidget {
-  const _UpdateBanner({required this.service});
+/// "Do you want to update?": the optional update, asked before the app is
+/// used. Update downloads with a progress bar and hands the file to Android's
+/// installer; Later lets the resident in until the next release. When Android
+/// does not yet allow installs from this app, the button asks for that first.
+class _UpdatePrompt extends StatelessWidget {
+  const _UpdatePrompt({required this.service});
 
   final UpdateService service;
 
@@ -213,35 +151,28 @@ class _UpdateBanner extends StatelessWidget {
     final size = release.sizeBytes;
     return Material(
       color: AppColors.background,
-      elevation: 6,
-      shadowColor: AppColors.shadowMedium,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderRadius: BorderRadius.circular(AppRadius.lg),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                const Icon(PhosphorIconsFill.arrowCircleUp, color: AppColors.primary, size: 24),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Update available',
-                          style: sfPro(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                      Text(
-                        'Version ${release.version}${size == null ? '' : ' · ${formatMegabytes(size)}'}',
-                        style: sfPro(fontSize: 12.5, color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            const Icon(PhosphorIconsFill.arrowCircleUp, size: 42, color: AppColors.primary),
             const SizedBox(height: 12),
+            Text('Do you want to update?',
+                textAlign: TextAlign.center,
+                style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            const SizedBox(height: 8),
+            Text(
+              'Monticello Villas ${release.version} is available'
+              '${size == null ? '' : ' (${formatMegabytes(size)})'}. It installs over this version — '
+              'you stay signed in.'
+              '${service.needsInstallPermission ? ' Android will first ask you to allow updates from this app, once.' : ''}',
+              textAlign: TextAlign.center,
+              style: sfPro(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+            ),
+            const SizedBox(height: 18),
             _UpdateProgress(service: service),
             _UpdateActions(service: service, required: false),
           ],
@@ -350,7 +281,7 @@ class _UpdateActions extends StatelessWidget {
     final primary = service.needsInstallPermission
         // The forced screen asks for the permission in its own action.
         ? PrimaryButton(
-            label: 'Allow app updates',
+            label: required ? 'Allow app updates' : 'Update now',
             icon: PhosphorIconsBold.gear,
             onPressed: service.openInstallSettings,
           )

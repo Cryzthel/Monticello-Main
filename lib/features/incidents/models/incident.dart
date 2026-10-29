@@ -412,6 +412,15 @@ class Announcement {
   final String category;
   final String? imageUrl;
 
+  /// Who residents see as the publisher. The admin console stores the
+  /// author's display name, or their EMAIL when they have none — and an
+  /// administrator's sign-in address is nothing a resident needs (2026-10-29,
+  /// by request). An empty or email-shaped author reads as the HOA itself.
+  String get publisher {
+    final name = author.trim();
+    return name.isEmpty || name.contains('@') ? 'Monticello Villas HOA' : name;
+  }
+
   /// Every photo on the notice. The admin composer writes up to six to
   /// `imageUrls` and repeats the first as `imageUrl`; older notices have only
   /// the single field.

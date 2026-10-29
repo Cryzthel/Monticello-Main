@@ -220,7 +220,7 @@ void main() {
     await _advance(tester);
 
     expect(find.text('No Internet Connection'), findsOneWidget);
-    expect(find.textContaining("couldn't reach the backend server"), findsOneWidget);
+    expect(find.textContaining("couldn't reach emergency servers"), findsOneWidget);
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 4);
 

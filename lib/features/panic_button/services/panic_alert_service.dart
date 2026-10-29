@@ -108,11 +108,13 @@ class PanicAlertService {
     // still on disk and the sync service will deliver it.
     await SosQueue.enqueue(payload);
 
-    // No network at all: say so now rather than after a timeout. The write
-    // would only hang, and the sheet uses this answer to offer the SMS
-    // fallback. The queue delivers it when a connection returns.
-    if (await isOffline()) return SosDispatchOutcome.queued;
-
+    // ALWAYS try the server. An earlier version skipped straight to the queue
+    // when the phone reported "no connection", and Android can report that
+    // wrongly (a VPN, a captive Wi-Fi, a stale reading right after airplane
+    // mode) — the alert then sat on the phone while the network was fine.
+    // The connectivity reading now only opens the SMS prompt early (see the
+    // countdown sheet); delivery is decided by the server answering, within
+    // SosSyncService.firstAckTimeout.
     switch (await SosSyncService.deliverFirst(payload)) {
       case SosDelivery.delivered:
         await SosQueue.remove(payload.alertId);
@@ -125,12 +127,8 @@ class PanicAlertService {
     }
   }
 
-  /// Assembles the emergency from whatever is known right now.
-  ///
-  /// Every lookup here is cached-or-best-effort by design. A resident in an
-  /// emergency cannot wait on a profile fetch, and an alert carrying a blank
-  /// name still carries the lot number that tells a guard where to go.
   /// Whether the phone reports no network at all. Unknown reads as online.
+  /// Advisory only: it opens the SMS prompt early, never skips delivery.
   static Future<bool> isOffline() async {
     try {
       final result = await Connectivity().checkConnectivity().timeout(const Duration(seconds: 1));
@@ -141,6 +139,11 @@ class PanicAlertService {
     }
   }
 
+  /// Assembles the emergency from whatever is known right now.
+  ///
+  /// Every lookup here is cached-or-best-effort by design. A resident in an
+  /// emergency cannot wait on a profile fetch, and an alert carrying a blank
+  /// name still carries the lot number that tells a guard where to go.
   static Future<SosPayload> buildPayload({
     String emergencyType = 'general',
   }) async {

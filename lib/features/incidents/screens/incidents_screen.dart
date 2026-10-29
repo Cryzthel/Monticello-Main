@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import 'package:monticello_villas_app/core/widgets/filter_pills.dart';
+import 'package:monticello_villas_app/core/widgets/history_row.dart';
 import 'package:monticello_villas_app/features/panic_button/models/sos_alert_record.dart';
 import 'package:monticello_villas_app/features/panic_button/widgets/sos_history.dart';
 import 'package:monticello_villas_app/core/network/request_pace.dart';
@@ -9,10 +11,8 @@ import 'package:monticello_villas_app/features/incidents/models/incident.dart';
 import 'package:monticello_villas_app/features/incidents/models/report_deletion.dart';
 import 'package:monticello_villas_app/features/incidents/widgets/history_skeleton.dart';
 import 'package:monticello_villas_app/core/storage/local_data_store.dart';
-import 'package:monticello_villas_app/core/theme/app_icons.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/animated_list_entry.dart';
-import 'package:monticello_villas_app/core/widgets/app_card.dart';
 import 'package:monticello_villas_app/core/widgets/network_progress_bar.dart';
 import 'package:monticello_villas_app/core/widgets/refresh_shell.dart';
 import 'package:monticello_villas_app/core/widgets/shared_widgets.dart';
@@ -54,6 +54,11 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   static const _resolved = 2;
 
   static const _statuses = ['All', 'Active', 'Resolved'];
+  static const _statusIcons = [
+    PhosphorIconsFill.squaresFour,
+    PhosphorIconsFill.clock,
+    PhosphorIconsFill.checkCircle,
+  ];
 
   /// ── THREE PAGES, NOT ONE FILTERED LIST ───────────────────────────────────
   /// The status filter narrowed a single list until now, and the comment that
@@ -68,16 +73,9 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   /// screen still holds exactly one list.
   ///
   /// What the pager does NOT change is that the tabs are still one closed
-  /// choice over the same records — which is why the control above stays a
-  /// segmented control and does not become a [TabBar].
+  /// choice over the same records. The control above is the shared green
+  /// filter pills (FilterPillBar), the same as the Announcements feed.
   late final PageController _pages;
-
-  /// Continuous page position, driving the indicator frame by frame.
-  ///
-  /// A [ValueNotifier] rather than screen state on purpose: this changes on
-  /// every frame of a drag, and calling `setState` at that rate would rebuild
-  /// the whole feed to move one pill. See [SegmentedControl.position].
-  final ValueNotifier<double> _tabPosition = ValueNotifier<double>(0);
 
   int _index = _all;
 
@@ -95,25 +93,15 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
   @override
   void initState() {
     super.initState();
-    _pages = PageController(initialPage: _index)..addListener(_trackPage);
+    _pages = PageController(initialPage: _index);
     _sos.start();
   }
 
   @override
   void dispose() {
     _sos.dispose();
-    _pages.removeListener(_trackPage);
     _pages.dispose();
-    _tabPosition.dispose();
     super.dispose();
-  }
-
-  void _trackPage() {
-    // `page` throws if the controller has no viewport attached yet, and is
-    // null for the frame between attaching and the first layout.
-    if (!_pages.hasClients) return;
-    final page = _pages.page;
-    if (page != null) _tabPosition.value = page;
   }
 
   /// Tapping a segment travels the same path a swipe does, so the pages and
@@ -232,11 +220,15 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
             // widget whose appearance cannot have changed.
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              child: SegmentedControl(
-                segments: _statuses,
+              // The same green pills as the Announcements feed.
+              child: FilterPillBar(
+                padding: EdgeInsets.zero,
                 selectedIndex: _index,
-                position: _tabPosition,
                 onChanged: _goToTab,
+                options: [
+                  for (var i = 0; i < _statuses.length; i++)
+                    FilterPillOption(_statuses[i], icon: _statusIcons[i]),
+                ],
               ),
             ),
             Expanded(
@@ -263,8 +255,7 @@ class _IncidentsScreenState extends State<IncidentsScreen> {
                     controller: _pages,
                     itemCount: _statuses.length,
                     // Fires on settle, not during the drag, so this never
-                    // rebuilds a page mid-swipe. The INDICATOR does not wait
-                    // for it — that follows `_tabPosition` continuously.
+                    // rebuilds a page mid-swipe; the pill follows then.
                     onPageChanged: (i) => setState(() => _index = i),
                     itemBuilder: (context, tab) => !loaded
                         ? const HistoryFeedSkeleton()
@@ -460,14 +451,15 @@ class IncidentHistoryList extends StatelessWidget {
             )
           : ListView.separated(
               physics: const AlwaysScrollableScrollPhysics(),
-              // Item 0 is a REPORT. Nothing is prepended to this feed any
-              // more — no hint, no notice — and the top inset is 8 rather than
-              // 16 because the segmented control above already contributes 12
-              // of its own: the first card now sits directly under the filter
-              // rather than under a band of instructions.
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+              // Edge to edge, split by hairlines, as the notification feed is.
+              padding: const EdgeInsets.fromLTRB(0, 4, 0, 100),
               itemCount: entries.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              separatorBuilder: (_, __) => const Divider(
+                height: 1,
+                thickness: 1,
+                indent: 68,
+                color: AppColors.borderNeutralSoft,
+              ),
               itemBuilder: (context, i) {
                 final entry = entries[i];
                 return entry.incident != null
@@ -585,158 +577,23 @@ class _IncidentCard extends StatelessWidget {
 
   const _IncidentCard({required this.incident, this.onLongPressDelete});
 
-  String _relative(DateTime t) {
-    final diff = DateTime.now().difference(t);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return '${diff.inDays}d ago';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final pColor = IncidentPriorityInfo.color(incident.priority);
-    final sColor = IncidentStatusInfo.color(incident.status);
-
-    // ── AppCard, NOT A HAND-ROLLED InkWell ──────────────────────────────────
-    //
-    // This was a Material/InkWell over a borderless Container with its own
-    // 16px shadow — the one card in the app that painted its own container,
-    // with a RIPPLE where every other card scales.
-    //
-    // The ripple is the part that mattered. On a surface this size a splash
-    // reads as a wash crawling across the content rather than as the card
-    // responding to a finger; scaling moves the whole object, which is what
-    // "tactile" means at card scale. AppCard already does exactly that at 0.98
-    // with a selection haptic and a Semantics button role, so this row gets the
-    // same press behaviour as every other container in the app instead of a
-    // private imitation of it.
-    //
-    // ── WHITE PANEL, SOFT SHADOW, SLATE-100 HAIRLINE ────────────────────────
-    // This card has now been all three points of the same triangle. It began
-    // outlined in slate-200 at 1.5px with `shadow-sm`; that stroke boxed it in
-    // a feed of peers, so it went fully borderless on `shadow-md`; a shadow
-    // that heavy on pure white is the other failure — the cards start to hover
-    // rather than sit, and a column of them reads as a stack of floating
-    // panels.
-    //
-    // This is the settled middle, and the two numbers are what make it work
-    // rather than a compromise between two wrongs: the stroke is slate-100
-    // (the palette's faintest structural rule) at 1px, not slate-200 at 1.5px.
-    // At that weight the line does not draw a box — it just stops two whites
-    // from bleeding into each other where the shadow alone is too soft to
-    // separate them, which is exactly the job [AppColors.borderNeutralSoft]
-    // exists for. The press scale, haptic and semantics are unchanged.
-    return AppCard(
+    // Notification-style row (core/widgets/history_row.dart), shared with
+    // the SOS entries in the same feed. Tap opens the report's timeline;
+    // long-press deletes where the tab allows it.
+    return HistoryRow(
+      icon: IncidentCategoryInfo.icon(incident.category),
+      tint: IncidentPriorityInfo.color(incident.priority),
+      title: incident.title,
+      detail: [incident.category, incident.location]
+          .where((part) => part.trim().isNotEmpty)
+          .join(' · '),
+      at: incident.reportedAt,
+      statusLabel: IncidentStatusInfo.label(incident.status),
+      statusColor: IncidentStatusInfo.color(incident.status),
       onTap: () => showIncidentTimeline(context, incident),
-      // Only on the Resolved tab — see [IncidentHistoryList.canDelete].
       onLongPress: onLongPressDelete,
-      borderColor: AppColors.borderNeutralSoft,
-      borderWidth: AppStroke.hairline,
-      shadows: AppShadows.sm,
-      cornerRadius: AppRadius.lg,
-      child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: pColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child:
-                        Icon(IncidentCategoryInfo.icon(incident.category),
-                            color: pColor, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          incident.title,
-                          style: _t(
-                              size: 14,
-                              weight: FontWeight.w600,
-                              color: AppColors.textPrimary),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${incident.id} · ${incident.category}',
-                          style: _t(size: 11.5, color: AppColors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // Fill only. The 25%-alpha ring this used to carry was a
-                      // second, fainter statement of the shade already filling
-                      // the pill — on a badge this small it thickened the
-                      // silhouette without adding a reading, and it put a
-                      // stroke back on a card that now has none.
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: sColor.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(AppRadius.pill),
-                        ),
-                        child: Text(
-                          IncidentStatusInfo.label(incident.status),
-                          style: _t(
-                              size: 10.5,
-                              weight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                              color: sColor),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _relative(incident.reportedAt),
-                        style: _t(size: 11, color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              ReportStatusTracker(status: incident.status),
-              Row(
-                children: [
-                  const Icon(PhosphorIconsFill.mapPin,
-                      size: 13, color: AppColors.textMuted),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      incident.location,
-                      style: _t(size: 12, color: AppColors.textSecondary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'View Timeline',
-                        style: _t(
-                            size: 11.5,
-                            weight: FontWeight.w600,
-                            color: AppColors.primary),
-                      ),
-                      const SizedBox(width: 2),
-                      const Icon(AppIcons.chevronRight,
-                          size: 14, color: AppColors.primary),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-      ),
     );
   }
 }

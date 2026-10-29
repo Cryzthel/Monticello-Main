@@ -14,6 +14,7 @@ import 'package:monticello_villas_app/features/panic_button/services/sos_sms_rec
 import 'package:monticello_villas_app/features/panic_button/services/sos_sync_service.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/theme/theme_mode_controller.dart';
+import 'package:monticello_villas_app/core/updates/update_service.dart';
 
 /// Runs one start-up step without letting it take the whole app down.
 ///
@@ -84,6 +85,15 @@ Future<void> main() async {
     await SosSmsRecipients.load();
     unawaited(SosSmsRecipients.refresh());
   });
+
+  // The update check, BEFORE the first frame: a waiting update is then the
+  // first thing the resident sees ("Do you want to update?") instead of a
+  // prompt landing on a screen they have already started using. Capped at
+  // three seconds — a slow network must not hold the app (or its SOS button)
+  // back; UpdateGate checks again once it is up.
+  await _bootStep('Update check', () => UpdateService.instance
+      .check(force: true)
+      .timeout(const Duration(seconds: 3)));
 
   runApp(const MonticelloVillasApp());
 }

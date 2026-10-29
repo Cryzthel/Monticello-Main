@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
-import 'package:monticello_villas_app/core/widgets/app_card.dart';
+import 'package:monticello_villas_app/core/widgets/history_row.dart';
 import 'package:monticello_villas_app/features/panic_button/models/sos_alert_record.dart';
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
 import 'package:monticello_villas_app/features/panic_button/services/sos_queue.dart';
@@ -122,8 +122,8 @@ class SosHistoryController extends ChangeNotifier {
   }
 }
 
-/// One SOS alert as a History row, shaped like a report card so the two
-/// read as one feed. Tapping it opens the live status timeline.
+/// One SOS alert as a History row — the same [HistoryRow] a report uses,
+/// so the two read as one feed. Tapping it opens the live status timeline.
 class SosHistoryCard extends StatelessWidget {
   const SosHistoryCard({super.key, required this.record});
 
@@ -131,43 +131,15 @@ class SosHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _stageColor(record.stage);
-    return AppCard(
+    return HistoryRow(
+      icon: PhosphorIconsFill.siren,
+      tint: AppColors.panicOxblood,
+      title: 'SOS alert',
+      detail: record.place ?? 'Location from your phone',
+      at: record.raisedAt,
+      statusLabel: record.stage.label,
+      statusColor: _stageColor(record.stage),
       onTap: () => showSosTimeline(context, record),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.panicOxblood.withValues(alpha: 0.10)),
-            child: const Icon(PhosphorIconsFill.siren, size: 20, color: AppColors.panicOxblood),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('SOS alert',
-                    style: sfPro(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-                const SizedBox(height: 2),
-                Text(
-                  DateFormat('MMM d, yyyy • h:mm a').format(record.raisedAt),
-                  style: sfPro(fontSize: 12.5, color: AppColors.textMuted),
-                ),
-                if (record.place != null) ...[
-                  const SizedBox(height: 2),
-                  Text(record.place!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: sfPro(fontSize: 12.5, color: AppColors.textSecondary)),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          _StagePill(stage: record.stage, color: color),
-        ],
-      ),
     );
   }
 }

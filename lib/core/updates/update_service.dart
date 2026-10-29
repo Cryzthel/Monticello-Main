@@ -50,9 +50,6 @@ class UpdateService extends ChangeNotifier {
   /// apps"). Read with each check, and again on return from Settings.
   bool? canInstallPackages;
 
-  /// The start-up permission prompt was waved away for this session.
-  bool _permissionPromptDismissed = false;
-
   int _dismissedBuild = 0;
   DateTime? _lastCheck;
   bool _checking = false;
@@ -70,16 +67,6 @@ class UpdateService extends ChangeNotifier {
   /// "Install unknown apps" first, before the resident gets into the app.
   bool get needsInstallPermission =>
       urgency != UpdateUrgency.none && canInstallPackages == false && phase == UpdatePhase.idle;
-
-  /// The start-up prompt, unless already waved away (a required update keeps
-  /// asking: the forced screen shows the same step).
-  bool get offerInstallPermission =>
-      needsInstallPermission && (urgency == UpdateUrgency.required || (offerOptional && !_permissionPromptDismissed));
-
-  void dismissPermissionPrompt() {
-    _permissionPromptDismissed = true;
-    notifyListeners();
-  }
 
   Future<void> check({bool force = false}) async {
     if (!supported || _checking || busy) return;

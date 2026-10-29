@@ -8,6 +8,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/widgets/app_card.dart';
+import 'package:monticello_villas_app/core/widgets/filter_pills.dart';
 import 'package:monticello_villas_app/core/widgets/skeleton.dart';
 import 'package:monticello_villas_app/features/announcements/widgets/announcement_detail_sheet.dart';
 import 'package:monticello_villas_app/features/incidents/models/incident.dart';
@@ -453,9 +454,7 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                           children: [
                             Flexible(
                               child: Text(
-                                announcement.author.isEmpty
-                                    ? 'Monticello Villas HOA'
-                                    : announcement.author,
+                                announcement.publisher,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: _t(
@@ -788,67 +787,21 @@ class AnnouncementFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        padding: padding,
-        scrollDirection: Axis.horizontal,
-        itemCount: options.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final option = options[i];
-          final selected = option == value;
-          final isAll = option == allAnnouncements;
-          // "All" has no category colour of its own, so it takes the app's
-          // accent — the same tint every other selected control on the shell
-          // uses.
-          final tint =
-              isAll ? AppColors.primary : announcementCategoryColor(option);
-
-          return GestureDetector(
-            onTap: () => onChanged(option),
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: selected
-                    ? tint.withValues(alpha: 0.16)
-                    : AppColors.backgroundSecondary,
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                border: Border.all(
-                  color: selected
-                      ? tint.withValues(alpha: 0.55)
-                      : AppColors.innerStroke,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isAll
-                        ? PhosphorIconsFill.squaresFour
-                        : announcementCategoryIcon(option),
-                    size: 13,
-                    color: selected ? tint : AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    option,
-                    style: _t(
-                      size: 12.5,
-                      weight: selected ? FontWeight.w700 : FontWeight.w600,
-                      color: selected ? tint : AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
+    // The shared pill row (core/widgets/filter_pills.dart): solid green with
+    // white text when active, the same control Report History uses.
+    return FilterPillBar(
+      padding: padding,
+      selectedIndex: options.indexOf(value).clamp(0, options.length - 1),
+      onChanged: (i) => onChanged(options[i]),
+      options: [
+        for (final option in options)
+          FilterPillOption(
+            option,
+            icon: option == allAnnouncements
+                ? PhosphorIconsFill.squaresFour
+                : announcementCategoryIcon(option),
+          ),
+      ],
     );
   }
 }
@@ -886,7 +839,9 @@ class _PinMark extends StatelessWidget {
           shape: BoxShape.circle,
           boxShadow: AppShadows.sm,
         ),
-        child: const Icon(PhosphorIconsFill.pushPin, size: 14, color: _pinnedInk),
+        // Material's push_pin stands upright; Phosphor's is drawn at 45°,
+        // which read as tilted in the corner.
+        child: const Icon(Icons.push_pin_rounded, size: 14, color: _pinnedInk),
       ),
     );
   }

@@ -293,9 +293,7 @@ class ResidentNotification {
       // decides whether to open the feed based on it alone.
       headline: 'New Subdivision Announcement: '
           '${title.isEmpty ? 'Untitled' : title}',
-      detail: announcement.author.trim().isEmpty
-          ? 'Posted to the community announcements feed.'
-          : 'Posted by ${announcement.author.trim()}.',
+      detail: 'Posted by ${announcement.publisher}.',
       tint: AppColors.primary,
       icon: PhosphorIconsFill.megaphone,
       guardName: '',

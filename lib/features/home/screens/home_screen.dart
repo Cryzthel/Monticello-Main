@@ -1116,9 +1116,11 @@ class _HeaderIdentity extends StatelessWidget {
                 if (verified) {
                   return const Tooltip(
                     message: 'HOA verified',
+                    // 16pt against the name's ~20pt cap height: beside it, not
+                    // louder than it.
                     child: Icon(
                       PhosphorIconsFill.sealCheck,
-                      size: 20,
+                      size: 16,
                       color: Colors.white,
                       semanticLabel: 'HOA verified',
                     ),

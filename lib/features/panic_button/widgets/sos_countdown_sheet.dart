@@ -372,7 +372,7 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
     _smsOffered = true;
     final send = await showDialog<bool>(
       context: context,
-      builder: (ctx) => _NoInternetDialog(recipients: SosSmsRecipients.current),
+      builder: (ctx) => const _NoInternetDialog(),
     );
     if (send == true) await _sendSms();
   }
@@ -788,9 +788,7 @@ class _SosLockedBody extends StatelessWidget {
 /// "No Internet Connection": offered once the alert is queued for want of a
 /// connection. Pops `true` to open the SMS composer.
 class _NoInternetDialog extends StatelessWidget {
-  const _NoInternetDialog({required this.recipients});
-
-  final List<SmsRecipient> recipients;
+  const _NoInternetDialog();
 
   @override
   Widget build(BuildContext context) {
@@ -807,23 +805,11 @@ class _NoInternetDialog extends StatelessWidget {
         textAlign: TextAlign.center,
         style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "We couldn't reach the backend server over mobile data. Would you like "
-            'to send an Emergency SMS alert instead?',
-            style: sfPro(fontSize: 14.5, color: AppColors.textSecondary, height: 1.45),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Your messaging app opens with your name, address, location and the time '
-            'already written, addressed to '
-            '${recipients.map((r) => r.label).join(', ')}. Press Send there.',
-            style: sfPro(fontSize: 12.5, color: AppColors.textMuted, height: 1.45),
-          ),
-        ],
+      content: Text(
+        "We couldn't reach emergency servers over mobile data. Would you like to "
+        'send an Emergency SMS alert to guardhouse personnel instead?',
+        textAlign: TextAlign.center,
+        style: sfPro(fontSize: 14.5, color: AppColors.textSecondary, height: 1.45),
       ),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
       actions: [

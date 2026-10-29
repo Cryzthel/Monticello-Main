@@ -318,10 +318,13 @@ class _FigureTile extends StatelessWidget {
           border: Border.all(
               color: AppColors.accentPrimary.withValues(alpha: 0.14)),
         ),
+        // Centred (2026-10-29, by request): three short figures side by side
+        // read as a row of stats, each number under its own label.
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(icon, size: 14, color: AppColors.accentPrimary),
                 const SizedBox(width: 5),
@@ -342,9 +345,10 @@ class _FigureTile extends StatelessWidget {
             const SizedBox(height: 8),
             FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
+              alignment: Alignment.center,
               child: Text(
                 value,
+                textAlign: TextAlign.center,
                 style: displayFont(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
