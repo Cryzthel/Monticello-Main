@@ -52,25 +52,17 @@ void main() {
   });
 
   group('legal documents', () {
-    test('both open with key points', () {
-      expect(termsAndConditions.keyPoints, isNotEmpty);
-      expect(privacyPolicy.keyPoints, isNotEmpty);
-    });
-
-    testWidgets('key points first, then every section, without overflow', (tester) async {
+    testWidgets('the intro is a card, every section follows, no key points', (tester) async {
       await tester.pumpWidget(const MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(child: LegalDocumentBody(document: privacyPolicy)),
+          body: SingleChildScrollView(child: LegalDocumentBody(document: termsAndConditions, showTitle: false)),
         ),
       ));
-      expect(find.text('Key points'), findsOneWidget);
-      for (final section in privacyPolicy.sections) {
+      expect(find.text('Key points'), findsNothing);
+      expect(find.text(termsAndConditions.intro!), findsOneWidget);
+      for (final section in termsAndConditions.sections) {
         expect(find.text(section.heading), findsOneWidget);
       }
-      expect(
-        tester.getTopLeft(find.text('Key points')).dy,
-        lessThan(tester.getTopLeft(find.text(privacyPolicy.sections.first.heading)).dy),
-      );
       expect(tester.takeException(), isNull);
     });
   });

@@ -197,7 +197,7 @@ Future<void> _showPhoneActions(
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(PhosphorIconsBold.phoneCall,
-                  color: AppColors.primary),
+                  color: AppColors.textPrimary),
               title: Text('Call now', style: _t(size: 14.5)),
               onTap: () async {
                 final navigator = Navigator.of(sheetContext);
@@ -209,7 +209,7 @@ Future<void> _showPhoneActions(
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading:
-                  const Icon(PhosphorIconsBold.copy, color: AppColors.primary),
+                  const Icon(PhosphorIconsBold.copy, color: AppColors.textPrimary),
               title: Text('Copy number', style: _t(size: 14.5)),
               onTap: () async {
                 final navigator = Navigator.of(sheetContext);
@@ -278,11 +278,12 @@ class _ContactTile extends StatelessWidget {
       leading: Container(
         width: 32,
         height: 32,
+        // Neutral, like the Settings icons (2026-10-30, by request).
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.1),
+          color: AppColors.neutralFill,
           borderRadius: BorderRadius.circular(AppRadius.xs),
         ),
-        child: Icon(icon, size: 18, color: AppColors.primary),
+        child: Icon(icon, size: 18, color: AppColors.textPrimary),
       ),
       title: Text(title, style: _t(size: 14.5, weight: FontWeight.w600)),
       subtitle:

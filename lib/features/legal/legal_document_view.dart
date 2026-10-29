@@ -72,21 +72,7 @@ class LegalDocumentBody extends StatelessWidget {
           ),
         if (showTitle || doc.lastUpdated != null) const SizedBox(height: 16),
         if (doc.intro != null) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.accentPrimary.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(
-                  color: AppColors.accentPrimary.withValues(alpha: 0.14)),
-            ),
-            child: Text(doc.intro!, style: _bodyStyle, textAlign: bodyAlign),
-          ),
-          const SizedBox(height: 24),
-        ],
-        if (doc.keyPoints.isNotEmpty) ...[
-          _KeyPoints(points: doc.keyPoints),
+          _IntroCard(text: doc.intro!, bodyStyle: _bodyStyle),
           const SizedBox(height: 16),
         ],
         // Each section in its own card (2026-10-29, by request), so a long
@@ -100,34 +86,59 @@ class LegalDocumentBody extends StatelessWidget {
   }
 }
 
-/// "Key points": the document in four lines, before the full text.
-class _KeyPoints extends StatelessWidget {
-  const _KeyPoints({required this.points});
+/// The document's welcome, as the lead card (2026-10-30, by request): a
+/// tinted panel with a shield mark and a short label over the intro (not the
+/// title, which the page may already show), set apart
+/// from the plain section cards that follow it.
+class _IntroCard extends StatelessWidget {
+  const _IntroCard({required this.text, required this.bodyStyle});
 
-  final List<String> points;
+  final String text;
+  final TextStyle bodyStyle;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
       decoration: BoxDecoration(
-        color: AppColors.accentPrimary.withValues(alpha: 0.06),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.accentPrimary.withValues(alpha: 0.10),
+            AppColors.accentPrimary.withValues(alpha: 0.03),
+          ],
+        ),
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.accentPrimary.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Key points',
-            style: sfPro(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryDark,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.verified_user_rounded, size: 18, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Please read carefully',
+                  style: sfPro(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          _Bullets(
-            items: points,
-            style: sfPro(fontSize: 14, color: AppColors.textPrimary, height: 1.5),
-          ),
+          const SizedBox(height: 12),
+          Text(text, style: bodyStyle.copyWith(color: AppColors.textPrimary), textAlign: LegalDocumentBody.bodyAlign),
         ],
       ),
     );

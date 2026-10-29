@@ -52,7 +52,6 @@ Future<void> showSosCountdown(
   Future<SosDispatchReceipt> Function()? dispatcher,
   SosStatusStream? statusStream,
   ResidentVerification Function()? verification,
-  Future<bool> Function(SosPayload payload)? smsComposer,
   Future<bool> Function(SosPayload payload, SmsRecipient to)? singleComposer,
   Future<bool> Function()? offlineCheck,
 }) async {
@@ -85,7 +84,6 @@ Future<void> showSosCountdown(
     barrierDismissible: false,
     builder: (_) => _NoInternetDialog(
       payload: handoff.payload,
-      smsComposer: smsComposer ?? SosSmsFallback.compose,
       singleComposer: singleComposer ?? SosSmsFallback.composeTo,
       statusStream: stream,
     ),
@@ -761,10 +759,12 @@ class _SosLockedBody extends StatelessWidget {
 /// "No Internet Connection" — the ONLY thing on screen once an SOS cannot
 /// reach the server: the sheet has closed itself (see `_handOff`).
 ///
-///   Send SMS Alert → waits for the alert to be built (GPS included, a few
-///                    seconds at most), opens the SMS app addressed to every
-///                    guardhouse number, and closes. If no messaging app
-///                    opens, it says so and stays, so the resident can retry.
+///   Send SMS Alert → the guard list (2026-10-30, by request): one row per
+///                    guardhouse number. Tapping a guard opens the SMS app
+///                    addressed to THAT guard alone, with the alert written —
+///                    one recipient, so no messaging app can fail to start the
+///                    conversation over how several numbers are separated.
+///                    The list stays up to text another guard.
 ///   Close          → closes; the queued alert still sends itself.
 ///
 /// It also watches the alert: if the queue gets it through while this is
@@ -773,13 +773,11 @@ class _SosLockedBody extends StatelessWidget {
 class _NoInternetDialog extends StatefulWidget {
   const _NoInternetDialog({
     required this.payload,
-    required this.smsComposer,
     required this.singleComposer,
     required this.statusStream,
   });
 
   final Future<SosPayload> payload;
-  final Future<bool> Function(SosPayload payload) smsComposer;
   final Future<bool> Function(SosPayload payload, SmsRecipient to) singleComposer;
   final SosStatusStream statusStream;
 
@@ -788,13 +786,14 @@ class _NoInternetDialog extends StatefulWidget {
 }
 
 class _NoInternetDialogState extends State<_NoInternetDialog> {
-  bool _working = false;
   bool _delivered = false;
 
-  /// The messaging app was opened with every number. The modal stays, with
-  /// a button per guard: if that app could not start a group conversation
-  /// ("Could not start conversation"), each guard can be texted on their own.
-  bool _opened = false;
+  /// Showing the guard list (after "Send SMS Alert").
+  bool _choosing = false;
+
+  /// The guard whose text is being prepared, and the ones already opened.
+  String? _sending;
+  final Set<String> _texted = {};
   String? _error;
   StreamSubscription<SosAlertStatus>? _sub;
   Timer? _relisten;
@@ -834,56 +833,43 @@ class _NoInternetDialogState extends State<_NoInternetDialog> {
     super.dispose();
   }
 
-  Future<void> _send() async {
+  void _send() => setState(() {
+        _choosing = true;
+        _error = null;
+      });
+
+  Future<void> _sendTo(SmsRecipient recipient) async {
+    if (_sending != null) return;
     setState(() {
-      _working = true;
+      _sending = recipient.number;
       _error = null;
     });
     SosPayload? payload;
     try {
+      // Built while the countdown ran; at most a few seconds more for the
+      // GPS fix if the guard was tapped straight away.
       payload = await widget.payload.timeout(const Duration(seconds: 8));
     } catch (_) {
       payload = null;
     }
+    final opened = payload != null && await widget.singleComposer(payload, recipient);
     if (!mounted) return;
-    if (payload == null) {
-      setState(() {
-        _working = false;
-        _error = "Your alert couldn't be prepared. Call the guardhouse if you can.";
-      });
-      return;
-    }
-    final opened = await widget.smsComposer(payload);
-    if (!mounted) return;
-    if (opened) {
-      setState(() {
-        _working = false;
-        _opened = true;
-      });
-      return;
-    }
     setState(() {
-      _working = false;
-      _error = "This phone couldn't open a messaging app. Call the guardhouse if you can.";
+      _sending = null;
+      if (opened) {
+        _texted.add(recipient.number);
+      } else {
+        _error = payload == null
+            ? "Your alert couldn't be prepared. Call the guardhouse if you can."
+            : "This phone couldn't open a messaging app. Call the guardhouse if you can.";
+      }
     });
-  }
-
-  Future<void> _sendTo(SmsRecipient recipient) async {
-    final SosPayload payload;
-    try {
-      payload = await widget.payload.timeout(const Duration(seconds: 8));
-    } catch (_) {
-      return;
-    }
-    final opened = await widget.singleComposer(payload, recipient);
-    if (!mounted || opened) return;
-    setState(() => _error = "This phone couldn't open a messaging app. Call the guardhouse if you can.");
   }
 
   @override
   Widget build(BuildContext context) {
     final delivered = _delivered;
-    if (_opened && !delivered) return _openedView(context);
+    if (_choosing && !delivered) return _guardPicker(context);
     return AlertDialog(
       backgroundColor: AppColors.backgroundSecondary,
       surfaceTintColor: Colors.transparent,
@@ -941,20 +927,14 @@ class _NoInternetDialogState extends State<_NoInternetDialog> {
             ]
           : [
               TextButton(
-                onPressed: _working ? null : () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(context).pop(),
                 child: Text('Close',
                     style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
               ),
               ElevatedButton.icon(
-                onPressed: _working ? null : _send,
-                icon: _working
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(PhosphorIconsBold.chatText, size: 16),
-                label: Text(_error == null ? 'Send SMS Alert' : 'Try again',
+                onPressed: _send,
+                icon: const Icon(PhosphorIconsBold.chatText, size: 16),
+                label: Text('Send SMS Alert',
                     style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.panicOxblood,
@@ -970,63 +950,61 @@ class _NoInternetDialogState extends State<_NoInternetDialog> {
 }
 
 extension on _NoInternetDialogState {
-  /// After the messaging app opened: what to check, and one button per guard.
-  Widget _openedView(BuildContext context) {
-    final recipients = SosSmsRecipients.current;
+  /// "Choose a guard": the guardhouse roster as a list, one tap per text.
+  Widget _guardPicker(BuildContext context) {
+    final guards = SosSmsRecipients.current;
     return AlertDialog(
       backgroundColor: AppColors.backgroundSecondary,
       surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.xl),
         side: const BorderSide(color: AppColors.innerStroke),
       ),
-      icon: const Icon(PhosphorIconsFill.chatText, size: 30, color: AppColors.panicOxblood),
-      title: Text(
-        'Press Send in your messaging app',
-        textAlign: TextAlign.center,
-        style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+      contentPadding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      title: Column(
         children: [
           Text(
-            'If it said it could not start the conversation, text each guard '
-            'on their own:',
+            'Text a guard',
             textAlign: TextAlign.center,
-            style: sfPro(fontSize: 14, color: AppColors.textSecondary, height: 1.45),
+            style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
           ),
-          const SizedBox(height: 12),
-          for (final r in recipients)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: OutlinedButton.icon(
-                onPressed: () => _sendTo(r),
-                icon: const Icon(PhosphorIconsBold.chatText, size: 16, color: AppColors.panicOxblood),
-                label: Text(
-                  'Text ${r.label}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                ),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(44),
-                  side: const BorderSide(color: AppColors.borderNeutral),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ),
-          if (_error != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              _error!,
-              textAlign: TextAlign.center,
-              style: sfPro(fontSize: 13, color: AppColors.dangerInk, height: 1.4),
-            ),
-          ],
+          const SizedBox(height: 4),
+          Text(
+            'Tap a guard to open your messaging app with your emergency details '
+            'written. Press Send there.',
+            textAlign: TextAlign.center,
+            style: sfPro(fontSize: 13, color: AppColors.textSecondary, height: 1.45),
+          ),
         ],
       ),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final g in guards)
+              _GuardRow(
+                guard: g,
+                sending: _sending == g.number,
+                texted: _texted.contains(g.number),
+                onTap: () => _sendTo(g),
+              ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: sfPro(fontSize: 13, color: AppColors.dangerInk, height: 1.4),
+                ),
+              ),
+          ],
+        ),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
       actionsAlignment: MainAxisAlignment.center,
       actions: [
         TextButton(
@@ -1035,6 +1013,112 @@ extension on _NoInternetDialogState {
               style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
         ),
       ],
+    );
+  }
+}
+
+/// One guard in the picker: initials badge, name, number, and what tapping
+/// will do (text, preparing, or texted already).
+class _GuardRow extends StatelessWidget {
+  const _GuardRow({required this.guard, required this.sending, required this.texted, required this.onTap});
+
+  final SmsRecipient guard;
+  final bool sending;
+  final bool texted;
+  final VoidCallback onTap;
+
+  static String _initials(String name) {
+    final parts = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty && RegExp(r'[A-Za-z]').hasMatch(p[0])).toList();
+    if (parts.isEmpty) return '#';
+    return (parts.first[0] + (parts.length > 1 ? parts.last[0] : '')).toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: sending ? null : onTap,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.panicOxblood.withValues(alpha: 0.10),
+                  border: Border.all(color: AppColors.panicOxblood.withValues(alpha: 0.25)),
+                ),
+                child: Text(
+                  _initials(guard.label),
+                  style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.panicOxblood),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      guard.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: sfPro(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryDark.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                          child: Text(
+                            'Guardhouse',
+                            style: sfPro(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.primaryDark),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            guard.number,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: sfPro(fontSize: 12.5, color: AppColors.textMuted),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (sending)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.panicOxblood),
+                )
+              else if (texted)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(PhosphorIconsFill.checkCircle, size: 18, color: AppColors.success),
+                    const SizedBox(width: 4),
+                    Text('Opened', style: sfPro(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.success)),
+                  ],
+                )
+              else
+                const Icon(PhosphorIconsBold.chatText, size: 20, color: AppColors.panicOxblood),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -10,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:monticello_villas_app/core/config/map_constants.dart';
 import 'package:monticello_villas_app/core/location/device_heading.dart';
@@ -152,6 +151,15 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
   Uint8List? _coneBytes;
   double? _coneRatio;
 
+  /// The resident's pin, as an upright annotation of its own (2026-10-30).
+  /// See [_renderMarker] for why it is no longer the puck's top image.
+  PointAnnotationManager? _pinManager;
+  PointAnnotation? _pin;
+  LiveLocationMarkerImage? _pinImage;
+  bool _pinImageChanged = false;
+  geo.Position? _fix;
+  StreamSubscription<geo.Position>? _positionSub;
+
   /// Satellite by default.
   ///
   /// A street basemap of a subdivision is mostly empty road casing — the
@@ -181,6 +189,7 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _serviceSub?.cancel();
+    _positionSub?.cancel();
     super.dispose();
   }
 
@@ -297,61 +306,9 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     _watchServiceStatus();
     final access = await _refreshAccess();
     if (!mounted || access == null || !access.canPrompt) return;
-    // Say WHY before Android asks (2026-10-29, by request): a bare system
-    // dialog on the first screen after sign-in reads as tracking for its own
-    // sake. Only when the OS will actually show its prompt (`canPrompt`); a
-    // "Not now" leaves the status chip on the map to ask again later.
-    if (!await _explainLocation()) return;
-    if (!mounted) return;
+    // Straight to Android's own prompt: the in-app explainer that stood in
+    // front of it was removed by request (2026-10-30).
     await _resolveAccess(access);
-  }
-
-  /// The in-app step before the system location prompt. True to go on to it.
-  Future<bool> _explainLocation() async {
-    final go = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.backgroundSecondary,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.xl),
-          side: const BorderSide(color: AppColors.innerStroke),
-        ),
-        icon: const Icon(PhosphorIconsFill.mapPin, size: 30, color: AppColors.primary),
-        title: Text(
-          'Allow location for emergencies',
-          textAlign: TextAlign.center,
-          style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-        ),
-        content: Text(
-          'When you press SOS or file a report, your exact location goes with it so '
-          'the guardhouse can dispatch a guard straight to you. It is also how the '
-          'map shows where you are. Location is only used while you use the app.',
-          textAlign: TextAlign.center,
-          style: sfPro(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('Not now',
-                style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryDark,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text('Continue',
-                style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-    return go ?? false;
   }
 
   /// Re-reads access without prompting and brings the map in line with it.
@@ -576,22 +533,21 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     );
   }
 
-  /// Shows the resident through Mapbox's own location engine, and nothing
-  /// else.
+  /// Shows the resident: Mapbox's location component for the heading cone
+  /// and the accuracy disk, and an upright annotation for the pin.
   ///
-  /// ── ONE ENGINE ────────────────────────────────────────────────────────────
-  /// The native location component is the ONLY source of the resident's
-  /// position on this map. It runs its own high-accuracy provider at about one
-  /// update a second, draws the pin as its puck image, sizes the accuracy ring
-  /// in metres from each fix, turns the heading cone with the compass, and
-  /// glides between real fixes on the render thread without extrapolating past
-  /// the latest one. Dart never sees a coordinate, so there is no listener to
-  /// throttle, no setState per fix, and no second marker to disagree with.
+  /// ── WHY THE PIN LEFT THE PUCK (2026-10-30) ───────────────────────────────
+  /// It was the puck's `topImage`, and Mapbox turns the WHOLE location
+  /// indicator to the compass heading — so the resident's face tilted as they
+  /// turned (seen on a real phone). The cone and the ring stay on the puck,
+  /// where the native compass turns the cone with no Dart in the loop. The pin
+  /// is a point annotation, never rotated, placed from geolocator.
   ///
-  /// It used to be two: the stock blue puck from Mapbox's provider plus an
-  /// avatar annotation placed from geolocator, which on a real phone sat 15–20
-  /// m apart. geolocator now only asks for permission and watches the location
-  /// switch — Mapbox has no Flutter API for either.
+  /// The last time the pin was an annotation it sat 15–20 m from Mapbox's own
+  /// dot. That version seeded from a stale last-known fix and filtered moves
+  /// under 10 m, while a second, blue puck showed the live position beside it.
+  /// Now the stream is high accuracy with no distance filter, nothing else
+  /// draws a dot, and the cone and ring come from the same fused provider.
   ///
   /// Not granted → the puck is off and there is no pin at all. The map stays
   /// usable; the chip says what to do.
@@ -617,6 +573,7 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
 
     final live = _access?.isGranted ?? false;
     if (!live) {
+      _stopFollowingPosition();
       if (_markerKey == 'off') return;
       try {
         await map.location.updateSettings(LocationComponentSettings(
@@ -624,12 +581,15 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
           pulsingEnabled: false,
           showAccuracyRing: false,
         ));
+        await _pinManager?.deleteAll();
+        _pin = null;
         _markerKey = 'off';
       } catch (_) {
         _markerKey = null;
       }
       return;
     }
+    _startFollowingPosition();
 
     final profile = UserProfileService.instance.profile;
     // Cached, NOT read from the context here — see [_pixelRatio]. This runs
@@ -680,20 +640,98 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
           puckBearing: PuckBearing.HEADING,
           locationPuck: LocationPuck(
             locationPuck2D: LocationPuck2D(
-              topImage: pin.bytes,
-              // Empty bytes mean "no image" to both platform mappings — which
-              // is what replaces the stock arrow and shadow.
+              // Empty bytes mean "no image" to both platform mappings. No top
+              // image: the pin is an annotation (see above), so the only
+              // thing the compass turns is the cone.
+              topImage: Uint8List(0),
               bearingImage: cone,
               shadowImage: Uint8List(0),
             ),
           ),
         ),
       );
+      _pinImage = pin;
+      _pinImageChanged = true;
+      await _placePin();
       _markerKey = key;
     } catch (_) {
       // A failed rasterise or a dead platform view must not take the card
       // down; the next refresh tries again from scratch.
       _markerKey = null;
+    }
+  }
+
+  /// Live position for the pin: high accuracy, every fix (no distance
+  /// filter), seeded with a fresh reading rather than a cached one.
+  void _startFollowingPosition() {
+    if (_positionSub != null) return;
+    try {
+      _positionSub = geo.Geolocator.getPositionStream(
+        locationSettings: const geo.LocationSettings(
+          accuracy: geo.LocationAccuracy.best,
+          distanceFilter: 0,
+        ),
+      ).listen((pos) {
+        _fix = pos;
+        unawaited(_placePin());
+      }, onError: (Object _) {/* a dropped fix keeps the last pin */});
+    } catch (_) {
+      _positionSub = null;
+      return;
+    }
+    unawaited(() async {
+      try {
+        final now = await geo.Geolocator.getCurrentPosition(
+          desiredAccuracy: geo.LocationAccuracy.best,
+        ).timeout(const Duration(seconds: 10));
+        _fix ??= now;
+        await _placePin();
+      } catch (_) {}
+    }());
+  }
+
+  void _stopFollowingPosition() {
+    _positionSub?.cancel();
+    _positionSub = null;
+  }
+
+  bool _placing = false;
+
+  /// Puts the pin on the latest fix: created once, then only moved. Never
+  /// given an `iconRotate`, so it stays upright whatever the phone does.
+  Future<void> _placePin() async {
+    final manager = _pinManager;
+    final image = _pinImage;
+    final fix = _fix;
+    if (manager == null || image == null || fix == null || _placing || !mounted) return;
+    _placing = true;
+    try {
+      final point = Point(coordinates: Position(fix.longitude, fix.latitude));
+      if (_pin != null && !_pinImageChanged) {
+        _pin!.geometry = point;
+        await manager.update(_pin!);
+        return;
+      }
+      await manager.deleteAll();
+      _pin = await manager.create(
+        PointAnnotationOptions(
+          geometry: point,
+          image: image.bytes,
+          // The pointer's apex on the coordinate: TOP_LEFT, offset by the
+          // painter's own tip (icon-offset is in the bitmap's pixels).
+          iconAnchor: IconAnchor.TOP_LEFT,
+          iconOffset: [-image.tip.dx, -image.tip.dy],
+          // Painted at the device pixel ratio, laid out in device pixels: 1:1.
+          iconSize: 1.0,
+          iconRotate: 0,
+        ),
+      );
+      _pinImageChanged = false;
+    } catch (_) {
+      // A dead platform view or a style mid-swap: the next fix tries again.
+      _pin = null;
+    } finally {
+      _placing = false;
     }
   }
 
@@ -705,6 +743,9 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     if (map == null) return;
 
     _boundaryCore = await map.annotations.createPolylineAnnotationManager();
+    // After the boundary, so the pin draws above the line.
+    _pinManager = await map.annotations.createPointAnnotationManager();
+    _pin = null;
     _markerKey = null;
 
     await _drawBoundary();

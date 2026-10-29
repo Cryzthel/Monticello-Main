@@ -76,22 +76,25 @@ Future<void> _advance(WidgetTester tester,
   }
 }
 
-/// Stands in for the SMS composer: records what it was asked to send.
+/// Stands in for the SMS composer: records what it was asked to send, and to
+/// whom (one guard per text since 2026-10-30).
 class _Sms {
   final List<SosPayload> sent = [];
   final List<String> singles = [];
   bool available = true;
 
-  Future<bool> call(SosPayload payload) async {
-    sent.add(payload);
-    return available;
-  }
-
   Future<bool> one(SosPayload payload, SmsRecipient to) async {
+    sent.add(payload);
     singles.add(to.number);
     return available;
   }
 }
+
+/// The guardhouse numbers every SMS test texts.
+void _setGuards() => SosSmsRecipients.debugSet(const [
+      SmsRecipient(label: 'Main gate', number: '09512801347'),
+      SmsRecipient(label: 'Back gate', number: '09078970640'),
+    ]);
 
 Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
     {_StatusFeed? feed,
@@ -114,7 +117,6 @@ Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
                 // tests below, and the rest are about the countdown.
                 verification:
                     verification ?? () => ResidentVerification.verified,
-                smsComposer: (sms ?? _Sms()).call,
                 singleComposer: (sms ?? _Sms()).one,
                 offlineCheck: () async => offline,
               ),
@@ -200,12 +202,9 @@ void main() {
     expect(find.textContaining('saved on this phone'), findsNothing);
   });
 
-  testWidgets('Send SMS Alert drafts that alert, then offers each guard',
+  testWidgets('Send SMS Alert lists the guards; a tap texts that one guard',
       (tester) async {
-    SosSmsRecipients.debugSet(const [
-      SmsRecipient(label: 'Main gate', number: '09512801347'),
-      SmsRecipient(label: 'Back gate', number: '09078970640'),
-    ]);
+    _setGuards();
     final sms = _Sms();
     await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
     await tester.pump(const Duration(seconds: 5));
@@ -213,18 +212,25 @@ void main() {
 
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 4);
-    expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
+    expect(sms.sent, isEmpty, reason: 'nothing opens until a guard is chosen');
+    expect(find.text('Text a guard'), findsOneWidget);
+    expect(find.text('Main gate'), findsOneWidget);
+    expect(find.text('Back gate'), findsOneWidget);
 
-    // The modal stays: if the messaging app could not start a group
-    // conversation, each guard can be texted on their own.
-    expect(find.text('Press Send in your messaging app'), findsOneWidget);
-    await tester.tap(find.text('Text Back gate'));
+    await tester.tap(find.text('Back gate'));
     await _advance(tester, frames: 2);
     expect(sms.singles, ['09078970640']);
+    expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
+    expect(find.text('Opened'), findsOneWidget);
+
+    // The list stays up to text another guard.
+    await tester.tap(find.text('Main gate'));
+    await _advance(tester, frames: 2);
+    expect(sms.singles, ['09078970640', '09512801347']);
 
     await tester.tap(find.text('Done'));
     await _advance(tester, frames: 4);
-    expect(find.text('Press Send in your messaging app'), findsNothing);
+    expect(find.text('Text a guard'), findsNothing);
     SosSmsRecipients.debugSet(const []);
   });
 
@@ -238,25 +244,31 @@ void main() {
     await _advance(tester, frames: 4);
     expect(find.text('No Internet Connection'), findsNothing);
     expect(find.text('EMERGENCY ALERT'), findsNothing);
-    expect(sms.sent, isEmpty);
+    expect(sms.singles, isEmpty);
   });
 
   testWidgets('a phone with no messaging app is told so, and can retry',
       (tester) async {
+    _setGuards();
     final sms = _Sms()..available = false;
     await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
     await tester.pump(const Duration(seconds: 5));
     await _advance(tester);
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 4);
+    await tester.tap(find.text('Main gate'));
+    await _advance(tester, frames: 4);
 
     expect(find.textContaining("couldn't open a messaging app"), findsOneWidget);
-    expect(find.text('No Internet Connection'), findsOneWidget);
+    expect(find.text('Text a guard'), findsOneWidget);
+    expect(find.text('Opened'), findsNothing);
     sms.available = true;
-    await tester.tap(find.text('Try again'));
+    await tester.tap(find.text('Main gate'));
     await _advance(tester, frames: 4);
-    expect(sms.sent, hasLength(2));
-    expect(find.text('Press Send in your messaging app'), findsOneWidget);
+    expect(sms.singles, hasLength(2));
+    expect(find.text('Opened'), findsOneWidget);
+    expect(find.textContaining("couldn't open a messaging app"), findsNothing);
+    SosSmsRecipients.debugSet(const []);
   });
 
   testWidgets('with no network the modal opens before the alert is saved',
@@ -278,7 +290,6 @@ void main() {
               },
               statusStream: _StatusFeed().call,
               verification: () => ResidentVerification.verified,
-              smsComposer: sms.call,
               singleComposer: sms.one,
               offlineCheck: () async => true,
             ),
@@ -294,14 +305,18 @@ void main() {
 
     expect(find.text('No Internet Connection'), findsOneWidget);
     expect(find.text('EMERGENCY ALERT'), findsNothing);
+    _setGuards();
     await tester.tap(find.text('Send SMS Alert'));
+    await _advance(tester, frames: 2);
+    await tester.tap(find.text('Main gate'));
     await _advance(tester, frames: 2);
     expect(sms.sent, isEmpty, reason: 'waits for the alert to be built');
 
     gate.complete();
     await _advance(tester, frames: 4);
     expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
-    expect(find.text('Press Send in your messaging app'), findsOneWidget);
+    expect(find.text('Opened'), findsOneWidget);
+    SosSmsRecipients.debugSet(const []);
   });
 
   testWidgets('a delivered alert never offers SMS', (tester) async {
@@ -333,7 +348,6 @@ void main() {
               dispatcher: (_Dispatcher()..outcome = SosDispatchOutcome.queued).call,
               statusStream: feed,
               verification: () => ResidentVerification.verified,
-              smsComposer: _Sms().call,
               offlineCheck: () async => false,
             ),
             child: const Text('SOS'),

@@ -274,9 +274,8 @@ class _SosTimelineSheetState extends State<_SosTimelineSheet> {
                     style: sfPro(fontSize: 12.5, color: AppColors.warningInk, height: 1.45),
                   ),
                 ),
+              // No reference footer (2026-10-30, by request).
               SosStatusTimeline(record: r),
-              const SizedBox(height: 8),
-              Text('Reference ${r.id}', style: sfPro(fontSize: 11, color: AppColors.textMuted)),
             ],
           ),
         ),

@@ -33,17 +33,12 @@ class LegalDocument {
     required this.sections,
     this.lastUpdated,
     this.intro,
-    this.keyPoints = const [],
   });
 
   final String title;
   final String? lastUpdated;
   final String? intro;
   final List<LegalSection> sections;
-
-  /// A plain-language summary shown first, in its own card. It restates the
-  /// sections below and never adds to them: the full text is the document.
-  final List<String> keyPoints;
 }
 
 /// The address the Privacy Policy names for privacy requests. Rendered as a
@@ -53,15 +48,6 @@ const String kPrivacyEmail = 'adminmonticellov@gmail.com';
 const LegalDocument termsAndConditions = LegalDocument(
   title: 'Terms and Conditions',
   lastUpdated: 'September 2, 2026',
-  keyPoints: [
-    'The app is for verified Monticello Villas residents; keep your sign-in safe.',
-    'Reports and SOS alerts must be truthful — false reports and needless SOS '
-        'alerts can get your account suspended.',
-    'Without internet, the app drafts an emergency text; you still press Send. '
-        'It does not replace calling emergency services.',
-    'Photos, videos and details you submit are used by the HOA only for '
-        'security and incident response.',
-  ],
   intro: 'Welcome to the Monticello Villas Incident & Announcement Management '
       'System. These Terms and Conditions explain the rules for using the '
       'Monticello Villas mobile application and its related services. By using '
@@ -151,16 +137,6 @@ const LegalDocument termsAndConditions = LegalDocument(
 
 const LegalDocument privacyPolicy = LegalDocument(
   title: 'Privacy Policy',
-  keyPoints: [
-    'We collect your name, email, lot details, verification ID, and your '
-        'location when you pin a report or press SOS.',
-    'It is used for verification, emergency response and announcements — '
-        'never sold, rented or traded.',
-    'Only authorized HOA staff and on-duty security can see your reports; '
-        'Mapbox draws the maps.',
-    'You can ask to see, correct or delete your data under the Data Privacy '
-        'Act of 2012 — email $kPrivacyEmail.',
-  ],
   sections: [
     LegalSection('1. Information We Collect', [
       LegalBlock.text(

@@ -310,27 +310,21 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: catColor.withValues(alpha: 0.14),
-                      // AppRadius.sm (12) — the shared lead-icon tile radius,
-                      // same as SettingsRow and the notification tiles. A lead
-                      // glyph is one object across all three screens.
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: Icon(
-                      announcementCategoryIcon(announcement.category),
-                      size: 19,
-                      // Ink on the 14% tile behind it. This glyph is the only
-                      // thing distinguishing a Security notice from a Maintenance
-                      // one at a glance, so it is meaningful content and owes the
-                      // 3:1 that non-text UI is held to. In the fill hue three of
-                      // the four categories missed it — Maintenance at 1.93:1,
-                      // Event 2.82:1, General 2.40:1, with only Security clearing
-                      // at 3.89:1. The inks run 6.09:1 to 6.55:1 on that wash.
-                      color: AppColors.inkFor(catColor),
+                  // The bare glyph, no tile behind it (2026-10-30, by request),
+                  // in a fixed 28pt slot so titles still line up. Drawn in the
+                  // category's INK: the glyph is what tells a Security notice
+                  // from a Maintenance one at a glance, so it owes non-text
+                  // UI's 3:1, which the inks clear on white and the raw hues
+                  // mostly do not.
+                  SizedBox(
+                    width: 28,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(
+                        announcementCategoryIcon(announcement.category),
+                        size: 22,
+                        color: AppColors.inkFor(catColor),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),

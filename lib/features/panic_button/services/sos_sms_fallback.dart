@@ -48,21 +48,14 @@ class SosSmsFallback {
 
   static const _channel = MethodChannel('monticello/sms');
 
-  /// Opens the SMS composer addressed to the guardhouse numbers in
-  /// [SosSmsRecipients] with [payload] written out.
+  /// Opens the SMS composer addressed to ONE guard (picked in the offline
+  /// modal's guard list) with [payload] written out. One recipient, so there
+  /// is no separator for a messaging app to misread.
   ///
   /// Returns false if no messaging app could be opened (a tablet, an emulator,
   /// a data-only device). Callers treat that as "the fallback is not
   /// available", not as "the alert failed" — the encrypted queue still holds
   /// it and the sync service will still deliver it.
-  static Future<bool> compose(SosPayload payload) async {
-    await SosSmsRecipients.load();
-    return _open(SosSmsRecipients.current, payload.toSmsBody());
-  }
-
-  /// The same alert to ONE guard. With a single number there is no separator
-  /// for a messaging app to misread, so this works wherever SMS works — the
-  /// fallback for an app that cannot start a multi-recipient conversation.
   static Future<bool> composeTo(SosPayload payload, SmsRecipient recipient) =>
       _open([recipient], payload.toSmsBody());
 

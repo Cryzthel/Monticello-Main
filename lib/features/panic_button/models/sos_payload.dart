@@ -190,33 +190,30 @@ extension SosPayloadWire on SosPayload {
     };
   }
 
-  /// The same emergency rendered for a 160-character world.
+  /// The text a guard receives, in the fixed order the guardhouse reads it
+  /// (2026-10-30, by request):
   ///
-  /// Ordered by what a guard needs first and truncated from the back, so a
-  /// carrier that splits or clips the message still delivers the address. The
-  /// coordinates go last because they are the one part the property record
-  /// already substitutes for.
+  ///   [EMERGENCY SOS] Resident: Ana Cruz | Location: Phase 1, Blk 4, Lot 12 |
+  ///   GPS: 14.12345,121.54321 | Time: 21:05
+  ///
+  /// Short enough for one SMS in the common case, the label on every field so
+  /// it reads at a glance, and nothing a guard has to decode. A part with
+  /// nothing to say (no GPS fix) is left out rather than printed empty.
   String toSmsBody() {
-    final where = propertyLabel?.isNotEmpty == true
-        ? propertyLabel!
-        : 'Ph $propertyPhase Blk $propertyBlock Lot $propertyLot';
+    final name = residentName.trim().isEmpty ? 'Unknown resident' : residentName.trim();
+    final location = [
+      if (propertyPhase.isNotEmpty) 'Phase $propertyPhase',
+      if (propertyBlock.isNotEmpty) 'Blk $propertyBlock',
+      if (propertyLot.isNotEmpty) 'Lot $propertyLot',
+    ].join(', ');
     final at = capturedAt.toLocal();
     final hh = at.hour.toString().padLeft(2, '0');
     final mm = at.minute.toString().padLeft(2, '0');
-    // The date as well as the time: a text read the next morning, or held in
-    // a phone's outbox overnight, must not look like a fresh emergency.
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     final parts = <String>[
-      'SOS Monticello Villas',
-      residentName.isEmpty ? 'Resident' : residentName,
-      where,
-      'at $hh:$mm ${months[at.month - 1]} ${at.day}',
-      if (residentPhone.isNotEmpty) residentPhone,
-      // As a map link a guard can tap, which still carries the bare
-      // coordinates for anyone reading it on a basic phone.
-      if (hasLocation)
-        'https://maps.google.com/?q=${lat!.toStringAsFixed(5)},${lng!.toStringAsFixed(5)}',
-      'Ref $alertId',
+      '[EMERGENCY SOS] Resident: $name',
+      'Location: ${location.isEmpty ? (propertyLabel ?? 'unknown') : location}',
+      if (hasLocation) 'GPS: ${lat!.toStringAsFixed(5)},${lng!.toStringAsFixed(5)}',
+      'Time: $hh:$mm',
     ];
     return parts.join(' | ');
   }

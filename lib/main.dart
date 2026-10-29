@@ -86,11 +86,10 @@ Future<void> main() async {
     unawaited(SosSmsRecipients.refresh());
   });
 
-  // The update check, BEFORE the first frame: a waiting update is then the
-  // first thing the resident sees ("Do you want to update?") instead of a
-  // prompt landing on a screen they have already started using. Capped at
-  // three seconds — a slow network must not hold the app (or its SOS button)
-  // back; UpdateGate checks again once it is up.
+  // The update check, BEFORE the first frame, so a waiting update can go
+  // straight to Android's own installer (see UpdateGate — there is no in-app
+  // update screen). Capped at three seconds — a slow network must not hold
+  // the app (or its SOS button) back; UpdateGate checks again once it is up.
   await _bootStep('Update check', () => UpdateService.instance
       .check(force: true)
       .timeout(const Duration(seconds: 3)));

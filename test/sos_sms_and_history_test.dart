@@ -47,12 +47,12 @@ void main() {
       expect(uri, isNot(contains('SOS+Monticello')));
     });
 
-    test('the body carries name, lot, time with date, and a map link', () {
+    test('the body carries name, lot, GPS and time', () {
       final body = _payload().toSmsBody();
-      expect(body, contains('Ana Cruz'));
-      expect(body, contains('Phase 1 • Block 4 • Lot 12'));
-      expect(body, contains('at 21:05 Oct 29'));
-      expect(body, contains('maps.google.com/?q=14.12345,121.54321'));
+      expect(body, startsWith('[EMERGENCY SOS] Resident: Ana Cruz | '));
+      expect(body, contains('Location: Phase 1, Blk 4, Lot 12'));
+      expect(body, contains('GPS: 14.12345,121.54321'));
+      expect(body, endsWith('Time: 21:05'));
     });
   });
 

@@ -203,16 +203,13 @@ test('a device clock running ahead never reports a negative hold', () {
   });
 
   group('SMS fallback body', () {
-    test('leads with what a guard needs first', () {
+    test('is the guardhouse format, field by field', () {
       final body = _payload(lat: 14.12345, lng: 121.54321).toSmsBody();
-      // Truncation happens from the back, so the order is the priority order.
-      expect(body.indexOf('SOS Monticello Villas'), 0);
-      expect(body.indexOf('Maria Dela Cruz'),
-          lessThan(body.indexOf('Phase 2 • Block 7 • Lot 14')));
-      expect(body.indexOf('Phase 2 • Block 7 • Lot 14'),
-          lessThan(body.indexOf('14.12345')));
-      expect(body, contains('at 21:05'));
-      expect(body, contains('Ref uid_1700000000000'));
+      expect(
+        body,
+        '[EMERGENCY SOS] Resident: Maria Dela Cruz | Location: Phase 2, Blk 7, Lot 14 '
+        '| GPS: 14.12345,121.54321 | Time: 21:05',
+      );
     });
 
     test('falls back to raw lot parts when no label was cached', () {
@@ -229,10 +226,9 @@ test('a device clock running ahead never reports a negative hold', () {
         emergencyType: 'general',
       );
       final body = noLabel.toSmsBody();
-      expect(body, contains('Ph 3 Blk 1 Lot 9'));
-      // An unknown name must not render as an empty field.
-      expect(body, contains('Resident'));
-      expect(body, contains('at 09:07'));
+      // An unknown name must not render as an empty field, and no fix means
+      // no GPS field at all.
+      expect(body, '[EMERGENCY SOS] Resident: Unknown resident | Location: Phase 3, Blk 1, Lot 9 | Time: 09:07');
     });
   });
 }

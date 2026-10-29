@@ -434,28 +434,15 @@ class _ReportSummarySection extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(_sidePad, 14, _sidePad, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Report Summary',
-                    style: sfPro(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.onGlassMuted,
-                      letterSpacing: 0.7,
-                    ),
-                  ),
-                ),
-                Text(
-                  incident.id,
-                  style: sfPro(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
+            // No reference number beside the heading (2026-10-30, by request).
+            child: Text(
+              'Report Summary',
+              style: sfPro(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: AppColors.onGlassMuted,
+                letterSpacing: 0.7,
+              ),
             ),
           ),
           for (final (label, value) in fields) ...[

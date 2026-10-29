@@ -1898,9 +1898,10 @@ class _OfficerRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              // The row's action, said by its glyph: this calls.
+              // The row's action, said by its glyph: this calls. Black, like
+              // every other Settings icon (2026-10-30, by request).
               const Icon(PhosphorIconsBold.phoneCall,
-                  size: 20, color: AppColors.accentPrimary),
+                  size: 20, color: AppColors.textPrimary),
             ],
           ),
         ),
