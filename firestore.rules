@@ -321,7 +321,12 @@ service cloud.firestore {
         // the response. Optional — a call can end with none of them true —
         // but held to the same vocabulary the old field used, so the history
         // reads consistently either side of the change.
-        return r.keys().hasOnly(['outcome', 'notes', 'photoUrls', 'tags'])
+        // `videoUrls` / `videoMeta`: optional clips beside the required photo
+        // (2026-10-29). KEEP IN STEP with RESOLUTION_VIDEOS_MAX in
+        // dispatchStage.js; `videoMeta` is one record per clip.
+        return r.keys().hasOnly(['outcome', 'notes', 'photoUrls', 'tags', 'videoUrls', 'videoMeta'])
+          && r.get('videoUrls', []) is list && r.get('videoUrls', []).size() <= 3
+          && r.get('videoMeta', []) is list && r.get('videoMeta', []).size() <= 3
           && r.get('tags', []) is list
           // KEEP IN STEP with INVESTIGATION_TAGS and RESOLUTION_OUTCOMES in
           // web-portal/packages/shared/src/lib/dispatchStage.js. The console

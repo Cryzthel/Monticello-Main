@@ -3,11 +3,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ACCEPT_ATTRIBUTE,
   bucketFor,
+  contentTypeOf,
   describeUploadError,
   formatBytes,
   isAcceptedType,
   uploadIncidentAttachment,
 } from '@shared/lib/attachments'
+import { COMPRESS_ABOVE_BYTES, isVideoFile } from '@shared/lib/videoCompression'
+import { uploadVideoEvidence } from '@shared/lib/videoEvidence'
 import MediaAttachmentField from '@shared/components/MediaAttachmentField'
 import {
   MAX_SOURCE_IMAGE_BYTES,
@@ -32,8 +35,9 @@ import { attachmentLimitBytes } from '@shared/lib/attachments'
  * rather than merely hiding the row — otherwise the bytes keep flowing and the
  * file lands in Storage orphaned, paid for and referenced by nothing.
  *
- * `onChange` receives `{ photoUrls, videoUrls, attachmentUrls }`, already split
- * into the arrays the incident document expects — images and video must stay
+ * `onChange` receives `{ photoUrls, videoUrls, attachmentUrls, videoMeta }`,
+ * already split into the arrays the incident document expects (`videoMeta`
+ * is one record per video — see lib/videoEvidence.js) — images and video must stay
  * in the fields the Flutter app reads. See lib/attachments.js.
  *
  * `onBusyChange` reports whether any tile is still compressing or transferring.
@@ -55,10 +59,13 @@ export default function AttachFileField({ onChange, onBusyChange, disabled = fal
   // Report only the files that actually landed. A chip mid-upload or in error
   // must not contribute a URL — the report would reference nothing.
   useEffect(() => {
-    const buckets = { photoUrls: [], videoUrls: [], attachmentUrls: [] }
+    const buckets = { photoUrls: [], videoUrls: [], attachmentUrls: [], videoMeta: [] }
     items
       .filter((item) => item.status === 'done' && item.url)
-      .forEach((item) => buckets[bucketFor(item.type)].push(item.url))
+      .forEach((item) => {
+        buckets[bucketFor(item.type)].push(item.url)
+        if (item.videoMeta) buckets.videoMeta.push(item.videoMeta)
+      })
     onChange?.(buckets)
   }, [items, onChange])
 
@@ -99,8 +106,12 @@ export default function AttachFileField({ onChange, onBusyChange, disabled = fal
       const admitted = []
 
       files.forEach((file) => {
-        if (!isAcceptedType(file.type)) {
+        if (!isAcceptedType(contentTypeOf(file))) {
           problems.push(`${file.name} — unsupported type`)
+        } else if (isVideoFile(file)) {
+          // Video is size-checked inside the pipeline, AFTER compression has
+          // had its chance — a 300 MB clip is welcome if it re-encodes small.
+          admitted.push(file)
         } else if (isCompressibleImage(file.type)) {
           // Images are NOT size-checked here. They are downscaled below, and a
           // 20 MP phone photo compresses to well under a megabyte — rejecting
@@ -123,6 +134,48 @@ export default function AttachFileField({ onChange, onBusyChange, disabled = fal
 
       admitted.forEach(async (source) => {
         const id = `f${(seq += 1)}`
+
+        if (isVideoFile(source)) {
+          setItems((prev) => [
+            ...prev,
+            {
+              id,
+              name: source.name,
+              size: source.size,
+              type: contentTypeOf(source),
+              preview: null,
+              // 'compressing' only when it will be; the pipeline moves it on.
+              status: source.size > COMPRESS_ABOVE_BYTES ? 'compressing' : 'uploading',
+              progress: 0,
+            },
+          ])
+          const job = uploadVideoEvidence(source, {
+            onUpdate: ({ preview, ...next }) => {
+              if (preview) previewUrls.current.add(preview)
+              update(id, preview ? { ...next, preview } : next)
+            },
+          })
+          update(id, { cancel: job.cancel })
+          job.done
+            .then(({ url, meta, note }) =>
+              update(id, {
+                status: 'done',
+                url,
+                progress: 100,
+                type: meta.contentType,
+                size: meta.sizeBytes,
+                note,
+                videoMeta: meta,
+                cancel: null,
+              }),
+            )
+            .catch((err) => {
+              if (err?.code === 'storage/canceled' || err?.name === 'ConversionCanceledError') return
+              update(id, { status: 'error', error: describeUploadError(err), cancel: null })
+            })
+          return
+        }
+
         const compressible = isCompressibleImage(source.type)
 
         setItems((prev) => [
@@ -186,8 +239,10 @@ export default function AttachFileField({ onChange, onBusyChange, disabled = fal
   )
 
   function remove(item) {
-    // Cancel first — an in-flight task keeps uploading otherwise.
+    // Cancel first — an in-flight task (or a video still compressing) keeps
+    // working otherwise.
     item.task?.cancel?.()
+    item.cancel?.()
     if (item.preview) {
       URL.revokeObjectURL(item.preview)
       previewUrls.current.delete(item.preview)
@@ -229,9 +284,9 @@ export default function AttachFileField({ onChange, onBusyChange, disabled = fal
     <>
       <MediaAttachmentField
         heading={heading}
-        hint={`Images, video, PDF or .txt — photos are resized automatically, other files up to ${Math.round(
-          attachmentLimitBytes(getSettings()) / 1048576,
-        )} MB`}
+        hint={`Photos (JPG, PNG, WebP), video (MP4, MOV, WebM, AVI), PDF or .txt. Photos are resized and videos over ${Math.round(
+          COMPRESS_ABOVE_BYTES / 1048576,
+        )} MB compressed on this device; other files up to ${Math.round(attachmentLimitBytes(getSettings()) / 1048576)} MB.`}
         items={tiles}
         error={rejected || undefined}
         disabled={disabled}

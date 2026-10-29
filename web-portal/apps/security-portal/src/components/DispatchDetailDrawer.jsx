@@ -54,6 +54,7 @@ import { incidentAddress, ticketCode } from '@shared/lib/incidentDetail'
 import ResolveIncidentModal from '@/components/dispatch/ResolveIncidentModal'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { formatTime } from '@shared/lib/dates'
+import { mediaItemsFrom } from '@shared/lib/incidents'
 
 /** How long the exit runs; matches `.dialog-panel-out` in the shared CSS. */
 const EXIT_MS = 150
@@ -273,7 +274,8 @@ function ReportDetailsModal({ report, closing, units = [], onClose, navigation =
   const severity = String(report.severity ?? 'medium').toLowerCase()
   const severityTone = SEVERITY_TONES[severity] ?? 'warning'
   const stamp = { at: report.reportedAt, lat: report.lat, lng: report.lng, reference }
-  const resolutionMedia = (report.resolution?.photoUrls ?? []).map((url) => ({ url, type: 'image' }))
+  // Photos AND the optional clips a resolve may carry (2026-10-29).
+  const resolutionMedia = mediaItemsFrom(report.resolution)
   const outcomeLabel = RESOLUTION_OUTCOMES.find((o) => o.value === report.resolution?.outcome)?.label
   const nextMessage = residentMessageForStage(
     report,

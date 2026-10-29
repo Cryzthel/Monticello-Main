@@ -1,5 +1,6 @@
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage'
 import { auth, storage } from '@shared/lib/firebase'
+import { VIDEO_ACCEPT, videoContentType } from '@shared/lib/videoCompression'
 
 /**
  * Attachment uploads for a guard-filed incident report.
@@ -35,12 +36,30 @@ export const ACCEPTED_TYPES = [
   'image/gif',
   'video/mp4',
   'video/quicktime',
+  'video/webm',
+  'video/x-msvideo',
   'application/pdf',
   'text/plain',
 ]
 
-/** For the file input's `accept`, which takes extensions and MIME types. */
-export const ACCEPT_ATTRIBUTE = 'image/*,video/mp4,video/quicktime,application/pdf,.txt,text/plain'
+/**
+ * For the file input's `accept`, which takes extensions and MIME types.
+ * Video is listed by extension as well as MIME (see VIDEO_ACCEPT) because
+ * Windows reports `.mov` / `.avi` with an empty type on some installs, and a
+ * MIME-only filter then hides the file in the picker.
+ */
+export const ACCEPT_ATTRIBUTE = `image/*,.jpg,.jpeg,.png,.webp,${VIDEO_ACCEPT},application/pdf,.txt,text/plain`
+
+/** For pickers that take photos and video but not documents (the resolve modals). */
+export const MEDIA_ACCEPT_ATTRIBUTE = `image/png,image/jpeg,image/webp,.jpg,.jpeg,.png,.webp,${VIDEO_ACCEPT}`
+
+/**
+ * The content type a picked file is stored as: the browser's own, or for a
+ * video it could not name, one derived from the extension.
+ */
+export function contentTypeOf(file) {
+  return file?.type || videoContentType(file)
+}
 
 /**
  * Which array on the incident document a file belongs in.
@@ -80,11 +99,14 @@ export function formatBytes(bytes) {
  * in-flight upload — a 20 MB body-cam still on a guardhouse connection is long
  * enough that "remove" has to actually stop it, not just hide the chip.
  */
-export function uploadIncidentAttachment(file, onProgress) {
+export function uploadIncidentAttachment(file, onProgress, { contentType = contentTypeOf(file), name = file.name } = {}) {
   const uid = auth.currentUser?.uid ?? 'unknown'
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+  const safeName = name.replace(/[^a-zA-Z0-9._-]/g, '_')
   const path = `incidents/${uid}/${Date.now()}-${safeName}`
-  const task = uploadBytesResumable(ref(storage, path), file, { contentType: file.type })
+  // Resumable = chunked: the SDK sends the body in pieces and resumes a
+  // dropped one, which is what makes a 100 MB clip survivable on guardhouse
+  // wifi. Progress below is per chunk acknowledged.
+  const task = uploadBytesResumable(ref(storage, path), file, { contentType })
 
   const done = new Promise((resolve, reject) => {
     task.on(

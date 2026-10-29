@@ -142,6 +142,9 @@ export default function MediaAttachmentField({
                 const Icon = iconFor(item.type)
                 const failed = item.status === 'error'
                 const compressing = item.status === 'compressing'
+                // Video compression streams and reports a real percentage;
+                // image resizing does not (see the bar below).
+                const measured = compressing && (item.progress ?? 0) > 0
                 const busy = compressing || item.status === 'uploading'
                 return (
                   <figure key={item.id} className="m-0">
@@ -151,7 +154,16 @@ export default function MediaAttachmentField({
                       }`}
                     >
                       {item.src ? (
-                        <img src={item.src} alt="" className="h-full w-full object-cover" />
+                        <>
+                          <img src={item.src} alt="" className="h-full w-full object-cover" />
+                          {/* A video's src is its poster frame, so it needs
+                              saying that this still is a clip. */}
+                          {item.type?.startsWith('video/') ? (
+                            <span className="absolute left-1 top-1 flex h-[22px] w-[22px] items-center justify-center rounded-full bg-black/60 text-white">
+                              <Icon size={12} aria-hidden="true" />
+                            </span>
+                          ) : null}
+                        </>
                       ) : (
                         // Non-image attachments (video, PDF, text) have no
                         // thumbnail to show. A type glyph centred in the cell
@@ -184,7 +196,9 @@ export default function MediaAttachmentField({
                           {failed
                             ? 'Failed'
                             : compressing
-                              ? 'Optimising…'
+                              ? measured
+                                ? `Compressing ${item.progress}%`
+                                : 'Optimising…'
                               : busy
                                 ? `Uploading ${item.progress ?? 0}%`
                                 : 'Attached'}
@@ -197,19 +211,21 @@ export default function MediaAttachmentField({
                           the tile is where the file is. */}
                       {busy ? (
                         <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/20">
-                          {/* Compression reports no percentage — canvas encoding
+                          {/* IMAGE compression reports no percentage — canvas encoding
                               is one synchronous-looking step, not a stream — so
                               a determinate bar here would have to lie. An
                               indeterminate sweep says "working" without
                               claiming to know how far along it is. It is brief:
-                              even a 24 MP photo resizes in well under a second. */}
+                              even a 24 MP photo resizes in well under a second.
+                              Video compression DOES stream a percentage, and
+                              gets the determinate bar in the info colour. */}
                           <div
                             className={
-                              compressing
+                              compressing && !measured
                                 ? 'h-full w-1/3 animate-[indeterminate_1.1s_ease-in-out_infinite] bg-info'
-                                : 'h-full bg-brand-500 transition-[width] duration-200'
+                                : `h-full transition-[width] duration-200 ${compressing ? 'bg-info' : 'bg-brand-500'}`
                             }
-                            style={compressing ? undefined : { width: `${item.progress ?? 0}%` }}
+                            style={compressing && !measured ? undefined : { width: `${item.progress ?? 0}%` }}
                           />
                         </div>
                       ) : null}

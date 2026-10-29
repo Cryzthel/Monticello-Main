@@ -8,6 +8,7 @@ import {
   Clock,
   Copy,
   Crosshair,
+  FileText,
   Phone,
   Satellite,
   Siren,
@@ -32,6 +33,9 @@ import {
 import { formatDateTime } from '@shared/lib/dates'
 import { toast } from '@shared/lib/toast'
 import { DetailCard, DetailField } from '@shared/components/detail/DetailCard'
+import EvidenceGrid from '@shared/components/dispatch/EvidenceGrid'
+import Lightbox from '@shared/components/Lightbox'
+import { mediaItemsFrom } from '@shared/lib/incidents'
 
 /** The same short code the SOS log prints, so an alert is quoted one way. */
 const alertCode = (id) => `SOS-${String(id ?? '').slice(-6).toUpperCase()}`
@@ -103,15 +107,22 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
   const now = useNow()
   const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
+  // Index into the resolution proof open in the lightbox, or null.
+  const [lightboxIndex, setLightboxIndex] = useState(null)
 
   useEffect(() => {
     if (!alert) return undefined
     const onKey = (event) => {
-      if (event.key === 'Escape') onClose?.()
+      // The lightbox closes itself on Escape; that press must not also take
+      // the alert window with it.
+      if (event.key === 'Escape' && lightboxIndex == null) onClose?.()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [alert, onClose])
+  }, [alert, onClose, lightboxIndex])
+
+  // A different alert opened in the same window starts with no lightbox.
+  useEffect(() => setLightboxIndex(null), [alert?.id])
 
   useEffect(() => {
     if (!copied) return undefined
@@ -145,6 +156,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
   const address = alert.address && alert.address !== 'Address unavailable' ? alert.address : ''
   const location = address || unit
   const hasFix = typeof alert.lat === 'number' && typeof alert.lng === 'number'
+  const proof = mediaItemsFrom(alert.resolution)
   const coordinates = hasFix ? `${alert.lat.toFixed(5)}, ${alert.lng.toFixed(5)}` : ''
 
   // Boundary checks follow the admin setting; a MISSING fix is stated whether
@@ -173,6 +185,7 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
 
   return createPortal(
     // Portalled to <body>: the map frame is an `isolate` stacking context.
+    <>
     <div
       className="dialog-scrim fixed inset-0 z-[var(--z-modal)] flex items-end justify-center bg-black/70 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
@@ -305,6 +318,28 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
             ) : null}
           </DetailCard>
 
+          {/* ── RESOLUTION PROOF (2026-10-29) ──
+              Written by the Guardhouse's resolve since it existed and shown
+              nowhere until now: the guard's notes and the photos and clips
+              they attached. Only drawn once there is something to show. */}
+          {alert.resolution?.notes || proof.length ? (
+            <DetailCard compact icon={FileText} title="Resolution proof">
+              {alert.resolution?.notes ? (
+                <p className="whitespace-pre-wrap break-words rounded-lg border border-hairline bg-base-950 p-3 text-sm leading-relaxed text-text-secondary shadow-inner">
+                  {alert.resolution.notes}
+                </p>
+              ) : null}
+              {proof.length ? (
+                <EvidenceGrid
+                  media={proof}
+                  stamp={{ at: alert.resolvedAt, lat: alert.lat, lng: alert.lng, reference: 'SOS' }}
+                  onOpen={setLightboxIndex}
+                  emptyText=""
+                />
+              ) : null}
+            </DetailCard>
+          ) : null}
+
           {escalation || escalationHistory ? (
             <p
               role={escalation ? 'status' : undefined}
@@ -342,7 +377,18 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
           </div>
         </footer>
       </div>
-    </div>,
+    </div>
+
+    {/* A sibling of the scrim, not a child: a click inside the lightbox must
+        not bubble to the scrim's close handler. The wrapper lifts it over this
+        window — the lightbox's own layer (--z-overlay, 100) sits under
+        --z-modal (1000), which is where this window lives. */}
+    {lightboxIndex != null ? (
+      <div className="relative z-[calc(var(--z-modal)_+_1)]">
+        <Lightbox media={proof} startIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
+      </div>
+    ) : null}
+    </>,
     document.body,
   )
 }

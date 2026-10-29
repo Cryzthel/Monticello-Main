@@ -8,6 +8,7 @@ import { captureTimestamp } from '@shared/components/dispatch/EvidenceGrid'
 import { buildMediaItems } from '@shared/lib/incidents'
 import { toast } from '@shared/lib/toast'
 import { elapsed, incidentAddress, incidentStatusHistory, stampOf } from '@shared/lib/incidentDetail'
+import { EvidenceVideo, VideoThumb } from '@shared/components/EvidenceVideo'
 
 /**
  * The incident cards both consoles draw a report with — lifted out of the
@@ -148,7 +149,7 @@ export function MediaEvidenceCard({ report, compact = false, onLightboxChange, t
         }`}
       >
         {active?.type === 'video' ? (
-          <video key={active.url} src={active.url} controls className="absolute inset-0 h-full w-full object-contain" />
+          <EvidenceVideo item={active} className="absolute inset-0 h-full w-full object-contain" />
         ) : active ? (
           <>
             <button
@@ -203,11 +204,7 @@ export function MediaEvidenceCard({ report, compact = false, onLightboxChange, t
                 item === active ? 'border-2 border-brand-500' : 'border border-hairline opacity-60 hover:opacity-100'
               }`}
             >
-              {item.type === 'video' ? (
-                <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
-              ) : (
-                <EvidenceImage src={item.url} />
-              )}
+              {item.type === 'video' ? <VideoThumb item={item} /> : <EvidenceImage src={item.url} />}
             </button>
           ))}
         </div>

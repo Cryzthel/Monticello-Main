@@ -1,6 +1,6 @@
-import { PlayCircle } from '@shared/icons'
 import EvidenceImage from '@shared/components/EvidenceImage'
 import { PORTAL_TIME_ZONE, formatDateTime } from '@shared/lib/dates'
+import { VideoThumb } from '@shared/components/EvidenceVideo'
 
 const STAMP = {
   year: 'numeric',
@@ -92,12 +92,7 @@ export default function EvidenceGrid({ media, stamp, onOpen, emptyText }) {
             className="group relative block aspect-[4/3] w-full overflow-hidden rounded-lg border border-slate-200 transition-colors duration-150 hover:border-brand-500/60"
           >
             {item.type === 'video' ? (
-              <>
-                <video src={item.url} className="h-full w-full object-cover" muted preload="metadata" />
-                <span className="absolute inset-0 flex items-center justify-center bg-black/35">
-                  <PlayCircle size="lg" className="text-white" aria-hidden="true" />
-                </span>
-              </>
+              <VideoThumb item={item} />
             ) : (
               <EvidenceImage src={item.url} alt="" />
             )}

@@ -34,6 +34,7 @@ import { useStaffAccounts } from '@shared/hooks/useStaffAccounts'
 import {
   archiveIncidents,
   buildMediaItems,
+  mediaItemsFrom,
   isArchived,
   markReportsReviewed,
 } from '@shared/lib/incidents'
@@ -367,7 +368,8 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
     timestamp: forensicTimestamp(report.reportedAt),
   }
 
-  const resolutionMedia = (report.resolution?.photoUrls ?? []).map((url) => ({ url, type: 'image' }))
+  // Photos AND the optional clips a resolve may carry (2026-10-29).
+  const resolutionMedia = mediaItemsFrom(report.resolution)
   const resolutionStamp = {
     at: report.resolvedAt,
     lat: report.arrival?.lat ?? report.lat,

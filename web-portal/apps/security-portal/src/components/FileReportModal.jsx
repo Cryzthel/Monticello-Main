@@ -165,7 +165,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
   const [uploading, setUploading] = useState(false)
   // Populated by AttachFileField as uploads land, already split into the
   // arrays the incident document expects.
-  const [attachments, setAttachments] = useState({ photoUrls: [], videoUrls: [], attachmentUrls: [] })
+  const [attachments, setAttachments] = useState({ photoUrls: [], videoUrls: [], attachmentUrls: [], videoMeta: [] })
 
   // A resident who loses verification (or is removed) while selected is
   // dropped from the draft, not silently filed against.
@@ -235,6 +235,10 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
         photoUrls: attachments.photoUrls,
         videoUrls: attachments.videoUrls,
         attachmentUrls: attachments.attachmentUrls,
+        // One record per video — poster, size before and after compression,
+        // duration, format — in the same write as the URLs, so a viewer never
+        // sees a clip without its details. Ignored by the Flutter app.
+        videoMeta: attachments.videoMeta,
         wpdaScore: 0,
       })
       // Closes on success; the page reports it above the directory, which

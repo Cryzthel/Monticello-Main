@@ -7,7 +7,9 @@ import {
   INVESTIGATION_TAGS,
   RESOLUTION_OUTCOMES,
   RESOLUTION_PHOTOS_MAX,
+  RESOLUTION_VIDEOS_MAX,
 } from '@shared/lib/dispatchStage'
+import { MEDIA_ACCEPT_ATTRIBUTE } from '@shared/lib/attachments'
 import { incidentReference } from '@/lib/dispatch'
 import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
@@ -54,7 +56,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
   const [dragging, setDragging] = useState(false)
   const [notes, setNotes] = useState('')
   const [touched, setTouched] = useState(false)
-  const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX })
+  const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX, maxVideos: RESOLUTION_VIDEOS_MAX })
   const fileRef = useRef(null)
   const notesId = useId()
   const cancelRef = useRef(onCancel)
@@ -95,9 +97,9 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
   const tiles = photos.items.map((item) => ({
     id: item.id,
     name: item.name,
-    type: 'image',
+    type: item.type,
     src: item.previewUrl,
-    status: item.error ? 'error' : item.url ? 'done' : 'uploading',
+    status: item.status,
     progress: item.progress,
     error: item.error,
   }))
@@ -115,7 +117,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
     event.preventDefault()
     setTouched(true)
     if (!ready || busy) return
-    onSubmit({ outcome, notes: trimmed, photoUrls: photos.urls, tags })
+    onSubmit({ outcome, notes: trimmed, photoUrls: photos.urls, videoUrls: photos.videoUrls, videoMeta: photos.videoMeta, tags })
   }
 
   return createPortal(
@@ -276,9 +278,9 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
                 is why the header row above is gone rather than kept. */}
             <MediaAttachmentField
               items={tiles}
-              capacity={RESOLUTION_PHOTOS_MAX}
-              heading="Photos"
-              hint="PNG or JPG. Compressed on this device before upload, so uploading needs a connection."
+              capacity={RESOLUTION_PHOTOS_MAX + RESOLUTION_VIDEOS_MAX}
+              heading="Photos & video"
+              hint={`At least one photo (JPG, PNG, WebP). Up to ${RESOLUTION_VIDEOS_MAX} clips (MP4, MOV, WebM, AVI) — over 25 MB they are compressed on this device. Uploading needs a connection.`}
               disabled={busy}
               onPick={() => fileRef.current?.click()}
               onRemove={photos.remove}
@@ -297,7 +299,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept={MEDIA_ACCEPT_ATTRIBUTE}
               capture="environment"
               multiple
               className="sr-only"
@@ -318,7 +320,7 @@ export default function ResolveIncidentModal({ open, report, busy, onSubmit, onC
                 <span>Still needs {missing.join(', ')}.</span>
               </>
             ) : photos.uploading ? (
-              'Uploading photos…'
+              'Uploading evidence…'
             ) : (
               'The resident is asked to rate the response.'
             )}

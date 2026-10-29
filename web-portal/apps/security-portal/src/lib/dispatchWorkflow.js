@@ -424,7 +424,7 @@ export async function confirmArrival(incident, check, { role, reason = '' }) {
  * The officer's device drops back to idle telemetry when it sees the stage
  * change.
  */
-export async function resolveIncident(incident, { outcome, notes, photoUrls, tags = [] }, { role }) {
+export async function resolveIncident(incident, { outcome, notes, photoUrls, videoUrls = [], videoMeta = [], tags = [] }, { role }) {
   const forensics = await captureForensics()
   return commitStage({
     incident,
@@ -442,9 +442,19 @@ export async function resolveIncident(incident, { outcome, notes, photoUrls, tag
       // object, written in one batch, that reads back as the account of how
       // this call ended. They used to be a separate `investigation` field
       // toggled live during the response — see ResolveIncidentModal.
-      resolution: { outcome, notes: notes.trim(), photoUrls, tags },
+      //
+      // Video keys are written only when there are clips, so a photo-only
+      // resolve is byte-identical to before and still passes a rules
+      // deployment that predates them.
+      resolution: {
+        outcome,
+        notes: notes.trim(),
+        photoUrls,
+        tags,
+        ...(videoUrls.length ? { videoUrls, videoMeta } : {}),
+      },
       ratingRequestedAt: serverTimestamp(),
     },
-    detail: { outcome, photoCount: photoUrls.length, tagCount: tags.length },
+    detail: { outcome, photoCount: photoUrls.length, videoCount: videoUrls.length, tagCount: tags.length },
   })
 }

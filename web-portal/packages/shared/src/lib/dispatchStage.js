@@ -257,5 +257,7 @@ export const INVESTIGATION_TAGS = [
 export const RESOLUTION_NOTES_MIN = 10
 export const RESOLUTION_NOTES_MAX = 1000
 export const RESOLUTION_PHOTOS_MAX = 6
+/** Optional clips beside the required photo. Mirrored by validResolution() in firestore.rules. */
+export const RESOLUTION_VIDEOS_MAX = 3
 export const INVESTIGATION_PHOTOS_MAX = 12
 export const OVERRIDE_REASON_MIN = 3

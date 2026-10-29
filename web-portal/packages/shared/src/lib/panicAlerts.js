@@ -40,6 +40,9 @@ export function mapPanicAlertDoc(d) {
     // have been changed by the time anyone reads this back.
     escalatedAfterMinutes: d.escalatedAfterMinutes,
     resolvedAt,
+    // The guard's account and proof — notes, photos, and since 2026-10-29
+    // clips with their `videoMeta`. Passed through as written.
+    resolution: d.resolution ?? null,
     createdAt,
   }
 }
@@ -145,9 +148,10 @@ export async function acknowledgePanicAlert(alertId, staffName) {
  *
  * Only from `acknowledged` (2026-10-19), enforced here and in firestore.rules.
  */
-export async function resolvePanicAlert(alertId, { notes = '', photoUrls = [] } = {}) {
+export async function resolvePanicAlert(alertId, { notes = '', photoUrls = [], videoUrls = [], videoMeta = [] } = {}) {
   const trimmed = String(notes ?? '').trim()
   const photos = Array.isArray(photoUrls) ? photoUrls.filter(Boolean) : []
+  const videos = Array.isArray(videoUrls) ? videoUrls.filter(Boolean) : []
 
   // acknowledged → resolved only. An alert nobody has acknowledged is not
   // resolvable from any console (see the state machine above).
@@ -162,8 +166,14 @@ export async function resolvePanicAlert(alertId, { notes = '', photoUrls = [] } 
       // guardhouse can read.
       resolvedBy: auth.currentUser?.uid ?? null,
       resolvedByName: acknowledgedByLabel(auth.currentUser?.displayName ?? ''),
-      ...(trimmed || photos.length
-        ? { resolution: { ...(trimmed ? { notes: trimmed } : {}), ...(photos.length ? { photoUrls: photos } : {}) } }
+      ...(trimmed || photos.length || videos.length
+        ? {
+            resolution: {
+              ...(trimmed ? { notes: trimmed } : {}),
+              ...(photos.length ? { photoUrls: photos } : {}),
+              ...(videos.length ? { videoUrls: videos, videoMeta } : {}),
+            },
+          }
         : {}),
       updatedAt: serverTimestamp(),
     },

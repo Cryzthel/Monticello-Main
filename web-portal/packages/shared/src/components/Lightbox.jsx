@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import EvidenceImage from '@shared/components/EvidenceImage'
 import { X, ChevronLeft, ChevronRight } from '@shared/icons'
+import { EvidenceVideo, VideoThumb } from '@shared/components/EvidenceVideo'
 
 // Full-resolution, full-screen media viewer shared by both portals'
 // forensic views — a click on any evidence thumbnail opens this instead of
@@ -82,7 +83,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
 
         <div className="relative flex max-h-full max-w-full items-center justify-center">
           {active.type === 'video' ? (
-            <video src={active.url} controls autoPlay className="max-h-[75vh] max-w-full rounded-lg object-contain" />
+            <EvidenceVideo item={active} autoPlay className="max-h-[75vh] max-w-full rounded-lg object-contain" />
           ) : (
             <img
               src={active.url}
@@ -126,7 +127,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
               }`}
             >
               {item.type === 'video' ? (
-                <video src={item.url} className="h-full w-full object-cover" muted />
+                <VideoThumb item={item} />
               ) : (
                 <EvidenceImage src={item.url} />
               )}

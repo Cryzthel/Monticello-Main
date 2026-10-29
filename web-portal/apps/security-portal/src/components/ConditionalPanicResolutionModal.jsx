@@ -6,7 +6,8 @@ import { acknowledgePanicAlert, resolvePanicAlert } from '@shared/lib/panicAlert
 import { settleWrite } from '@shared/lib/writeSync'
 import MediaAttachmentField from '@shared/components/MediaAttachmentField'
 import { usePhotoUploads } from '@/components/dispatch/usePhotoUploads'
-import { RESOLUTION_NOTES_MAX, RESOLUTION_PHOTOS_MAX } from '@shared/lib/dispatchStage'
+import { RESOLUTION_NOTES_MAX, RESOLUTION_PHOTOS_MAX, RESOLUTION_VIDEOS_MAX } from '@shared/lib/dispatchStage'
+import { MEDIA_ACCEPT_ATTRIBUTE } from '@shared/lib/attachments'
 import { useAuth } from '@shared/auth/AuthContext'
 import { useDialogFocus } from '@shared/hooks/useDialogFocus'
 import { useSystemSettings } from '@shared/lib/systemSettingsStore'
@@ -78,7 +79,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
   const [notice, setNotice] = useState(null)
   const [notes, setNotes] = useState('')
   const fileRef = useRef(null)
-  const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX })
+  const photos = usePhotoUploads({ max: RESOLUTION_PHOTOS_MAX, maxVideos: RESOLUTION_VIDEOS_MAX })
 
   const panelRef = useRef(null)
   useDialogFocus({ open: !closing, containerRef: panelRef })
@@ -110,9 +111,9 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
   const tiles = photos.items.map((item) => ({
     id: item.id,
     name: item.name,
-    type: 'image',
+    type: item.type,
     src: item.previewUrl,
-    status: item.error ? 'error' : item.url ? 'done' : 'uploading',
+    status: item.status,
     progress: item.progress,
     error: item.error,
   }))
@@ -277,9 +278,9 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
                     stamp, rendered over the photo wherever it is shown. */}
                 <MediaAttachmentField
                   items={tiles}
-                  capacity={RESOLUTION_PHOTOS_MAX}
-                  heading="Photo proof"
-                  hint="PNG or JPG. Stamped with the server's resolution time, not this device's."
+                  capacity={RESOLUTION_PHOTOS_MAX + RESOLUTION_VIDEOS_MAX}
+                  heading="Photo & video proof"
+                  hint={`Photos (JPG, PNG, WebP) and up to ${RESOLUTION_VIDEOS_MAX} clips (MP4, MOV, WebM, AVI); clips over 25 MB are compressed on this device. Stamped with the server's resolution time.`}
                   disabled={submitting}
                   onPick={() => fileRef.current?.click()}
                   onRemove={photos.remove}
@@ -287,7 +288,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/png,image/jpeg"
+                  accept={MEDIA_ACCEPT_ATTRIBUTE}
                   multiple
                   hidden
                   onChange={(event) => {
@@ -327,7 +328,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               type="button"
               disabled={Boolean(busy) || photos.uploading}
               onClick={() =>
-                run('resolve', () => resolvePanicAlert(alert.id, { notes, photoUrls: photos.urls }), 'SOS alert resolved', () => onClose?.())
+                run('resolve', () => resolvePanicAlert(alert.id, { notes, photoUrls: photos.urls, videoUrls: photos.videoUrls, videoMeta: photos.videoMeta }), 'SOS alert resolved', () => onClose?.())
               }
               className="flex w-full items-center justify-center gap-2 rounded-full bg-zinc-100 py-2.5 text-xs font-semibold text-zinc-950 shadow-sm transition-[background-color,transform] duration-150 ease-out hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -336,7 +337,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               ) : (
                 <CheckCircle2 size={16} aria-hidden="true" />
               )}
-              {submitting ? 'Submitting…' : photos.uploading ? 'Uploading photos…' : 'Submit & confirm resolve'}
+              {submitting ? 'Submitting…' : photos.uploading ? 'Uploading evidence…' : 'Submit & confirm resolve'}
             </button>
           ) : canNavigate ? (
             <button

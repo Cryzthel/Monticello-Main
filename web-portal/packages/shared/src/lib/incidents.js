@@ -374,8 +374,35 @@ export function computeMeanResolutionTime(reports) {
 // the forensic viewers (guard History panel + Admin ticket modal) to page
 // through — images first, then videos.
 export function buildMediaItems(report) {
-  const photos = (report?.photoUrls ?? []).map((url) => ({ url, type: 'image' }))
-  const videos = (report?.videoUrls ?? []).map((url) => ({ url, type: 'video' }))
+  return mediaItemsFrom(report)
+}
+
+/**
+ * `{ url, type }` items for a photo + video set, with each video joined to its
+ * `videoMeta` record by URL — poster frame, content type, size, duration —
+ * where one was written (2026-10-29). Clips from the mobile app, or filed
+ * before then, carry no record and render exactly as before.
+ *
+ * Takes any object with `photoUrls` / `videoUrls` / `videoMeta`: an incident
+ * document, or the `resolution` map a resolve writes.
+ */
+export function mediaItemsFrom(source) {
+  const meta = new Map((source?.videoMeta ?? []).filter((m) => m?.url).map((m) => [m.url, m]))
+  const photos = (source?.photoUrls ?? []).map((url) => ({ url, type: 'image' }))
+  const videos = (source?.videoUrls ?? []).map((url) => {
+    const m = meta.get(url)
+    return m
+      ? {
+          url,
+          type: 'video',
+          posterUrl: m.posterUrl ?? null,
+          contentType: m.contentType ?? null,
+          sizeBytes: m.sizeBytes ?? null,
+          durationSec: m.durationSec ?? null,
+          format: m.format ?? null,
+        }
+      : { url, type: 'video' }
+  })
   return [...photos, ...videos]
 }
 
