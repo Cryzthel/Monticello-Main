@@ -115,7 +115,7 @@ function StepHeading({ title, children }) {
       <h2 className="type-h2 text-text-primary">
         {title}
       </h2>
-      <p className="mt-2 text-small leading-relaxed text-text-muted">{children}</p>
+      <p className="mt-2 text-body leading-relaxed text-text-muted">{children}</p>
     </div>
   )
 }

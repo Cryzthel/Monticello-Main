@@ -120,7 +120,7 @@ function Avatar({ name, photoUrl }) {
   return (
     <div
       aria-hidden="true"
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-500/25 bg-brand-500/15 text-body font-semibold text-brand-500"
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-brand-500/25 bg-brand-500/15 text-h3 font-semibold text-brand-500"
     >
       {(name || '?').trim().charAt(0).toUpperCase()}
     </div>

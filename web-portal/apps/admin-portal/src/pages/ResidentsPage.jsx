@@ -179,7 +179,7 @@ export default function ResidentsPage() {
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-info/30 bg-info/[0.07] p-4">
             <Info size="md" className="shrink-0 text-info" />
             <div className="min-w-0 flex-1">
-              <p className="text-small font-semibold text-text-primary">
+              <p className="text-body font-semibold text-text-primary">
                 {profileOnly.length} account{profileOnly.length === 1 ? '' : 's'} visible from their
                 mobile profile only
               </p>
@@ -236,7 +236,7 @@ export default function ResidentsPage() {
                 {error ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-12 text-center">
-                      <p className="text-small font-medium text-danger">Could not load resident registrations.</p>
+                      <p className="text-body font-medium text-danger">Could not load resident registrations.</p>
                       {/* Surfacing the real code matters here: a
                           permission-denied points at firestore.rules, not at
                           the query — the exact confusion that hid this bug. */}
@@ -266,7 +266,7 @@ export default function ResidentsPage() {
                   <tr>
                     <td colSpan={6} className="px-4 py-14 text-center">
                       <UserCheck size="lg" className="mx-auto mb-2 text-text-muted" />
-                      <p className="text-small text-text-secondary">
+                      <p className="text-body text-text-secondary">
                         {search
                           ? 'No registrations match this search.'
                           : tab === ALL

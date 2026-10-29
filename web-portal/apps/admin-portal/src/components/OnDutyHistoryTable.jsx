@@ -224,7 +224,7 @@ export default function OnDutyHistoryTable() {
               {error ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center">
-                    <p className="text-small font-medium text-danger">Could not load shift history.</p>
+                    <p className="text-body font-medium text-danger">Could not load shift history.</p>
                     {/* Surfacing the code matters: a permission-denied points at
                         firestore.rules (guard_shifts), not at the query. */}
                     <p className="mt-1 text-small text-text-secondary">
@@ -246,7 +246,7 @@ export default function OnDutyHistoryTable() {
                 <tr>
                   <td colSpan={6} className="px-4 py-14 text-center">
                     <ShieldOff size="lg" className="mx-auto mb-2 text-text-muted" />
-                    <p className="text-small text-text-secondary">
+                    <p className="text-body text-text-secondary">
                       {search || state !== 'all' || range !== 'all'
                         ? 'No shifts match these filters.'
                         : 'No shifts recorded yet. Guards clock in from the Guardhouse portal.'}

@@ -495,7 +495,7 @@ function Composer({
 
         {feedback ? (
           <p
-            className={`flex items-start gap-2 rounded-xl border p-3 text-small ${
+            className={`flex items-start gap-2 rounded-xl border p-3 text-body ${
               feedback.tone === 'danger'
                 ? 'border-danger/30 bg-danger/10 text-danger'
                 : 'border-success/30 bg-success/10 text-success'
@@ -723,7 +723,7 @@ function AnnouncementDetailModal({ announcement: a, onClose, onEdit }) {
           {/* The whole notice, line breaks intact — this is the surface the
               card's two-line clamp defers to, so nothing here may be trimmed. */}
           {a.body ? (
-            <p className="whitespace-pre-line text-small leading-relaxed text-text-secondary">
+            <p className="whitespace-pre-line text-body leading-relaxed text-text-secondary">
               {a.body}
             </p>
           ) : null}

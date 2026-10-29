@@ -167,7 +167,7 @@ export default function NotificationPanel({
       {sections.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-5 py-14 text-center">
           <BellOff size="lg" className="text-text-muted" />
-          <p className="text-small text-text-secondary">{filter === 'unread' ? "You're all caught up." : 'No activity yet.'}</p>
+          <p className="text-body text-text-secondary">{filter === 'unread' ? "You're all caught up." : 'No activity yet.'}</p>
         </div>
       ) : (
         <div className="custom-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-5 py-4">

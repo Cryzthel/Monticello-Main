@@ -73,7 +73,7 @@ const ZoneOption = memo(function ZoneOption({ z, index, total, id, active, selec
       className={`flex cursor-pointer items-center gap-3 rounded-lg px-2.5 ${active ? 'bg-tint/[0.07]' : ''}`}
     >
       <span className="min-w-0 flex-1 leading-tight">
-        <span className="block truncate text-small text-text-primary">{z.city}</span>
+        <span className="block truncate text-body text-text-primary">{z.city}</span>
         {z.region ? <span className="block truncate text-small text-text-muted">{z.region}</span> : null}
       </span>
       <span className="shrink-0 font-mono text-small tabular-nums text-text-muted">{z.offset}</span>
@@ -256,7 +256,7 @@ export default function TimeZoneSelect({ id, value, onChange, disabled }) {
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
-        className={`inline-flex h-10 w-full items-center gap-2 rounded-lg border bg-base-900/50 px-4 text-left text-small shadow-sm outline-none transition-[border-color,box-shadow] duration-150 disabled:opacity-60 ${
+        className={`inline-flex h-10 w-full items-center gap-2 rounded-lg border bg-base-900/50 px-4 text-left text-body shadow-sm outline-none transition-[border-color,box-shadow] duration-150 disabled:opacity-60 ${
           open
             ? 'border-brand-500/60 ring-2 ring-brand-500/20'
             : 'border-hairline hover:border-brand-500/30 focus-visible:border-brand-500/60 focus-visible:ring-2 focus-visible:ring-brand-500/20'

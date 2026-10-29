@@ -184,7 +184,7 @@ export function MediaEvidenceCard({ report, compact = false, onLightboxChange, t
             </div>
           </>
         ) : (
-          <span className="flex flex-col items-center gap-2 text-small text-zinc-400">
+          <span className="flex flex-col items-center gap-2 text-body text-zinc-400">
             <ImageOff size="lg" aria-hidden="true" />
             {report.hasMedia ? 'Media still uploading…' : 'No media attached'}
           </span>

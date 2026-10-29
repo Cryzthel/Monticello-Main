@@ -99,7 +99,7 @@ export default function ConfirmDialog({
       onClick={onCancel}
       className={
         centered
-          ? 'btn btn-outline h-11 flex-1 rounded-full px-4 text-small'
+          ? 'btn btn-outline h-11 flex-1 rounded-full px-4 text-body'
           : 'btn btn-outline h-11 w-full px-4 text-small sm:h-9 sm:w-auto'
       }
     >
@@ -114,7 +114,7 @@ export default function ConfirmDialog({
       onClick={onConfirm}
       className={
         centered
-          ? `btn h-11 flex-1 rounded-full px-4 text-small font-semibold ${confirm}`
+          ? `btn h-11 flex-1 rounded-full px-4 text-body font-semibold ${confirm}`
           : `btn h-11 w-full px-4 text-small sm:h-9 sm:w-auto ${confirm}`
       }
     >

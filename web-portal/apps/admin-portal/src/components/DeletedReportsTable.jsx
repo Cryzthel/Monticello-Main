@@ -170,7 +170,7 @@ export default function DeletedReportsTable({ incidents = [], loading = false, o
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
                   <Trash size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-small text-text-secondary">
+                  <p className="text-body text-text-secondary">
                     {search ? 'No deleted reports match that search.' : 'The recycle bin is empty.'}
                   </p>
                 </td>

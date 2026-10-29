@@ -89,7 +89,7 @@ export default function StatusSelect({
     }
   }, [open])
 
-  const height = size === 'sm' ? 'h-8 text-small' : 'h-9 text-small'
+  const height = size === 'sm' ? 'h-8 text-small' : 'h-9 text-body'
   const { dot } = statusStyle(value)
 
   return (

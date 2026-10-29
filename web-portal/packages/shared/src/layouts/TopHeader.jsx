@@ -133,7 +133,7 @@ export default function TopHeader({
         // even `px-4`: the ⌘K cap needs less room inside the curve than the
         // leading glyph does, and an even padding left it crowding the right
         // edge. `shadow-none` drops the 1px lift a flat oblong does not want.
-        className="hidden h-10 min-w-0 max-w-xl flex-1 items-center gap-2.5 rounded-full border border-slate-200 bg-base-900 pl-4 pr-2 text-left text-small text-text-muted transition-[border-color,color] duration-150 hover:border-slate-300 hover:text-text-secondary sm:flex"
+        className="hidden h-10 min-w-0 max-w-xl flex-1 items-center gap-2.5 rounded-full border border-slate-200 bg-base-900 pl-4 pr-2 text-left text-body text-text-muted transition-[border-color,color] duration-150 hover:border-slate-300 hover:text-text-secondary sm:flex"
       >
         <Search size="sm" className="shrink-0" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">Search pages…</span>

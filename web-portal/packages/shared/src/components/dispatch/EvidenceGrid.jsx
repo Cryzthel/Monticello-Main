@@ -76,7 +76,7 @@ export function forensicCoordinates(lat, lng) {
  * file to fetch. The grid shows the compressed original, scaled down.
  */
 export default function EvidenceGrid({ media, stamp, onOpen, emptyText }) {
-  if (!media.length) return <p className="text-small text-text-muted">{emptyText}</p>
+  if (!media.length) return <p className="text-body text-text-muted">{emptyText}</p>
 
   return (
     // Two up, not three: at three a 416px rail leaves ~115px per tile, and the

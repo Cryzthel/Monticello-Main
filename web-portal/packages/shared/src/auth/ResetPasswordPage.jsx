@@ -125,7 +125,7 @@ function EmailActionPage({ loginPath, illustration }) {
   return (
     <LoginSplitLayout title={state.status === 'done' ? copy.title : 'Confirming your email'} description="Monticello Villas account" illustration={illustration}>
       {state.status === 'checking' ? (
-        <p className="text-small text-text-muted">Checking your link…</p>
+        <p className="text-body text-text-muted">Checking your link…</p>
       ) : (
         <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
@@ -136,7 +136,7 @@ function EmailActionPage({ loginPath, illustration }) {
             >
               {state.status === 'done' ? <CheckCircle2 size="md" /> : <ShieldAlert size="md" />}
             </span>
-            <p className="text-small leading-relaxed text-text-muted">
+            <p className="text-body leading-relaxed text-text-muted">
               {state.status === 'done'
                 ? copy.body
                 : 'This link has expired or has already been used. Request a new one from Settings.'}
@@ -286,7 +286,7 @@ function PasswordResetForm({ loginPath, illustration }) {
 
   const body = () => {
     if (checking) {
-      return <p className="text-small text-text-muted">Checking your link…</p>
+      return <p className="text-body text-text-muted">Checking your link…</p>
     }
 
     if (linkError) {
@@ -298,7 +298,7 @@ function PasswordResetForm({ loginPath, illustration }) {
             </span>
             <div>
               <p className="type-h3 text-text-primary">Link no longer valid</p>
-              <p className="mt-1.5 text-small leading-relaxed text-text-muted">{linkError}</p>
+              <p className="mt-1.5 text-body leading-relaxed text-text-muted">{linkError}</p>
             </div>
           </div>
           <button
@@ -321,7 +321,7 @@ function PasswordResetForm({ loginPath, illustration }) {
             </span>
             <div>
               <p className="type-h3 text-text-primary">Password updated</p>
-              <p className="mt-1.5 text-small leading-relaxed text-text-muted">
+              <p className="mt-1.5 text-body leading-relaxed text-text-muted">
                 Sign in with your new password. Any other device that was signed in to this
                 account will need it too.
               </p>
@@ -346,7 +346,7 @@ function PasswordResetForm({ loginPath, illustration }) {
     return (
       <form className="step-enter flex flex-col gap-6" onSubmit={handleSubmit} noValidate>
         {account ? (
-          <p className="text-small leading-relaxed text-text-muted">
+          <p className="text-body leading-relaxed text-text-muted">
             Setting a new password for{' '}
             <span className="font-medium text-text-primary">{account}</span>.
           </p>

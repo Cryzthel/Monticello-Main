@@ -282,7 +282,7 @@ function ProfileCard({ settings }) {
           ) : (
             <span
               aria-hidden="true"
-              className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-body font-semibold text-[#047857]"
+              className="flex size-14 shrink-0 items-center justify-center rounded-full bg-brand-100 text-h3 font-semibold text-[#047857]"
             >
               {initial}
             </span>
@@ -336,7 +336,7 @@ function ProfileCard({ settings }) {
           {loading ? (
             <Skeleton className="h-4 w-32" />
           ) : (
-            <span className="min-w-0 truncate text-small font-medium text-text-secondary">{officer.email || '—'}</span>
+            <span className="min-w-0 truncate text-body font-medium text-text-secondary">{officer.email || '—'}</span>
           )}
         </div>
       </SettingsItem>
@@ -439,7 +439,7 @@ function NotificationsCard({ settings }) {
               onPointerUp={(event) => previewAt(Number(event.currentTarget.value) / 100, true)}
               className="h-1.5 flex-1 cursor-pointer accent-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             />
-            <span className="w-10 shrink-0 text-right text-small font-medium tabular-nums text-text-secondary">
+            <span className="w-10 shrink-0 text-right text-body font-medium tabular-nums text-text-secondary">
               {percent}%
             </span>
           </div>
@@ -508,6 +508,6 @@ function SystemCard({ settings }) {
  */
 function AccountValue({ loading, value, empty = '—' }) {
   if (loading) return <Skeleton className="h-4 w-32" />
-  if (!value) return <span className="text-small text-text-muted">{empty}</span>
-  return <span className="block truncate text-small font-medium text-text-primary">{value}</span>
+  if (!value) return <span className="text-body text-text-muted">{empty}</span>
+  return <span className="block truncate text-body font-medium text-text-primary">{value}</span>
 }

@@ -207,7 +207,7 @@ function PanicResolutionPanel({ alert, closing, onClose, onRespond, respondingId
               </span>
             )}
             <div>
-              <h3 className="text-small font-semibold text-zinc-100">{alert.residentName}</h3>
+              <h3 className="text-body font-semibold text-zinc-100">{alert.residentName}</h3>
               <p className="mt-0.5 flex items-center gap-1.5 text-small text-zinc-400">
                 <MapPin size={14} className="shrink-0 text-zinc-500" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate">{alert.address}</span>

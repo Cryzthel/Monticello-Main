@@ -362,14 +362,14 @@ export default function PanicAlertDetailModal({ alert, onClose }) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full px-4 py-2 text-small font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+              className="rounded-full px-4 py-2 text-body font-medium text-text-secondary transition-colors hover:bg-tint/[0.06] hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
             >
               Close
             </button>
             <button
               type="button"
               onClick={openLog}
-              className="group inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-small font-semibold text-[var(--color-cta-fg)] transition-colors hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97]"
+              className="group inline-flex items-center gap-2 rounded-full bg-[var(--color-cta)] px-5 py-2 text-body font-semibold text-[var(--color-cta-fg)] transition-colors hover:bg-[var(--color-cta-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 active:scale-[0.97]"
             >
               Open SOS log
               <ArrowRight size="sm" className="transition-transform duration-150 group-hover:translate-x-1" aria-hidden="true" />

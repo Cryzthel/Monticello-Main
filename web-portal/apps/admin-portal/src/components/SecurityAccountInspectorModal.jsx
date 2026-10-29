@@ -131,7 +131,7 @@ export default function SecurityAccountInspectorModal({ account, onClose }) {
             ) : (
               <span
                 aria-hidden="true"
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-body font-bold text-brand-500 shadow-inner"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-h3 font-bold text-brand-500 shadow-inner"
               >
                 {initialsOf(name)}
               </span>

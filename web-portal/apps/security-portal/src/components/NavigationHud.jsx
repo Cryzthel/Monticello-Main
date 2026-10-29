@@ -97,13 +97,13 @@ export default function NavigationHud({ route, progress, offRoute = false, targe
         </span>
         <div className="min-w-0 flex-1" aria-live="polite">
           {arrived ? (
-            <p className="text-body font-semibold leading-tight text-emerald-300">You have arrived</p>
+            <p className="text-h3 font-semibold leading-tight text-emerald-300">You have arrived</p>
           ) : (
             <>
-              <p className="text-body font-semibold leading-tight tabular-nums">
+              <p className="text-h3 font-semibold leading-tight tabular-nums">
                 {Number.isFinite(step?.distanceM) ? `In ${formatDistance(step.distanceM)}` : 'Head to the call'}
               </p>
-              <p className="mt-0.5 line-clamp-2 text-small leading-snug text-white/75">
+              <p className="mt-0.5 line-clamp-2 text-body leading-snug text-white/75">
                 {step?.instruction ?? 'Follow the highlighted route.'}
               </p>
             </>
@@ -125,11 +125,11 @@ export default function NavigationHud({ route, progress, offRoute = false, targe
         <dl className="flex items-center gap-6 tabular-nums">
           <div>
             <dt className="text-small font-medium uppercase tracking-wider text-white/45">ETA</dt>
-            <dd className="text-body font-semibold text-white">{eta ? formatClockTime(eta) : '—'}</dd>
+            <dd className="text-h3 font-semibold text-white">{eta ? formatClockTime(eta) : '—'}</dd>
           </div>
           <div>
             <dt className="text-small font-medium uppercase tracking-wider text-white/45">Distance</dt>
-            <dd className="text-body font-semibold text-white">{formatDistance(remainingM)}</dd>
+            <dd className="text-h3 font-semibold text-white">{formatDistance(remainingM)}</dd>
           </div>
           <span
             className={`ml-auto inline-flex items-center gap-1.5 text-small font-medium ${live ? 'text-white/45' : 'text-amber-300'}`}

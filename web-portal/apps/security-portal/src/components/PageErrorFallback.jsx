@@ -17,7 +17,7 @@ export default function PageErrorFallback({ error, reset, title = 'This page fai
         <ShieldAlert size="md" />
       </span>
       <div>
-        <p className="text-small font-semibold text-text-primary">{title}</p>
+        <p className="text-body font-semibold text-text-primary">{title}</p>
         {error?.message ? (
           <p className="mx-auto mt-1 max-w-sm break-words text-small leading-relaxed text-text-secondary">
             {error.message}

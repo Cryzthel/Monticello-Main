@@ -189,7 +189,7 @@ export default function SecurityDirectoryTable({
             {error ? (
               <tr>
                 <td colSpan={COLUMNS} className="px-4 py-12 text-center">
-                  <p className="text-small font-medium text-danger">
+                  <p className="text-body font-medium text-danger">
                     Could not load the security directory.
                   </p>
                   {/* Surfacing the code matters: a permission-denied points at
@@ -206,7 +206,7 @@ export default function SecurityDirectoryTable({
               <tr>
                 <td colSpan={COLUMNS} className="px-4 py-14 text-center">
                   <ShieldOff size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-small text-text-secondary">
+                  <p className="text-body text-text-secondary">
                     {filtered
                       ? 'No accounts match these filters.'
                       : 'No security accounts yet. Provision one to give a guard portal access.'}

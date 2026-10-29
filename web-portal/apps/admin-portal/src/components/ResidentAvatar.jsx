@@ -2,7 +2,7 @@
 // profile screen leaves photoUrl empty by default, so that's the common case
 // rather than an edge case.
 export default function ResidentAvatar({ name, photoUrl, size = 'md' }) {
-  const dimension = size === 'lg' ? 'h-16 w-16 text-body font-semibold' : 'h-9 w-9 text-small'
+  const dimension = size === 'lg' ? 'h-16 w-16 text-h3 font-semibold' : 'h-9 w-9 text-small'
   const initial = (name || '?').trim().charAt(0).toUpperCase()
 
   if (photoUrl) {

@@ -542,13 +542,13 @@ export default function HazardMapReportDetailsModal({ report, onClose }) {
           <section className={`${CARD} flex items-center gap-3.5`} aria-label={officerFiled ? 'Filed by officer' : 'Reporter'}>
             <span
               aria-hidden="true"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-small font-bold text-brand-500"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-500/30 bg-brand-500/10 text-body font-bold text-brand-500"
             >
               {reporterInitial}
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-small font-bold tracking-tight text-text-primary">
+                <h3 className="truncate text-body font-bold tracking-tight text-text-primary">
                   {report.reportedByName || 'Unknown reporter'}
                 </h3>
                 {/* Whether an administrator has confirmed this resident owns or

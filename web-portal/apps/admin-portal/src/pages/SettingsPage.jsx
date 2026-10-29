@@ -205,7 +205,7 @@ export default function SettingsPage() {
           {status === 'error' ? (
             <p
               role="status"
-              className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3.5 text-small leading-relaxed text-text-primary"
+              className="flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3.5 text-body leading-relaxed text-text-primary"
             >
               <AlertTriangle size="sm" aria-hidden="true" className="mt-0.5 shrink-0 text-warning" />
               <span>

@@ -193,7 +193,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
         <header className="flex shrink-0 flex-col justify-between gap-4 border-b border-hairline bg-gradient-to-r from-base-900 to-base-950/60 px-6 py-5 md:flex-row md:items-center dark:to-base-950">
           <div className="flex min-w-0 items-center gap-4">
             <div className="relative shrink-0">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-500/40 bg-brand-500/15 text-body font-bold text-brand-500 shadow-lg shadow-brand-500/10">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-brand-500/40 bg-brand-500/15 text-h3 font-bold text-brand-500 shadow-lg shadow-brand-500/10">
                 {initialsOf(displayName)}
               </span>
               {guard.onDuty ? (
@@ -254,7 +254,7 @@ export default function GuardShiftRecordModal({ guard, onClose, onOpenShift, sus
           <section className="space-y-3">
             <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div>
-                <h3 className="flex items-center gap-2 text-small font-bold tracking-tight text-text-primary">
+                <h3 className="flex items-center gap-2 text-body font-bold tracking-tight text-text-primary">
                   <ClipboardList size="sm" className="text-brand-500" aria-hidden="true" />
                   Official shift duty logs
                 </h3>

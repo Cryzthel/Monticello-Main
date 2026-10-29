@@ -7,7 +7,7 @@
  * alerts), and the page names itself in its own space, where the title can be
  * a real heading instead of a label squeezed beside a search field.
  *
- * Sentence case, H2 (40px Space Grotesk); the subtitle is Body (18px). Actions
+ * Sentence case, H2 (24px Space Grotesk); the subtitle is Body (14px). Actions
  * sit on the title's baseline row from `sm` up and wrap under it below.
  */
 export default function PageHeader({ title, subtitle, actions, className = '' }) {

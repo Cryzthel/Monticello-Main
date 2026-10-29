@@ -456,7 +456,7 @@ function ReportComposer({ onClose, onFiled, onBusyChange }) {
           {error ? (
             <p
               role="alert"
-              className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-small text-danger"
+              className="flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-body text-danger"
             >
               <ShieldAlert size="sm" className="mt-0.5 shrink-0" />
               {error}

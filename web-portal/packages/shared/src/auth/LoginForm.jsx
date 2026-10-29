@@ -240,7 +240,7 @@ export default function LoginForm({
         noValidate
       >
         <div className="step-enter">
-          <p className="text-small font-semibold text-text-primary" id="totp-code-label">
+          <p className="text-body font-semibold text-text-primary" id="totp-code-label">
             Two-step verification
           </p>
           <p className="mt-1.5 text-small leading-relaxed text-text-muted">

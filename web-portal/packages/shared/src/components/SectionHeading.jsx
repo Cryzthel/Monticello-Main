@@ -29,7 +29,7 @@ export default function SectionHeading({
     <div
       className={`flex shrink-0 flex-wrap ${description ? 'items-end' : 'items-center'} justify-between gap-x-4 gap-y-1 ${className}`}
     >
-      {/* H3 in the type scale (28px Space Grotesk). These sit above panels
+      {/* H3 in the type scale (18px Space Grotesk). These sit above panels
           ("System events", "Broadcast feed"), one rank under the page title's
           H2 (PageHeader) and above the Body/Small text inside the panel. */}
       <div className="min-w-0">

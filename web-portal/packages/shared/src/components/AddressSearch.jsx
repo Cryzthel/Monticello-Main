@@ -191,7 +191,7 @@ export default function AddressSearch({
                 }`}
               >
                 <MapPin size="sm" className="shrink-0 text-text-muted" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-small font-medium text-text-primary">
+                <span className="min-w-0 flex-1 truncate text-body font-medium text-text-primary">
                   {entry.label}
                 </span>
                 {/* The count is why this list beats three dropdowns: it says how

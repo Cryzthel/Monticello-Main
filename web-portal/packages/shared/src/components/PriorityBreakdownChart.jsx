@@ -30,7 +30,7 @@ export default function PriorityBreakdownChart({ incidents = [], loading = false
   return (
     <Card className="flex h-72 flex-col p-5">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-small font-semibold text-text-primary">Active incidents by priority</p>
+        <p className="text-body font-semibold text-text-primary">Active incidents by priority</p>
         {/* Withheld rather than rendered as "0 active" while the query opens —
             on a priority chart that is a claim about the queue being clear,
             not a placeholder. */}
@@ -46,10 +46,10 @@ export default function PriorityBreakdownChart({ incidents = [], loading = false
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={CHART_MARGIN}>
           <CartesianGrid stroke="var(--color-chart-grid)" vertical={false} />
-          <XAxis dataKey="name" tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }} axisLine={{ stroke: 'var(--color-chart-grid)' }} tickLine={false} />
+          <XAxis dataKey="name" tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }} axisLine={{ stroke: 'var(--color-chart-grid)' }} tickLine={false} />
           <YAxis
             allowDecimals={false}
-            tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
+            tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }}
             axisLine={false}
             tickLine={false}
             width={yAxisWidth(peak)}

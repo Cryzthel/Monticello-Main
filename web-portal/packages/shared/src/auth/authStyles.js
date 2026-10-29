@@ -40,7 +40,7 @@
  * is deliberately NOT used: it hardcodes the near-black pair.
  */
 export const CTA =
-  'btn h-12 w-full rounded-full bg-brand-cta text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover text-small font-semibold disabled:opacity-60'
+  'btn h-12 w-full rounded-full bg-brand-cta text-brand-cta-fg shadow-sm transition-all hover:bg-brand-cta-hover text-body font-semibold disabled:opacity-60'
 
 /**
  * The secondary action: "Back to sign in", "Use a different account".

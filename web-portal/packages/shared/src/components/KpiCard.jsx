@@ -66,7 +66,7 @@ export default function KpiCard({
   return (
     <div className={`kpi-shell ${className}`}>
       <div className={`kpi-face ${compact ? 'px-3 py-2.5' : 'px-4 py-3.5'}`}>
-        <p className={`truncate font-medium text-small text-text-secondary`}>{label}</p>
+        <p className={`truncate font-medium text-text-secondary ${compact ? 'text-small' : 'text-body'}`}>{label}</p>
         <div className={`flex items-center justify-between gap-2 ${compact ? 'mt-1' : 'mt-1.5'}`}>
           <p
             className={`tabular-nums ${

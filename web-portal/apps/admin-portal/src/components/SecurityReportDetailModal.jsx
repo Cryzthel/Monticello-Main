@@ -337,7 +337,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
             {pending ? (
               <SkeletonBody />
             ) : gone ? (
-              <p className="text-small text-text-secondary">
+              <p className="text-body text-text-secondary">
                 This report was deleted while it was open. It may be in Audit History → Deleted reports, where it can be
                 restored.
               </p>
@@ -382,7 +382,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                     ].map(([label, value]) => (
                       <div key={label}>
                         <dt className="mb-0.5 text-small uppercase tracking-wider text-text-muted">{label}</dt>
-                        <dd className="text-small font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
+                        <dd className="text-body font-semibold tabular-nums text-text-primary">{value || '—'}</dd>
                       </div>
                     ))}
                   </dl>
@@ -422,7 +422,7 @@ export default function SecurityReportDetailModal({ reportId, report: pageReport
                   {attachmentCount === 0 ? (
                     <div className="flex h-40 flex-col items-center justify-center rounded-lg border border-hairline bg-zinc-900 text-zinc-400">
                       <ImageOff size="lg" className="mb-2" aria-hidden="true" />
-                      <span className="text-small">No evidence attached</span>
+                      <span className="text-body">No evidence attached</span>
                     </div>
                   ) : (
                     <>

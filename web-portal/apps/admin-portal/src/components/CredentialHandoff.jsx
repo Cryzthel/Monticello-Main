@@ -49,7 +49,7 @@ export function CopyRow({ label, value, mono = true }) {
     <div className="flex items-center gap-3 rounded-xl border border-hairline bg-base-900 p-3">
       <div className="min-w-0 flex-1">
         <p className="text-small font-semibold tracking-normal text-text-muted">{label}</p>
-        <p className={`mt-0.5 truncate text-small text-text-primary ${mono ? 'font-mono' : 'font-medium'}`}>
+        <p className={`mt-0.5 truncate text-body text-text-primary ${mono ? 'font-mono' : 'font-medium'}`}>
           {value}
         </p>
       </div>

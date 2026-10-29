@@ -92,7 +92,7 @@ export default function ActionToaster() {
           ].join(' '),
           icon: '!m-0 flex h-8 w-8 shrink-0 items-center justify-center',
           content: 'flex min-w-0 flex-1 flex-col pt-0.5',
-          title: 'text-small font-medium tracking-tight text-text-primary',
+          title: 'text-body font-medium tracking-tight text-text-primary',
           description: 'mt-0.5 text-small leading-relaxed text-text-secondary',
           closeButton: [
             // `absolute` is ours to add: with `unstyled`, sonner drops its own

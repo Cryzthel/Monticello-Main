@@ -94,7 +94,7 @@ export default function Lightbox({ media = [], startIndex = 0, watermark, onClos
 
           {watermark ? (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-lg bg-gradient-to-t from-black/85 to-transparent p-4">
-              <p className="text-small font-semibold text-text-primary">{watermark.name}</p>
+              <p className="text-body font-semibold text-text-primary">{watermark.name}</p>
               <p className="text-small text-white/80">{watermark.address}</p>
               <p className="text-small text-white/60">{watermark.timestamp}</p>
             </div>

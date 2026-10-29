@@ -174,7 +174,7 @@ function SidebarHeader({ collapsed, onClose }) {
             both. 16px briefly did not, which is why this once branched on
             `onClose` — that branch is gone, and a conditional that always
             evaluates the same way is worse than no conditional. */}
-        <p className="truncate font-brand text-small font-normal leading-tight tracking-tight text-brand-logo">
+        <p className="truncate font-brand text-body font-normal leading-tight tracking-tight text-brand-logo">
           Monticello Villas
         </p>
       </div>

@@ -684,7 +684,7 @@ function ArrivalOverride({ check, reason, onReason, busy, onCancel, onConfirm })
   const ready = reason.trim().length >= 3
   return (
     <div className="mt-2 rounded-xl border border-warning/30 bg-warning/10 p-3" role="group" aria-label="Confirm arrival">
-      <p className="flex items-start gap-2 text-small font-semibold text-text-primary">
+      <p className="flex items-start gap-2 text-body font-semibold text-text-primary">
         <AlertTriangle size="sm" className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
         {arrivalVerdictText(check)}
       </p>

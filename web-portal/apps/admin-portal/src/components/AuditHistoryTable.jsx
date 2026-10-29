@@ -289,7 +289,7 @@ export default function AuditHistoryTable({
               <tr>
                 <td colSpan={7} className="px-4 py-16 text-center">
                   <History size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-small text-text-secondary">
+                  <p className="text-body text-text-secondary">
                     {search ? 'No events match that search.' : 'No events recorded yet.'}
                   </p>
                 </td>

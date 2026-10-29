@@ -55,14 +55,14 @@ export default function CommandPalette({ open, onClose, navGroups, onNavigate })
 
         <div className="custom-scrollbar max-h-80 overflow-y-auto p-2">
           {results.length === 0 ? (
-            <p className="px-2 py-6 text-center text-small text-text-secondary">No matches.</p>
+            <p className="px-2 py-6 text-center text-body text-text-secondary">No matches.</p>
           ) : (
             results.map(({ to, label, icon: Icon, group }) => (
               <button
                 key={to}
                 type="button"
                 onClick={() => handleSelect(to)}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-small text-text-primary transition-colors duration-100 hover:bg-tint/[0.05]"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-body text-text-primary transition-colors duration-100 hover:bg-tint/[0.05]"
               >
                 <Icon size="sm" className="shrink-0 text-brand-400" />
                 <span className="flex-1 truncate">{label}</span>

@@ -62,8 +62,8 @@ import { Check, ChevronDown } from '@shared/icons'
  */
 const SIZES = {
   sm: 'h-8 text-small',
-  md: 'h-9 text-small',
-  touch: 'h-11 text-small sm:h-9',
+  md: 'h-9 text-body',
+  touch: 'h-11 text-body sm:h-9',
 }
 
 /**
@@ -127,8 +127,7 @@ export default function Select({
   )
   const picked = multiple ? (Array.isArray(value) ? value : []) : []
   const selected = multiple ? null : normalized.find((option) => option.value === value)
-  // A Select in a form is form input text (Body, 18px); in a toolbar it is chrome (Small).
-  const height = (SIZES[size] ?? SIZES.md).replace('text-small', variant === 'field' ? 'text-body' : 'text-small')
+  const height = SIZES[size] ?? SIZES.md
 
   /**
    * What the trigger says when several things are chosen.
@@ -463,7 +462,7 @@ export default function Select({
                       // them into one treatment is how a keyboard user ends
                       // up unable to tell what they have chosen from what
                       // they are merely pointing at.
-                      className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-small font-medium transition-colors duration-100 sm:min-h-0 sm:text-small ${
+                      className={`flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-body font-medium transition-colors duration-100 sm:min-h-0 ${
                         active
                           ? 'bg-nav-active text-nav-active-fg'
                           : focused

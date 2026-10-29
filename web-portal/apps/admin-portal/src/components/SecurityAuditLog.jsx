@@ -131,7 +131,7 @@ export default function SecurityAuditLog() {
       <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-6">
         {error ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-small font-medium text-danger">Could not load the provisioning log.</p>
+            <p className="text-body font-medium text-danger">Could not load the provisioning log.</p>
             <p className="mt-1 text-small text-text-secondary">
               {describeFirestoreError(error, 'load the audit log')}
             </p>
@@ -151,7 +151,7 @@ export default function SecurityAuditLog() {
         ) : entries.length === 0 ? (
           <div className="px-4 py-14 text-center">
             <FileClock size="lg" className="mx-auto mb-2 text-text-muted" />
-            <p className="text-small text-text-secondary">No provisioning activity recorded yet.</p>
+            <p className="text-body text-text-secondary">No provisioning activity recorded yet.</p>
             <p className="mx-auto mt-1 max-w-md text-small text-text-muted">
               Entries are written by the Cloud Functions that perform each action, so this stays
               empty until an account is created, reset, suspended or revoked.
@@ -186,7 +186,7 @@ export default function SecurityAuditLog() {
                       {/* No icon in the badge: the tile beside it already
                           carries the action's glyph, and the row drew it twice. */}
                       <StatusBadge tone={style.tone}>{style.label}</StatusBadge>
-                      <p className="min-w-0 text-small text-text-primary">
+                      <p className="min-w-0 text-body text-text-primary">
                         {/* The summary is composed server-side, in the same
                             function that made the change, so it describes what
                             was actually written rather than what the UI asked

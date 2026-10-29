@@ -136,7 +136,7 @@ export default function FloatingField({
           id={id}
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
-          className={`min-w-0 flex-1 bg-transparent py-3.5 text-body leading-6 text-text-primary outline-none placeholder:text-transparent focus:placeholder:text-text-muted ${inputClassName}`}
+          className={`min-w-0 flex-1 bg-transparent py-3.5 text-body leading-5 text-text-primary outline-none placeholder:text-transparent focus:placeholder:text-text-muted ${inputClassName}`}
           {...inputProps}
         />
         {trailing}

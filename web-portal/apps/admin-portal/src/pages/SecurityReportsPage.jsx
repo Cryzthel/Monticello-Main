@@ -408,7 +408,7 @@ export default function SecurityReportsPage() {
                   aria-label="From date"
                   value={customFrom}
                   onChange={(e) => setCustomFrom(e.target.value)}
-                  className="field h-11 py-0 sm:h-10 sm:w-[10.5rem]"
+                  className="field h-11 py-0 sm:h-9 sm:w-[9.5rem]"
                 />
                 <span className="text-small text-text-muted">to</span>
                 <input
@@ -416,7 +416,7 @@ export default function SecurityReportsPage() {
                   aria-label="To date"
                   value={customTo}
                   onChange={(e) => setCustomTo(e.target.value)}
-                  className="field h-11 py-0 sm:h-10 sm:w-[10.5rem]"
+                  className="field h-11 py-0 sm:h-9 sm:w-[9.5rem]"
                 />
               </div>
             ) : null}
@@ -540,7 +540,7 @@ export default function SecurityReportsPage() {
             ) : rows.length === 0 ? (
               <div className="px-4 py-16 text-center">
                 <ClipboardList size="lg" className="mx-auto mb-2 text-text-muted" />
-                <p className="text-small text-text-secondary">{emptyMessage}</p>
+                <p className="text-body text-text-secondary">{emptyMessage}</p>
               </div>
             ) : (
               <ul>
@@ -597,7 +597,7 @@ export default function SecurityReportsPage() {
                   <tr>
                     <td colSpan={8} className="px-4 py-16 text-center">
                       <ClipboardList size="lg" className="mx-auto mb-2 text-text-muted" />
-                      <p className="text-small text-text-secondary">{emptyMessage}</p>
+                      <p className="text-body text-text-secondary">{emptyMessage}</p>
                     </td>
                   </tr>
                 ) : (

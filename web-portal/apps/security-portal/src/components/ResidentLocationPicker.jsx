@@ -135,7 +135,7 @@ export default function ResidentLocationPicker({
           <UserRound size="sm" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-small font-semibold text-text-primary">{selected.name}</p>
+          <p className="truncate text-body font-semibold text-text-primary">{selected.name}</p>
           <p className="mt-0.5 flex items-center gap-1.5 truncate text-small text-text-secondary">
             <MapPin size="sm" className="shrink-0" />
             {selected.label || 'No address on their profile'}

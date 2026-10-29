@@ -100,7 +100,7 @@ function InstallGuide({ open, onClose, release }) {
         <h2 id="install-guide-title" className="type-h3 pr-8 text-text-primary">
           Installing the app on Android
         </h2>
-        <p className="mt-1 text-small text-text-secondary">
+        <p className="mt-1 text-body text-text-secondary">
           This app is installed directly instead of from the Play Store. It takes about a minute.
         </p>
         <ol className="mt-4 space-y-3">
@@ -110,8 +110,8 @@ function InstallGuide({ open, onClose, release }) {
                 {i + 1}
               </span>
               <div>
-                <p className="text-small font-medium text-text-primary">{step.title}</p>
-                <p className="mt-0.5 text-small leading-relaxed text-text-secondary">{step.body}</p>
+                <p className="text-body font-medium text-text-primary">{step.title}</p>
+                <p className="mt-0.5 text-body leading-relaxed text-text-secondary">{step.body}</p>
               </div>
             </li>
           ))}
@@ -163,19 +163,19 @@ export default function DirectDownloadCard() {
             </span>
             <div className="min-w-0">
               <h2 className="type-h3 text-text-primary">Monticello Villas for Android</h2>
-              <p className="text-small text-text-secondary">Report incidents, raise an SOS and follow updates.</p>
+              <p className="text-body text-text-secondary">Report incidents, raise an SOS and follow updates.</p>
             </div>
           </div>
 
           {status === 'loading' ? (
-            <p className="mt-5 flex items-center gap-2 text-small text-text-muted" role="status">
+            <p className="mt-5 flex items-center gap-2 text-body text-text-muted" role="status">
               <Loader2 size={16} className="animate-spin" aria-hidden="true" />
               Checking for the latest release…
             </p>
           ) : null}
 
           {status === 'none' || status === 'error' ? (
-            <p className="mt-5 flex items-start gap-2 rounded-xl border border-hairline bg-base-950/60 p-3 text-small text-text-secondary" role="status">
+            <p className="mt-5 flex items-start gap-2 rounded-xl border border-hairline bg-base-950/60 p-3 text-body text-text-secondary" role="status">
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
               {status === 'none'
                 ? 'No Android release has been published yet.'
@@ -219,7 +219,7 @@ export default function DirectDownloadCard() {
                 <button
                   type="button"
                   onClick={() => setGuideOpen(true)}
-                  className="inline-flex items-center gap-1.5 text-small font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
+                  className="inline-flex items-center gap-1.5 text-body font-medium text-brand-600 underline-offset-4 hover:underline dark:text-brand-400"
                 >
                   <Info size={14} aria-hidden="true" />
                   How to install

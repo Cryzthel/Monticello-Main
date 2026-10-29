@@ -62,7 +62,7 @@ function Field({ icon: Icon, label, value, mono = false, tone = 'text-text-prima
         {Icon ? <Icon size="sm" /> : null}
         {label}
       </p>
-      <p className={`mt-1 break-words text-small font-medium ${mono ? 'font-mono' : ''} ${tone}`}>
+      <p className={`mt-1 break-words text-body font-medium ${mono ? 'font-mono' : ''} ${tone}`}>
         {value || <span className="text-text-muted">—</span>}
       </p>
     </div>
@@ -90,7 +90,7 @@ function TimelineRow({ icon: Icon, label, at, duration, pendingLabel, isLast = f
       </div>
       <div className={`min-w-0 flex-1 ${isLast ? '' : 'pb-4'}`}>
         <p className="meta-label">{label}</p>
-        <p className={`mt-0.5 text-small font-medium ${done ? 'text-text-primary' : 'text-text-muted'}`}>
+        <p className={`mt-0.5 text-body font-medium ${done ? 'text-text-primary' : 'text-text-muted'}`}>
           {done ? formatDateTime(at) : pendingLabel}
         </p>
         {done && duration != null ? (
@@ -140,7 +140,7 @@ function NotesEditor({ report, canEdit = true }) {
           <>
             <div>
               <p className="meta-label">Responder notes</p>
-              <p className="mt-1 whitespace-pre-wrap text-small text-text-primary">
+              <p className="mt-1 whitespace-pre-wrap text-body text-text-primary">
                 {report.responderNotes || <span className="text-text-muted">None recorded</span>}
               </p>
             </div>
@@ -148,7 +148,7 @@ function NotesEditor({ report, canEdit = true }) {
               <p className="meta-label">
                 Final resolution summary
               </p>
-              <p className="mt-1 whitespace-pre-wrap text-small text-text-primary">
+              <p className="mt-1 whitespace-pre-wrap text-body text-text-primary">
                 {report.resolutionSummary || <span className="text-text-muted">None recorded</span>}
               </p>
             </div>
@@ -246,7 +246,7 @@ export default function IncidentBreakdown({ report, mediaCount = 0, canEditNotes
           <Field label="Severity" value={report.severity} tone="text-text-primary capitalize" />
           <div className="min-w-0">
             <p className="meta-label">WPDA urgency</p>
-            <p className="mt-1 font-mono text-small font-semibold text-brand-400">{Math.round(wpdaScore)}</p>
+            <p className="mt-1 font-mono text-body font-semibold text-brand-400">{Math.round(wpdaScore)}</p>
             {/* The "Server-scored • weight ×10" line was here and is gone. It
                 explained the scorer's internals — where the number came from
                 and what the category multiplier was — to an audience that acts
@@ -264,7 +264,7 @@ export default function IncidentBreakdown({ report, mediaCount = 0, canEditNotes
             <p className="meta-label">
               Reported description
             </p>
-            <p className="mt-1 whitespace-pre-wrap text-small text-text-primary">{report.description}</p>
+            <p className="mt-1 whitespace-pre-wrap text-body text-text-primary">{report.description}</p>
           </div>
         ) : null}
       </Section>

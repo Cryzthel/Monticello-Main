@@ -51,7 +51,7 @@ export default function AuthAlert({ tone = 'error', children }) {
   return (
     <div
       role={role}
-      className={`flex items-start gap-2.5 rounded-2xl border p-3.5 text-small leading-relaxed ${className}`}
+      className={`flex items-start gap-2.5 rounded-2xl border p-3.5 text-body leading-relaxed ${className}`}
     >
       <Icon size="sm" className="mt-0.5 shrink-0" />
       <span className="min-w-0">{children}</span>

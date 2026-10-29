@@ -45,7 +45,7 @@ export default function SecuritySettingsCard() {
         align="start"
       >
         {!hasEmail ? (
-          <p className="text-small text-text-muted">
+          <p className="text-body text-text-muted">
             Not available: a password is confirmed against the account's email, and this account has none.
           </p>
         ) : (
@@ -138,7 +138,7 @@ export default function SecuritySettingsCard() {
           </button>
         }
       >
-        <p className="text-small leading-relaxed text-text-secondary">
+        <p className="text-body leading-relaxed text-text-secondary">
           Every other device signed in to this account has been signed out. This console stays signed in.
         </p>
       </SettingsDialog>

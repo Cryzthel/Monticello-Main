@@ -63,7 +63,7 @@ export const BADGE_TONES = {
 export const BADGE_SIZES = {
   sm: 'h-5 gap-1 px-2.5 text-small',
   md: 'h-6 gap-1.5 px-3 text-small',
-  lg: 'h-7 gap-1.5 px-3.5 text-small',
+  lg: 'h-7 gap-1.5 px-3.5 text-body',
 }
 
 /*

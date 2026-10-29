@@ -21,7 +21,7 @@ export default function SettingsSection({ id, icon: Icon, title, action, childre
           id={`${id}-heading`}
           className="type-h3 flex items-center gap-2.5 text-text-primary"
         >
-          {Icon ? <Icon size={22} className="text-text-muted" aria-hidden="true" /> : null}
+          {Icon ? <Icon size={18} className="text-text-muted" aria-hidden="true" /> : null}
           {title}
         </h2>
         {action}

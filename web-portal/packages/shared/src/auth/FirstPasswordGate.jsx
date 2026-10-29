@@ -109,7 +109,7 @@ function SetPasswordScreen({ illustration }) {
     >
       <form onSubmit={submit} noValidate className="flex flex-col gap-6" data-auth-recovery>
         {changed ? (
-          <p role="status" className="rounded-2xl border border-success/25 bg-success/10 p-3.5 text-small text-success">
+          <p role="status" className="rounded-2xl border border-success/25 bg-success/10 p-3.5 text-body text-success">
             Your new password is saved. Finishing setup…
           </p>
         ) : (
@@ -151,7 +151,7 @@ function SetPasswordScreen({ illustration }) {
         )}
 
         {error ? (
-          <p role="alert" className="rounded-2xl border border-danger/25 bg-danger/10 p-3.5 text-small text-danger">
+          <p role="alert" className="rounded-2xl border border-danger/25 bg-danger/10 p-3.5 text-body text-danger">
             {error}
           </p>
         ) : null}

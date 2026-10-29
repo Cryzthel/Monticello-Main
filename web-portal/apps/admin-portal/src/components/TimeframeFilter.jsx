@@ -28,7 +28,7 @@ export default function TimeframeFilter({ value, onChange, className = '' }) {
             aria-label="From date"
             value={value.from ?? ''}
             onChange={(e) => onChange({ ...value, from: e.target.value })}
-            className="field h-10 w-auto py-1.5"
+            className="field h-9 w-auto py-1.5"
           />
           <span className="text-small text-text-muted">to</span>
           <input
@@ -36,7 +36,7 @@ export default function TimeframeFilter({ value, onChange, className = '' }) {
             aria-label="To date"
             value={value.to ?? ''}
             onChange={(e) => onChange({ ...value, to: e.target.value })}
-            className="field h-10 w-auto py-1.5"
+            className="field h-9 w-auto py-1.5"
           />
         </div>
       ) : null}

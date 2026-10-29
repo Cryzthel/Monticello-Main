@@ -13,7 +13,7 @@ export default function DownloadAppPage() {
         <span className="text-body font-semibold tracking-tight text-text-primary">Monticello Villas</span>
       </div>
       <DirectDownloadCard />
-      <a href="/login" className="text-small text-text-muted underline-offset-4 hover:text-text-primary hover:underline">
+      <a href="/login" className="text-body text-text-muted underline-offset-4 hover:text-text-primary hover:underline">
         Staff sign-in
       </a>
     </main>

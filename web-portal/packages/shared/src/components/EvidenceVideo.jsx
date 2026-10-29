@@ -32,7 +32,7 @@ export function EvidenceVideo({ item, className = '', autoPlay = false }) {
     return (
       <div className={`flex flex-col items-center justify-center gap-3 rounded-lg bg-black/60 p-6 text-center ${className}`}>
         <Film size={32} className="text-white/70" aria-hidden="true" />
-        <p className="text-small font-medium text-white/90">This video format cannot play in the browser.</p>
+        <p className="text-body font-medium text-white/90">This video format cannot play in the browser.</p>
         <a
           href={item.url}
           target="_blank"

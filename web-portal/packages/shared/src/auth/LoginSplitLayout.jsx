@@ -275,7 +275,7 @@ export default function LoginSplitLayout({ children, illustration, title, descri
               colour by construction and cannot drift apart. It is a visible
               change even here in light — the ink moves off slate-900
               (#0F172A) onto the brand's #05171B. */}
-          <p className="min-w-0 truncate font-brand text-small font-normal leading-tight tracking-tight text-brand-logo">
+          <p className="min-w-0 truncate font-brand text-body font-normal leading-tight tracking-tight text-brand-logo">
             Monticello Villas
           </p>
         </div>
@@ -312,9 +312,9 @@ export default function LoginSplitLayout({ children, illustration, title, descri
               state has to be lifted out of LoginForm to say "recovering". */}
           <div className="flex flex-col items-center group-has-[[data-auth-recovery]]/shell:hidden">
 
-          {/* THE HEADING: H1 of the type scale — Space Grotesk 700 at 64px,
-              through `type-h1`. It clamps down to 40px on a phone, where
-              64px would split the greeting a word per line. No gradient
+          {/* THE HEADING: H1 of the type scale — Space Grotesk 700 at 36px,
+              through `type-h1`. It steps down to 30px on a phone, where
+              36px would crowd the greeting. No gradient
               fill: the ink is the system's heading value. */}
           <h1 className="type-h1 text-text-primary">
             {title}

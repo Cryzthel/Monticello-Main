@@ -80,7 +80,7 @@ export default function ShiftSummary({ shift, open }) {
         </p>
         {/* `tabular-nums` so the seconds column cannot shift the label beside
             it once a second. */}
-        <p className="font-mono text-small font-semibold tabular-nums text-text-primary">{elapsed}</p>
+        <p className="font-mono text-body font-semibold tabular-nums text-text-primary">{elapsed}</p>
       </div>
 
       <dl className="mt-3 grid grid-cols-3 gap-2">
@@ -89,7 +89,7 @@ export default function ShiftSummary({ shift, open }) {
             <dt className="text-small font-medium uppercase tracking-wider text-text-muted">
               {item.label}
             </dt>
-            <dd className="mt-0.5 text-body font-semibold tabular-nums leading-none text-text-primary">
+            <dd className="mt-0.5 text-h3 font-semibold tabular-nums leading-none text-text-primary">
               {loading ? '—' : item.value}
             </dd>
           </div>

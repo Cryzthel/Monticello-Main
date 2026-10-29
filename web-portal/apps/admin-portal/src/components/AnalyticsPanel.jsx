@@ -152,7 +152,7 @@ export default function AnalyticsPanel({
       <Card className="col-span-12 flex h-72 flex-col p-5 xl:col-span-6">
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-small font-semibold text-text-primary">Incident volume</p>
+            <p className="text-body font-semibold text-text-primary">Incident volume</p>
             {/* The window in words, so the ticks can stay short. */}
             <p className="mt-0.5 truncate text-small tabular-nums text-text-muted">{rangeLabel}</p>
           </div>
@@ -186,13 +186,13 @@ export default function AnalyticsPanel({
               tickFormatter={(ms) => formatChartTick(ms)}
               interval={tickEvery - 1}
               minTickGap={12}
-              tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
+              tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }}
               axisLine={{ stroke: 'var(--color-chart-grid)' }}
               tickLine={false}
             />
             <YAxis
               allowDecimals={false}
-              tick={{ fill: 'var(--color-chart-axis)', fontSize: 14 }}
+              tick={{ fill: 'var(--color-chart-axis)', fontSize: 12 }}
               axisLine={false}
               tickLine={false}
               width={yAxisWidth(peakDay)}
@@ -205,11 +205,11 @@ export default function AnalyticsPanel({
       </Card>
 
       <Card className="col-span-12 flex h-72 flex-col p-5 xl:col-span-6">
-        <p className="mb-2 text-small font-semibold text-text-primary">Category breakdown</p>
+        <p className="mb-2 text-body font-semibold text-text-primary">Category breakdown</p>
         {loading ? (
           <SkeletonDonut className="min-h-0 flex-1" size="h-32 w-32" legendRows={4} />
         ) : stableBreakdown.length === 0 ? (
-          <p className="text-small text-text-secondary">No data yet.</p>
+          <p className="text-body text-text-secondary">No data yet.</p>
         ) : (
           <div className="flex flex-1 items-center gap-4">
             <ResponsiveContainer width="45%" height="100%" debounce={120}>

@@ -27,7 +27,7 @@ function Stat({ icon: Icon, label, value, tone = 'text-text-primary' }) {
         <Icon size="sm" />
         {label}
       </p>
-      <p className={`mt-1 text-small font-semibold ${tone}`}>{value}</p>
+      <p className={`mt-1 text-body font-semibold ${tone}`}>{value}</p>
     </div>
   )
 }

@@ -53,7 +53,7 @@ export default function NotificationsSettingsCard({ draft, disabled, setGroup, o
               style={{ '--fill': `${percent}%` }}
               className="range-slider"
             />
-            <span className="w-10 shrink-0 text-right text-small font-medium tabular-nums text-text-secondary">{percent}%</span>
+            <span className="w-10 shrink-0 text-right text-body font-medium tabular-nums text-text-secondary">{percent}%</span>
           </div>
           <div>
             <button type="button" onClick={onTestSiren} className="btn btn-sm btn-outline">

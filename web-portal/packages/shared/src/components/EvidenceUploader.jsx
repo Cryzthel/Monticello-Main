@@ -226,7 +226,7 @@ export default function EvidenceUploader({
               type="button"
               disabled={disabled || full}
               onClick={open}
-              className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border text-small font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-lg border text-body font-semibold transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
                 dragging
                   ? 'border-brand-500 bg-brand-100 text-brand-400'
                   : 'border-dashed border-slate-300 text-text-secondary hover:border-brand-500/60 hover:bg-brand-50 hover:text-brand-400'
@@ -257,7 +257,7 @@ export default function EvidenceUploader({
                   : 'text-text-muted group-hover:-translate-y-0.5 group-hover:text-brand-500'
               }`}
             />
-            <span className="mt-2.5 text-small font-medium text-text-primary">
+            <span className="mt-2.5 text-body font-medium text-text-primary">
               {dragging ? 'Drop to attach' : 'Click or drag files here'}
             </span>
             {hint ? <span className="mt-1 px-3 text-center text-small text-text-muted">{hint}</span> : null}

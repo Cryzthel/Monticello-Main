@@ -144,7 +144,7 @@ function EmptyState({ message }) {
   return (
     <div className="px-4 py-14 text-center">
       <FileText size="lg" className="mx-auto mb-2 text-text-muted" />
-      <p className="text-small text-text-secondary">{message}</p>
+      <p className="text-body text-text-secondary">{message}</p>
     </div>
   )
 }

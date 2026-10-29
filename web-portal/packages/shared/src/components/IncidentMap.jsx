@@ -1953,14 +1953,14 @@ export default function IncidentMap({
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-base-900/95 p-6 text-center">
           <div className="max-w-xs">
             <MapPinOff size="lg" aria-hidden="true" className="mx-auto mb-2 text-text-muted" />
-            <p className="text-small font-medium text-text-primary">The map is not available</p>
+            <p className="text-body font-medium text-text-primary">The map is not available</p>
             <p className="mt-1 text-small leading-relaxed text-text-secondary">{mapFailure}</p>
           </div>
         </div>
       ) : null}
 
       {!mapboxgl.accessToken ? (
-        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-base-950 text-small text-text-secondary">
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-base-950 text-body text-text-secondary">
           Set VITE_MAPBOX_TOKEN to enable the incident map.
         </div>
       ) : null}

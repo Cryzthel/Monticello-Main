@@ -188,7 +188,7 @@ export default function ResetCredentialDialog({ open, account, onClose, onDone }
             </div>
 
             {error ? (
-              <p className="mt-4 flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-small text-danger">
+              <p className="mt-4 flex items-start gap-2 rounded-xl border border-danger/25 bg-danger/10 p-3 text-body text-danger">
                 <AlertTriangle size="sm" className="mt-0.5 shrink-0" />
                 <span className="min-w-0">{error}</span>
               </p>

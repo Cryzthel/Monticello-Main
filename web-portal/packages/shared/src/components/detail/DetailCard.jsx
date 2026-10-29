@@ -50,7 +50,7 @@ export function DetailField({ label, children, empty = false, mono = false, acce
     <div className={`min-w-0 border-l-2 pl-3 ${accent || 'border-hairline'} ${className}`}>
       <span className="mb-0.5 block text-small text-text-muted">{label}</span>
       <div
-        className={`break-words text-small font-medium ${mono ? 'font-mono tracking-wide' : ''} ${
+        className={`break-words text-body font-medium ${mono ? 'font-mono tracking-wide' : ''} ${
           empty ? 'italic text-text-muted' : 'text-text-primary'
         }`}
       >
@@ -84,7 +84,7 @@ export function DetailTimeline({ items }) {
         return (
           <li key={item.key} className="relative">
             <span aria-hidden="true" className={`absolute -left-6 top-1.5 h-2.5 w-2.5 rounded-full ${NODE[tone]}`} />
-            <p className={`text-small ${LABEL[tone]}`}>{item.label}</p>
+            <p className={`text-body ${LABEL[tone]}`}>{item.label}</p>
             {item.detail ? (
               <p className={`mt-0.5 truncate text-small ${tone === 'pending' ? 'text-text-muted' : 'font-medium text-text-secondary'}`}>
                 {item.detail}

@@ -238,7 +238,7 @@ export default function IncidentReviewModal({ report, onClose }) {
                   </div>
 
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4 text-left">
-                    <p className="text-small font-semibold text-white">{watermark.name}</p>
+                    <p className="text-body font-semibold text-white">{watermark.name}</p>
                     <p className="mt-0.5 flex items-center gap-1 text-small text-white/80">
                       <MapPin size="sm" className="shrink-0" />
                       {watermark.address}
@@ -251,7 +251,7 @@ export default function IncidentReviewModal({ report, onClose }) {
                 </button>
               </div>
             ) : (
-              <p className="flex items-center gap-2 p-4 text-small text-text-muted">
+              <p className="flex items-center gap-2 p-4 text-body text-text-muted">
                 {stillUploading ? (
                   <ShieldQuestion size="sm" className="shrink-0 text-warning" />
                 ) : (

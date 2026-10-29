@@ -202,7 +202,7 @@ export default function PanicAlertsTable({
                       empty array with loading:false — indistinguishable from
                       "no emergencies have happened", which is the worst possible
                       reading of an emergency log. */}
-                  <p className="text-small font-medium text-danger">Could not load panic alerts.</p>
+                  <p className="text-body font-medium text-danger">Could not load panic alerts.</p>
                   <p className="mt-1 text-small text-text-secondary">
                     {error.code ? `Firestore error: ${error.code}` : error.message}
                   </p>
@@ -229,7 +229,7 @@ export default function PanicAlertsTable({
               <tr>
                 <td colSpan={hasActions ? 6 : 5} className="px-4 py-16 text-center">
                   <Siren size="lg" className="mx-auto mb-2 text-text-muted" />
-                  <p className="text-small text-text-secondary">
+                  <p className="text-body text-text-secondary">
                     {alerts.length === 0
                       ? 'No panic alerts have been raised.'
                       : 'No alerts match this view.'}
