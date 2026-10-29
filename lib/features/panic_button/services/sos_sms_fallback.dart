@@ -57,9 +57,16 @@ class SosSmsFallback {
   /// it and the sync service will still deliver it.
   static Future<bool> compose(SosPayload payload) async {
     await SosSmsRecipients.load();
-    final recipients = SosSmsRecipients.current;
-    final body = payload.toSmsBody();
+    return _open(SosSmsRecipients.current, payload.toSmsBody());
+  }
 
+  /// The same alert to ONE guard. With a single number there is no separator
+  /// for a messaging app to misread, so this works wherever SMS works — the
+  /// fallback for an app that cannot start a multi-recipient conversation.
+  static Future<bool> composeTo(SosPayload payload, SmsRecipient recipient) =>
+      _open([recipient], payload.toSmsBody());
+
+  static Future<bool> _open(List<SmsRecipient> recipients, String body) async {
     // Android: an explicit SENDTO intent through MainActivity.composeSms,
     // which does not depend on url_launcher resolving an `sms:` URI (the
     // "Could not launch sms:" failure) and passes the body as an extra too.

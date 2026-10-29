@@ -155,10 +155,12 @@ void main() {
       expect(labels(_post(category: 'Utilities')).first, 'Maintenance');
     });
 
-    testWidgets('a photo post shows its category once, not on the image too',
-        (tester) async {
+    testWidgets('the card carries no category label at all', (tester) async {
+      // Removed by request (2026-10-29): the filter tab names the category.
       await _pumpCard(tester, _post(imageUrl: 'https://example.com/a.jpg'));
-      expect(find.text('Maintenance'), findsOneWidget);
+      expect(find.text('Maintenance'), findsNothing);
+      await _pumpCard(tester, _post());
+      expect(find.text('Maintenance'), findsNothing);
     });
 
     testWidgets('a pinned post shows a pin in the top-right corner, not a pill',

@@ -167,83 +167,6 @@ List<AnnouncementBadge> announcementBadges(Announcement a, {DateTime? now}) {
   ];
 }
 
-/// The card's badges in a single row, 8pt apart.
-///
-/// Never wraps. At most three short labels fit any phone this app runs on,
-/// and if a category name is long enough not to, the category pill gives way
-/// (ellipsis) rather than pushing Pinned / New onto a second line under it.
-/// Each pill is keyed by its label, so a badge appearing or disappearing on
-/// a live update never hands one pill's element to another.
-class _BadgeRow extends StatelessWidget {
-  const _BadgeRow({required this.badges});
-
-  final List<AnnouncementBadge> badges;
-
-  @override
-  Widget build(BuildContext context) {
-    if (badges.isEmpty) return const SizedBox.shrink();
-    return Row(
-      children: [
-        for (var i = 0; i < badges.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          // Only the first pill (the category) may shrink; the status pills
-          // are one word each and keep their full width.
-          if (i == 0)
-            Flexible(
-              key: ValueKey('badge-${badges[i].label}'),
-              child: _Pill(badge: badges[i]),
-            )
-          else
-            _Pill(key: ValueKey('badge-${badges[i].label}'), badge: badges[i]),
-        ],
-      ],
-    );
-  }
-}
-
-/// The standard badge pill: fully rounded, 10 x 4 padding, 12pt medium label.
-/// One recipe for every badge on the card, which is what keeps three of them
-/// in a row from looking like three different components.
-class _Pill extends StatelessWidget {
-  const _Pill({super.key, required this.badge});
-
-  final AnnouncementBadge badge;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: badge.fill,
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        border: Border.all(color: badge.edge),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (badge.icon != null) ...[
-            Icon(badge.icon, size: 12, color: badge.ink),
-            const SizedBox(width: 4),
-          ],
-          Flexible(
-            child: Text(
-              badge.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _t(
-                size: 12,
-                weight: FontWeight.w500,
-                color: badge.ink,
-                height: 1.2,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _OfficialSeal extends StatelessWidget {
   const _OfficialSeal();
 
@@ -572,8 +495,9 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                   );
                 },
               ),
-              const SizedBox(height: 12),
-              _BadgeRow(badges: announcementBadges(announcement)),
+              // No category pill on the card (2026-10-29, by request): the
+              // filter tab says which category is showing, the lead icon
+              // carries its colour, and the detail view names it.
             ],
           ),
           if (announcement.pinned)
@@ -822,26 +746,26 @@ TextStyle _t({
   );
 }
 
-/// The pinned mark: a pin glyph in the card's top-right corner, on a small
-/// white disc so it reads over a photo as well as over the card itself.
+/// The pinned mark: the pin glyph alone in the card's top-right corner, no
+/// disc behind it (2026-10-29, by request). A soft shadow keeps it legible
+/// where it sits over a photo.
 class _PinMark extends StatelessWidget {
   const _PinMark();
 
   @override
   Widget build(BuildContext context) {
+    // Material's push_pin stands upright; Phosphor's is drawn at 45°, which
+    // read as tilted in the corner.
     return Semantics(
       label: 'Pinned',
-      child: Container(
-        width: 26,
-        height: 26,
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          shape: BoxShape.circle,
-          boxShadow: AppShadows.sm,
+      child: const Padding(
+        padding: EdgeInsets.all(4),
+        child: Icon(
+          Icons.push_pin_rounded,
+          size: 18,
+          color: _pinnedInk,
+          shadows: [Shadow(color: Color(0x66FFFFFF), blurRadius: 4)],
         ),
-        // Material's push_pin stands upright; Phosphor's is drawn at 45°,
-        // which read as tilted in the corner.
-        child: const Icon(Icons.push_pin_rounded, size: 14, color: _pinnedInk),
       ),
     );
   }

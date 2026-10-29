@@ -670,10 +670,10 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
           // ring around a face read as a second marker.
           pulsingEnabled: false,
           showAccuracyRing: true,
-          accuracyRingColor:
-              LiveLocationMarker.ring.withValues(alpha: 0.14).toARGB32(),
-          accuracyRingBorderColor:
-              LiveLocationMarker.ring.withValues(alpha: 0.35).toARGB32(),
+          // White, like the cone (2026-10-29, by request): one light-coloured
+          // halo under the pin instead of a violet disc.
+          accuracyRingColor: Colors.white.withValues(alpha: 0.22).toARGB32(),
+          accuracyRingBorderColor: Colors.white.withValues(alpha: 0.6).toARGB32(),
           // Device heading drives the cone. Off without a compass, so no cone
           // confidently points north on a phone that cannot know.
           puckBearingEnabled: heading,

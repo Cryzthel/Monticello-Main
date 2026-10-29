@@ -47,7 +47,27 @@ class AnnouncementsScreen extends StatefulWidget {
 class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   // Vocabulary and matching both come from the shared filter bar, so this
   // screen cannot drift back to offering a category the dashboard never writes.
-  String _filter = AnnouncementFilterBar.allAnnouncements;
+  static const _options = AnnouncementFilterBar.options;
+
+  /// One page per category, so the feed can be SWIPED between them as well
+  /// as tapped (2026-10-29, by request) — the same pager History uses. The
+  /// pills follow the page; a tap travels the same path a swipe does.
+  final PageController _pages = PageController();
+  int _index = 0;
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
+
+  void _goTo(int index) {
+    _pages.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,70 +79,63 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
             // The shared header. Was a hand-rolled Stack at w800 — one of the
             // two screens that had drifted heavier than the other five.
             const PageTitleBar(title: 'Announcements'),
+            AnnouncementFilterBar(
+              value: _options[_index],
+              onChanged: (f) => _goTo(_options.indexOf(f)),
+            ),
+            const SizedBox(height: 14),
             Expanded(
               child: ListenableBuilder(
-        listenable: LocalDataStore.instance,
-        builder: (context, _) {
-          final all = LocalDataStore.instance.announcements;
-          // Filter first, then order — so a pinned notice rises to the top of
-          // whichever CATEGORY tab it belongs to rather than only of "All".
-          // Sorting first and filtering after produces the same list here, but
-          // this order is the one that stays correct if the filter ever becomes
-          // something that can reorder.
-          final list = sortAnnouncementsForFeed(
-            all.where((a) => AnnouncementFilterBar.matches(_filter, a)).toList(),
-          );
-          return Column(
-            children: [
-              AnnouncementFilterBar(
-                value: _filter,
-                onChanged: (f) => setState(() => _filter = f),
-              ),
-              const SizedBox(height: 14),
-              Expanded(
-                // The app's one pull-to-refresh (leaf bar, pop, haptic), as on
-                // History, Notifications and Edit Profile.
-                child: RefreshShell(
-                  onRefresh: LocalDataStore.instance.refresh,
-                  child: !LocalDataStore.instance.hasLoadedAnnouncements &&
-                          list.isEmpty
-                      ? const AnnouncementFeedSkeleton()
-                      : list.isEmpty
-                      // Scrollable even when empty, or the pull has nothing
-                      // to drag and the gesture dies.
-                      ? LayoutBuilder(
-                          builder: (context, c) => SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            child: SizedBox(
-                              height: c.maxHeight,
-                              child: _emptyState(),
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-                          itemCount: list.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          // Keyed by post: the card holds its own Read More
-                          // state, and a post arriving live at the top would
-                          // otherwise hand each card its neighbour's.
-                          itemBuilder: (_, i) => AnnouncementCard(
-                            key: ValueKey(list[i].id),
-                            announcement: list[i],
-                          ),
-                        ),
+                listenable: LocalDataStore.instance,
+                builder: (context, _) => PageView.builder(
+                  controller: _pages,
+                  itemCount: _options.length,
+                  onPageChanged: (i) => setState(() => _index = i),
+                  itemBuilder: (context, page) => _feed(_options[page]),
                 ),
               ),
-            ],
-          );
-        },
-      ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _feed(String filter) {
+    final all = LocalDataStore.instance.announcements;
+    // Filter first, then order — so a pinned notice rises to the top of
+    // whichever CATEGORY tab it belongs to rather than only of "All".
+    final list = sortAnnouncementsForFeed(
+      all.where((a) => AnnouncementFilterBar.matches(filter, a)).toList(),
+    );
+    // The app's one pull-to-refresh (leaf bar, pop, haptic), as on History,
+    // Notifications and Edit Profile.
+    return RefreshShell(
+      onRefresh: LocalDataStore.instance.refresh,
+      child: !LocalDataStore.instance.hasLoadedAnnouncements && list.isEmpty
+          ? const AnnouncementFeedSkeleton()
+          : list.isEmpty
+              // Scrollable even when empty, or the pull has nothing to drag
+              // and the gesture dies.
+              ? LayoutBuilder(
+                  builder: (context, c) => SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: SizedBox(height: c.maxHeight, child: _emptyState()),
+                  ),
+                )
+              : ListView.separated(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  // Keyed by post: the card holds its own Read More state, and
+                  // a post arriving live at the top would otherwise hand each
+                  // card its neighbour's.
+                  itemBuilder: (_, i) => AnnouncementCard(
+                    key: ValueKey(list[i].id),
+                    announcement: list[i],
+                  ),
+                ),
     );
   }
 

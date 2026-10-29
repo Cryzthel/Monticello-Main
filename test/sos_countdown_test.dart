@@ -7,6 +7,7 @@ import 'package:monticello_villas_app/features/auth/widgets/verification_lock.da
 import 'package:monticello_villas_app/features/panic_button/models/sos_payload.dart';
 import 'package:monticello_villas_app/features/panic_button/services/panic_alert_service.dart';
 import 'package:monticello_villas_app/features/panic_button/services/sos_alert_status.dart';
+import 'package:monticello_villas_app/features/panic_button/services/sos_sms_recipients.dart';
 import 'package:monticello_villas_app/features/panic_button/widgets/sos_countdown_sheet.dart';
 
 /// Records dispatch attempts, and can be made to fail on demand.
@@ -78,10 +79,16 @@ Future<void> _advance(WidgetTester tester,
 /// Stands in for the SMS composer: records what it was asked to send.
 class _Sms {
   final List<SosPayload> sent = [];
+  final List<String> singles = [];
   bool available = true;
 
   Future<bool> call(SosPayload payload) async {
     sent.add(payload);
+    return available;
+  }
+
+  Future<bool> one(SosPayload payload, SmsRecipient to) async {
+    singles.add(to.number);
     return available;
   }
 }
@@ -108,6 +115,7 @@ Future<void> _open(WidgetTester tester, _Dispatcher dispatcher,
                 verification:
                     verification ?? () => ResidentVerification.verified,
                 smsComposer: (sms ?? _Sms()).call,
+                singleComposer: (sms ?? _Sms()).one,
                 offlineCheck: () async => offline,
               ),
               child: const Text('SOS'),
@@ -192,8 +200,12 @@ void main() {
     expect(find.textContaining('saved on this phone'), findsNothing);
   });
 
-  testWidgets('Send SMS Alert drafts that alert and closes the modal',
+  testWidgets('Send SMS Alert drafts that alert, then offers each guard',
       (tester) async {
+    SosSmsRecipients.debugSet(const [
+      SmsRecipient(label: 'Main gate', number: '09512801347'),
+      SmsRecipient(label: 'Back gate', number: '09078970640'),
+    ]);
     final sms = _Sms();
     await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
     await tester.pump(const Duration(seconds: 5));
@@ -202,7 +214,18 @@ void main() {
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 4);
     expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
-    expect(find.text('No Internet Connection'), findsNothing);
+
+    // The modal stays: if the messaging app could not start a group
+    // conversation, each guard can be texted on their own.
+    expect(find.text('Press Send in your messaging app'), findsOneWidget);
+    await tester.tap(find.text('Text Back gate'));
+    await _advance(tester, frames: 2);
+    expect(sms.singles, ['09078970640']);
+
+    await tester.tap(find.text('Done'));
+    await _advance(tester, frames: 4);
+    expect(find.text('Press Send in your messaging app'), findsNothing);
+    SosSmsRecipients.debugSet(const []);
   });
 
   testWidgets('Close leaves nothing on screen', (tester) async {
@@ -233,7 +256,7 @@ void main() {
     await tester.tap(find.text('Try again'));
     await _advance(tester, frames: 4);
     expect(sms.sent, hasLength(2));
-    expect(find.text('No Internet Connection'), findsNothing);
+    expect(find.text('Press Send in your messaging app'), findsOneWidget);
   });
 
   testWidgets('with no network the modal opens before the alert is saved',
@@ -256,6 +279,7 @@ void main() {
               statusStream: _StatusFeed().call,
               verification: () => ResidentVerification.verified,
               smsComposer: sms.call,
+              singleComposer: sms.one,
               offlineCheck: () async => true,
             ),
             child: const Text('SOS'),
@@ -277,7 +301,7 @@ void main() {
     gate.complete();
     await _advance(tester, frames: 4);
     expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
-    expect(find.text('No Internet Connection'), findsNothing);
+    expect(find.text('Press Send in your messaging app'), findsOneWidget);
   });
 
   testWidgets('a delivered alert never offers SMS', (tester) async {

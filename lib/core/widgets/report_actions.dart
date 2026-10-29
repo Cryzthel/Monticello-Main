@@ -462,28 +462,8 @@ class _ReportSummarySection extends StatelessWidget {
             const _SummaryRule(),
             _summaryRow(label, value),
           ],
-          if (incident.description.isNotEmpty) ...[
-            const _SummaryRule(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                  _sidePad, _rowPad, _sidePad, _rowPad + 3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Description', style: _labelStyle),
-                  const SizedBox(height: 6),
-                  Text(
-                    incident.description,
-                    style: sfPro(
-                      fontSize: 13,
-                      height: 1.45,
-                      color: AppColors.onGlassPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          // The description block was removed from History's Report
+          // Details (2026-10-29, by request); the summary is the fields only.
         ],
       ),
     );

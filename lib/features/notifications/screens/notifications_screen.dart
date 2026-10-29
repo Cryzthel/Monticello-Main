@@ -11,6 +11,7 @@ import 'package:monticello_villas_app/core/widgets/animated_list_entry.dart';
 import 'package:monticello_villas_app/core/widgets/refresh_shell.dart';
 import 'package:monticello_villas_app/core/widgets/swipe_to_delete.dart';
 import 'package:monticello_villas_app/features/notifications/models/resident_notification.dart';
+import 'package:monticello_villas_app/features/notifications/services/notification_badge.dart';
 import 'package:monticello_villas_app/features/notifications/services/notification_prefs_store.dart';
 import 'package:monticello_villas_app/features/notifications/widgets/resident_notification_tile.dart';
 import 'package:monticello_villas_app/features/notifications/widgets/notification_detail_modal.dart';
@@ -124,7 +125,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       _ready = true;
     });
     // AFTER the read. See NotificationPrefsStore.markOpened.
-    await NotificationPrefsStore.markOpened(DateTime.now());
+    final opened = DateTime.now();
+    await NotificationPrefsStore.markOpened(opened);
+    // The header bell reads this: opening the drawer puts its dot out.
+    NotificationBadge.instance.noteOpened(opened);
   }
 
   /// Asks before deleting. Both routes to delete — the swipe and the
@@ -249,6 +253,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (!_read.contains(notification.id)) {
       setState(() => _read = {..._read, notification.id});
       unawaited(NotificationPrefsStore.markRead(notification.id));
+      NotificationBadge.instance.noteRead(notification.id);
     }
     showNotificationDetail(context, notification);
   }

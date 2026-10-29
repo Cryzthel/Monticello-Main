@@ -152,7 +152,11 @@ class SettingsIconTile extends StatelessWidget {
 
   /// The settings palette, in one place. Every row that is not destructive
   /// draws this exact colour — see the class note on [SettingsRow].
-  static const Color accent = AppColors.primary;
+  ///
+  /// Neutral dark (2026-10-29, by request), no longer the emerald: a column of
+  /// green glyphs down the whole screen was more colour than a settings list
+  /// needs. Destructive rows still pass red.
+  static const Color accent = AppColors.textPrimary;
 
   /// The accent wash the profile avatar's empty state still uses. No row
   /// draws it any more.

@@ -11,6 +11,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:monticello_villas_app/core/app_version.dart';
+import 'package:monticello_villas_app/features/notifications/services/notification_badge.dart';
 import 'package:monticello_villas_app/features/contact/widgets/hoa_contact_sheet.dart';
 import 'package:monticello_villas_app/features/incidents/models/incident.dart';
 import 'package:monticello_villas_app/features/settings/services/account_approval_service.dart';
@@ -714,8 +715,15 @@ class _HomeTabState extends State<_HomeTab> {
                       // says "updates" rather than "unread" to match. A real
                       // cursor (last-seen stamp compared against the newest
                       // event's `at`) is the follow-up.
+                      // UNREAD, NOT PRESENCE (2026-10-29): the dot lights only
+                      // for something newer than the last visit to the drawer
+                      // and not yet opened or deleted — NotificationBadge — so
+                      // it goes out once the resident has looked.
                       ListenableBuilder(
-                        listenable: LocalDataStore.instance,
+                        listenable: Listenable.merge([
+                          LocalDataStore.instance,
+                          NotificationBadge.instance..start(),
+                        ]),
                         builder: (context, _) {
                           final store = LocalDataStore.instance;
                           final updates = ResidentNotification.build(
@@ -730,7 +738,7 @@ class _HomeTabState extends State<_HomeTab> {
                                     '${updates.length == 1 ? 'update' : 'updates'}',
                             onTap: () => Navigator.of(context)
                                 .pushNamed('/notifications'),
-                            badge: updates.isNotEmpty,
+                            badge: NotificationBadge.instance.hasUnread(updates),
                           );
                         },
                       ),
@@ -1117,11 +1125,11 @@ class _HeaderIdentity extends StatelessWidget {
                 if (verified) {
                   return const Tooltip(
                     message: 'HOA verified',
-                    // 16pt against the name's ~20pt cap height: beside it, not
-                    // louder than it.
+                    // 13pt against the name's ~20pt type: a mark beside it,
+                    // not a second headline.
                     child: Icon(
                       PhosphorIconsFill.sealCheck,
-                      size: 16,
+                      size: 13,
                       color: Colors.white,
                       semanticLabel: 'HOA verified',
                     ),

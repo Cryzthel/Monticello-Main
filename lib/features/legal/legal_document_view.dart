@@ -29,9 +29,9 @@ class LegalDocumentBody extends StatelessWidget {
   /// text does: stretched word gaps make a line read looser, and tight
   /// leading under it turns the page grey.
   static TextStyle get _bodyStyle => sfPro(
-        fontSize: 15,
+        fontSize: 14.5,
         color: AppColors.textSecondary,
-        height: 1.65,
+        height: 1.6,
       );
 
   /// Every block of running text is justified, by request, so the two
@@ -39,7 +39,9 @@ class LegalDocumentBody extends StatelessWidget {
   /// ragged, which is what keeps a short closing line from being stretched
   /// across the page. Headings stay left-aligned: they are labels, and
   /// justifying a one-line heading does nothing but space it out.
-  static const TextAlign bodyAlign = TextAlign.justify;
+  /// Left-aligned, not justified (2026-10-29): in a card's narrower column,
+  /// justification opens rivers of space between words.
+  static const TextAlign bodyAlign = TextAlign.start;
 
   @override
   Widget build(BuildContext context) {
@@ -83,11 +85,73 @@ class LegalDocumentBody extends StatelessWidget {
           ),
           const SizedBox(height: 24),
         ],
+        if (doc.keyPoints.isNotEmpty) ...[
+          _KeyPoints(points: doc.keyPoints),
+          const SizedBox(height: 16),
+        ],
+        // Each section in its own card (2026-10-29, by request), so a long
+        // document reads as a set of short, separate topics.
         for (var i = 0; i < doc.sections.length; i++) ...[
-          if (i > 0) const SizedBox(height: 28),
-          _Section(section: doc.sections[i], bodyStyle: _bodyStyle),
+          if (i > 0) const SizedBox(height: 12),
+          _SectionCard(child: _Section(section: doc.sections[i], bodyStyle: _bodyStyle)),
         ],
       ],
+    );
+  }
+}
+
+/// "Key points": the document in four lines, before the full text.
+class _KeyPoints extends StatelessWidget {
+  const _KeyPoints({required this.points});
+
+  final List<String> points;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.accentPrimary.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.accentPrimary.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Key points',
+            style: sfPro(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 10),
+          _Bullets(
+            items: points,
+            style: sfPro(fontSize: 14, color: AppColors.textPrimary, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The card each section sits in: white, a neutral hairline, the app's card
+/// radius.
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderNeutral),
+      ),
+      child: child,
     );
   }
 }
@@ -106,7 +170,7 @@ class _Section extends StatelessWidget {
         Text(
           section.heading,
           style: sfPro(
-            fontSize: 17,
+            fontSize: 16,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.25,
             color: AppColors.textPrimary,
@@ -243,11 +307,10 @@ class LegalDocumentScreen extends StatelessWidget {
             const Divider(height: 1, color: AppColors.borderNeutral),
             Expanded(
               child: SingleChildScrollView(
-                // 24pt gutters, wider than the app's 16: a long-form reading
-                // column wants a shorter measure, and justified lines show
-                // their word gaps less the shorter they are.
+                // The app's 16pt gutters: the cards inside add their own
+                // padding, which keeps the reading measure short.
                 padding: EdgeInsets.fromLTRB(
-                    24, 24, 24, MediaQuery.paddingOf(context).bottom + 48),
+                    16, 20, 16, MediaQuery.paddingOf(context).bottom + 48),
                 child: LegalDocumentBody(document: document, showTitle: false),
               ),
             ),

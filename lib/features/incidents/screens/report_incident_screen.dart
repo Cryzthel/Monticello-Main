@@ -923,9 +923,13 @@ class _WizardHeader extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         // Numbered step indicators
+        // Numbers and labels in one row of fixed slots, so each label sits
+        // centred under its own number (2026-10-29, by request) rather than in
+        // a separate row aligned left / centre / right.
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: List.generate(5, (i) {
               if (i.isOdd) {
                 final segIdx = i ~/ 2;
@@ -935,7 +939,8 @@ class _WizardHeader extends StatelessWidget {
                     duration: const Duration(milliseconds: 320),
                     curve: Curves.easeOutCubic,
                     height: 3,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    // Centred on the 28px numbers beside it.
+                    margin: const EdgeInsets.fromLTRB(4, 12.5, 4, 0),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(AppRadius.pill),
                       // Solid on both sides of the state. The unreached
@@ -960,7 +965,7 @@ class _WizardHeader extends StatelessWidget {
               // as a smudge. State is carried entirely by fill and text colour
               // now: solid emerald with white numerals when reached, flat
               // slate-tinted surface with muted text when not.
-              return AnimatedContainer(
+              final circle = AnimatedContainer(
                 duration: const Duration(milliseconds: 320),
                 curve: Curves.easeOutCubic,
                 width: 28,
@@ -987,35 +992,32 @@ class _WizardHeader extends StatelessWidget {
                         ),
                 ),
               );
-            }),
-          ),
-        ),
-        const SizedBox(height: 4),
-        // Step labels
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: List.generate(3, (i) {
-              final isActive = step == i;
-              final isDone = step > i;
-              return Expanded(
-                child: Text(
-                  labels[i],
-                  textAlign: i == 0
-                      ? TextAlign.left
-                      : (i == 2 ? TextAlign.right : TextAlign.center),
-                  style: sfPro(
-                    fontSize: 13,
-                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                    color: isDone || isActive
-                        ? AppColors.onGlassPrimary
-                        : AppColors.onGlassSecondary,
-                  ),
+              return SizedBox(
+                width: 76,
+                child: Column(
+                  children: [
+                    circle,
+                    const SizedBox(height: 6),
+                    Text(
+                      labels[idx],
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: sfPro(
+                        fontSize: 13,
+                        fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                        color: isFilled
+                            ? AppColors.onGlassPrimary
+                            : AppColors.onGlassSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               );
             }),
           ),
         ),
+        const SizedBox(height: 4),
         const SizedBox(height: 4),
       ],
     );

@@ -13,7 +13,7 @@ class FilterPillOption {
 
 /// The filter row used by the Announcements feed and Report History, so the
 /// two read as one control (2026-10-29, by request): a horizontal strip of
-/// capsules where the active one fills solid green (#10B981) with white text
+/// capsules where the active one fills the brand green with white text
 /// and the rest sit quiet on the card surface. Fill, outline, text and icon
 /// colour all animate together on a change.
 class FilterPillBar extends StatelessWidget {
@@ -30,8 +30,9 @@ class FilterPillBar extends StatelessWidget {
   final ValueChanged<int> onChanged;
   final EdgeInsetsGeometry padding;
 
-  /// Emerald-500, the requested active fill.
-  static const Color activeFill = Color(0xFF10B981);
+  /// The app's primary brand green (#047857, the CTA colour), not a lighter
+  /// tint of it — the same green every primary button uses.
+  static const Color activeFill = AppColors.primaryDark;
   static const Duration duration = Duration(milliseconds: 220);
   static const double height = 38;
 
@@ -54,7 +55,7 @@ class FilterPillBar extends StatelessWidget {
   }
 }
 
-class _Pill extends StatelessWidget {
+class _Pill extends StatefulWidget {
   const _Pill({required this.option, required this.selected, required this.onTap});
 
   final FilterPillOption option;
@@ -62,7 +63,32 @@ class _Pill extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_Pill> createState() => _PillState();
+}
+
+class _PillState extends State<_Pill> {
+  // A swipe can select a pill that is scrolled out of the row; bring it in.
+  @override
+  void didUpdateWidget(_Pill old) {
+    super.didUpdateWidget(old);
+    if (widget.selected && !old.selected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Scrollable.ensureVisible(
+          context,
+          alignment: 0.5,
+          duration: FilterPillBar.duration,
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final option = widget.option;
+    final selected = widget.selected;
+    final onTap = widget.onTap;
     final fg = selected ? Colors.white : AppColors.textSecondary;
     return Semantics(
       button: true,
@@ -78,7 +104,8 @@ class _Pill extends StatelessWidget {
           decoration: BoxDecoration(
             color: selected ? FilterPillBar.activeFill : AppColors.backgroundSecondary,
             borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(color: selected ? FilterPillBar.activeFill : AppColors.innerStroke),
+            // Unselected: the neutral hairline the cards use, not a green one.
+            border: Border.all(color: selected ? FilterPillBar.activeFill : AppColors.borderNeutral),
           ),
           // One tween drives the icon and the label, so they change colour in
           // step with the fill instead of snapping ahead of it.

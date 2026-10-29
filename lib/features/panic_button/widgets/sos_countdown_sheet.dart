@@ -53,6 +53,7 @@ Future<void> showSosCountdown(
   SosStatusStream? statusStream,
   ResidentVerification Function()? verification,
   Future<bool> Function(SosPayload payload)? smsComposer,
+  Future<bool> Function(SosPayload payload, SmsRecipient to)? singleComposer,
   Future<bool> Function()? offlineCheck,
 }) async {
   final stream = statusStream ?? watchSosAlert;
@@ -85,6 +86,7 @@ Future<void> showSosCountdown(
     builder: (_) => _NoInternetDialog(
       payload: handoff.payload,
       smsComposer: smsComposer ?? SosSmsFallback.compose,
+      singleComposer: singleComposer ?? SosSmsFallback.composeTo,
       statusStream: stream,
     ),
   );
@@ -772,11 +774,13 @@ class _NoInternetDialog extends StatefulWidget {
   const _NoInternetDialog({
     required this.payload,
     required this.smsComposer,
+    required this.singleComposer,
     required this.statusStream,
   });
 
   final Future<SosPayload> payload;
   final Future<bool> Function(SosPayload payload) smsComposer;
+  final Future<bool> Function(SosPayload payload, SmsRecipient to) singleComposer;
   final SosStatusStream statusStream;
 
   @override
@@ -786,6 +790,11 @@ class _NoInternetDialog extends StatefulWidget {
 class _NoInternetDialogState extends State<_NoInternetDialog> {
   bool _working = false;
   bool _delivered = false;
+
+  /// The messaging app was opened with every number. The modal stays, with
+  /// a button per guard: if that app could not start a group conversation
+  /// ("Could not start conversation"), each guard can be texted on their own.
+  bool _opened = false;
   String? _error;
   StreamSubscription<SosAlertStatus>? _sub;
   Timer? _relisten;
@@ -847,7 +856,10 @@ class _NoInternetDialogState extends State<_NoInternetDialog> {
     final opened = await widget.smsComposer(payload);
     if (!mounted) return;
     if (opened) {
-      Navigator.of(context).pop();
+      setState(() {
+        _working = false;
+        _opened = true;
+      });
       return;
     }
     setState(() {
@@ -856,9 +868,22 @@ class _NoInternetDialogState extends State<_NoInternetDialog> {
     });
   }
 
+  Future<void> _sendTo(SmsRecipient recipient) async {
+    final SosPayload payload;
+    try {
+      payload = await widget.payload.timeout(const Duration(seconds: 8));
+    } catch (_) {
+      return;
+    }
+    final opened = await widget.singleComposer(payload, recipient);
+    if (!mounted || opened) return;
+    setState(() => _error = "This phone couldn't open a messaging app. Call the guardhouse if you can.");
+  }
+
   @override
   Widget build(BuildContext context) {
     final delivered = _delivered;
+    if (_opened && !delivered) return _openedView(context);
     return AlertDialog(
       backgroundColor: AppColors.backgroundSecondary,
       surfaceTintColor: Colors.transparent,
@@ -940,6 +965,76 @@ class _NoInternetDialogState extends State<_NoInternetDialog> {
                 ),
               ),
             ],
+    );
+  }
+}
+
+extension on _NoInternetDialogState {
+  /// After the messaging app opened: what to check, and one button per guard.
+  Widget _openedView(BuildContext context) {
+    final recipients = SosSmsRecipients.current;
+    return AlertDialog(
+      backgroundColor: AppColors.backgroundSecondary,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+        side: const BorderSide(color: AppColors.innerStroke),
+      ),
+      icon: const Icon(PhosphorIconsFill.chatText, size: 30, color: AppColors.panicOxblood),
+      title: Text(
+        'Press Send in your messaging app',
+        textAlign: TextAlign.center,
+        style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'If it said it could not start the conversation, text each guard '
+            'on their own:',
+            textAlign: TextAlign.center,
+            style: sfPro(fontSize: 14, color: AppColors.textSecondary, height: 1.45),
+          ),
+          const SizedBox(height: 12),
+          for (final r in recipients)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: OutlinedButton.icon(
+                onPressed: () => _sendTo(r),
+                icon: const Icon(PhosphorIconsBold.chatText, size: 16, color: AppColors.panicOxblood),
+                label: Text(
+                  'Text ${r.label}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  side: const BorderSide(color: AppColors.borderNeutral),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          if (_error != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: sfPro(fontSize: 13, color: AppColors.dangerInk, height: 1.4),
+            ),
+          ],
+        ],
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Done',
+              style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textSecondary)),
+        ),
+      ],
     );
   }
 }
