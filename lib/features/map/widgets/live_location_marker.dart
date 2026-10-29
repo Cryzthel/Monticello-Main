@@ -308,6 +308,10 @@ class LiveLocationMarker {
   /// rotates it to the compass heading, so the beam fans out from the point
   /// the stem marks, under the pin, in whichever direction the phone faces.
   /// Strongest at the apex and gone by the rim, like the reference.
+  ///
+  /// White at low opacity (2026-10-29, by request), not the ring's violet: a
+  /// beam of light rather than a second coloured shape, readable over both the
+  /// satellite and the street basemap.
   static Future<Uint8List> paintHeadingCone({double pixelRatio = 3.0}) async {
     final r = pixelRatio;
     final radius = coneRadius * r;
@@ -332,7 +336,10 @@ class LiveLocationMarker {
         ..shader = ui.Gradient.radial(
           centre,
           radius,
-          [ring.withValues(alpha: 0.55), ring.withValues(alpha: 0.0)],
+          [
+            const Color(0xFFFFFFFF).withValues(alpha: 0.6),
+            const Color(0xFFFFFFFF).withValues(alpha: 0.0),
+          ],
           [0.0, 1.0],
         ),
     );

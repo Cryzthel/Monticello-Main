@@ -172,92 +172,73 @@ void main() {
     expect(find.textContaining('has your alert'), findsOneWidget);
   });
 
-  testWidgets('an offline alert reads as saved, never as sent', (tester) async {
-    final dispatcher = _Dispatcher()..outcome = SosDispatchOutcome.queued;
-    await _open(tester, dispatcher);
+  // ── NO SIGNAL: ONE MODAL ────────────────────────────────────────────────
 
+  testWidgets('an offline alert closes the sheet and leaves only the modal',
+      (tester) async {
+    await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued);
     await tester.pump(const Duration(seconds: 5));
     await _advance(tester);
 
-    expect(dispatcher.calls, 1);
-    // The whole point of the queued state: it must not claim the guardhouse
-    // has the alert, and it must not read as a failure either.
-    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
-    expect(find.text('SECURITY NOTIFIED'), findsNothing);
-    expect(find.text('ALERT NOT SENT'), findsNothing);
-    // No separate "saved on this phone" notice: the prompt carries it.
-    expect(find.textContaining('saved on this phone'), findsNothing);
-    expect(find.textContaining('has not received your alert yet'), findsOneWidget);
-  });
-
-  testWidgets('a queued alert can be dismissed like a sent one', (tester) async {
-    final dispatcher = _Dispatcher()..outcome = SosDispatchOutcome.queued;
-    await _open(tester, dispatcher);
-
-    await tester.pump(const Duration(seconds: 5));
-    await _advance(tester);
-
-    // The SMS prompt comes up first; it is dismissable.
     expect(find.text('No Internet Connection'), findsOneWidget);
-    await tester.tap(find.text('Not now'));
-    await _advance(tester, frames: 4);
-    expect(find.text('No Internet Connection'), findsNothing);
-
-    // No retry button: there is nothing to retry, the queue owns it now.
-    expect(find.text('Done'), findsOneWidget);
-    await tester.tap(find.text('Done'));
-    await _advance(tester);
+    expect(
+        find.text("We couldn't reach emergency servers over mobile data. Would you "
+            'like to send an Emergency SMS alert to guardhouse personnel instead?'),
+        findsOneWidget);
+    // The sheet is gone: no second offline surface, no "saved" notice.
+    expect(find.text('EMERGENCY ALERT'), findsNothing);
     expect(find.text('NO INTERNET CONNECTION'), findsNothing);
+    expect(find.text('SECURITY NOTIFIED'), findsNothing);
+    expect(find.textContaining('saved on this phone'), findsNothing);
   });
 
-  // ── NO SIGNAL: THE SMS FALLBACK ─────────────────────────────────────────
-
-  testWidgets('a queued alert offers the SMS fallback, which drafts that alert',
+  testWidgets('Send SMS Alert drafts that alert and closes the modal',
       (tester) async {
     final sms = _Sms();
     await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
     await tester.pump(const Duration(seconds: 5));
     await _advance(tester);
 
-    expect(find.text('No Internet Connection'), findsOneWidget);
-    expect(find.textContaining("couldn't reach emergency servers"), findsOneWidget);
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 4);
-
     expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
-    expect(find.textContaining('make sure you pressed Send'), findsOneWidget);
-    // Still offered on the sheet, for a second try.
-    expect(find.text('Text again'), findsOneWidget);
+    expect(find.text('No Internet Connection'), findsNothing);
   });
 
-  testWidgets('declining the prompt leaves "Send SMS alert" on the sheet',
-      (tester) async {
+  testWidgets('Close leaves nothing on screen', (tester) async {
     final sms = _Sms();
     await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
     await tester.pump(const Duration(seconds: 5));
     await _advance(tester);
-    await tester.tap(find.text('Not now'));
-    await _advance(tester, frames: 4);
-    expect(sms.sent, isEmpty);
 
-    await tester.tap(find.text('Send SMS alert'));
-    await _advance(tester, frames: 2);
-    expect(sms.sent, hasLength(1));
+    await tester.tap(find.text('Close'));
+    await _advance(tester, frames: 4);
+    expect(find.text('No Internet Connection'), findsNothing);
+    expect(find.text('EMERGENCY ALERT'), findsNothing);
+    expect(sms.sent, isEmpty);
   });
 
-  testWidgets('a phone with no messaging app is told so', (tester) async {
+  testWidgets('a phone with no messaging app is told so, and can retry',
+      (tester) async {
     final sms = _Sms()..available = false;
     await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued, sms: sms);
     await tester.pump(const Duration(seconds: 5));
     await _advance(tester);
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 4);
-    expect(find.textContaining('could not open a messaging app'), findsOneWidget);
+
+    expect(find.textContaining("couldn't open a messaging app"), findsOneWidget);
+    expect(find.text('No Internet Connection'), findsOneWidget);
+    sms.available = true;
+    await tester.tap(find.text('Try again'));
+    await _advance(tester, frames: 4);
+    expect(sms.sent, hasLength(2));
+    expect(find.text('No Internet Connection'), findsNothing);
   });
 
-  testWidgets('with no network the prompt opens before the alert is saved',
+  testWidgets('with no network the modal opens before the alert is saved',
       (tester) async {
-    // The dispatch (GPS fix, encrypted save) takes its time; the prompt must
+    // The dispatch (GPS fix, encrypted save) takes its time; the modal must
     // not wait for it, and its SMS must still carry that alert.
     final gate = Completer<void>();
     final dispatcher = _Dispatcher()..outcome = SosDispatchOutcome.queued;
@@ -285,9 +266,10 @@ void main() {
     await tester.tap(find.text('SOS'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 6));
-    await _advance(tester, frames: 3);
+    await _advance(tester, frames: 4);
 
     expect(find.text('No Internet Connection'), findsOneWidget);
+    expect(find.text('EMERGENCY ALERT'), findsNothing);
     await tester.tap(find.text('Send SMS Alert'));
     await _advance(tester, frames: 2);
     expect(sms.sent, isEmpty, reason: 'waits for the alert to be built');
@@ -295,18 +277,70 @@ void main() {
     gate.complete();
     await _advance(tester, frames: 4);
     expect(sms.sent.map((p) => p.alertId), [_Dispatcher.alertId]);
-    // Shown once, not again when the queued answer arrives.
     expect(find.text('No Internet Connection'), findsNothing);
   });
 
   testWidgets('a delivered alert never offers SMS', (tester) async {
-    final sms = _Sms();
-    await _open(tester, _Dispatcher(), sms: sms);
+    await _open(tester, _Dispatcher());
     await tester.pump(const Duration(seconds: 5));
     await _advance(tester);
     expect(find.text('No Internet Connection'), findsNothing);
-    expect(find.text('Send SMS alert'), findsNothing);
+    expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
   });
+
+  testWidgets('the modal says delivered if the queued alert lands meanwhile',
+      (tester) async {
+    // A fresh stream per subscription: the first is refused and closes (the
+    // rules deny a listen on a document that does not exist yet); the next
+    // arrives once the alert has landed.
+    final streams = <StreamController<SosAlertStatus>>[];
+    Stream<SosAlertStatus> feed(String _) {
+      final c = StreamController<SosAlertStatus>();
+      streams.add(c);
+      return c.stream;
+    }
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () => showSosCountdown(
+              context,
+              dispatcher: (_Dispatcher()..outcome = SosDispatchOutcome.queued).call,
+              statusStream: feed,
+              verification: () => ResidentVerification.verified,
+              smsComposer: _Sms().call,
+              offlineCheck: () async => false,
+            ),
+            child: const Text('SOS'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('SOS'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 6));
+    await _advance(tester, frames: 4);
+    expect(find.text('No Internet Connection'), findsOneWidget);
+    expect(streams, hasLength(1));
+
+    unawaited(streams.first.close());
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 5));
+    expect(streams, hasLength(2), reason: 'a closed feed must be retried');
+
+    streams.last.add(const SosAlertStatus(serverAcknowledged: true));
+    await _advance(tester, frames: 3);
+    expect(find.text('Alert delivered'), findsOneWidget);
+    expect(find.text('Send SMS Alert'), findsNothing);
+    await tester.tap(find.text('Done'));
+    await _advance(tester, frames: 3);
+    expect(find.text('Alert delivered'), findsNothing);
+
+    for (final c in streams) {
+      unawaited(c.close());
+    }
+  }, timeout: const Timeout(Duration(seconds: 40)));
 
   testWidgets('a hold shorter than a second does NOT cancel', (tester) async {
     final dispatcher = _Dispatcher();
@@ -487,31 +521,6 @@ void main() {
     await feed.close();
   });
 
-  testWidgets('a queued alert waits for signal, then turns sent when it lands',
-      (tester) async {
-    final feed = _StatusFeed();
-    await _open(tester, _Dispatcher()..outcome = SosDispatchOutcome.queued,
-        feed: feed);
-    await runOut(tester);
-
-    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
-    expect(find.text('Waiting for signal'), findsOneWidget);
-    expect(find.text('Received by the guardhouse'), findsNothing);
-
-    // Still only in this phone's cache: not delivered, nothing changes.
-    feed.emit(const SosAlertStatus(serverAcknowledged: false));
-    await _advance(tester, frames: 3);
-    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
-
-    // The sync service lands it while the sheet is still open.
-    feed.emit(const SosAlertStatus(serverAcknowledged: true));
-    await _advance(tester, frames: 3);
-    expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
-    expect(find.text('NO INTERNET CONNECTION'), findsNothing);
-    expect(find.text('Received by the guardhouse'), findsOneWidget);
-    await feed.close();
-  });
-
   testWidgets('a feed that errors leaves the sheet standing', (tester) async {
     final feed = _StatusFeed();
     await _open(tester, _Dispatcher(), feed: feed);
@@ -523,54 +532,6 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
     await feed.close();
-  });
-
-  testWidgets('a feed that ends is asked again, and the queued alert lands',
-      (tester) async {
-    // A fresh stream per subscription: the first is refused and closes (the
-    // rules deny a listen on a document that does not exist yet); the second
-    // arrives once the alert has landed.
-    final streams = <StreamController<SosAlertStatus>>[];
-    Stream<SosAlertStatus> feed(String _) {
-      final c = StreamController<SosAlertStatus>();
-      streams.add(c);
-      return c.stream;
-    }
-
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (context) => ElevatedButton(
-            onPressed: () => showSosCountdown(
-              context,
-              dispatcher: (_Dispatcher()..outcome = SosDispatchOutcome.queued)
-                  .call,
-              statusStream: feed,
-            ),
-            child: const Text('SOS'),
-          ),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('SOS'));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 6));
-    await _advance(tester);
-    expect(streams, hasLength(1));
-    expect(find.text('NO INTERNET CONNECTION'), findsOneWidget);
-
-    await streams.first.close();
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 5));
-    expect(streams, hasLength(2), reason: 'a closed feed must be retried');
-
-    streams.last.add(const SosAlertStatus(serverAcknowledged: true));
-    await _advance(tester, frames: 3);
-    expect(find.text('SECURITY NOTIFIED'), findsOneWidget);
-
-    for (final c in streams) {
-      await c.close();
-    }
   });
 
   // ── LOCKED FOR AN UNVERIFIED ACCOUNT ─────────────────────────────────────

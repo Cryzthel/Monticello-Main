@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.provider.Telephony
 import android.hardware.Sensor
 import android.hardware.SensorManager
 import android.os.Build
@@ -83,22 +84,37 @@ class MainActivity : FlutterActivity() {
     }
 
     // Opens the default SMS app addressed to every number with the body
-    // written. `;` separates recipients: Google Messages and Samsung Messages
-    // both read it (Samsung rejects `,`). `sms_body` is the extra every
-    // mainstream SMS app reads; the body is also in the URI for those that
-    // only parse that. Falls back to a plain VIEW, then reports false.
+    // written.
+    //
+    // THE SEPARATOR DEPENDS ON THE APP. Samsung Messages splits recipients on
+    // `;` and rejects `,`; Google Messages splits on `,` and answers `;` with
+    // "Could not start conversation" (seen on a resident's phone, 2026-10-29).
+    // So the default SMS app is asked for by package, and its separator used.
+    // The intent is pinned to that package first, so the app whose rules were
+    // followed is the one that opens; then unpinned; then a plain VIEW.
+    // `sms_body` is the extra every mainstream SMS app reads. No `address`
+    // extra: Google Messages parses it too, and a second copy of the list in
+    // the other format is exactly what it chokes on.
     private fun composeSms(numbers: List<String>, body: String): Boolean {
-        val to = numbers.map { it.filter { c -> c.isDigit() || c == '+' } }
+        val clean = numbers.map { it.filter { c -> c.isDigit() || c == '+' } }
             .filter { it.isNotEmpty() }
-            .joinToString(";")
-        val attempts = listOf(
+            .distinct()
+        if (clean.isEmpty()) return false
+        val smsApp = try {
+            Telephony.Sms.getDefaultSmsPackage(this)
+        } catch (_: Exception) {
+            null
+        }
+        val separator = if (smsApp?.contains("samsung", ignoreCase = true) == true) ";" else ","
+        val to = clean.joinToString(separator)
+        val attempts = listOfNotNull(
+            smsApp?.let { Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$to")).setPackage(it) },
             Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$to")),
             Intent(Intent.ACTION_VIEW, Uri.parse("sms:$to")),
         )
         for (intent in attempts) {
             try {
                 intent.putExtra("sms_body", body)
-                    .putExtra("address", to)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 startActivity(intent)
                 return true

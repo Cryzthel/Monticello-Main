@@ -31,9 +31,9 @@ SosPayload _payload({String id = 'a'}) => SosPayload(
 
 void main() {
   group('SMS URI', () {
-    test('Android: every number, separated by ;', () {
+    test('Android URI fallback: every number, separated by , (Google Messages)', () {
       final uri = SosSmsFallback.buildUri(_guards, 'SOS now', ios: false).toString();
-      expect(uri, startsWith('sms:09512801347;+639078970640?body='));
+      expect(uri, startsWith('sms:09512801347,+639078970640?body='));
     });
 
     test('iOS: the addresses form, comma-separated', () {

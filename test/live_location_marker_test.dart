@@ -357,6 +357,22 @@ void main() {
       expect(east[3], 0);
     });
 
+    test('is white, not the ring colour', () async {
+      const r = 2.0;
+      final png = await LiveLocationMarker.paintHeadingCone(pixelRatio: r);
+      final image = await decodeImageFromList(png);
+      final c = image.width / 2;
+      image.dispose();
+      const reach = LiveLocationMarker.coneRadius * r;
+      final px = await pixel(png, c, c - reach * 0.2);
+      expect(px[3], greaterThan(40));
+      // `pixel` reads premultiplied RGBA: white at any opacity has every
+      // channel equal to its alpha (violet would be far from it in G).
+      for (final channel in px.take(3)) {
+        expect(channel, closeTo(px[3], 3));
+      }
+    });
+
     test('fades out toward its rim', () async {
       const r = 2.0;
       final png = await LiveLocationMarker.paintHeadingCone(pixelRatio: r);

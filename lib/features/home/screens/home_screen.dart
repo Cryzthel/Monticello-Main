@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart' show Geolocator;
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:monticello_villas_app/core/app_version.dart';
 import 'package:monticello_villas_app/features/contact/widgets/hoa_contact_sheet.dart';
 import 'package:monticello_villas_app/features/incidents/models/incident.dart';
 import 'package:monticello_villas_app/features/settings/services/account_approval_service.dart';
@@ -1513,8 +1514,8 @@ class _SettingsTabState extends State<_SettingsTab>
               showChevron: false,
               // A statement, not a destination: the row has no tap handler, so
               // it does not report itself as a button either.
-              trailing: Text(
-                'v1.0.0',
+              // Read from the installed package, never typed in: see AppVersion.
+              trailing: AppVersionText(
                 style: _t(size: 13, color: AppColors.textMuted),
               ),
             ),
@@ -1535,8 +1536,8 @@ class _SettingsTabState extends State<_SettingsTab>
         ),
         const SizedBox(height: 20),
         Center(
-          child: Text(
-            'Monticello Villas  ·  v1.0.0',
+          child: AppVersionText(
+            prefix: 'Monticello Villas  ·  ',
             style: _t(size: 11.5, color: AppColors.textMuted),
           ),
         ),

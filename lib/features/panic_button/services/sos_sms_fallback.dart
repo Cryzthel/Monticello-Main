@@ -43,7 +43,7 @@ class SosSmsFallback {
     if (ios) {
       return Uri.parse('sms:/open?addresses=${numbers.join(',')}&body=$text');
     }
-    return Uri.parse('sms:${numbers.join(';')}?body=$text');
+    return Uri.parse('sms:${numbers.join(',')}?body=$text');
   }
 
   static const _channel = MethodChannel('monticello/sms');

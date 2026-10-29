@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'package:monticello_villas_app/core/config/map_constants.dart';
 import 'package:monticello_villas_app/core/location/device_heading.dart';
@@ -296,7 +297,61 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     _watchServiceStatus();
     final access = await _refreshAccess();
     if (!mounted || access == null || !access.canPrompt) return;
+    // Say WHY before Android asks (2026-10-29, by request): a bare system
+    // dialog on the first screen after sign-in reads as tracking for its own
+    // sake. Only when the OS will actually show its prompt (`canPrompt`); a
+    // "Not now" leaves the status chip on the map to ask again later.
+    if (!await _explainLocation()) return;
+    if (!mounted) return;
     await _resolveAccess(access);
+  }
+
+  /// The in-app step before the system location prompt. True to go on to it.
+  Future<bool> _explainLocation() async {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.backgroundSecondary,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.xl),
+          side: const BorderSide(color: AppColors.innerStroke),
+        ),
+        icon: const Icon(PhosphorIconsFill.mapPin, size: 30, color: AppColors.primary),
+        title: Text(
+          'Allow location for emergencies',
+          textAlign: TextAlign.center,
+          style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'When you press SOS or file a report, your exact location goes with it so '
+          'the guardhouse can dispatch a guard straight to you. It is also how the '
+          'map shows where you are. Location is only used while you use the app.',
+          textAlign: TextAlign.center,
+          style: sfPro(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Not now',
+                style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryDark,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: Text('Continue',
+                style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    return go ?? false;
   }
 
   /// Re-reads access without prompting and brings the map in line with it.

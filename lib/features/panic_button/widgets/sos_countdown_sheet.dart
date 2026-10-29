@@ -54,8 +54,9 @@ Future<void> showSosCountdown(
   ResidentVerification Function()? verification,
   Future<bool> Function(SosPayload payload)? smsComposer,
   Future<bool> Function()? offlineCheck,
-}) {
-  return showModalBottomSheet<void>(
+}) async {
+  final stream = statusStream ?? watchSosAlert;
+  final handoff = await showModalBottomSheet<_OfflineHandoff>(
     context: context,
     // None of the usual escape hatches. A barrier tap, a downward drag or a
     // back gesture must not abort an alert that is already counting down —
@@ -67,12 +68,34 @@ Future<void> showSosCountdown(
     backgroundColor: Colors.transparent,
     builder: (_) => _SosCountdownSheet(
       dispatcher: dispatcher ?? PanicAlertService.dispatch,
-      statusStream: statusStream ?? watchSosAlert,
+      statusStream: stream,
       verification: verification ?? cachedResidentVerification,
-      smsComposer: smsComposer ?? SosSmsFallback.compose,
       offlineCheck: offlineCheck ?? PanicAlertService.isOffline,
     ),
   );
+  // ── NO SIGNAL: ONE MODAL, NOTHING ELSE ─────────────────────────────────
+  // The sheet closed itself and handed the alert over: from here the only
+  // thing on screen is "No Internet Connection" (2026-10-29, by request —
+  // the sheet's own offline state and its "saved on this phone" copy were a
+  // second, competing surface). The alert is still queued and sends itself.
+  if (handoff == null || !context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _NoInternetDialog(
+      payload: handoff.payload,
+      smsComposer: smsComposer ?? SosSmsFallback.compose,
+      statusStream: stream,
+    ),
+  );
+}
+
+/// What the sheet hands over when it closes for want of a connection: the
+/// alert, or the promise of it while the GPS fix and save finish.
+class _OfflineHandoff {
+  const _OfflineHandoff(this.payload);
+
+  final Future<SosPayload> payload;
 }
 
 /// `queued` is a success state, not a failure one — the alert is on disk and
@@ -85,15 +108,11 @@ class _SosCountdownSheet extends StatefulWidget {
     required this.dispatcher,
     required this.statusStream,
     required this.verification,
-    required this.smsComposer,
     required this.offlineCheck,
   });
 
   /// Whether the phone has no network at all. See [showSosCountdown].
   final Future<bool> Function() offlineCheck;
-
-  /// Opens the SMS composer for an alert. See [showSosCountdown].
-  final Future<bool> Function(SosPayload payload) smsComposer;
 
   /// The resident's standing as last observed. See [showSosCountdown].
   final ResidentVerification Function() verification;
@@ -197,6 +216,10 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       return;
     }
 
+    // The modal may never ask for the payload; a failure nobody awaits must
+    // not surface as an unhandled async error.
+    unawaited(_payloadReady.future.then((_) {}, onError: (Object _) {}));
+
     // The guardhouse numbers, fetched while the countdown runs: if this alert
     // ends up needing the SMS fallback, the list is as fresh as it can be.
     unawaited(SosSmsRecipients.refresh());
@@ -223,19 +246,22 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
   /// The alert this sheet raised, once it has; what its document says now.
   String? _alertId;
 
-  /// What was sent, kept for the SMS fallback (same alert, same reference).
-  SosPayload? _payload;
-
-  /// Completes with [_payload] once the dispatch has built it (GPS included),
-  /// so an SMS asked for before then waits for it rather than going without.
+  /// Completes with the alert once the dispatch has built it (GPS included),
+  /// so the offline modal's SMS can wait for it rather than go without.
   final Completer<SosPayload> _payloadReady = Completer<SosPayload>();
 
-  /// The "No Internet Connection" prompt has been shown for this alert.
-  bool _smsOffered = false;
+  /// The sheet has closed itself and handed the alert to the offline modal.
+  bool _handedOff = false;
 
-  /// The SMS composer was opened at least once / could not be opened.
-  bool _smsOpened = false;
-  bool _smsUnavailable = false;
+  /// Closes the sheet and leaves the "No Internet Connection" modal as the
+  /// only thing on screen. `pop`, not `maybePop`: the sheet's PopScope guards
+  /// against an accidental back gesture, not against this.
+  void _handOff() {
+    if (_handedOff || !mounted) return;
+    _handedOff = true;
+    HapticFeedback.heavyImpact();
+    Navigator.of(context).pop(_OfflineHandoff(_payloadReady.future));
+  }
   SosAlertStatus _status = SosAlertStatus.unknown;
   StreamSubscription<SosAlertStatus>? _statusSub;
 
@@ -326,10 +352,13 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
     // the save that the dispatch below still has to do. Its "Send SMS Alert"
     // waits for that payload, so the text still carries the location.
     unawaited(widget.offlineCheck().then((offline) {
-      if (offline && mounted && _phase == _Phase.sending) unawaited(_offerSms());
+      if (offline && mounted && _phase == _Phase.sending) _handOff();
     }).catchError((Object _) {}));
     try {
       final receipt = await widget.dispatcher();
+      // Before the mounted check: the sheet may already have handed off, and
+      // the modal it left behind is waiting on this for the SMS.
+      if (!_payloadReady.isCompleted) _payloadReady.complete(receipt.payload);
       if (!mounted) return;
       // ── THE SERVER SAID NO ────────────────────────────────────────────────
       // The app's own check passed (the standing was unknown, so it could not
@@ -346,58 +375,22 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
         HapticFeedback.heavyImpact();
         return;
       }
+      if (receipt.outcome == SosDispatchOutcome.queued) {
+        _handOff();
+        return;
+      }
       setState(() {
         _alertId = receipt.alertId;
-        _payload = receipt.payload;
-        if (!_payloadReady.isCompleted) _payloadReady.complete(receipt.payload);
-        _phase = receipt.outcome == SosDispatchOutcome.delivered
-            ? _Phase.sent
-            : _Phase.queued;
+        _phase = _Phase.sent;
       });
       HapticFeedback.heavyImpact();
       _watch(receipt.alertId);
-      if (_phase == _Phase.queued) unawaited(_offerSms());
-    } catch (_) {
+    } catch (err) {
+      if (!_payloadReady.isCompleted) _payloadReady.completeError(err);
       if (!mounted) return;
       setState(() => _phase = _Phase.failed);
       HapticFeedback.heavyImpact();
     }
-  }
-
-  /// The "No Internet Connection" prompt. Dismissable on purpose: the alert
-  /// is already queued and sends itself when a connection returns, so this is
-  /// an extra way out, never a gate.
-  Future<void> _offerSms() async {
-    if (!mounted || _smsOffered) return;
-    _smsOffered = true;
-    final send = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => const _NoInternetDialog(),
-    );
-    if (send == true) await _sendSms();
-  }
-
-  Future<void> _sendSms() async {
-    SosPayload? payload = _payload;
-    if (payload == null) {
-      // Asked for before the dispatch finished building the alert (the
-      // offline prompt opens early): wait for it, a few seconds at most.
-      try {
-        payload = await _payloadReady.future.timeout(const Duration(seconds: 6));
-      } catch (_) {
-        payload = null;
-      }
-    }
-    if (payload == null) {
-      if (mounted) setState(() => _smsUnavailable = true);
-      return;
-    }
-    final opened = await widget.smsComposer(payload);
-    if (!mounted) return;
-    setState(() {
-      _smsOpened = _smsOpened || opened;
-      _smsUnavailable = !opened;
-    });
   }
 
   Future<void> _retry() async {
@@ -591,16 +584,9 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
       _Phase.sent =>
         'Security has your alert, with your location and property details.\n'
             'Stay where you are if it is safe to do so.',
-      // One message per state, and no separate "saved on this phone" notice:
-      // the No Internet Connection prompt carries the offline transition.
-      _Phase.queued => _smsUnavailable
-          ? 'This phone could not open a messaging app. Call the guardhouse if '
-              'you can — the alert also sends itself once you are back online.'
-          : _smsOpened
-              ? 'Your text to the guardhouse is in your messaging app — make sure '
-                  'you pressed Send.'
-              : 'The guardhouse has not received your alert yet. Send it by SMS '
-                  'below.',
+      // Not shown in practice: a queued alert closes the sheet and the
+      // No Internet Connection modal takes over (see _handOff).
+      _Phase.queued => 'The guardhouse has not received your alert yet.',
       _Phase.failed =>
         'The alert could not be sent. Check your connection and try again, '
             'or call the security hotline.',
@@ -631,26 +617,11 @@ class _SosCountdownSheetState extends State<_SosCountdownSheet>
           onTap: () => Navigator.of(context).pop(),
         );
       case _Phase.queued:
-        return Row(
-          children: [
-            Expanded(
-              child: _FlatButton(
-                label: 'Done',
-                background: AppColors.backgroundElevated,
-                foreground: AppColors.textSecondary,
-                onTap: () => Navigator.of(context).pop(),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _FlatButton(
-                label: _smsOpened ? 'Text again' : 'Send SMS alert',
-                background: AppColors.panicOxblood,
-                foreground: Colors.white,
-                onTap: _sendSms,
-              ),
-            ),
-          ],
+        return _FlatButton(
+          label: 'Done',
+          background: AppColors.backgroundElevated,
+          foreground: AppColors.textSecondary,
+          onTap: () => Navigator.of(context).pop(),
         );
       case _Phase.failed:
         return Row(
@@ -785,13 +756,109 @@ class _SosLockedBody extends StatelessWidget {
   }
 }
 
-/// "No Internet Connection": offered once the alert is queued for want of a
-/// connection. Pops `true` to open the SMS composer.
-class _NoInternetDialog extends StatelessWidget {
-  const _NoInternetDialog();
+/// "No Internet Connection" — the ONLY thing on screen once an SOS cannot
+/// reach the server: the sheet has closed itself (see `_handOff`).
+///
+///   Send SMS Alert → waits for the alert to be built (GPS included, a few
+///                    seconds at most), opens the SMS app addressed to every
+///                    guardhouse number, and closes. If no messaging app
+///                    opens, it says so and stays, so the resident can retry.
+///   Close          → closes; the queued alert still sends itself.
+///
+/// It also watches the alert: if the queue gets it through while this is
+/// open, the modal says it was delivered instead of asking for an SMS that
+/// is no longer needed.
+class _NoInternetDialog extends StatefulWidget {
+  const _NoInternetDialog({
+    required this.payload,
+    required this.smsComposer,
+    required this.statusStream,
+  });
+
+  final Future<SosPayload> payload;
+  final Future<bool> Function(SosPayload payload) smsComposer;
+  final SosStatusStream statusStream;
+
+  @override
+  State<_NoInternetDialog> createState() => _NoInternetDialogState();
+}
+
+class _NoInternetDialogState extends State<_NoInternetDialog> {
+  bool _working = false;
+  bool _delivered = false;
+  String? _error;
+  StreamSubscription<SosAlertStatus>? _sub;
+  Timer? _relisten;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.payload.then((p) {
+      if (mounted) _watch(p.alertId);
+    }, onError: (Object _) {});
+  }
+
+  // A listen on a document that does not exist yet is refused by the rules
+  // and closes; ask again every few seconds while the modal is open.
+  void _watch(String alertId) {
+    _sub?.cancel();
+    _sub = widget.statusStream(alertId).listen(
+      (status) {
+        if (!mounted || !status.serverAcknowledged || _delivered) return;
+        HapticFeedback.heavyImpact();
+        setState(() => _delivered = true);
+      },
+      onError: (Object _) {},
+      onDone: () {
+        if (!mounted || _delivered) return;
+        _relisten = Timer(const Duration(seconds: 5), () {
+          if (mounted) _watch(alertId);
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _relisten?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    setState(() {
+      _working = true;
+      _error = null;
+    });
+    SosPayload? payload;
+    try {
+      payload = await widget.payload.timeout(const Duration(seconds: 8));
+    } catch (_) {
+      payload = null;
+    }
+    if (!mounted) return;
+    if (payload == null) {
+      setState(() {
+        _working = false;
+        _error = "Your alert couldn't be prepared. Call the guardhouse if you can.";
+      });
+      return;
+    }
+    final opened = await widget.smsComposer(payload);
+    if (!mounted) return;
+    if (opened) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _working = false;
+      _error = "This phone couldn't open a messaging app. Call the guardhouse if you can.";
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final delivered = _delivered;
     return AlertDialog(
       backgroundColor: AppColors.backgroundSecondary,
       surfaceTintColor: Colors.transparent,
@@ -799,38 +866,80 @@ class _NoInternetDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.xl),
         side: const BorderSide(color: AppColors.innerStroke),
       ),
-      icon: const Icon(PhosphorIconsFill.wifiSlash, size: 30, color: AppColors.panicOxblood),
+      icon: Icon(
+        delivered ? PhosphorIconsFill.shieldCheck : PhosphorIconsFill.wifiSlash,
+        size: 30,
+        color: delivered ? AppColors.success : AppColors.panicOxblood,
+      ),
       title: Text(
-        'No Internet Connection',
+        delivered ? 'Alert delivered' : 'No Internet Connection',
         textAlign: TextAlign.center,
         style: sfPro(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
       ),
-      content: Text(
-        "We couldn't reach emergency servers over mobile data. Would you like to "
-        'send an Emergency SMS alert to guardhouse personnel instead?',
-        textAlign: TextAlign.center,
-        style: sfPro(fontSize: 14.5, color: AppColors.textSecondary, height: 1.45),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            delivered
+                ? 'Your connection came back and security has your alert, with your '
+                    'location and property details.'
+                : "We couldn't reach emergency servers over mobile data. Would you like to "
+                    'send an Emergency SMS alert to guardhouse personnel instead?',
+            textAlign: TextAlign.center,
+            style: sfPro(fontSize: 14.5, color: AppColors.textSecondary, height: 1.45),
+          ),
+          if (_error != null && !delivered) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: sfPro(fontSize: 13, color: AppColors.dangerInk, height: 1.4),
+            ),
+          ],
+        ],
       ),
       actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: Text('Not now',
-              style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
-        ),
-        ElevatedButton.icon(
-          onPressed: () => Navigator.of(context).pop(true),
-          icon: const Icon(PhosphorIconsBold.chatText, size: 16),
-          label: Text('Send SMS Alert',
-              style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.panicOxblood,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        ),
-      ],
+      actionsAlignment: delivered ? MainAxisAlignment.center : MainAxisAlignment.end,
+      actions: delivered
+          ? [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.success,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text('Done',
+                    style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
+            ]
+          : [
+              TextButton(
+                onPressed: _working ? null : () => Navigator.of(context).pop(),
+                child: Text('Close',
+                    style: sfPro(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+              ),
+              ElevatedButton.icon(
+                onPressed: _working ? null : _send,
+                icon: _working
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(PhosphorIconsBold.chatText, size: 16),
+                label: Text(_error == null ? 'Send SMS Alert' : 'Try again',
+                    style: sfPro(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.panicOxblood,
+                  disabledBackgroundColor: AppColors.panicOxblood.withValues(alpha: 0.6),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
     );
   }
 }
