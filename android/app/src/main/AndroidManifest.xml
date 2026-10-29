@@ -17,6 +17,12 @@
          Foreground only: no ACCESS_BACKGROUND_LOCATION is requested. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- ── IN-APP UPDATES ───────────────────────────────────────────────────
+         The app is sideloaded, so it updates itself: it downloads the new APK
+         and opens the system installer on it (lib/core/updates). Android 8+
+         refuses that intent from an app that does not declare this, and then
+         asks the resident once to "Allow from this source". -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- allowBackup="false" (security audit, 2026-10-20): Android backs up an
          app's private storage by default, which here includes the Firebase
          sign-in session and the resident's cached incidents. A restored backup
@@ -61,6 +67,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Hands the downloaded update to the package installer as a
+             content:// URI (Android 7+). See UpdateFileProvider. -->
+        <provider
+            android:name=".UpdateFileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_paths" />
+        </provider>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

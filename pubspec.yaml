@@ -1,7 +1,7 @@
 name: monticello_villas_app
 description: Monticello Villas Cross-Platform Incident and Announcement Management System - Resident Mobile App
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -61,6 +61,14 @@ dependencies:
   # Picks a PDF for the HOA ID / proof-of-residency step. image_picker cannot:
   # it only returns photos and videos.
   file_picker: ^11.0.3
+  # In-app updates (lib/core/updates): the installed versionCode to compare
+  # against downloads/latest.json, a cache folder to download the new APK
+  # into, and SHA-256 to check it against the published checksum before
+  # handing it to the Android installer. crypto and path_provider were
+  # already in the lockfile as transitive dependencies.
+  package_info_plus: ^9.0.1
+  path_provider: ^2.1.5
+  crypto: ^3.0.7
 
 # phosphor_flutter 2.1.0 — the newest version published — subclasses IconData,
 # which Flutter declares `final`, so the published package cannot compile

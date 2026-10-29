@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:monticello_villas_app/app/auth_gate.dart';
 import 'package:monticello_villas_app/core/theme/app_theme.dart';
 import 'package:monticello_villas_app/core/theme/theme_mode_controller.dart';
+import 'package:monticello_villas_app/core/updates/update_gate.dart';
 import 'package:monticello_villas_app/core/widgets/dismiss_keyboard_on_tap.dart';
 import 'package:monticello_villas_app/features/announcements/screens/announcements_screen.dart';
 import 'package:monticello_villas_app/features/auth/screens/change_password_screen.dart';
@@ -30,9 +31,11 @@ class MonticelloVillasApp extends StatelessWidget {
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.lightTheme,
           themeMode: ThemeMode.light,
-          // No builder wrapper: the ClickSparkWrapper that drew a burst of
-          // sparks at every tap was removed by request (2026-10-19), with its
-          // file. Press feedback is the theme's quiet highlight instead.
+          // The one builder wrapper is the in-app updater: above every route,
+          // so a required update blocks the whole app and an optional one can
+          // float over any screen. (The ClickSparkWrapper that used to sit here
+          // was removed by request on 2026-10-19.)
+          builder: (context, child) => UpdateGate(child: child ?? const SizedBox.shrink()),
           // Any screen, dialog or sheet coming or going drops text focus, so a
           // keyboard opened on one route never sits over the next.
           navigatorObservers: [KeyboardDismissingObserver()],
