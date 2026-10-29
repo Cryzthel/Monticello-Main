@@ -423,10 +423,13 @@ export function computeDailyCounts(incidents, days) {
  *
  * Half-open at the start and inclusive at the end (`> start && <= end`) so two
  * adjacent windows never both claim the same incident.
+ *
+ * [now] pins the window's end. A caller that memoises the result should pass a
+ * value that ticks, or the window stops moving whenever the data does.
  */
-export function selectInRange(incidents, days, offsetDays = 0) {
+export function selectInRange(incidents, days, offsetDays = 0, now = Date.now()) {
   if (!Number.isFinite(days)) return [...incidents]
-  const end = Date.now() - offsetDays * 86400000
+  const end = now - offsetDays * 86400000
   const start = end - days * 86400000
   return incidents.filter((incident) => {
     if (!incident.reportedAt) return false

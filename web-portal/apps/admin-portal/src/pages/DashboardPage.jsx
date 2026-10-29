@@ -16,6 +16,17 @@ import { useWaitWhile } from '@/lib/waitState'
 import { useStaffAccounts } from '@shared/hooks/useStaffAccounts'
 import { isOfficerFiled } from '@shared/lib/staffFiling'
 
+/*
+  ── THREE CARDS, ONE ROW FROM TABLET UP (2026-10-29) ───────────────────────
+  Active SOS alerts left this row by request; the Panic alerts page is where a
+  live emergency is watched, and resolved ones now count in the totals here.
+  `.kpi-grid` is a four-up track that only turns three-up at `xl`, so three
+  cards broke 2 + 1 on a tablet — one card alone on a row, twice as wide as
+  its siblings. Three equal columns from `md` keep the row balanced at every
+  width the console is used at.
+*/
+const KPI_ROW = 'grid grid-cols-1 gap-6 md:grid-cols-3'
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const [selectedId, setSelectedId] = useState(null)
@@ -47,8 +58,6 @@ export default function DashboardPage() {
     resolvedDelta,
     resolutionRate,
     resolutionDelta,
-    activeSosCount,
-    sosLoading,
     categoryBreakdown,
   } = usePortalMetrics(rangeDays)
   useWaitWhile(loading, 'Syncing incident metrics')
@@ -118,16 +127,16 @@ export default function DashboardPage() {
               below it. The placeholder is KpiCard's own box, so the swap is
               in-place and nothing under it moves. */}
           {loading ? (
-            <SkeletonKpiRow count={4} />
+            <SkeletonKpiRow count={3} className={KPI_ROW} />
           ) : (
-          <div className="kpi-grid">
+          <div className={KPI_ROW}>
             <KpiCard
               label="Total reports"
               value={totalReports}
               delta={totalDelta?.text}
               deltaDirection={totalDelta?.direction}
               deltaTone={totalDelta?.tone}
-              helpText="Reports filed in this period"
+              helpText="Incidents and SOS, this period"
             />
             <KpiCard
               label="Resolved reports"
@@ -144,17 +153,6 @@ export default function DashboardPage() {
               deltaDirection={resolutionDelta?.direction}
               deltaTone={resolutionDelta?.tone}
               helpText="Resolved as a share of total"
-            />
-            {/* Live, and deliberately outside the timeframe: an SOS from last
-                Tuesday that nobody closed is not a historical statistic, it is
-                a person still waiting. The count is the guardhouse map's own
-                definition of "live" (active or acknowledged, never resolved) —
-                see panicStatus.js — so this card and the SOS page agree. */}
-            <KpiCard
-              label="Active SOS alerts"
-              value={sosLoading ? '—' : activeSosCount}
-              tone="danger"
-              helpText="Open right now — ignores the timeframe"
             />
           </div>
           )}

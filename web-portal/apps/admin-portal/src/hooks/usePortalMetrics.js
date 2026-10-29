@@ -1,8 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useIncidentFeed } from '@shared/hooks/useIncidentFeed'
-import { useResidents } from '@shared/hooks/useResidents'
 import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
-import { useSystemHealth } from '@shared/hooks/useSystemHealth'
+import { isPanicLive } from '@shared/lib/panicStatus'
 import {
   computeCategoryBreakdown,
   selectInRange,
@@ -32,6 +31,9 @@ function formatDelta(current, previous, { lowerIsBetter = false } = {}) {
   }
 }
 
+/** How often the rolling window's end moves forward. */
+const WINDOW_TICK_MS = 60_000
+
 /**
  * Every headline number on the Admin portal's two analytics surfaces, derived
  * once from one set of live subscriptions.
@@ -60,7 +62,7 @@ function formatDelta(current, previous, { lowerIsBetter = false } = {}) {
  *      Both pages read this hook now, so a figure shown twice is computed once.
  *
  * -- WHAT DELIBERATELY IGNORES THE TIMEFRAME -------------------------------
- * `activeCount`, `activeSosCount`, the resident counts and everything in
+ * `activeCount`, `activeSosCount` and everything in
  * `operations` are live totals, not windowed figures, and that is not an
  * oversight — "open right now" is not a question about the last 7 days.
  * Windowing the first would hide a report that has been open for three weeks,
@@ -68,44 +70,73 @@ function formatDelta(current, previous, { lowerIsBetter = false } = {}) {
  * help text.
  */
 export function usePortalMetrics(rangeDays) {
-  const { incidents, loading } = useIncidentFeed()
-  const { counts: residentCounts, loading: residentsLoading } = useResidents()
-  const { liveCount: activeSosCount, loading: sosLoading } = usePanicAlerts()
+  const { incidents, loading: incidentsLoading } = useIncidentFeed()
+  const { alerts, liveCount: activeSosCount, loading: sosLoading } = usePanicAlerts()
 
-  // Measured, not asserted — see the hook. Read here rather than in the panel
-  // so the Overview's summary strip and the Metrics page's fuller one are
-  // reporting the same probe rather than opening two.
-  const health = useSystemHealth()
+  // ── ONE "LOADED" FOR BOTH FEEDS (2026-10-29) ─────────────────────────────
+  // The totals now sum two subscriptions. Reporting loaded when only the
+  // incidents had arrived drew a Total that jumped again a moment later when
+  // the SOS snapshot landed — two numbers for one figure, in sequence.
+  const loading = incidentsLoading || sosLoading
 
-  const inRange = useMemo(() => selectInRange(incidents, rangeDays), [incidents, rangeDays])
+  // ── THE WINDOW MOVES ON ITS OWN ──────────────────────────────────────────
+  // `selectInRange` read Date.now() only when a snapshot arrived, so on a
+  // quiet estate the "last 7 days" stopped advancing: a report could age out
+  // of the period and stay counted until some unrelated write re-ran the
+  // memo. The window's end now ticks once a minute.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), WINDOW_TICK_MS)
+    return () => clearInterval(timer)
+  }, [])
+
+  const inRange = useMemo(() => selectInRange(incidents, rangeDays, 0, now), [incidents, rangeDays, now])
+
+  // ── SOS ALERTS COUNT AS REPORTS (2026-10-29, by request) ─────────────────
+  // An emergency raised from the app is a report like any other, so it now
+  // feeds Total reports and, once resolved, Resolved reports — in the same
+  // snapshot that moves it off the live SOS list. Windowed by when it was
+  // raised, exactly as an incident is by when it was filed. Kept out of
+  // `inRange` itself: the volume chart and category donut are about incident
+  // categories, and an SOS has none.
+  const sosAsReports = useMemo(
+    () => alerts.map((alert) => ({ reportedAt: alert.createdAt, resolved: !isPanicLive(alert.status) })),
+    [alerts],
+  )
 
   const metrics = useMemo(() => {
-    const previous = selectInRange(incidents, rangeDays, rangeDays)
+    const previous = selectInRange(incidents, rangeDays, rangeDays, now)
+    const sosNow = selectInRange(sosAsReports, rangeDays, 0, now)
+    const sosBefore = selectInRange(sosAsReports, rangeDays, rangeDays, now)
 
-    const currentResolved = inRange.filter((i) => i.status === 'Resolved').length
-    const previousResolved = previous.filter((i) => i.status === 'Resolved').length
-    const currentRate = inRange.length ? Math.round((currentResolved / inRange.length) * 100) : 0
-    const previousRate = previous.length ? Math.round((previousResolved / previous.length) * 100) : 0
+    const currentTotal = inRange.length + sosNow.length
+    const previousTotal = previous.length + sosBefore.length
+    const currentResolved =
+      inRange.filter((i) => i.status === 'Resolved').length + sosNow.filter((a) => a.resolved).length
+    const previousResolved =
+      previous.filter((i) => i.status === 'Resolved').length + sosBefore.filter((a) => a.resolved).length
+    const currentRate = currentTotal ? Math.round((currentResolved / currentTotal) * 100) : 0
+    const previousRate = previousTotal ? Math.round((previousResolved / previousTotal) * 100) : 0
 
     // ── TOTAL AND RESOLVED REPORTS (2026-10-29) ─────────────────────────
     // "Avg response time" left the Overview for these two, by request: the
-    // two counts a reader can check against the tickets table, where a mean
-    // over dispatch timestamps could not be. Both are windowed and both are
-    // counted from `inRange`, so Resolved can never exceed Total and the
-    // resolution rate beside them is exactly their ratio.
+    // two counts a reader can check against the tickets and SOS lists. Both
+    // are windowed and both are counted from the same two sets, so Resolved
+    // can never exceed Total and the resolution rate beside them is exactly
+    // their ratio.
     return {
-      totalReports: inRange.length,
-      totalDelta: formatDelta(inRange.length, previous.length),
+      totalReports: currentTotal,
+      totalDelta: formatDelta(currentTotal, previousTotal),
       resolvedReports: currentResolved,
       resolvedDelta: formatDelta(currentResolved, previousResolved),
-      resolutionRate: inRange.length ? `${currentRate}%` : 'No data yet',
+      resolutionRate: currentTotal ? `${currentRate}%` : 'No data yet',
       resolutionDelta: formatDelta(currentRate, previousRate),
       activeCount: incidents.filter((i) => ACTIVE_STATUSES.has(i.status)).length,
       // Windowed, like the KPI cards directly above it. The chart and the
       // "Total reports" number are guaranteed to describe the same set.
       categoryBreakdown: computeCategoryBreakdown(inRange),
     }
-  }, [incidents, inRange, rangeDays])
+  }, [incidents, inRange, sosAsReports, rangeDays, now])
 
   /**
    * The live operational picture — the figures the status strips judge against
@@ -131,11 +162,8 @@ export function usePortalMetrics(rangeDays) {
     incidents,
     inRange,
     loading,
-    residentCounts,
-    residentsLoading,
     activeSosCount,
     sosLoading,
-    health,
     operations,
     ...metrics,
   }
