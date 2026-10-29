@@ -190,31 +190,38 @@ extension SosPayloadWire on SosPayload {
     };
   }
 
-  /// The text a guard receives, in the fixed order the guardhouse reads it
-  /// (2026-10-30, by request):
+  /// The text a guard receives, one labelled line per field (2026-10-30,
+  /// by request):
   ///
-  ///   [EMERGENCY SOS] Resident: Ana Cruz | Location: Phase 1, Blk 4, Lot 12 |
-  ///   GPS: 14.12345,121.54321 | Time: 21:05
+  ///   [EMERGENCY SOS ALERT]
+  ///   Resident: Ana Cruz
+  ///   Property: Phase 1, Blk 4, Lot 12
+  ///   Exact Location: https://maps.google.com/?q=14.12345,121.54321
+  ///   Time: 9:05 PM
   ///
-  /// Short enough for one SMS in the common case, the label on every field so
-  /// it reads at a glance, and nothing a guard has to decode. A part with
-  /// nothing to say (no GPS fix) is left out rather than printed empty.
+  /// The location is a plain Google Maps link, which every messaging app
+  /// makes tappable, so a guard goes from the text to directions in one tap.
+  /// With no GPS fix the line says so instead of carrying a broken link.
   String toSmsBody() {
     final name = residentName.trim().isEmpty ? 'Unknown resident' : residentName.trim();
-    final location = [
+    final property = [
       if (propertyPhase.isNotEmpty) 'Phase $propertyPhase',
       if (propertyBlock.isNotEmpty) 'Blk $propertyBlock',
       if (propertyLot.isNotEmpty) 'Lot $propertyLot',
     ].join(', ');
     final at = capturedAt.toLocal();
-    final hh = at.hour.toString().padLeft(2, '0');
+    final hour12 = at.hour % 12 == 0 ? 12 : at.hour % 12;
     final mm = at.minute.toString().padLeft(2, '0');
-    final parts = <String>[
-      '[EMERGENCY SOS] Resident: $name',
-      'Location: ${location.isEmpty ? (propertyLabel ?? 'unknown') : location}',
-      if (hasLocation) 'GPS: ${lat!.toStringAsFixed(5)},${lng!.toStringAsFixed(5)}',
-      'Time: $hh:$mm',
-    ];
-    return parts.join(' | ');
+    final ampm = at.hour < 12 ? 'AM' : 'PM';
+    final location = hasLocation
+        ? 'https://maps.google.com/?q=${lat!.toStringAsFixed(6)},${lng!.toStringAsFixed(6)}'
+        : 'unavailable (no GPS fix)';
+    return [
+      '[EMERGENCY SOS ALERT]',
+      'Resident: $name',
+      'Property: ${property.isEmpty ? (propertyLabel ?? 'unknown') : property}',
+      'Exact Location: $location',
+      'Time: $hour12:$mm $ampm',
+    ].join('\n');
   }
 }

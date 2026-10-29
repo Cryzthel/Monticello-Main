@@ -47,12 +47,21 @@ void main() {
       expect(uri, isNot(contains('SOS+Monticello')));
     });
 
-    test('the body carries name, lot, GPS and time', () {
-      final body = _payload().toSmsBody();
-      expect(body, startsWith('[EMERGENCY SOS] Resident: Ana Cruz | '));
-      expect(body, contains('Location: Phase 1, Blk 4, Lot 12'));
-      expect(body, contains('GPS: 14.12345,121.54321'));
-      expect(body, endsWith('Time: 21:05'));
+    test('the body carries name, lot, a Google Maps link and time', () {
+      final lines = _payload().toSmsBody().split('\n');
+      expect(lines, [
+        '[EMERGENCY SOS ALERT]',
+        'Resident: Ana Cruz',
+        'Property: Phase 1, Blk 4, Lot 12',
+        'Exact Location: https://maps.google.com/?q=14.123450,121.543210',
+        'Time: 9:05 PM',
+      ]);
+    });
+
+    test('the link survives the SMS URI as one tappable URL', () {
+      final uri = SosSmsFallback.buildUri(_guards, _payload().toSmsBody(), ios: true).toString();
+      expect(Uri.decodeComponent(uri.split('body=').last),
+          contains('https://maps.google.com/?q=14.123450,121.543210'));
     });
   });
 

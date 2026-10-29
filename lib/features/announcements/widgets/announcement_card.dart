@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -748,17 +749,20 @@ class _PinMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Material's push_pin stands upright; Phosphor's is drawn at 45°, which
-    // read as tilted in the corner.
+    // Material's upright push_pin, tilted 35° clockwise (2026-10-30, by
+    // request) so it reads as a pin pushed into a board.
     return Semantics(
       label: 'Pinned',
-      child: const Padding(
-        padding: EdgeInsets.all(4),
-        child: Icon(
-          Icons.push_pin_rounded,
-          size: 18,
-          color: _pinnedInk,
-          shadows: [Shadow(color: Color(0x66FFFFFF), blurRadius: 4)],
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Transform.rotate(
+          angle: 35 * math.pi / 180,
+          child: const Icon(
+            Icons.push_pin_rounded,
+            size: 18,
+            color: _pinnedInk,
+            shadows: [Shadow(color: Color(0x66FFFFFF), blurRadius: 4)],
+          ),
         ),
       ),
     );

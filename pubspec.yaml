@@ -1,7 +1,7 @@
 name: monticello_villas_app
 description: Monticello Villas Cross-Platform Incident and Announcement Management System - Resident Mobile App
 publish_to: 'none'
-version: 1.2.6+9
+version: 1.2.7+10
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

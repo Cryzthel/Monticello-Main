@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -168,10 +170,17 @@ void main() {
       await _pumpCard(tester, _post(pinned: true));
       expect(find.text('Pinned'), findsNothing);
       expect(find.text('New'), findsNothing);
-      final pin = tester.getRect(find.byIcon(Icons.push_pin_rounded));
+      // The tilt's own box: its corners are not rotated, the glyph's are.
+      final tilt = find.ancestor(
+          of: find.byIcon(Icons.push_pin_rounded), matching: find.byType(Transform)).first;
+      final pin = tester.getRect(tilt);
       final card = tester.getRect(find.byType(AnnouncementCard));
       expect(pin.right, closeTo(card.right, 24));
       expect(pin.top, closeTo(card.top, 24));
+      // Tilted like a pin pushed into a board (2026-10-30), not upright.
+      final m = tester.widget<Transform>(tilt).transform;
+      final degrees = math.atan2(m.entry(1, 0), m.entry(0, 0)) * 180 / math.pi;
+      expect(degrees, closeTo(35, 0.5));
       expect(tester.takeException(), isNull);
     });
 

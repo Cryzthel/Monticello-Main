@@ -207,8 +207,11 @@ test('a device clock running ahead never reports a negative hold', () {
       final body = _payload(lat: 14.12345, lng: 121.54321).toSmsBody();
       expect(
         body,
-        '[EMERGENCY SOS] Resident: Maria Dela Cruz | Location: Phase 2, Blk 7, Lot 14 '
-        '| GPS: 14.12345,121.54321 | Time: 21:05',
+        '[EMERGENCY SOS ALERT]\n'
+        'Resident: Maria Dela Cruz\n'
+        'Property: Phase 2, Blk 7, Lot 14\n'
+        'Exact Location: https://maps.google.com/?q=14.123450,121.543210\n'
+        'Time: 9:05 PM',
       );
     });
 
@@ -228,7 +231,15 @@ test('a device clock running ahead never reports a negative hold', () {
       final body = noLabel.toSmsBody();
       // An unknown name must not render as an empty field, and no fix means
       // no GPS field at all.
-      expect(body, '[EMERGENCY SOS] Resident: Unknown resident | Location: Phase 3, Blk 1, Lot 9 | Time: 09:07');
+      expect(
+        body,
+        '[EMERGENCY SOS ALERT]\n'
+        'Resident: Unknown resident\n'
+        'Property: Phase 3, Blk 1, Lot 9\n'
+        'Exact Location: unavailable (no GPS fix)\n'
+        'Time: 9:07 AM',
+      );
+      expect(body, isNot(contains('maps.google.com')));
     });
   });
 }

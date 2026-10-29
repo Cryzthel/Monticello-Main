@@ -373,6 +373,21 @@ void main() {
       }
     });
 
+    test('can be painted black, for the satellite basemap', () async {
+      const r = 2.0;
+      final png = await LiveLocationMarker.paintHeadingCone(
+          pixelRatio: r, color: const Color(0xFF000000));
+      final image = await decodeImageFromList(png);
+      final c = image.width / 2;
+      image.dispose();
+      const reach = LiveLocationMarker.coneRadius * r;
+      final px = await pixel(png, c, c - reach * 0.2);
+      expect(px[3], greaterThan(40));
+      for (final channel in px.take(3)) {
+        expect(channel, lessThan(4));
+      }
+    });
+
     test('fades out toward its rim', () async {
       const r = 2.0;
       final png = await LiveLocationMarker.paintHeadingCone(pixelRatio: r);

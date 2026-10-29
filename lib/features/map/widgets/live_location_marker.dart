@@ -34,19 +34,15 @@ class LiveLocationMarkerImage {
 
 /// Paints the Life360-style "you are here" pin to PNG bytes.
 ///
-/// ── ONE MARKER, DRAWN BY THE NATIVE PUCK ──────────────────────────────────
-/// These bytes become the `topImage` of Mapbox's own location puck. They used
-/// to be a separate PointAnnotation fed from geolocator while the native puck
-/// drew its stock blue dot from Mapbox's own location provider — two layers,
-/// two position sources, and on a real phone two markers 15–20 m apart. Now
-/// the puck IS the pin: one engine, glided between real fixes by the native
-/// renderer, with its accuracy ring sized in metres and its heading cone
-/// ([paintHeadingCone]) turned by the compass.
+/// ── WHERE IT IS DRAWN ─────────────────────────────────────────────────────
+/// Since 2026-10-30 these bytes are an upright PointAnnotation on the home
+/// map (the puck turned its top image with the compass, tilting the face);
+/// the puck keeps only the heading cone ([paintHeadingCone]) and the ring.
 ///
 /// ── WHY THE TIP IS THE BITMAP'S CENTRE ────────────────────────────────────
-/// A puck image is drawn centred on the coordinate, with no offset option. So
-/// the figure is laid out with the stem's point at the exact middle of the
-/// bitmap and the bottom half left transparent.
+/// The stem's point sits at the exact middle of the bitmap, bottom half left
+/// transparent, so the map can anchor it CENTER with no offset — offsets are
+/// read in logical pixels, which a bitmap painted at the device ratio is not.
 ///
 /// ── THE FIGURE ────────────────────────────────────────────────────────────
 /// A round portrait (or initials on the accent) in a crisp 2pt white border,
@@ -309,10 +305,13 @@ class LiveLocationMarker {
   /// the stem marks, under the pin, in whichever direction the phone faces.
   /// Strongest at the apex and gone by the rim, like the reference.
   ///
-  /// White at low opacity (2026-10-29, by request), not the ring's violet: a
-  /// beam of light rather than a second coloured shape, readable over both the
-  /// satellite and the street basemap.
-  static Future<Uint8List> paintHeadingCone({double pixelRatio = 3.0}) async {
+  /// [color] follows the basemap (2026-10-30, by request): black over
+  /// satellite imagery, white over the street map — whichever stands out.
+  /// The fade from apex to rim is the same either way.
+  static Future<Uint8List> paintHeadingCone({
+    double pixelRatio = 3.0,
+    Color color = const Color(0xFFFFFFFF),
+  }) async {
     final r = pixelRatio;
     final radius = coneRadius * r;
     final side = (radius * 2).ceilToDouble();
@@ -337,8 +336,8 @@ class LiveLocationMarker {
           centre,
           radius,
           [
-            const Color(0xFFFFFFFF).withValues(alpha: 0.6),
-            const Color(0xFFFFFFFF).withValues(alpha: 0.0),
+            color.withValues(alpha: 0.6),
+            color.withValues(alpha: 0.0),
           ],
           [0.0, 1.0],
         ),

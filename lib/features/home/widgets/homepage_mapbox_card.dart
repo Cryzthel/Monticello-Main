@@ -147,9 +147,13 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
   bool _refreshing = false;
   bool _refreshPending = false;
 
-  /// The heading beam, painted once per pixel ratio.
+  /// The heading beam, painted once per pixel ratio and colour.
   Uint8List? _coneBytes;
-  double? _coneRatio;
+  String? _coneKey;
+
+  /// The cone's colour for the basemap on screen (2026-10-30, by request):
+  /// black over satellite imagery, white over the street map.
+  Color get _coneColor => _satellite ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
 
   /// The resident's pin, as an upright annotation of its own (2026-10-30).
   /// See [_renderMarker] for why it is no longer the puck's top image.
@@ -157,6 +161,11 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
   PointAnnotation? _pin;
   LiveLocationMarkerImage? _pinImage;
   bool _pinImageChanged = false;
+
+  /// Serialises [_placePin]: a fix that lands mid-placement is not dropped,
+  /// it runs once the current one finishes.
+  bool _placing = false;
+  bool _placePending = false;
   geo.Position? _fix;
   StreamSubscription<geo.Position>? _positionSub;
 
@@ -599,7 +608,7 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     final initials = LiveLocationMarker.initialsFor(profile?.name);
     _hasHeading ??= await DeviceHeading.isAvailable();
     final heading = _hasHeading!;
-    final key = ['live', initials, profile?.photoUrl, ratio, heading].join('|');
+    final key = ['live', initials, profile?.photoUrl, ratio, heading, _satellite].join('|');
     if (key == _markerKey) return;
 
     try {
@@ -614,10 +623,11 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
       );
       Uint8List cone = Uint8List(0);
       if (heading) {
-        if (_coneBytes == null || _coneRatio != ratio) {
-          _coneBytes =
-              await LiveLocationMarker.paintHeadingCone(pixelRatio: ratio);
-          _coneRatio = ratio;
+        final color = _coneColor;
+        final coneKey = '$ratio|${color.toARGB32()}';
+        if (_coneBytes == null || _coneKey != coneKey) {
+          _coneBytes = await LiveLocationMarker.paintHeadingCone(pixelRatio: ratio, color: color);
+          _coneKey = coneKey;
         }
         cone = _coneBytes!;
       }
@@ -695,33 +705,54 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     _positionSub = null;
   }
 
-  bool _placing = false;
-
   /// Puts the pin on the latest fix: created once, then only moved. Never
   /// given an `iconRotate`, so it stays upright whatever the phone does.
   Future<void> _placePin() async {
+    if (_placing) {
+      _placePending = true;
+      return;
+    }
+    _placing = true;
+    try {
+      do {
+        _placePending = false;
+        await _placeOnce();
+      } while (_placePending && mounted);
+    } finally {
+      _placing = false;
+    }
+  }
+
+  Future<void> _placeOnce() async {
     final manager = _pinManager;
     final image = _pinImage;
     final fix = _fix;
-    if (manager == null || image == null || fix == null || _placing || !mounted) return;
-    _placing = true;
+    if (manager == null || image == null || fix == null || !mounted) return;
+    final point = Point(coordinates: Position(fix.longitude, fix.latitude));
     try {
-      final point = Point(coordinates: Position(fix.longitude, fix.latitude));
       if (_pin != null && !_pinImageChanged) {
         _pin!.geometry = point;
         await manager.update(_pin!);
         return;
       }
+    } catch (_) {
+      // The annotation went with a style swap: fall through and re-create.
+      _pin = null;
+    }
+    try {
       await manager.deleteAll();
       _pin = await manager.create(
         PointAnnotationOptions(
           geometry: point,
           image: image.bytes,
-          // The pointer's apex on the coordinate: TOP_LEFT, offset by the
-          // painter's own tip (icon-offset is in the bitmap's pixels).
-          iconAnchor: IconAnchor.TOP_LEFT,
-          iconOffset: [-image.tip.dx, -image.tip.dy],
-          // Painted at the device pixel ratio, laid out in device pixels: 1:1.
+          // ── THE RENDERING FIX (2026-10-30) ─────────────────────────────
+          // The painter puts the stem's point at the bitmap's exact centre
+          // (see [LiveLocationMarker.paint]), so CENTER puts it on the
+          // coordinate with no offset. It was TOP_LEFT plus an icon-offset of
+          // the tip in BITMAP pixels — but Mapbox reads icon-offset in
+          // logical pixels, so on a 3x screen the pin landed two-thirds of
+          // its own size up and left of the resident.
+          iconAnchor: IconAnchor.CENTER,
           iconSize: 1.0,
           iconRotate: 0,
         ),
@@ -730,8 +761,6 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     } catch (_) {
       // A dead platform view or a style mid-swap: the next fix tries again.
       _pin = null;
-    } finally {
-      _placing = false;
     }
   }
 
@@ -742,11 +771,22 @@ class _HomepageMapboxCardState extends State<HomepageMapboxCard>
     final map = _map;
     if (map == null) return;
 
-    _boundaryCore = await map.annotations.createPolylineAnnotationManager();
-    // After the boundary, so the pin draws above the line.
-    _pinManager = await map.annotations.createPointAnnotationManager();
+    _pinManager = null;
     _pin = null;
     _markerKey = null;
+    try {
+      _boundaryCore = await map.annotations.createPolylineAnnotationManager();
+      // After the boundary, so the pin draws above the line.
+      final pins = await map.annotations.createPointAnnotationManager();
+      // Always drawn, even where it would collide with a map label.
+      await pins.setIconAllowOverlap(true);
+      await pins.setIconIgnorePlacement(true);
+      _pinManager = pins;
+    } catch (_) {
+      // The style is not ready (or the view is gone): the next style load or
+      // map rebuild calls this again.
+      return;
+    }
 
     await _drawBoundary();
     await _refreshMarker();
