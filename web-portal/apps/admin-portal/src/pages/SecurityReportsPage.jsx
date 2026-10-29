@@ -175,7 +175,6 @@ export default function SecurityReportsPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
   const [priority, setPriority] = useState('all')
-  const [officerFilter, setOfficerFilter] = useState('all')
   const [range, setRange] = useState('30d')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
@@ -203,19 +202,6 @@ export default function SecurityReportsPage() {
 
   useEvidencePrefetch(officerReports)
 
-  // Officers who have filed at least one report, from the live list — so the
-  // filter never offers a name with nothing behind it.
-  const officerOptions = useMemo(() => {
-    const names = new Map()
-    officerReports.forEach((r) => {
-      if (!names.has(r.reporterUid)) names.set(r.reporterUid, r.reportedByName || staffById.get(r.reporterUid)?.name || 'Officer')
-    })
-    return [
-      { value: 'all', label: 'All officers' },
-      ...[...names].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),
-    ]
-  }, [officerReports, staffById])
-
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase()
 
@@ -233,7 +219,6 @@ export default function SecurityReportsPage() {
       .filter((report) => (view === 'archived' ? isArchived(report) : !isArchived(report)))
       .filter((report) => status === 'all' || reviewState(report) === status)
       .filter((report) => priority === 'all' || severityOf(report) === priority)
-      .filter((report) => officerFilter === 'all' || report.reporterUid === officerFilter)
       .filter((report) => {
         if (!report.reportedAt) return !from && !to
         const at = new Date(report.reportedAt).getTime()
@@ -257,7 +242,7 @@ export default function SecurityReportsPage() {
           .includes(term)
       })
       .sort((a, b) => (b.reportedAt?.getTime?.() ?? 0) - (a.reportedAt?.getTime?.() ?? 0))
-  }, [officerReports, view, status, priority, officerFilter, range, customFrom, customTo, search])
+  }, [officerReports, view, status, priority, range, customFrom, customTo, search])
 
   const counts = useMemo(
     () => ({
@@ -336,7 +321,7 @@ export default function SecurityReportsPage() {
   }
 
   const filtersActive =
-    Boolean(search.trim()) || status !== 'all' || priority !== 'all' || officerFilter !== 'all'
+    Boolean(search.trim()) || status !== 'all' || priority !== 'all'
 
   const emptyMessage =
     counts[view] === 0
@@ -409,14 +394,6 @@ export default function SecurityReportsPage() {
               className="w-full sm:w-auto sm:min-w-[9.5rem]"
             />
             <Select
-              ariaLabel="Filter by officer"
-              size="touch"
-              value={officerFilter}
-              onChange={setOfficerFilter}
-              options={officerOptions}
-              className="w-full sm:w-auto sm:min-w-[10rem]"
-            />
-            <Select
               ariaLabel="Date range"
               size="touch"
               value={range}
@@ -450,7 +427,6 @@ export default function SecurityReportsPage() {
                   setSearch('')
                   setStatus('all')
                   setPriority('all')
-                  setOfficerFilter('all')
                 }}
                 className="chip chip-idle h-9 sm:ml-auto"
               >

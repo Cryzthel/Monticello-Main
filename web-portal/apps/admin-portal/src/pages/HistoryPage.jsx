@@ -7,8 +7,7 @@ import { useWaitWhile } from '@/lib/waitState'
 import SegmentedControl from '@shared/components/SegmentedControl'
 import AuditHistoryTable from '@/components/AuditHistoryTable'
 import DeletedReportsTable from '@/components/DeletedReportsTable'
-import ArchivedReportsTable from '@/components/ArchivedReportsTable'
-import ArchivedActivityTable from '@/components/ArchivedActivityTable'
+import ArchiveTable from '@/components/ArchiveTable'
 import SecurityReportDetailModal from '@/components/SecurityReportDetailModal'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { db } from '@shared/lib/firebase'
@@ -21,14 +20,6 @@ const VIEWS = [
   { key: 'events', label: 'System events' },
   { key: 'archive', label: 'Archive' },
   { key: 'trash', label: 'Deleted reports' },
-]
-
-// Keyed off the view rather than a chain of ternaries. Two views was the limit
-// of what `view === 'trash' ? … : …` could express; the third would have made
-// every heading a nested conditional.
-const ARCHIVE_TABS = [
-  { key: 'reports', label: 'Archived reports' },
-  { key: 'activity', label: 'Archived activity' },
 ]
 
 /** How long a feed entry stays live before it belongs to the archive. */
@@ -70,11 +61,6 @@ export default function HistoryPage() {
     return VIEWS.some((v) => v.key === requested) ? requested : 'events'
   })
 
-  // Which half of the Archive the admin is looking at. Reports are the records
-  // themselves; Activity is the feed entries that aged out of the live panel.
-  const [archiveTab, setArchiveTab] = useState(
-    () => (searchParams.get('archive') === 'activity' ? 'activity' : 'reports'),
-  )
   const [search, setSearch] = useState('')
 
   /*
@@ -279,7 +265,7 @@ export default function HistoryPage() {
    *     half was filtered — so it was the sum of an unfiltered count and a
    *     filtered one, which is not a count of anything.
    *
-   * ArchivedActivityTable owns its own search box, so it must be handed the
+   * ArchiveTable owns its own search box, so it must be handed the
    * whole list and do its own narrowing. Counts now come from `events`, and
    * only the table the search belongs to reads `visibleEvents`.
    */
@@ -346,31 +332,15 @@ export default function HistoryPage() {
         {view === 'trash' ? (
           <DeletedReportsTable incidents={deletedIncidents} loading={loading} onOpenReport={setOpenReportId} />
         ) : view === 'archive' ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            {/* ── TWO ARCHIVES UNDER ONE TAB ──────────────────────────────
-                A report and an event about a report are different records and
-                answer different questions — "what was filed" versus "what
-                happened, and when". They are siblings here rather than two
-                top-level tabs because both are the same act of looking
-                something up after it has left the live views. */}
-            <SegmentedControl
-              ariaLabel="Archive contents"
-              className="self-start"
-              options={ARCHIVE_TABS.map((t) => ({ value: t.key, label: t.label }))}
-              value={archiveTab}
-              onChange={setArchiveTab}
-            />
-
-            {archiveTab === 'activity' ? (
-              <ArchivedActivityTable events={expiredEvents} loading={loading} />
-            ) : (
-              <ArchivedReportsTable
-                incidents={archivedIncidents}
-                loading={loading}
-                onOpenReport={setOpenReportId}
-              />
-            )}
-          </div>
+          // ONE table for archived reports and aged-out activity (2026-10-29,
+          // by request) — the inner Reports / Activity switcher is gone. See
+          // ArchiveTable.
+          <ArchiveTable
+            incidents={archivedIncidents}
+            events={expiredEvents}
+            loading={loading}
+            onOpenReport={setOpenReportId}
+          />
         ) : (
           <AuditHistoryTable
             events={visibleEvents}

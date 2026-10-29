@@ -5,7 +5,7 @@
 // (IncidentMap wants flat lat/lng + severity; IncidentsTable and
 // IncidentHistoryTable want the Dispatched/On-Site/Resolved vocabulary).
 
-import { doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { auth, db, functions } from '@shared/lib/firebase'
 // Re-exported, not re-implemented. `computeCategoryBreakdown` is pure
@@ -94,19 +94,40 @@ export function isDeleted(incident) {
   return Boolean(incident?.deletedAt)
 }
 
+/** Firestore's ceiling on writes per batch. */
+const BATCH_LIMIT = 500
+
+/**
+ * Apply one write to every id, as ONE atomic commit.
+ *
+ * ── WHY NOT Promise.all(updateDoc…) ────────────────────────────────────────
+ * That was every bulk action here, and it was N independent writes: a
+ * selection of ten could land seven, refuse three (a rule, a dropped
+ * connection) and report one error for the lot, leaving the views showing a
+ * half-applied delete nobody asked for. A batch commits all or none, and
+ * every listener receives it as a single snapshot, so the tickets table, the
+ * KPI counts and the trash change in the same frame. Over 500 ids (not a
+ * selection anyone makes) is split, each chunk still atomic.
+ */
+async function commitEach(ids, write) {
+  for (let start = 0; start < ids.length; start += BATCH_LIMIT) {
+    const batch = writeBatch(db)
+    ids.slice(start, start + BATCH_LIMIT).forEach((id) => write(batch, doc(db, 'incidents', id)))
+    await batch.commit()
+  }
+}
+
 export async function softDeleteIncidents(ids) {
   const actor = {
     deletedBy: auth.currentUser?.uid ?? '',
     deletedByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
   }
-  await Promise.all(
-    ids.map((id) =>
-      updateDoc(doc(db, 'incidents', id), {
-        ...actor,
-        deletedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }),
-    ),
+  await commitEach(ids, (batch, ref) =>
+    batch.update(ref, {
+      ...actor,
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
   )
 }
 
@@ -122,7 +143,7 @@ export async function softDeleteIncidents(ids) {
  * can soft-delete a ticket but cannot purge it.
  */
 export async function purgeIncidents(ids) {
-  await Promise.all(ids.map((id) => deleteDoc(doc(db, 'incidents', id))))
+  await commitEach(ids, (batch, ref) => batch.delete(ref))
 }
 
 /**
@@ -150,9 +171,7 @@ export async function markReportsReviewed(ids) {
     reviewedBy: auth.currentUser?.uid ?? '',
     reviewedByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
   }
-  await Promise.all(
-    ids.map((id) => updateDoc(doc(db, 'incidents', id), { ...actor, reviewedAt: serverTimestamp() })),
-  )
+  await commitEach(ids, (batch, ref) => batch.update(ref, { ...actor, reviewedAt: serverTimestamp() }))
 }
 
 /**
@@ -241,42 +260,36 @@ export async function archiveIncidents(ids) {
     archivedBy: auth.currentUser?.uid ?? '',
     archivedByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
   }
-  await Promise.all(
-    ids.map((id) =>
-      updateDoc(doc(db, 'incidents', id), { ...actor, archivedAt: serverTimestamp(), updatedAt: serverTimestamp() }),
-    ),
+  await commitEach(ids, (batch, ref) =>
+    batch.update(ref, { ...actor, archivedAt: serverTimestamp(), updatedAt: serverTimestamp() }),
   )
 }
 
 export async function unarchiveIncidents(ids) {
-  await Promise.all(
-    ids.map((id) =>
-      updateDoc(doc(db, 'incidents', id), {
-        archivedAt: null,
-        archivedBy: '',
-        archivedByName: '',
-        updatedAt: serverTimestamp(),
-      }),
-    ),
+  await commitEach(ids, (batch, ref) =>
+    batch.update(ref, {
+      archivedAt: null,
+      archivedBy: '',
+      archivedByName: '',
+      updatedAt: serverTimestamp(),
+    }),
   )
 }
 
 export async function restoreIncidents(ids) {
-  await Promise.all(
-    ids.map((id) =>
-      updateDoc(doc(db, 'incidents', id), {
-        // Cleared rather than set to a sentinel, so `isDeleted` stays a simple
-        // truthiness check and a restored ticket is indistinguishable from one
-        // that was never deleted.
-        deletedAt: null,
-        deletedBy: '',
-        deletedByName: '',
-        restoredBy: auth.currentUser?.uid ?? '',
-        restoredByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
-        restoredAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      }),
-    ),
+  await commitEach(ids, (batch, ref) =>
+    batch.update(ref, {
+      // Cleared rather than set to a sentinel, so `isDeleted` stays a simple
+      // truthiness check and a restored ticket is indistinguishable from one
+      // that was never deleted.
+      deletedAt: null,
+      deletedBy: '',
+      deletedByName: '',
+      restoredBy: auth.currentUser?.uid ?? '',
+      restoredByName: auth.currentUser?.displayName || auth.currentUser?.email || 'Admin',
+      restoredAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }),
   )
 }
 

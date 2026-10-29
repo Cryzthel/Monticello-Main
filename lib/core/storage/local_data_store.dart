@@ -119,7 +119,14 @@ class LocalDataStore extends ChangeNotifier {
         .snapshots()
         .listen((snapshot) {
       _relistenAttempt = 0;
-      _incidents = snapshot.docs.map((d) => Incident.fromFirestore(d)).toList();
+      // A report staff soft-deleted (`deletedAt` stamped by either web
+      // console) leaves the resident's list the moment it is deleted, like
+      // every other view of it. It used to stay here indefinitely, because
+      // this app never read the field.
+      _incidents = snapshot.docs
+          .where((d) => d.data()['deletedAt'] == null)
+          .map((d) => Incident.fromFirestore(d))
+          .toList();
       _markIncidentsAnswered();
       final pending = _optimisticIncident;
       if (pending != null &&

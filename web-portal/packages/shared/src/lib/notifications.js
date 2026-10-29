@@ -280,14 +280,19 @@ export function buildNotificationFeed({
   viewerUid = null,
   limit = 30,
 } = {}) {
-  const incidentItems = incidents.map((incident) => incidentNotification(incident, { viewerUid })).filter((item) => {
-    if (audience === 'admin') {
-      const urgent = item.priority === 'high' || item.priority === 'critical'
-      return urgent || item.status === 'Pending' || item.status === 'Dispatched' || item.status === 'Dispatch in progress'
-    }
-    if (audience === 'security') return item.status !== 'Resolved'
-    return true
-  })
+  // A soft-deleted report is gone from every queue, so it leaves the bell
+  // too; it used to stay there, linking to a ticket no list would show.
+  const incidentItems = incidents
+    .filter((incident) => !incident.deletedAt)
+    .map((incident) => incidentNotification(incident, { viewerUid }))
+    .filter((item) => {
+      if (audience === 'admin') {
+        const urgent = item.priority === 'high' || item.priority === 'critical'
+        return urgent || item.status === 'Pending' || item.status === 'Dispatched' || item.status === 'Dispatch in progress'
+      }
+      if (audience === 'security') return item.status !== 'Resolved'
+      return true
+    })
 
   const announcementItems = announcements
     .filter((a) => !(viewerUid && a.authorUid && a.authorUid === viewerUid))

@@ -20,8 +20,6 @@ import SearchField from '@shared/components/SearchField'
 import { formatDateTimeSeconds } from '@shared/lib/dates'
 import DataTable from '@shared/components/DataTable'
 
-const STATUS_FILTERS = ['All', ...INCIDENT_STATUSES]
-
 /**
  * Human-quotable ticket id, derived from the Firestore document id.
  *
@@ -96,6 +94,13 @@ export default function IncidentsTable({
    * array; it just must not be reachable before then.
    */
   loading = false,
+  /**
+   * The statuses the Status dropdown offers, after "All". Defaults to every
+   * state a report can be in. Admin › Incident tickets narrows it to the
+   * three dispatch states (2026-10-29, by request) — rows still show their
+   * real status, and Pending / Verified tickets still appear under "All".
+   */
+  statusOptions = INCIDENT_STATUSES,
 }) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
@@ -262,7 +267,7 @@ export default function IncidentsTable({
               a permanently-red control in a toolbar of neutral ones spent its
               urgency on a page where nothing was urgent. It is a sidebar entry
               now, beside the other destinations. */}
-          <StatusSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_FILTERS} />
+          <StatusSelect value={statusFilter} onChange={setStatusFilter} options={['All', ...statusOptions]} />
           {/* The ONE sort control: newest or oldest, nothing else.
               Clickable column headers used to drive four more fields from a
               second piece of state. Both are gone — a queue watched all shift

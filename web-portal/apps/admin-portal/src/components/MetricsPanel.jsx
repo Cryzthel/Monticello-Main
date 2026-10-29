@@ -1,8 +1,7 @@
 import { useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
-import KpiCard from '@shared/components/KpiCard'
 import SectionHeading from '@shared/components/SectionHeading'
-import { Skeleton, SkeletonChart, SkeletonKpiRow } from '@shared/components/Skeleton'
+import { Skeleton, SkeletonChart } from '@shared/components/Skeleton'
 import { phaseColor } from '@shared/lib/subdivisionBoundary'
 import Card from '@shared/components/Card'
 import PriorityBreakdownChart from '@shared/components/PriorityBreakdownChart'
@@ -73,33 +72,18 @@ function DurationTooltip({ active, payload }) {
 }
 
 /**
- * The System Metrics page's charts and its key-indicator row.
+ * The System Metrics page's charts.
  *
- * -- WHAT THIS COMPONENT NO LONGER COMPUTES --------------------------------
- * Total incidents, resolution rate, average response time and the evidence
- * rate all arrive as finished props from `usePortalMetrics` — the same hook
- * the Overview reads. It previously derived each of them here, from a private
- * `withinLast` window that disagreed with the Overview's `selectInRange` at
- * both ends, which is how one console came to display two different answers to
- * "how many incidents were there this month".
- *
- * What is left is genuinely local: three views nothing else renders.
- *
- * -- PLAIN WORDS -----------------------------------------------------------
- * "Overall MTTR" and "Data Integrity Rate" are gone as labels. The figures are
- * unchanged; the acronym and the compliance-audit phrasing are not, because a
- * dashboard that requires a glossary is not a dashboard. Every card now says
- * what it measures in the words an administrator would use out loud, and each
- * states its period rather than leaving the reader to infer it.
+ * -- NO KEY-NUMBERS ROW (2026-10-29, by request) ---------------------------
+ * This opened with four KPI cards — total, response time, resolution rate,
+ * evidence — that restated the Overview's Analytics cards one click away.
+ * The headline counts live on the Overview only; this page is the trends and
+ * hot-spots behind them, which nothing else renders.
  */
 export default function MetricsPanel({
   incidents = [],
   inRange = [],
   days = 30,
-  totalIncidents,
-  resolutionRate,
-  avgResponseTime,
-  evidenceRate,
   activeIncidents = [],
   /**
    * Whether the incident feed is still opening.
@@ -126,40 +110,6 @@ export default function MetricsPanel({
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <SectionHeading title="Key numbers" />
-        {loading ? (
-          <SkeletonKpiRow count={4} />
-        ) : (
-        <div className="kpi-grid">
-          <KpiCard
-            label="Total incidents"
-            value={totalIncidents}
-            helpText="Reports filed in this period"
-          />
-          <KpiCard
-            label="Avg response time"
-            value={avgResponseTime}
-            helpText="Report filed to security dispatched"
-          />
-          <KpiCard
-            label="Resolution rate"
-            value={resolutionRate}
-            helpText="Share of this period's reports now closed"
-          />
-          {/* Was "Data Integrity Rate", which sounds like a database health
-              check. It is the share of reports that arrived with a photo or a
-              video attached — an evidence question, and the one an admin is
-              actually asking when they look at it. */}
-          <KpiCard
-            label="Reports with evidence"
-            value={evidenceRate}
-            helpText="Photo or video attached"
-          />
-        </div>
-        )}
-      </section>
-
       <section className="flex flex-col gap-3">
         <SectionHeading title="Trends and hot-spots" />
 

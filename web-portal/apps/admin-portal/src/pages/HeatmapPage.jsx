@@ -8,7 +8,7 @@ import PanicAlertDetailModal from '@/components/PanicAlertDetailModal'
 import { useLiveCollection } from '@shared/hooks/useLiveCollection'
 import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
 import { db } from '@shared/lib/firebase'
-import { mapIncidentDoc, isResolvedExpired } from '@shared/lib/incidents'
+import { mapIncidentDoc, isDeleted, isResolvedExpired } from '@shared/lib/incidents'
 import { isPanicLive } from '@shared/lib/panicStatus'
 
 
@@ -32,7 +32,12 @@ export default function HeatmapPage() {
   // closed calls. Resolved pins now drop a day after they close; the record
   // itself is untouched and still in History and the archive.
   const live = useMemo(
-    () => rawIncidents.map(mapIncidentDoc).filter((incident) => !isResolvedExpired(incident)),
+    // Deleted reports leave the map the moment they are deleted, like every
+    // other live view (they used to stay pinned here indefinitely).
+    () =>
+      rawIncidents
+        .map(mapIncidentDoc)
+        .filter((incident) => !isDeleted(incident) && !isResolvedExpired(incident)),
     [rawIncidents],
   )
 

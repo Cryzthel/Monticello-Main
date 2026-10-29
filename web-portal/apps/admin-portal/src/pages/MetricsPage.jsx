@@ -7,27 +7,14 @@ import { usePortalMetrics } from '@/hooks/usePortalMetrics'
 export default function MetricsPage() {
   const [rangeDays, setRangeDays] = useState(30)
 
-  // -- THE SAME HOOK THE OVERVIEW READS ------------------------------------
-  //
-  // Not merely the same feed — the same computed figures. This page restates
-  // Total Incidents, Resolution Rate and the average response time, and it used
-  // to derive all three itself from its own subscription with its own windowing
-  // helper. Two pages computing one metric off two arrays is how an admin ends
-  // up with two answers to "how many incidents were there", and they had
-  // genuinely drifted: the local `withinLast` counted future-dated reports that
-  // `selectInRange` excludes.
-  //
-  // The panel below now receives finished numbers and derives only what is
-  // unique to it — the weekly trend, the per-category durations, the phase
-  // hot-spots. Nothing shown on both pages is calculated twice.
+  // The headline counts are the Overview's alone (the Key numbers row that
+  // restated them here was removed 2026-10-29). This page reads the same hook
+  // for the feed and derives only what is unique to it — the weekly trend, the
+  // per-category durations, the phase hot-spots.
   const {
     incidents,
     inRange,
     loading,
-    totalIncidents,
-    resolutionRate,
-    avgResponseTime,
-    evidenceRate,
     operations,
   } = usePortalMetrics(rangeDays)
 
@@ -43,10 +30,6 @@ export default function MetricsPage() {
           incidents={incidents}
           inRange={inRange}
           days={rangeDays}
-          totalIncidents={totalIncidents}
-          resolutionRate={resolutionRate}
-          avgResponseTime={avgResponseTime}
-          evidenceRate={evidenceRate}
           activeIncidents={operations.activeIncidents}
           loading={loading}
         />

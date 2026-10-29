@@ -41,12 +41,12 @@ export default function DashboardPage() {
     // hook and simply never read here, which is why every number on this page
     // rendered as a confident 0 for the first paint and then jumped.
     loading,
-    totalIncidents,
+    totalReports,
     totalDelta,
+    resolvedReports,
+    resolvedDelta,
     resolutionRate,
     resolutionDelta,
-    avgResponseTime,
-    avgResponseDelta,
     activeSosCount,
     sosLoading,
     categoryBreakdown,
@@ -70,7 +70,7 @@ export default function DashboardPage() {
   // resident-filed, so an eager split opens by showing exactly what the
   // separation exists to prevent.
   //
-  // The KPI cards above are deliberately NOT filtered. "Total Incidents" means
+  // The KPI cards above are deliberately NOT filtered. "Total reports" means
   // every incident on the property; scoping it to one population would make the
   // headline number quietly answer a narrower question than it asks.
   const residentIncidents = useMemo(
@@ -122,12 +122,28 @@ export default function DashboardPage() {
           ) : (
           <div className="kpi-grid">
             <KpiCard
-              label="Total incidents"
-              value={totalIncidents}
+              label="Total reports"
+              value={totalReports}
               delta={totalDelta?.text}
               deltaDirection={totalDelta?.direction}
               deltaTone={totalDelta?.tone}
               helpText="Reports filed in this period"
+            />
+            <KpiCard
+              label="Resolved reports"
+              value={resolvedReports}
+              delta={resolvedDelta?.text}
+              deltaDirection={resolvedDelta?.direction}
+              deltaTone={resolvedDelta?.tone}
+              helpText="This period's reports now closed"
+            />
+            <KpiCard
+              label="Resolution rate"
+              value={resolutionRate}
+              delta={resolutionDelta?.text}
+              deltaDirection={resolutionDelta?.direction}
+              deltaTone={resolutionDelta?.tone}
+              helpText="Resolved as a share of total"
             />
             {/* Live, and deliberately outside the timeframe: an SOS from last
                 Tuesday that nobody closed is not a historical statistic, it is
@@ -139,27 +155,6 @@ export default function DashboardPage() {
               value={sosLoading ? '—' : activeSosCount}
               tone="danger"
               helpText="Open right now — ignores the timeframe"
-            />
-            <KpiCard
-              label="Resolution rate"
-              value={resolutionRate}
-              delta={resolutionDelta?.text}
-              deltaDirection={resolutionDelta?.direction}
-              deltaTone={resolutionDelta?.tone}
-              helpText="Share of this period's reports now closed"
-            />
-            {/* "Mean Time to Respond" in plain words. The figure is unchanged —
-                report filed to security dispatched — but the card no longer
-                asks a reader to know an acronym to read their own dashboard.
-                Its delta is inverted against the others: faster is better, so a
-                fall is the green number here. */}
-            <KpiCard
-              label="Avg response time"
-              value={avgResponseTime}
-              delta={avgResponseDelta?.text}
-              deltaDirection={avgResponseDelta?.direction}
-              deltaTone={avgResponseDelta?.tone}
-              helpText="Report filed to security dispatched"
             />
           </div>
           )}

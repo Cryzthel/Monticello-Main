@@ -5,9 +5,6 @@ import { usePanicAlerts } from '@shared/hooks/usePanicAlerts'
 import { useSystemHealth } from '@shared/hooks/useSystemHealth'
 import {
   computeCategoryBreakdown,
-  computeDataIntegrityRate,
-  formatMinutes,
-  meanMinutesToRespond,
   selectInRange,
 } from '@shared/lib/incidents'
 import { minutesWaiting } from '@shared/lib/wpda'
@@ -20,10 +17,9 @@ export const DISPATCH_SLA_MINUTES = 20
  * A period-over-period change, as the KPI chip needs it.
  *
  * `direction` is what the figure DID and `tone` is whether that is good news.
- * They come apart on exactly one card — average response time, where a fall is
- * the best outcome — and keeping them as separate fields is what lets that card
- * render a green arrow pointing down instead of having to pick between a
- * correct arrow and a correct colour. See KpiCard.
+ * They come apart on any lower-is-better figure (the retired average response
+ * time was one), and keeping them as separate fields is what lets such a card
+ * render a green arrow pointing down. See KpiCard.
  */
 function formatDelta(current, previous, { lowerIsBetter = false } = {}) {
   if (!previous) return null
@@ -91,27 +87,22 @@ export function usePortalMetrics(rangeDays) {
     const currentRate = inRange.length ? Math.round((currentResolved / inRange.length) * 100) : 0
     const previousRate = previous.length ? Math.round((previousResolved / previous.length) * 100) : 0
 
-    const currentResponse = meanMinutesToRespond(inRange)
-    const previousResponse = meanMinutesToRespond(previous)
-
+    // ── TOTAL AND RESOLVED REPORTS (2026-10-29) ─────────────────────────
+    // "Avg response time" left the Overview for these two, by request: the
+    // two counts a reader can check against the tickets table, where a mean
+    // over dispatch timestamps could not be. Both are windowed and both are
+    // counted from `inRange`, so Resolved can never exceed Total and the
+    // resolution rate beside them is exactly their ratio.
     return {
-      totalIncidents: inRange.length,
+      totalReports: inRange.length,
       totalDelta: formatDelta(inRange.length, previous.length),
+      resolvedReports: currentResolved,
+      resolvedDelta: formatDelta(currentResolved, previousResolved),
       resolutionRate: inRange.length ? `${currentRate}%` : 'No data yet',
       resolutionDelta: formatDelta(currentRate, previousRate),
-      avgResponseTime: currentResponse == null ? 'No data yet' : formatMinutes(currentResponse),
-      avgResponseDelta:
-        currentResponse == null || previousResponse == null
-          ? null
-          : formatDelta(currentResponse, previousResponse, { lowerIsBetter: true }),
       activeCount: incidents.filter((i) => ACTIVE_STATUSES.has(i.status)).length,
-      // Windowed like everything else in this block. It used to be computed
-      // all-time on the Metrics page while sitting in a row of cards captioned
-      // "Selected range" — one card quietly answering a different question
-      // from its four neighbours.
-      evidenceRate: computeDataIntegrityRate(inRange),
       // Windowed, like the KPI cards directly above it. The chart and the
-      // "Total Incidents" number are guaranteed to describe the same set.
+      // "Total reports" number are guaranteed to describe the same set.
       categoryBreakdown: computeCategoryBreakdown(inRange),
     }
   }, [incidents, inRange, rangeDays])

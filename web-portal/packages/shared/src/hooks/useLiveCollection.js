@@ -17,7 +17,15 @@ export function useLiveCollection(query) {
     return subscribeWithRetry(
       query,
       (snapshot) => {
-        setData(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })))
+        // `estimate`, not the default `none`: until the server acknowledges a
+        // write, a `serverTimestamp()` field reads as NULL in the local
+        // snapshot. Soft delete is exactly such a write (`deletedAt`), so
+        // the tab that pressed Delete kept showing the row — and every count
+        // that excludes deleted reports kept it — until the round trip
+        // landed, which on a slow link or a cold connection looked like the
+        // delete had not worked. Estimated, the field is the local clock's
+        // time at once and the server's value when it arrives.
+        setData(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data({ serverTimestamps: 'estimate' }) })))
         setError(null)
         setLoading(false)
       },

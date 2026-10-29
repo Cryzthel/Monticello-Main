@@ -6,6 +6,11 @@ import IncidentTicketDetailsModal from '@/components/IncidentTicketDetailsModal'
 import { useIncidentStreams } from '@shared/hooks/useIncidentStreams'
 import { useEvidencePrefetch } from '@shared/hooks/useEvidencePrefetch'
 
+// The Status dropdown's choices on this page: the three dispatch states only.
+// Pending and Verified were removed from the filter (2026-10-29, by request);
+// tickets in those states still list under "All" with their own badge.
+const TICKET_STATUS_FILTERS = ['Dispatched', 'Dispatch in progress', 'Resolved']
+
 export default function TicketsPage() {
   const [selectedId, setSelectedId] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -74,6 +79,7 @@ export default function TicketsPage() {
           loading={loading}
           incidents={resident}
           onSelect={(incident) => setSelectedId(incident.id)}
+          statusOptions={TICKET_STATUS_FILTERS}
         />
       </div>
 
