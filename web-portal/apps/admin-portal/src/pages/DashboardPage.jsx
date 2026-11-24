@@ -1,0 +1,246 @@
+import { ROUTES } from '@/config/portal'
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ArrowRight } from '@shared/icons'
+import AppShell from '@/layouts/AppShell'
+import KpiCard from '@shared/components/KpiCard'
+import Card from '@shared/components/Card'
+import SectionHeading from '@shared/components/SectionHeading'
+import TimeframePills from '@shared/components/TimeframePills'
+import AnalyticsPanel from '@/components/AnalyticsPanel'
+import IncidentsTable from '@shared/components/IncidentsTable'
+import IncidentTicketDetailsModal from '@/components/IncidentTicketDetailsModal'
+import { SkeletonKpiRow } from '@shared/components/Skeleton'
+import { usePortalMetrics } from '@/hooks/usePortalMetrics'
+import { useWaitWhile } from '@/lib/waitState'
+import { useStaffAccounts } from '@shared/hooks/useStaffAccounts'
+import { isOfficerFiled } from '@shared/lib/staffFiling'
+
+/*
+  ── THREE CARDS, ONE ROW FROM TABLET UP (2026-10-29) ───────────────────────
+  Active SOS alerts left this row by request; the Panic alerts page is where a
+  live emergency is watched, and resolved ones now count in the totals here.
+  `.kpi-grid` is a four-up track that only turns three-up at `xl`, so three
+  cards broke 2 + 1 on a tablet — one card alone on a row, twice as wide as
+  its siblings. Three equal columns from `md` keep the row balanced at every
+  width the console is used at.
+*/
+const KPI_ROW = 'grid grid-cols-1 gap-6 md:grid-cols-3'
+
+export default function DashboardPage() {
+  const navigate = useNavigate()
+  const [selectedId, setSelectedId] = useState(null)
+  const [rangeDays, setRangeDays] = useState(30)
+
+  // -- ONE ARRAY, ONE WINDOW, ONE TAXONOMY ---------------------------------
+  //
+  // Every number on this page is a filter over ONE array of report records -
+  // incidents and SOS alerts projected into a single shape - and it is the SAME
+  // hook the System Metrics page reads, so a figure shown on both is computed
+  // once. Nothing below derives a count; the KPI cards, the donut, the volume
+  // chart's columns and its caption are all handed finished figures.
+  //
+  // That is a stronger claim than "one hook", and the difference is the bug
+  // that was reported. This page already read one hook, and the hook already
+  // opened one subscription per collection - but it handed out SEVERAL arrays,
+  // and the KPI cards counted incidents PLUS SOS alerts while the category
+  // donut counted incidents only. The slices summed to less than the card above
+  // them, and the donut's caption printed that smaller number as a fact. See
+  // usePortalMetrics for the full list, and scripts/check-overview-parity.mjs
+  // for the invariants that now hold over adversarial fixtures.
+  //
+  // It also means this page no longer counts soft-deleted reports. Deleting one
+  // used to remove it from the tickets table and leave it sitting in Total
+  // reports; the feed excludes them by default now. ARCHIVED reports are still
+  // counted, everywhere on the page - archiving is a review state and
+  // explicitly not a deletion.
+  const {
+    incidents,
+    // The feeds' open-subscription flag, covering both collections. It was
+    // already returned by the hook and simply never read here, which is why
+    // every number on this page rendered as a confident 0 for the first paint
+    // and then jumped.
+    loading,
+    totalReports,
+    totalDelta,
+    resolvedReports,
+    resolvedDelta,
+    resolutionRate,
+    resolutionDelta,
+    categoryBreakdown,
+    dailyCounts,
+  } = usePortalMetrics(rangeDays)
+  useWaitWhile(loading, 'Syncing incident metrics')
+
+  // Identifies which reports an OFFICER filed, which is a join against
+  // `staff_accounts` rather than a field on the incident — see
+  // useStaffAccounts. Only the filings feed needs it.
+  const { staffIds, loading: staffLoading } = useStaffAccounts()
+
+  // -- THE TABLE IS RESIDENT-FILED ONLY ------------------------------------
+  //
+  // Matching the Incident Tickets queue this panel previews. Officer-filed
+  // reports have their own page (Reports) and their own feed to the right of
+  // this table; listing them here too would put the same record in both
+  // columns of one screen under two different meanings.
+  //
+  // Withheld until `staff_accounts` has loaded, for the reason spelled out in
+  // useIncidentStreams: against an empty id set every report reads as
+  // resident-filed, so an eager split opens by showing exactly what the
+  // separation exists to prevent.
+  //
+  // The KPI cards above are deliberately NOT filtered. "Total reports" means
+  // every incident on the property; scoping it to one population would make the
+  // headline number quietly answer a narrower question than it asks.
+  const residentIncidents = useMemo(
+    () => (staffLoading ? [] : incidents.filter((i) => !isOfficerFiled(i, staffIds))),
+    [incidents, staffIds, staffLoading],
+  )
+
+  // Re-derived from the live collection every render (rather than storing the
+  // selected report object) so the open modal reflects a status change the
+  // instant Firestore's onSnapshot pushes it back.
+  const selected = incidents.find((incident) => incident.id === selectedId) ?? null
+
+  /*
+    THE H1 NAMES THE PAGE, not the reader. This carried
+    `Welcome back, <name>!`: the largest type on the console's landing page
+    spent on a greeting, while the page's own identity ("Overview") survived
+    only in the sidebar. It was consumer register on a product whose stated
+    presentation is calm and conventional (PRODUCT.md), and it named itself by
+    a different rule from Security's `Live dispatch`. If the greeting is wanted
+    back it belongs in the subtitle or the sidebar account footer —
+    `greetingName` in @shared/lib/identity is still there for that.
+  */
+  return (
+    <AppShell
+      title="Overview"
+      headerActions={<TimeframePills value={rangeDays} onChange={setRangeDays} />}
+    >
+      {/* -- THREE NAMED SECTIONS, NOT ONE RUN OF PANELS --------------------
+          The page previously opened with an unlabelled row of four cards, then
+          two charts, then two more panels, with nothing saying which of them
+          moved when the timeframe pill changed. Each band now states what it
+          is and what period it describes, so "Total Incidents" being windowed
+          and "Open incidents" being live is legible from the headings rather
+          than from four separate lines of help text. */}
+      {/* gap-6: this page scrolls, and a scrolling page takes the rhythm that
+          matches .page-grid and .kpi-grid — see "the two vertical rhythms" in
+          the shared stylesheet. It was gap-8, a third value no rule names. */}
+      {/* `overview-flat`: border only on this page — see styles/index.css. */}
+      <div className="overview-flat flex flex-col gap-6">
+        <section className="flex flex-col gap-3">
+          <SectionHeading title="Analytics overview" />
+          {/* The KPI strip is the page's worst layout-shift offender and the
+              reason it is skeletoned first: it sits at the very top, so every
+              pixel it changes height pushes the charts, the table and the feed
+              below it. The placeholder is KpiCard's own box, so the swap is
+              in-place and nothing under it moves. */}
+          {loading ? (
+            <SkeletonKpiRow count={3} className={KPI_ROW} />
+          ) : (
+          <div className={KPI_ROW}>
+            <KpiCard
+              label="Total reports"
+              value={totalReports}
+              delta={totalDelta?.text}
+              deltaDirection={totalDelta?.direction}
+              deltaTone={totalDelta?.tone}
+              helpText="Incidents and SOS alerts, this period"
+            />
+            <KpiCard
+              label="Resolved reports"
+              value={resolvedReports}
+              delta={resolvedDelta?.text}
+              deltaDirection={resolvedDelta?.direction}
+              deltaTone={resolvedDelta?.tone}
+              helpText="This period's reports now closed"
+            />
+            <KpiCard
+              label="Resolution rate"
+              value={resolutionRate}
+              delta={resolutionDelta?.text}
+              deltaDirection={resolutionDelta?.direction}
+              deltaTone={resolutionDelta?.tone}
+              helpText="Resolved as a share of total"
+            />
+          </div>
+          )}
+        </section>
+
+        {/* System health lives on System Metrics only. It was a band here,
+            between the KPI row and the charts, answering "is the platform up"
+            on a page whose job is "what is happening on the property". The
+            brief narrowed this page to three sections — analytics, where and
+            when, latest activity — and the probe still reports in full one
+            click away. */}
+
+        <section className="flex flex-col gap-3">
+          <SectionHeading title="Where and when" />
+          {/* Receives FINISHED figures: the day buckets for the volume chart,
+              the breakdown for the donut, and the authoritative total for both
+              captions. The panel derives no metric of its own - it does not even
+              re-sum the buckets it is given, which is what the "N in range"
+              caption used to do - so there is nothing inside it that can
+              disagree with the cards above. */}
+          <AnalyticsPanel
+            dailyCounts={dailyCounts}
+            categoryBreakdown={categoryBreakdown}
+            totalReports={totalReports}
+            loading={loading}
+          />
+        </section>
+
+        <section className="flex flex-col gap-3">
+          {/* "View all" sits on the SECTION header, not inside the card.
+              It used to be pinned to the card's own header so it read as
+              belonging to the table it opens. That was true, and it is still
+              where the link goes — but the section header is the only full
+              -width row on this band, so the control now has a baseline to
+              align to instead of floating inside a panel beside a caption.
+              SectionHeading already owns the right-hand action slot; this is
+              the rank it was built for. */}
+          <SectionHeading
+            title="Latest activity"
+            action={
+              <button type="button" onClick={() => navigate(ROUTES.tickets)} className="btn btn-compact btn-outline">
+                View all
+                <ArrowRight size="sm" />
+              </button>
+            }
+          />
+          {/* The fixed height and the split move TOGETHER, at `xl`. The height
+              exists so the table and the feed can share one row; left at `lg`
+              while the split moved, it would cram both STACKED panels into a
+              single 26rem box. See .page-grid for why the split waits for xl. */}
+          <div className="page-grid xl:h-[26rem]">
+            <Card className="col-span-12 flex h-full min-h-0 flex-col overflow-hidden p-0">
+              {/* No card header. It had shrunk to a title alone — "Recent
+                  incidents" — directly under the section heading "Latest
+                  activity", naming the same table twice in 40px. The table's
+                  own column row now opens the card, and the six rows it shows
+                  get the height the header used to take. */}
+              <div className="min-h-0 flex-1">
+                <IncidentsTable
+                  bare
+                  // `staffLoading` counts as loading here even though the
+                  // incident feed may already be open: `residentIncidents` is
+                  // held at [] until the staff id set arrives (see its useMemo
+                  // above), so without it the table would report an empty queue
+                  // for exactly as long as that second subscription takes.
+                  loading={loading || staffLoading}
+                  incidents={residentIncidents}
+                  onSelect={(incident) => setSelectedId(incident.id)}
+                  compact
+                  limit={6}
+                />
+              </div>
+            </Card>
+          </div>
+        </section>
+      </div>
+
+      <IncidentTicketDetailsModal report={selected} onClose={() => setSelectedId(null)} />
+    </AppShell>
+  )
+}

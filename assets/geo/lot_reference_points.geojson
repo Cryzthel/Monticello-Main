@@ -1,0 +1,22 @@
+{
+  "type": "FeatureCollection",
+  "metadata": {
+    "name": "Monticello Villas lot reference points",
+    "purpose": "Maps an address (phase / block / lot) to a real-world coordinate, so the incident map can label the lots around a dropped pin the way Grab labels nearby saved places.",
+    "crs": "EPSG:4326 (WGS 84), coordinates as [longitude, latitude]",
+    "consumedBy": [
+      "lib/features/property/services/lot_reference_store.dart"
+    ],
+    "status": "EMPTY ON PURPOSE — see 'whyEmpty'. The app runs normally with this file empty: the nearby-lot tags simply do not appear, and the pin badge falls back to naming the phase. Nothing is broken and nothing is invented.",
+    "whyEmpty": "No source available to this repository maps a coordinate to a lot number. The Pro-Friends site plans (MV1/MV2/MV3/MV5) are CAD drawings with no coordinate grid, no scale bar and no north arrow, so they cannot be registered to satellite imagery — there are no control points appearing in both. OpenStreetMap has 197 building footprints inside the estate and none of them carry a house number, street or name. Estimating anyway would put roughly 15-30 m of registration error onto a lot about 8 m wide, which produces confidently wrong addresses rather than approximate ones — and a wrong address here sends a guard to the wrong house.",
+    "howToFill": "One Point feature per lot. Only 'phase', 'block' and 'lot' are read; anything else is ignored and is fine to keep for your own bookkeeping. A row naming a lot the directory does not contain is dropped at load, so a typo cannot reach the map. Capture the coordinates any way that suits: a phone GPS reading at each gate post, a georeferenced copy of the site plan exported from QGIS, or the developer's own survey if the estate can obtain it. Partial data is useful — the app shows tags for the lots it knows and stays quiet about the rest, so the file can be filled one block at a time.",
+    "precisionNote": "Six decimal places is about 0.1 m at this latitude and is far more than enough. Four (about 11 m) is already coarser than a lot is wide.",
+    "example": {
+      "type": "Feature",
+      "properties": { "phase": "1", "block": 5, "lot": 19 },
+      "geometry": { "type": "Point", "coordinates": [122.516140, 10.767480] }
+    },
+    "relatedTier": "The app also learns points at runtime, device-locally, when a verified resident pins their own registered lot. Those never override a feature listed here — see LotReferenceStore."
+  },
+  "features": []
+}

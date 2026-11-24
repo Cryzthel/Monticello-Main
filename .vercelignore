@@ -1,0 +1,16 @@
+# Vercel CLI uploads from the repo root, because the portals' build reads
+# assets/geo/ (the subdivision boundary, shared with the Flutter app) as well
+# as web-portal/. An allowlist: everything else here — the Flutter app,
+# Android/iOS projects and their multi-GB build output — never leaves the machine.
+/*
+!/web-portal
+!/assets
+/assets/*
+!/assets/geo
+
+# Never uploaded: dependencies are installed by Vercel, outputs are rebuilt,
+# and env files stay local (Vercel holds its own copy of the variables).
+/web-portal/**/node_modules
+/web-portal/**/dist
+/web-portal/**/.env*
+/web-portal/**/*.local

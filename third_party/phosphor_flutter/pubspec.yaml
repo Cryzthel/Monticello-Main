@@ -1,0 +1,46 @@
+name: phosphor_flutter
+description: >
+  Vendored, patched fork of phosphor_flutter 2.1.0. Upstream subclasses
+  IconData, which Flutter made a `final class`; this fork emits plain
+  const IconData instead. See README.md.
+version: 2.1.0
+homepage: https://phosphoricons.com/
+repository: https://github.com/phosphor-icons/phosphor-flutter
+publish_to: none
+
+environment:
+  sdk: ">=2.12.0 <4.0.0"
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+# The family names below are load-bearing: every generated constant names its
+# glyph via `fontFamily: 'Phosphor<Style>'` + `fontPackage: 'phosphor_flutter'`,
+# so a family renamed here silently renders every icon as a missing glyph.
+#
+# Duotone is absent on purpose — see README.md. Its font file is not shipped
+# either, since nothing can reference it any more.
+flutter:
+  fonts:
+    - family: PhosphorRegular
+      fonts:
+        - asset: lib/fonts/Phosphor.ttf
+          weight: 400
+    - family: PhosphorLight
+      fonts:
+        - asset: lib/fonts/Phosphor-Light.ttf
+          weight: 400
+    - family: PhosphorBold
+      fonts:
+        - asset: lib/fonts/Phosphor-Bold.ttf
+          weight: 400
+    - family: PhosphorFill
+      fonts:
+        - asset: lib/fonts/Phosphor-Fill.ttf
+          weight: 400
+    - family: PhosphorThin
+      fonts:
+        - asset: lib/fonts/Phosphor-Thin.ttf
+          weight: 400

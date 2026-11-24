@@ -1,0 +1,224 @@
+import {
+  Archive,
+  ArchiveRestore,
+  Film,
+  Megaphone,
+  Pin,
+  PinOff,
+  Play,
+  Trash2,
+  Zap,
+} from '@shared/icons'
+import Card from '@shared/components/Card'
+import DataTable, { DataTableEmpty } from '@shared/components/DataTable'
+import OverflowMenu from '@shared/components/OverflowMenu'
+import StatusBadge from '@shared/components/StatusBadge'
+import Tooltip from '@shared/components/Tooltip'
+import { SkeletonTableRows } from '@shared/components/Skeleton'
+import { formatDate, formatDateTime } from '@shared/lib/dates'
+import {
+  CATEGORY_TONES,
+  STATE_META,
+  announcementImages,
+  announcementVideos,
+  announcementState,
+  categoryLabel,
+  goLiveDate,
+  timeUntil,
+} from '@/lib/announcements'
+
+const COLUMNS = [
+  { header: 'Announcement', minWidth: '18rem' },
+  { header: 'Status' },
+  { header: 'Category' },
+  { header: 'Date' },
+  { header: <span className="sr-only">Actions</span>, align: 'right' },
+]
+
+function IconButton({ icon: Icon, label, onClick, tone = 'default' }) {
+  return (
+    <Tooltip side="top" label={label}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-text-secondary transition-[color,background-color] duration-150 ${
+          tone === 'danger'
+            ? 'hover:bg-danger/15 hover:text-danger'
+            : 'hover:bg-tint/[0.06] hover:text-text-primary'
+        }`}
+      >
+        <Icon size="sm" />
+      </button>
+    </Tooltip>
+  )
+}
+
+/**
+ * One announcement. Clicking the row opens its details, which carry Edit —
+ * so the row offers neither an Edit icon nor a "View details" menu item
+ * (2026-10-19, by request: the same action three times was clutter). The
+ * view-count column went in the same pass.
+ */
+function AnnouncementRow({ announcement: a, onView, onDelete, onPin, onArchive, onPublishNow }) {
+  const state = announcementState(a)
+  const meta = STATE_META[state]
+  const goLive = goLiveDate(a)
+  // A notice with only a clip shows that clip's poster, marked as video.
+  const firstVideo = announcementVideos(a)[0]
+  const thumb = announcementImages(a)[0] ?? firstVideo?.posterUrl
+  const videoOnly = !announcementImages(a)[0] && Boolean(firstVideo)
+  const category = a.type ?? 'General'
+  const title = a.title || 'Untitled announcement'
+
+  const menu = [
+    state === 'scheduled' ? { label: 'Publish now', icon: Zap, onSelect: () => onPublishNow(a) } : null,
+    {
+      label: a.isPinned ? 'Unpin' : 'Pin to top',
+      icon: a.isPinned ? PinOff : Pin,
+      onSelect: () => onPin(a, !a.isPinned),
+    },
+    state === 'scheduled'
+      ? null
+      : {
+          label: state === 'archived' ? 'Restore' : 'Archive',
+          icon: state === 'archived' ? ArchiveRestore : Archive,
+          onSelect: () => onArchive(a, state !== 'archived'),
+        },
+  ].filter(Boolean)
+
+  return (
+    <tr
+      onClick={() => onView(a)}
+      onKeyDown={(event) => {
+        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault()
+          onView(a)
+        }
+      }}
+      tabIndex={0}
+      aria-label={`${title}, ${meta.label}`}
+      className={`data-row h-[4.5rem] cursor-pointer border-t border-divider focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500/40 ${
+        state === 'archived' ? 'opacity-70' : ''
+      }`}
+    >
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3">
+          {thumb ? (
+            <span className="relative h-10 w-10 shrink-0">
+              <img
+                src={thumb}
+                alt=""
+                loading="lazy"
+                className="h-10 w-10 rounded-lg border border-hairline object-cover"
+              />
+              {videoOnly ? (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white">
+                    <Play size={10} aria-label="Video" />
+                  </span>
+                </span>
+              ) : null}
+            </span>
+          ) : videoOnly ? (
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-tint/[0.05] text-text-muted">
+              <Film size="sm" aria-label="Video" />
+            </span>
+          ) : (
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-tint/[0.05] text-text-muted">
+              <Megaphone size="sm" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 font-medium text-text-primary">
+              {a.isPinned ? (
+                <Pin size="sm" className="shrink-0 text-brand-400" aria-label="Pinned" />
+              ) : null}
+              <span className="truncate">{title}</span>
+            </p>
+            {a.body ? <p className="line-clamp-1 text-small text-text-secondary">{a.body}</p> : null}
+          </div>
+        </div>
+      </td>
+
+      <td className="px-4 py-3">
+        <StatusBadge tone={meta.tone} dot>
+          {meta.label}
+        </StatusBadge>
+      </td>
+
+      <td className="px-4 py-3">
+        <StatusBadge tone={CATEGORY_TONES[category] ?? 'neutral'}>{categoryLabel(category)}</StatusBadge>
+      </td>
+
+      <td className="whitespace-nowrap px-4 py-3">
+        {goLive ? (
+          <span className="text-small text-text-secondary" title={formatDateTime(goLive)}>
+            {formatDate(goLive)}
+          </span>
+        ) : (
+          <span className="text-small text-text-muted">Not published</span>
+        )}
+        {state === 'scheduled' ? (
+          <span className="block text-small text-text-muted">{timeUntil(a.scheduledFor)}</span>
+        ) : null}
+      </td>
+
+      <td className="px-4 py-3" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1">
+          <IconButton icon={Trash2} label="Delete" tone="danger" onClick={() => onDelete(a)} />
+          <OverflowMenu ariaLabel={`More actions for ${title}`} items={menu} />
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * The announcements list as a table, on the shared DataTable frame: sticky
+ * header, the table's own scroller, and a minimum width below which it
+ * scrolls sideways instead of squeezing the columns.
+ *
+ * Rows come straight from the page's onSnapshot listener, so a publish,
+ * archive, pin or delete elsewhere re-renders the affected row
+ * with no refresh.
+ */
+export default function AnnouncementsTable({ rows, loading, emptyMessage, footer, ...handlers }) {
+  return (
+    <Card className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+      <DataTable
+        columns={COLUMNS}
+        minWidth="50rem"
+        colgroup={
+          <colgroup>
+            <col className="w-[46%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[14%]" />
+            <col className="w-[12%]" />
+          </colgroup>
+        }
+      >
+        {loading ? (
+          <SkeletonTableRows
+            rows={6}
+            columns={[
+              { identity: true },
+              { variant: 'pill' },
+              { variant: 'pill' },
+              { width: 'w-20' },
+              { empty: true },
+            ]}
+          />
+        ) : rows.length === 0 ? (
+          <DataTableEmpty colSpan={COLUMNS.length} icon={Megaphone}>
+            {emptyMessage}
+          </DataTableEmpty>
+        ) : (
+          rows.map((a) => <AnnouncementRow key={a.id} announcement={a} {...handlers} />)
+        )}
+      </DataTable>
+      {footer ? <div className="border-t border-hairline px-4 py-2">{footer}</div> : null}
+    </Card>
+  )
+}

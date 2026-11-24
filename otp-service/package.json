@@ -1,0 +1,12 @@
+{
+  "name": "monticello-otp-service",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Password-reset OTP endpoints, ported off Cloud Functions so they run on a free tier that needs no card.",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "nodemailer": "^6.9.15"
+  }
+}

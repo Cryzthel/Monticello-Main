@@ -1,0 +1,167 @@
+import { useEffect, useMemo, useState } from 'react'
+import { collection, query, where } from 'firebase/firestore'
+import { useLiveCollection } from '@shared/hooks/useLiveCollection'
+import { db } from '@shared/lib/firebase'
+import { isActiveStage } from '@shared/lib/dispatchStage'
+import { mapShiftDoc } from '@shared/lib/shifts'
+import { distanceMeters } from '@/lib/directions'
+import { GPS_ACCURACY_LIMIT_M } from '@/lib/routeOrigin'
+
+/**
+ * How old a position may be before the map stops presenting it as live.
+ * An idle device writes at least every 2 min (TELEMETRY_CADENCE), so 3 min
+ * without a word means it has lost signal, been closed, or run out of battery.
+ * A responding device writes every 20 s at worst, so it is held to 1 min.
+ */
+const STALE_AFTER_MS = { idle: 180_000, active: 60_000 }
+
+/** Past this, the position is not drawn at all. It says where a guard was, not where they are. */
+const HIDE_AFTER_MS = 15 * 60_000
+
+/**
+ * Unit state by the stage of the call it is booked to.
+ *
+ * The two legacy stages are kept: a document stored before the machine was
+ * shortened still reads `on_site`, and that unit is still on scene.
+ */
+const STAGE_TO_UNIT_STATE = {
+  dispatched: 'assigned',
+  responding: 'responding',
+  on_site: 'on_scene',
+  investigating: 'on_scene',
+}
+
+/**
+ * Which of the three marker colours this unit gets.
+ *
+ * ── ON-SCENE SURVIVED THE STAGE THAT CARRIED IT ─────────────────────────
+ * The map paints a unit orange while responding and blue once on scene, and
+ * that blue used to come from the `on_site` STAGE. That stage is gone — a
+ * guard who arrives now stays at `responding` — so keying the colour off
+ * the stage alone would have left every arrived unit orange, and a
+ * dispatcher scanning the canvas could no longer tell who was still driving
+ * from who was at the door.
+ *
+ * `onSceneAt` is the fact underneath, and it is still stamped (now
+ * automatically, from the unit's own telemetry — see `autoArrival`). So the
+ * colour reads the timestamp instead of the stage, which is the more direct
+ * question anyway: not "what stage is the paperwork at" but "has this unit
+ * got there".
+ */
+function unitStateFor(assignment) {
+  if (!assignment) return 'available'
+  const base = STAGE_TO_UNIT_STATE[assignment.dispatchStage]
+  if (!base) return 'available'
+  if (base === 'responding' && assignment.onSceneAt) return 'on_scene'
+  return base
+}
+
+export const UNIT_STATE_LABELS = {
+  available: 'Available',
+  assigned: 'Awaiting acknowledgement',
+  responding: 'Responding',
+  on_scene: 'On scene',
+}
+
+const toMillis = (value) => (value?.toMillis ? value.toMillis() : typeof value === 'number' ? value : null)
+
+/**
+ * Every on-duty officer as a unit the dispatcher can see and pick.
+ *
+ * On duty means an open shift in `guard_shifts`, the same record the duty
+ * lock and the admin timesheet use. Telemetry without an open shift is
+ * ignored: a device left signed in after clocking out is not a unit.
+ *
+ * The unit's STATE is worked out from the calls, not read from the device. The
+ * incident document is the authority on who is booked to what, and the device
+ * can be offline at the moment its call changes stage.
+ *
+ * `incidents` is the dashboard's live list of open calls (mapped docs).
+ * `target` is `[lng, lat]` to measure each unit's distance from, or null.
+ */
+export function useGuardUnits(incidents, target = null) {
+  const shiftsQuery = useMemo(() => query(collection(db, 'guard_shifts'), where('timeOut', '==', null)), [])
+  const telemetryQuery = useMemo(() => collection(db, 'guard_telemetry'), [])
+  const { data: rawShifts, loading: shiftsLoading } = useLiveCollection(shiftsQuery)
+  const { data: telemetry } = useLiveCollection(telemetryQuery)
+
+  /**
+   * ── PRESENCE: WHO IS ACTUALLY ONLINE (2026-10-20) ─────────────────────
+   * `staff_presence/{uid}` is the server's mirror of each console's live
+   * Realtime Database connection (functions/presence.js) — the same Online
+   * the Admin roster shows. The map draws ONLY online officers: a guard who
+   * closed the console keeps an open shift and a recent fix, and a pin for
+   * them read as an available responder who was not there.
+   *
+   * If the presence read fails (an older ruleset that did not let guards
+   * read it), `presenceKnown` is false and the map falls back to telemetry
+   * freshness rather than hiding everybody.
+   */
+  const presenceQuery = useMemo(() => collection(db, 'staff_presence'), [])
+  const { data: presence, loading: presenceLoading, error: presenceError } = useLiveCollection(presenceQuery)
+
+  // Freshness is measured against the clock, so it has to tick without a
+  // Firestore event. 5 s is fine enough for "12 s ago" to be honest.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 5000)
+    return () => clearInterval(id)
+  }, [])
+
+  const units = useMemo(() => {
+    const byUid = new Map()
+    rawShifts.map(mapShiftDoc).forEach((shift) => {
+      if (!shift.guardUid) return
+      const known = byUid.get(shift.guardUid)
+      if (!known || (shift.timeIn && known.timeIn && shift.timeIn > known.timeIn)) byUid.set(shift.guardUid, shift)
+    })
+    const telemetryByUid = new Map(telemetry.map((t) => [t.id, t]))
+    const presenceByUid = new Map(presence.map((p) => [p.id, p.online === true]))
+    // Until the first presence snapshot (or if it is refused), telemetry decides.
+    const presenceKnown = !presenceError && !presenceLoading
+    const assignmentByUid = new Map()
+    incidents.forEach((incident) => {
+      if (incident.assignedGuardUid && isActiveStage(incident.dispatchStage)) {
+        assignmentByUid.set(incident.assignedGuardUid, incident)
+      }
+    })
+
+    return [...byUid.values()].map((shift) => {
+      const t = telemetryByUid.get(shift.guardUid)
+      const assignment = assignmentByUid.get(shift.guardUid) ?? null
+      const state = unitStateFor(assignment)
+
+      const raw = t?.onDuty ? t.position : null
+      const fixAt = toMillis(raw?.capturedAt) ?? toMillis(t?.updatedAt)
+      const ageMs = raw && fixAt ? Math.max(0, now - fixAt) : null
+      const position = raw && ageMs != null && ageMs < HIDE_AFTER_MS ? raw : null
+      const staleAfter = t?.mode === 'active' ? STALE_AFTER_MS.active : STALE_AFTER_MS.idle
+      const lastSeenMs = toMillis(t?.updatedAt)
+      const fresh = Boolean(t?.onDuty) && lastSeenMs != null && now - lastSeenMs < staleAfter
+
+      return {
+        uid: shift.guardUid,
+        name: t?.name || shift.name,
+        badgeNumber: t?.badgeNumber ?? '',
+        shiftStartedAt: shift.timeIn,
+        state,
+        assignment,
+        position,
+        positionAgeMs: position ? ageMs : null,
+        stale: position ? ageMs > staleAfter : false,
+        approximate: position ? (position.accuracy ?? Infinity) > GPS_ACCURACY_LIMIT_M : false,
+        battery: t?.battery ?? null,
+        mode: t?.mode ?? 'off',
+        locationError: t?.device?.locationError ?? null,
+        reporting: Boolean(t?.onDuty),
+        /** Connected right now (presence), or — if presence is unreadable — reporting fresh telemetry. */
+        online: presenceKnown ? presenceByUid.get(shift.guardUid) === true : fresh,
+        lastSeenAgoMs: lastSeenMs ? Math.max(0, now - lastSeenMs) : null,
+        distanceM:
+          position && target ? Math.round(distanceMeters([position.lng, position.lat], target)) : null,
+      }
+    })
+  }, [rawShifts, telemetry, presence, presenceLoading, presenceError, incidents, target, now])
+
+  return { units, loading: shiftsLoading }
+}

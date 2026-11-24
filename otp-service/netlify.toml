@@ -1,0 +1,15 @@
+# Netlify is the default recommendation over Vercel for this service, and the
+# reason is licensing rather than engineering: Vercel's Hobby plan is for
+# personal, non-commercial projects, and a subdivision's production login is
+# arguably commercial. Netlify's free tier carries no such restriction.
+#
+# Both adapters are committed, so switching hosts is a deploy setting, not a
+# rewrite. The logic in src/ is identical either way.
+
+[build]
+  command = "npm install"
+  functions = "netlify/functions"
+  publish = "public"
+
+[functions]
+  node_bundler = "esbuild"

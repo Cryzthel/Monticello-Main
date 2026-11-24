@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The splash canvas, in Android resources.
+
+  These two files are the ONLY thing standing between a dark-mode cold start
+  and a white flash. The OS paints `LaunchTheme`'s windowBackground for the
+  whole of process start — before Dart runs, so before any Flutter widget can
+  have an opinion about the device's appearance setting. launch_background.xml
+  was hard-coded to @android:color/white, which meant a phone set to dark went
+  white -> #09090B the instant the engine drew its first frame.
+
+  Qualified resources do the work: `values-night/colors.xml` overrides this
+  value, the OS picks the right one, and the handoff to SplashView is to the
+  same colour it was already showing.
+
+  KEEP IN STEP with SplashPalette in
+  lib/features/onboarding/widgets/splash_view.dart. These are the same two
+  colours expressed in the one place Dart cannot reach.
+-->
+<resources>
+    <!-- SplashPalette.lightCanvas — pure white. -->
+    <color name="splash_canvas">#FFFFFFFF</color>
+
+    <!-- The adaptive launcher icon's background layer: pure white, with the
+         emerald mark on top — the splash screen exactly. See
+         tool/app_icons/gen_app_icons.py. -->
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+
+    <!-- The Android 12+ splash icon's ink (emerald-700, the light-mode mark).
+         Mirrors AppColors.brandMarkOnLight / brandMarkOnDark. -->
+    <color name="splash_mark_ink">#FF047857</color>
+</resources>

@@ -2,12 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Mirrors the Android <queries> block: the schemes the SOS screen hands
+	     to url_launcher. openURL does not strictly require these for tel/sms,
+	     but canOpenURL does, and declaring them keeps both call paths working. -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>sms</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Monticello Villas App</string>
+	<string>Monticello Villas</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -66,5 +74,18 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Monticello Villas needs camera access so you can take photos and record videos as evidence when reporting an incident.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Monticello Villas needs microphone access to record audio with your incident-report videos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Monticello Villas needs photo library access so you can attach existing photos and videos to your incident reports and profile.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Monticello Villas uses your location to show your position within the village and to tag incident reports.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>HomeMap</key>
+		<string>Precise location puts you on your own house on the village map, instead of somewhere in the neighbourhood.</string>
+	</dict>
 </dict>
 </plist>
