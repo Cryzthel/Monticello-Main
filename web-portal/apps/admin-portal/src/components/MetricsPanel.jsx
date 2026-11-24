@@ -11,6 +11,7 @@ import {
   formatMinutes,
 } from '@shared/lib/incidents'
 import { categoryLabel } from '@shared/lib/incidentCategories'
+import { isResolvedIncident } from '@shared/lib/overviewMetrics'
 import { CHART_MARGIN, yAxisWidth } from '@shared/theme/chartAxis'
 import { formatShortDate } from '@shared/lib/dates'
 
@@ -34,7 +35,11 @@ function computeWeeklyResolutionTrend(incidents) {
     const bucket = weeks.find((w) => reportedDate >= w.start && reportedDate <= w.end)
     if (!bucket) return
     bucket.reported += 1
-    if (incident.status === 'Resolved') bucket.resolved += 1
+    // The SAME predicate the Overview's Resolved card is a count of, so the
+    // Resolved series here and that card cannot drift apart. It reads the
+    // dispatch stage rather than the display status - see overviewMetrics.js
+    // for why this portal has exactly one definition of resolved.
+    if (isResolvedIncident(incident)) bucket.resolved += 1
   })
 
   return weeks.map((w) => ({

@@ -8,13 +8,15 @@
 import { doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { auth, db, functions } from '@shared/lib/firebase'
-// Re-exported, not re-implemented. `computeCategoryBreakdown` is pure
-// taxonomy logic and now lives beside the taxonomy itself, where it can be
-// exercised without dragging the Firebase SDK in. Callers importing it from
-// here keep working.
-export { computeCategoryBreakdown } from '@shared/lib/incidentCategories'
+// `computeCategoryBreakdown` is GONE, not moved. It counted raw category
+// strings per incident, and `computeBreakdown` in overviewMetrics.js replaced
+// it: the same buckets, but over report RECORDS, so SOS alerts land in the
+// chart that explains the total they are already counted in, and each row
+// carries its resolved count and its share. Two helpers bucketing categories
+// was one of the ways this page came to disagree with itself.
 import { normalizeCategory } from '@shared/lib/incidentCategories'
 import { deriveDispatchStage } from '@shared/lib/dispatchStage'
+import { isResolvedIncident } from '@shared/lib/overviewMetrics'
 import { readLatLng } from '@shared/lib/coordinates'
 
 // Mobile's IncidentStatus wire values -> the dashboard's display buckets.
@@ -212,7 +214,11 @@ export const RESOLVED_VISIBLE_HOURS = 24
  * a reason to hide a record.
  */
 export function isResolvedExpired(incident, hours = RESOLVED_VISIBLE_HOURS) {
-  if (incident?.status !== 'Resolved') return false
+  // `isResolvedIncident`, not `status === 'Resolved'`. The two agree on every
+  // document that has no stored `dispatchStage`, and where they disagree the
+  // stage is the field firestore.rules validated - see overviewMetrics.js for
+  // why this page has exactly one definition of resolved.
+  if (!incident || !isResolvedIncident(incident)) return false
   const at = incident?.resolvedAt ? new Date(incident.resolvedAt).getTime() : NaN
   if (Number.isNaN(at)) return false
   return Date.now() - at > hours * 60 * 60 * 1000
@@ -244,7 +250,7 @@ export function isResolvedExpired(incident, hours = RESOLVED_VISIBLE_HOURS) {
  * reason to drop a hazard.
  */
 export function isHazardStale(incident, hours) {
-  if (!incident || incident.status === 'Resolved') return false
+  if (!incident || isResolvedIncident(incident)) return false
   if (!Number.isFinite(hours) || hours <= 0) return false
   const at = incident.reportedAt ? new Date(incident.reportedAt).getTime() : NaN
   if (Number.isNaN(at)) return false
@@ -406,64 +412,21 @@ export function mediaItemsFrom(source) {
   return [...photos, ...videos]
 }
 
-// Used by both AdminDashboardPage's AnalyticsPanel (line trend) and
-// AdminMetricsPage's MetricsPanel (bar chart) — `days` lets each pick its own
-// window instead of hardcoding one.
-export function computeDailyCounts(incidents, days) {
-  const buckets = []
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const day = new Date()
-    day.setHours(0, 0, 0, 0)
-    day.setDate(day.getDate() - i)
-    buckets.push({ date: day, count: 0 })
-  }
+/*
+  -- THE WINDOW AND THE DAY BUCKETS LIVE IN overviewMetrics.js --------------
+  Both were defined here and both are pure. They moved so the Overview's whole
+  derivation could be exercised in Node without initialising Firebase - which
+  is how the parity claim on that page is now demonstrated rather than asserted
+  (scripts/check-overview-parity.mjs). Re-exported, not re-implemented, so the
+  one windowing rule is still the one windowing rule and every existing import
+  of it from here keeps working.
 
-  incidents.forEach((incident) => {
-    if (!incident.reportedAt) return
-    const reportedDay = new Date(incident.reportedAt)
-    reportedDay.setHours(0, 0, 0, 0)
-    const bucket = buckets.find((b) => b.date.getTime() === reportedDay.getTime())
-    if (bucket) bucket.count += 1
-  })
-
-  return buckets
-}
-
-/**
- * The incidents that fall inside a timeframe — the ONE windowing rule.
- *
- * ── WHY THIS EXISTS ───────────────────────────────────────────────────────
- * The Admin Overview had two windowing implementations and one place with none,
- * which produced a visible discrepancy: moving the timeframe pill from 30d to
- * 7d updated the KPI cards and the volume chart but left the category donut
- * showing all-time counts — its own caption said "(all time)" while the card
- * beside it said 7 days. Two numbers on one screen describing different
- * periods, with nothing to tell the reader which.
- *
- * Every windowed figure now derives from a single call to this, made once in
- * the page and passed down, so a chart cannot silently disagree with the KPI
- * above it.
- *
- * [offsetDays] shifts the window backwards by whole periods, which is what the
- * "vs. previous period" deltas compare against: `offsetDays = days` gives the
- * period immediately before this one.
- *
- * Half-open at the start and inclusive at the end (`> start && <= end`) so two
- * adjacent windows never both claim the same incident.
- *
- * [now] pins the window's end. A caller that memoises the result should pass a
- * value that ticks, or the window stops moving whenever the data does.
- */
-export function selectInRange(incidents, days, offsetDays = 0, now = Date.now()) {
-  if (!Number.isFinite(days)) return [...incidents]
-  const end = now - offsetDays * 86400000
-  const start = end - days * 86400000
-  return incidents.filter((incident) => {
-    if (!incident.reportedAt) return false
-    const ms = new Date(incident.reportedAt).getTime()
-    return ms > start && ms <= end
-  })
-}
+  `computeDailyCounts` gained a third argument, `now`. Without it the buckets
+  read the clock independently of the window that selected the records, so a
+  page left open across midnight bucketed into days the window no longer
+  covered. Callers pass the same `now` they windowed with.
+*/
+export { selectInRange, computeDailyCounts } from '@shared/lib/overviewMetrics'
 
 
 // "Data integrity validation rate" — the share of incidents that actually

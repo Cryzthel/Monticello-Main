@@ -11,9 +11,15 @@ export default function MetricsPage() {
   // restated them here was removed 2026-10-29). This page reads the same hook
   // for the feed and derives only what is unique to it — the weekly trend, the
   // per-category durations, the phase hot-spots.
+  // `incidentsInRange`, not `inRange`: the window now holds report RECORDS
+  // (incidents and SOS alerts in one shape), and this page's charts read fields
+  // only an incident document has - `phase` for the hot-spots, `resolvedAt` for
+  // the per-category durations. `incidentsInRange` is a projection of that same
+  // window rather than a second query, so this page and the Overview still
+  // describe one period measured once. See overviewMetrics.js.
   const {
     incidents,
-    inRange,
+    incidentsInRange,
     loading,
     operations,
   } = usePortalMetrics(rangeDays)
@@ -28,7 +34,7 @@ export default function MetricsPage() {
       <div className="flex flex-col gap-6">
         <MetricsPanel
           incidents={incidents}
-          inRange={inRange}
+          inRange={incidentsInRange}
           days={rangeDays}
           activeIncidents={operations.activeIncidents}
           loading={loading}

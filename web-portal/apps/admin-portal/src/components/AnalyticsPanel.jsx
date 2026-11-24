@@ -2,7 +2,6 @@ import { useMemo, useRef } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import Card from '@shared/components/Card'
 import { Skeleton, SkeletonChart, SkeletonDonut } from '@shared/components/Skeleton'
-import { computeDailyCounts } from '@shared/lib/incidents'
 import { categoryColor, categoryLabel } from '@shared/lib/incidentCategories'
 import { CHART_MARGIN, yAxisWidth } from '@shared/theme/chartAxis'
 import { formatChartTick } from '@shared/lib/dates'
@@ -51,8 +50,12 @@ function TrendTooltip({ active, payload, label }) {
   return (
     <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-small shadow-overlay">
       <p className="text-text-secondary">{TOOLTIP_FORMAT.format(label)}</p>
+      {/* "reports", not "incidents". These buckets hold SOS alerts as well
+          as incidents - they are what Total reports is made of - and calling
+          them incidents is how the chart and the card above it came to look
+          like they were describing different things. */}
       <p className="font-medium tabular-nums text-text-primary">
-        {count} {count === 1 ? 'incident' : 'incidents'}
+        {count} {count === 1 ? 'report' : 'reports'}
       </p>
     </div>
   )
@@ -60,46 +63,64 @@ function TrendTooltip({ active, payload, label }) {
 
 function DonutTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
-  const { category, count } = payload[0].payload
+  const { category, count, share, resolved } = payload[0].payload
   return (
     <div className="rounded-xl border border-hairline bg-base-850 px-3 py-2 text-small shadow-overlay">
       <p className="font-medium text-text-primary">{categoryLabel(category)}</p>
-      <p className="text-text-secondary">{count} incidents</p>
+      {/* `share` is computed upstream by largest remainder so the slices sum to
+          exactly 100%, and `resolved` is the same resolved count the KPI card
+          above is a sum of. Neither is derived here - a tooltip that does its
+          own arithmetic is one more place to disagree. */}
+      <p className="text-text-secondary tabular-nums">
+        {count} {count === 1 ? 'report' : 'reports'} &middot; {share}% &middot; {resolved} resolved
+      </p>
     </div>
   )
 }
 
 /**
- * @param {object} props
- * @param {Array} props.incidents Already windowed by the caller.
- * @param {Array<{category: string, count: number}>} props.categoryBreakdown
- *   Computed upstream by `usePortalMetrics`, not here.
+ * The Overview's two charts. It derives NOTHING.
  *
- *   ── WHY THIS IS A PROP AND NOT A useMemo ─────────────────────────────────
- *   This panel used to call `computeCategoryBreakdown` itself. That is one
- *   more place deriving a headline figure, and it is exactly where the donut
- *   and the KPI cards drifted apart: the panel bucketed raw category strings
- *   while the cards counted rows, so on any data set containing both
- *   'Security' and 'security' the slices summed to the card's number while
- *   showing two entries for one category. Passing the finished array in leaves
- *   this component with rendering as its only job.
- * @param {boolean} [props.loading] Whether the incident feed is still opening.
+ * ── EVERY FIGURE ARRIVES FINISHED ──────────────────────────────────────────
+ * This panel used to call `computeCategoryBreakdown` for the donut and
+ * `computeDailyCounts` for the volume chart, and then re-sum the day buckets to
+ * print "N in range" under the chart's title. That last number was the clearest
+ * symptom of the whole problem: it was a THIRD count of the same period, taken
+ * over midnight-aligned day buckets while the KPI cards counted a rolling
+ * millisecond window, so it could differ from the Total reports card by any
+ * report filed in the half-day between the oldest bucket and the window's edge.
+ * The donut was worse - it bucketed incidents only, while the card beside it
+ * counted incidents plus SOS alerts.
+ *
+ * Both now arrive as props from `usePortalMetrics`, computed once over one
+ * array (see overviewMetrics.js). Rendering is this component's only job, which
+ * is what makes it impossible for it to disagree with the cards above it.
+ *
+ * @param {object} props
+ * @param {Array<{date: Date, count: number}>} props.dailyCounts Day buckets for
+ *   the volume chart, already windowed and bucketed upstream.
+ * @param {Array<{category: string, count: number, resolved: number, share: number}>}
+ *   props.categoryBreakdown Normalised, sorted, with shares that sum to 100.
+ * @param {number} props.totalReports The authoritative count for this period -
+ *   the same number the Total reports card shows, passed down rather than
+ *   re-summed. The chart's columns sum to it (the parity script checks this),
+ *   so printing it here is a label, not a second measurement.
+ * @param {boolean} [props.loading] Whether the feeds are still opening.
  *
  *   ── WHY THE PANEL NEEDS THIS AND THE CHARTS DO NOT ───────────────────────
  *   Without it the donut rendered "No data yet." for the whole of the initial
- *   subscription, which is not a slow state — it is a WRONG one. An admin
+ *   subscription, which is not a slow state - it is a WRONG one. An admin
  *   opening the overview on a property with three hundred reports was told, in
  *   plain words, that there were none, and then the sentence was replaced by a
- *   chart. The empty state is still correct once the feed has actually
+ *   chart. The empty state is still correct once the feeds have actually
  *   delivered an empty array; it just must not be reachable before then.
  */
 export default function AnalyticsPanel({
-  incidents = [],
-  days = 30,
+  dailyCounts = [],
   categoryBreakdown = [],
+  totalReports = 0,
   loading = false,
 }) {
-  const dailyCounts = useMemo(() => computeDailyCounts(incidents, days), [incidents, days])
   const trendData = useMemo(
     () =>
       dailyCounts.map((d) => ({
@@ -117,7 +138,12 @@ export default function AnalyticsPanel({
    * from zero while the dashboard was live. The array is now held until its
    * CONTENT changes, so an unrelated write costs nothing on screen.
    */
-  const breakdownKey = categoryBreakdown.map((c) => `${c.category}:${c.count}`).join('|')
+  // Every field the donut and its legend render, so a snapshot that changes
+  // only a resolved count still restarts nothing while a real change still
+  // lands. Keying on the counts alone would hold a stale share.
+  const breakdownKey = categoryBreakdown
+    .map((c) => `${c.category}:${c.count}:${c.resolved}:${c.share}`)
+    .join('|')
   const stableBreakdownRef = useRef({ key: null, data: [] })
   if (stableBreakdownRef.current.key !== breakdownKey) {
     stableBreakdownRef.current = { key: breakdownKey, data: categoryBreakdown }
@@ -125,8 +151,6 @@ export default function AnalyticsPanel({
   const stableBreakdown = stableBreakdownRef.current.data
   const reduceMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-  const totalCategorized = stableBreakdown.reduce((sum, c) => sum + c.count, 0)
-  const totalInRange = dailyCounts.reduce((sum, d) => sum + d.count, 0)
   // Busiest single day, which is what the axis has to scale to — not the
   // range total, which is an order of magnitude larger and would reserve a
   // gutter for digits the axis never draws.
@@ -152,7 +176,9 @@ export default function AnalyticsPanel({
       <Card className="col-span-12 flex h-72 flex-col p-5 xl:col-span-6">
         <div className="mb-2 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-body font-semibold text-text-primary">Incident volume</p>
+            {/* "Report volume": these columns include SOS alerts, like every
+                other figure in this band. */}
+            <p className="text-body font-semibold text-text-primary">Report volume</p>
             {/* The window in words, so the ticks can stay short. */}
             <p className="mt-0.5 truncate text-small tabular-nums text-text-muted">{rangeLabel}</p>
           </div>
@@ -163,7 +189,7 @@ export default function AnalyticsPanel({
           {loading ? (
             <Skeleton variant="muted" className="h-3 w-20" />
           ) : (
-            <span className="shrink-0 text-small tabular-nums text-text-secondary">{totalInRange} in range</span>
+            <span className="shrink-0 text-small tabular-nums text-text-secondary">{totalReports} in range</span>
           )}
         </div>
         {loading ? (
@@ -251,7 +277,14 @@ export default function AnalyticsPanel({
                     />
                     {categoryLabel(segment.category)}
                   </span>
-                  <span className="font-medium text-text-primary">{segment.count}</span>
+                  {/* Count and share together. The share comes from upstream
+                      (largest remainder, so the column sums to 100) rather than
+                      being divided here against a total this component would
+                      have to be trusted to have got right. */}
+                  <span className="flex shrink-0 items-baseline gap-1.5 tabular-nums">
+                    <span className="font-medium text-text-primary">{segment.count}</span>
+                    <span className="text-text-muted">{segment.share}%</span>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -260,7 +293,14 @@ export default function AnalyticsPanel({
         {loading ? (
           <Skeleton variant="muted" className="mt-2 h-2.5 w-48" />
         ) : (
-          <p className="mt-2 text-small text-text-muted">{totalCategorized} incidents categorized in this timeframe</p>
+          /* The SAME number as the chart beside it and the card above both,
+             because it is that number rather than a sum taken here. It used to
+             read "N incidents categorized in this timeframe", where N was the
+             slices' own total - which on any period containing an SOS alert was
+             smaller than Total reports, and said so in words. */
+          <p className="mt-2 text-small text-text-muted">
+            {totalReports} {totalReports === 1 ? 'report' : 'reports'} in this timeframe
+          </p>
         )}
       </Card>
     </div>

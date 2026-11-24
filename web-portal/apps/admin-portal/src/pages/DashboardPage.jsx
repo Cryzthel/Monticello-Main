@@ -32,25 +32,34 @@ export default function DashboardPage() {
   const [selectedId, setSelectedId] = useState(null)
   const [rangeDays, setRangeDays] = useState(30)
 
-  // -- ONE FEED, ONE WINDOW, ONE TAXONOMY ----------------------------------
+  // -- ONE ARRAY, ONE WINDOW, ONE TAXONOMY ---------------------------------
   //
-  // Every number on this page comes out of a single hook, the donut's slices
-  // included — and it is the SAME hook the System
-  // Metrics page reads, so a figure shown on both is computed once. The page
-  // used to open its own `incidents` subscription and compute the KPIs inline
-  // while AnalyticsPanel bucketed categories itself, which is how the cards and
-  // the chart came to describe slightly different sets of reports; see
-  // usePortalMetrics for the four specific disagreements that produced.
+  // Every number on this page is a filter over ONE array of report records -
+  // incidents and SOS alerts projected into a single shape - and it is the SAME
+  // hook the System Metrics page reads, so a figure shown on both is computed
+  // once. Nothing below derives a count; the KPI cards, the donut, the volume
+  // chart's columns and its caption are all handed finished figures.
+  //
+  // That is a stronger claim than "one hook", and the difference is the bug
+  // that was reported. This page already read one hook, and the hook already
+  // opened one subscription per collection - but it handed out SEVERAL arrays,
+  // and the KPI cards counted incidents PLUS SOS alerts while the category
+  // donut counted incidents only. The slices summed to less than the card above
+  // them, and the donut's caption printed that smaller number as a fact. See
+  // usePortalMetrics for the full list, and scripts/check-overview-parity.mjs
+  // for the invariants that now hold over adversarial fixtures.
   //
   // It also means this page no longer counts soft-deleted reports. Deleting one
   // used to remove it from the tickets table and leave it sitting in Total
-  // Incidents; the feed excludes them by default now.
+  // reports; the feed excludes them by default now. ARCHIVED reports are still
+  // counted, everywhere on the page - archiving is a review state and
+  // explicitly not a deletion.
   const {
     incidents,
-    inRange,
-    // The feed's own open-subscription flag. It was already returned by the
-    // hook and simply never read here, which is why every number on this page
-    // rendered as a confident 0 for the first paint and then jumped.
+    // The feeds' open-subscription flag, covering both collections. It was
+    // already returned by the hook and simply never read here, which is why
+    // every number on this page rendered as a confident 0 for the first paint
+    // and then jumped.
     loading,
     totalReports,
     totalDelta,
@@ -59,6 +68,7 @@ export default function DashboardPage() {
     resolutionRate,
     resolutionDelta,
     categoryBreakdown,
+    dailyCounts,
   } = usePortalMetrics(rangeDays)
   useWaitWhile(loading, 'Syncing incident metrics')
 
@@ -136,7 +146,7 @@ export default function DashboardPage() {
               delta={totalDelta?.text}
               deltaDirection={totalDelta?.direction}
               deltaTone={totalDelta?.tone}
-              helpText="Incidents and SOS, this period"
+              helpText="Incidents and SOS alerts, this period"
             />
             <KpiCard
               label="Resolved reports"
@@ -167,14 +177,16 @@ export default function DashboardPage() {
 
         <section className="flex flex-col gap-3">
           <SectionHeading title="Where and when" />
-          {/* Receives the WINDOWED array for its volume chart and the
-              already-computed breakdown for its donut. The panel derives no
-              metric of its own, so there is nothing inside it that can
+          {/* Receives FINISHED figures: the day buckets for the volume chart,
+              the breakdown for the donut, and the authoritative total for both
+              captions. The panel derives no metric of its own - it does not even
+              re-sum the buckets it is given, which is what the "N in range"
+              caption used to do - so there is nothing inside it that can
               disagree with the cards above. */}
           <AnalyticsPanel
-            incidents={inRange}
-            days={rangeDays}
+            dailyCounts={dailyCounts}
             categoryBreakdown={categoryBreakdown}
+            totalReports={totalReports}
             loading={loading}
           />
         </section>

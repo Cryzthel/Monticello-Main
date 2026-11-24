@@ -33,6 +33,30 @@
 export const OTHER_CATEGORY = 'other'
 
 /**
+ * SOS alerts, as a reporting bucket.
+ *
+ * ── WHY A PANIC ALERT NEEDS A CATEGORY ─────────────────────────────────────
+ * It does not have one, and it never will: the SOS button is a single press
+ * with nothing to choose. But the Overview COUNTS panic alerts in Total reports
+ * and Resolved reports (2026-10-29, by request), and a row that is counted in
+ * the headline while belonging to no bucket is exactly what made the category
+ * donut sum to less than the card above it — see overviewMetrics.js for the
+ * reported symptom.
+ *
+ * So the bucket is not a claim that an SOS has a category. It is the admission
+ * that the page counts them, made visible in the one chart whose job is to
+ * explain what the total is made of. Folding them into `other` instead would
+ * keep the arithmetic honest and the chart misleading, because "Others" already
+ * means "a report that fit none of the options" and an emergency is not that.
+ *
+ * Not reachable from `normalizeCategory`'s alias table by accident — no incident
+ * document carries this key today. If one ever does (a seed, a later product
+ * decision to let a resident file an emergency as an incident), landing it here
+ * is the right answer anyway.
+ */
+export const SOS_CATEGORY = 'sos'
+
+/**
  * Canonical keys, in the mobile picker's own order.
  *
  * Order matters for one thing only — it is the tiebreak when two categories
@@ -46,6 +70,11 @@ export const INCIDENT_CATEGORIES = [
   'fire',
   'noise',
   OTHER_CATEGORY,
+  // Last, and after Others. It is not one of the mobile picker's options (see
+  // SOS_CATEGORY) and this order is only the equal-count tiebreak, so putting
+  // it at the end keeps the resident-facing options in the resident-facing
+  // order they were listed in.
+  SOS_CATEGORY,
 ]
 
 const CATEGORY_SET = new Set(INCIDENT_CATEGORIES)
@@ -105,6 +134,10 @@ export const CATEGORY_LABELS = {
   fire: 'Fire',
   noise: 'Noise',
   [OTHER_CATEGORY]: 'Others',
+  // "SOS alerts", not "Emergency": the console calls this collection SOS
+  // everywhere else (the Panic alerts page, the KPI help text, the SMS
+  // fallback), and a legend row has to be findable from the page it sits on.
+  [SOS_CATEGORY]: 'SOS alerts',
 }
 
 export function categoryLabel(category) {
@@ -131,40 +164,25 @@ export const CATEGORY_COLORS = {
   fire: '#F97316',
   noise: '#A855F7',
   [OTHER_CATEGORY]: '#94A3B8',
+  // The danger red the SOS surfaces already use, so the slice reads as the
+  // emergency it is rather than as a seventh incident type.
+  [SOS_CATEGORY]: '#DC2626',
 }
 
 export function categoryColor(category) {
   return CATEGORY_COLORS[normalizeCategory(category)]
 }
 
-/**
- * Incident counts per category, for the Overview breakdown chart.
- *
- * Every raw value is folded through `normalizeCategory` first, which is what
- * makes the chart's buckets the mobile picker's options rather than "whatever
- * strings happen to be in Firestore". Three things that used to produce their
- * own slice no longer do: retired categories (`hazard`), casing variants
- * ('Security' vs 'security', which counted twice), and reports carrying no
- * category at all.
- *
- * Zero-count categories are omitted. The taxonomy is the set of buckets a count
- * CAN land in, not a set of rows the chart must always draw — a donut carrying
- * empty slices for options nobody has used reads as a legend, not as data.
- *
- * Sorted by count desc, then by canonical order, so equal counts hold still
- * between renders instead of swapping places on every snapshot.
- */
-export function computeCategoryBreakdown(incidents) {
-  const counts = new Map()
-  incidents.forEach((incident) => {
-    const key = normalizeCategory(incident.category)
-    counts.set(key, (counts.get(key) ?? 0) + 1)
-  })
-  return [...counts.entries()]
-    .map(([category, count]) => ({ category, count }))
-    .sort(
-      (a, b) =>
-        b.count - a.count ||
-        INCIDENT_CATEGORIES.indexOf(a.category) - INCIDENT_CATEGORIES.indexOf(b.category),
-    )
-}
+/*
+  -- THE BREAKDOWN ITSELF MOVED TO overviewMetrics.js ------------------------
+  `computeCategoryBreakdown` counted raw category strings over INCIDENTS. The
+  Overview counts SOS alerts in its totals too, so a helper that only ever saw
+  incidents could not produce a chart that summed to those totals - which is
+  the bug that was reported. `computeBreakdown` there buckets report RECORDS
+  (incidents and SOS alike, category already normalised by this module) and
+  returns each row's resolved count and its share as well.
+
+  What stays here is the TAXONOMY: the keys, the aliases, the labels, the
+  colours and `normalizeCategory`. One module owns what the categories are;
+  another owns what is counted.
+*/

@@ -15,6 +15,7 @@
     "build:admin": "npm run build -w @monticello/admin-portal",
     "build:security": "npm run build -w @monticello/security-portal",
     "build:icons": "node scripts/build-icons.mjs",
+    "check:overview": "node scripts/check-overview-parity.mjs",
     "preview:admin": "npm run preview -w @monticello/admin-portal",
     "preview:security": "npm run preview -w @monticello/security-portal",
     "lint": "oxlint"
